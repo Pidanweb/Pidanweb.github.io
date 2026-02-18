@@ -9,8 +9,13 @@
   <style>
     body { font-family: sans-serif; line-height: 1.7; margin: 24px; }
     .wrap { max-width: 760px; margin: 0 auto; }
-    .tweet { margin: 18px 0; }
     .nav a { text-decoration: none; }
+
+    /* 折り畳みUI */
+    details { border: 1px solid #ddd; border-radius: 12px; padding: 10px 12px; margin: 14px 0; background: #fafafa; }
+    summary { cursor: pointer; font-weight: 700; }
+    summary::-webkit-details-marker { display: none; }
+    .note { font-size: 0.95rem; color: #444; margin: 8px 0 0; }
   </style>
 </head>
 
@@ -23,29 +28,34 @@
 
   <h2>公式投稿</h2>
 
-  <div class="tweet">
+  <details>
+    <summary>投稿1：キャラ登場（ハニア）</summary>
+    <p class="note">クリックで開閉できます。</p>
     <blockquote class="twitter-tweet">
       <a href="https://twitter.com/NTE_JP/status/2017055165392814142"></a>
     </blockquote>
-  </div>
+  </details>
 
-  <div class="tweet">
-  <blockquote class="twitter-tweet">
-    <a href="https://twitter.com/NTE_JP/status/2017056420093382965"></a>
-  </blockquote>
-　</div>
-  <!-- ▼ここに2つ目、3つ目をこの形で追加する -->
-  <!--
-  <div class="tweet">
+  <details>
+    <summary>投稿2：声優公開・キャラ映像（ハニア）</summary>
+    <p class="note">クリックで開閉できます。</p>
     <blockquote class="twitter-tweet">
-      <a href="ポストURL"></a>
+      <a href="https://twitter.com/NTE_JP/status/2017056420093382965"></a>
     </blockquote>
-  </div>
-  -->
+  </details>
 
 </div>
 
-<!-- script はページの最後に1回だけ -->
 <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+<!-- 折り畳みを開いた時に埋め込みを確実に変換 -->
+<script>
+  document.addEventListener('toggle', (e) => {
+    if (e.target.tagName === 'DETAILS' && e.target.open) {
+      if (window.twttr && twttr.widgets) twttr.widgets.load(e.target);
+    }
+  }, true);
+</script>
+
 </body>
 </html>
