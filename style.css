@@ -1,5 +1,8 @@
 body{
-  font-family: "Noto Sans JP", sans-serif;
+  margin:0;
+  font-family:"Noto Sans JP", sans-serif;
+  background:#ffe6f0;
+  line-height:1.7;
 }
 
 header{
@@ -12,21 +15,12 @@ header{
 .title-logo{
   margin:0;
   font-weight:900;
-  font-size:40px;
-  letter-spacing:1px;
-  color:#fff;
-  .title-logo{
-  margin:0;
-  font-weight:900;
   font-size:42px;
   letter-spacing:2px;
-
   color:#ffffff;
   -webkit-text-stroke:3px #ff3e9e;
-
-  text-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  text-shadow:0 4px 8px rgba(0,0,0,0.15);
 }
-
 
 .wrap{
   max-width:760px;
@@ -58,8 +52,7 @@ a:hover{
   text-decoration:underline;
 }
 
-/* 動画を中央に */
 .video{
   text-align:center;
-  margin: 16px 0 24px;
+  margin:16px 0 24px;
 }
