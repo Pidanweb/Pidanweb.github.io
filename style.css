@@ -18,16 +18,18 @@ header{
   font-size:40px;
   letter-spacing:1px;
   color:#fff;
-  text-shadow:
-    3px 3px 0 #ff3e9e,
-   -3px 3px 0 #ff3e9e,
-    3px -3px 0 #ff3e9e,
-   -3px -3px 0 #ff3e9e,
-    0 3px 0 #ff3e9e,
-    3px 0 0 #ff3e9e,
-    0 -3px 0 #ff3e9e,
-   -3px 0 0 #ff3e9e;
+  .title-logo{
+  margin:0;
+  font-weight:900;
+  font-size:42px;
+  letter-spacing:2px;
+
+  color:#ffffff;
+  -webkit-text-stroke:3px #ff3e9e;
+
+  text-shadow: 0 4px 8px rgba(0,0,0,0.15);
 }
+
 
 .wrap{
   max-width:760px;
