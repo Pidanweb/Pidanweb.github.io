@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>配達チャレンジ</title>
+<link rel="stylesheet" href="../style.css">
+
+<style>
+body {
+  text-align:center;
+  font-family:sans-serif;
+  background:#0d1117;
+  color:white;
+}
+
+button {
+  margin:20px;
+  padding:15px 25px;
+  font-size:18px;
+  border:none;
+  border-radius:10px;
+  cursor:pointer;
+}
+
+.choiceA { background:#1f6feb; color:white; }
+.choiceB { background:#d29922; color:black; }
+
+#log {
+  margin-top:30px;
+  min-height:40px;
+}
+
+#result {
+  margin-top:40px;
+  font-size:22px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>📦 配達チャレンジ</h1>
+<p id="situation"></p>
+
+<button class="choiceA" onclick="choose(0)" id="btnA"></button>
+<button class="choiceB" onclick="choose(1)" id="btnB"></button>
+
+<div id="log"></div>
+<div id="result"></div>
+
+<br>
+<a href="index.html" style="color:#aaa;">← ゲーム一覧に戻る</a>
+
+<script>
+
+const events = [
+  {
+    text: "雨が降っている。どうする？",
+    options: ["急いで近道", "遠回りして安全に"],
+    effect: [-1, 1]
+  },
+  {
+    text: "重い荷物だ。",
+    options: ["無理して走る", "ゆっくり確実に運ぶ"],
+    effect: [-1, 1]
+  },
+  {
+    text: "時間がギリギリ。",
+    options: ["スピード重視", "丁寧さ重視"],
+    effect: [-1, 1]
+  }
+];
+
+let current = 0;
+let score = 0;
+
+function loadEvent() {
+  document.getElementById("situation").innerText = events[current].text;
+  document.getElementById("btnA").innerText = events[current].options[0];
+  document.getElementById("btnB").innerText = events[current].options[1];
+}
+
+function choose(choice) {
+  score += events[current].effect[choice];
+  current++;
+
+  if (current < events.length) {
+    loadEvent();
+  } else {
+    showResult();
+  }
+}
+
+function showResult() {
+  document.getElementById("btnA").style.display = "none";
+  document.getElementById("btnB").style.display = "none";
+
+  let resultText = "";
+
+  if (score >= 2) {
+    resultText = "完璧な配達。信頼度MAX。";
+  } else if (score >= 0) {
+    resultText = "無事に配達完了。まあまあだね。";
+  } else {
+    resultText = "荷物破損…。怒られた。";
+  }
+
+  document.getElementById("result").innerText = resultText;
+}
+
+loadEvent();
+
+</script>
+
+</body>
+</html>
