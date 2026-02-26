@@ -1,1 +1,61 @@
 
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>2択診断</title>
+</head>
+<body>
+
+<h2 id="question"></h2>
+<button onclick="answer(0)" id="btn1"></button>
+<button onclick="answer(1)" id="btn2"></button>
+
+<p id="result"></p>
+
+<script>
+const questions = [
+  {
+    q: "あなたは冷静派？情熱派？",
+    options: ["冷静", "情熱"],
+    score: [1, 0]
+  },
+  {
+    q: "優先するのは理論？感情？",
+    options: ["理論", "感情"],
+    score: [1, 0]
+  }
+];
+
+let current = 0;
+let totalScore = 0;
+
+function loadQuestion() {
+  document.getElementById("question").innerText = questions[current].q;
+  document.getElementById("btn1").innerText = questions[current].options[0];
+  document.getElementById("btn2").innerText = questions[current].options[1];
+}
+
+function answer(choice) {
+  totalScore += questions[current].score[choice];
+  current++;
+  if (current < questions.length) {
+    loadQuestion();
+  } else {
+    showResult();
+  }
+}
+
+function showResult() {
+  if (totalScore >= 2) {
+    document.getElementById("result").innerText = "あなたは理性タイプ！";
+  } else {
+    document.getElementById("result").innerText = "あなたは情熱タイプ！";
+  }
+}
+
+loadQuestion();
+</script>
+
+</body>
+</html>
