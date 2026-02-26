@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>ハニアを呼ぶ</title>
+<link rel="stylesheet" href="../style.css">
+
+<style>
+body {
+  text-align:center;
+  font-family:sans-serif;
+  background:#111;
+  color:white;
+}
+
+button {
+  font-size:24px;
+  padding:15px 30px;
+  margin-top:30px;
+  border:none;
+  border-radius:12px;
+  background:#ff5c8a;
+  color:white;
+  cursor:pointer;
+}
+
+button:hover {
+  background:#ff2f6d;
+}
+
+#reaction {
+  margin-top:40px;
+  font-size:20px;
+  min-height:40px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>ハニアを呼んでみよう</h1>
+
+<button onclick="callHaniel()">ハニア〜！</button>
+
+<p id="count">0 回</p>
+<p id="reaction"></p>
+
+<br>
+<a href="index.html" style="color:#aaa;">← ゲーム一覧に戻る</a>
+
+<script>
+let count = 0;
+
+// ページ読み込み時に保存データ確認
+if (localStorage.getItem("hanielCount")) {
+  count = parseInt(localStorage.getItem("hanielCount"));
+  document.getElementById("count").innerText = count + " 回";
+}
+
+function callHaniel() {
+  count++;
+  document.getElementById("count").innerText = count + " 回";
+  localStorage.setItem("hanielCount", count);
+
+  let text = "";
+
+  if (count < 5) {
+    text = "……呼んだ？";
+  } else if (count < 20) {
+    text = "ちゃんと聞こえてる。";
+  } else if (count < 50) {
+    text = "そんなに呼ばなくていい。";
+  } else if (count < 100) {
+    text = "……本当に好きだね。";
+  } else if (count < 300) {
+    text = "もう好きにしなよ。";
+  } else {
+    text = "……ずっと呼んでるね。";
+  }
+
+  document.getElementById("reaction").innerText = text;
+}
+</script>
+
+</body>
+</html>
