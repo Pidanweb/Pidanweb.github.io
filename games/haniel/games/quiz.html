@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>2択診断</title>
+<link rel="stylesheet" href="../style.css">
+
+<style>
+body {
+  text-align:center;
+  font-family:sans-serif;
+  background:#161b22;
+  color:white;
+}
+
+button {
+  margin:20px;
+  padding:15px 25px;
+  font-size:18px;
+  border:none;
+  border-radius:10px;
+  cursor:pointer;
+}
+
+.choiceA { background:#58a6ff; color:black; }
+.choiceB { background:#f778ba; color:black; }
+
+#result {
+  margin-top:40px;
+  font-size:22px;
+}
+
+#progress {
+  margin-top:20px;
+  color:#aaa;
+}
+</style>
+</head>
+
+<body>
+
+<h1>ハニア適性診断</h1>
+
+<p id="question"></p>
+
+<button class="choiceA" onclick="answer(0)" id="btnA"></button>
+<button class="choiceB" onclick="answer(1)" id="btnB"></button>
+
+<div id="progress"></div>
+<div id="result"></div>
+
+<br>
+<a href="index.html" style="color:#aaa;">← ゲーム一覧に戻る</a>
+
+<script>
+
+const questions = [
+  {
+    text: "荷物はどう扱う？",
+    options: ["最優先で守る", "効率を優先する"],
+    score: [2, 0]
+  },
+  {
+    text: "依頼人が無愛想だった。",
+    options: ["気にしない", "少し気になる"],
+    score: [1, 2]
+  },
+  {
+    text: "夜間配達になった。",
+    options: ["静かに遂行する", "少し不安になる"],
+    score: [2, 1]
+  },
+  {
+    text: "呼びかけられたら？",
+    options: ["即反応する", "少し間を置く"],
+    score: [2, 1]
+  }
+];
+
+let current = 0;
+let totalScore = 0;
+
+function loadQuestion() {
+  document.getElementById("question").innerText = questions[current].text;
+  document.getElementById("btnA").innerText = questions[current].options[0];
+  document.getElementById("btnB").innerText = questions[current].options[1];
+  document.getElementById("progress").innerText =
+    (current + 1) + " / " + questions.length;
+}
+
+function answer(choice) {
+  totalScore += questions[current].score[choice];
+  current++;
+
+  if (current < questions.length) {
+    loadQuestion();
+  } else {
+    showResult();
+  }
+}
+
+function showResult() {
+  document.getElementById("btnA").style.display = "none";
+  document.getElementById("btnB").style.display = "none";
+
+  let resultText = "";
+
+  if (totalScore >= 7) {
+    resultText = "あなたは理想的な相棒タイプ。信頼度MAX。";
+  } else if (totalScore >= 4) {
+    resultText = "安定型サポーター。堅実で安心。";
+  } else {
+    resultText = "自由奔放タイプ。少し振り回すかも。";
+  }
+
+  document.getElementById("result").innerHTML =
+    resultText +
+    "<br><br><button onclick='restart()'>もう一度診断する</button>";
+}
+
+function restart() {
+  current = 0;
+  totalScore = 0;
+  document.getElementById("btnA").style.display = "inline-block";
+  document.getElementById("btnB").style.display = "inline-block";
+  document.getElementById("result").innerHTML = "";
+  loadQuestion();
+}
+
+loadQuestion();
+
+</script>
+
+</body>
+</html>
