@@ -751,6 +751,16 @@
 
       const text = await callGemini([{ role: 'user', parts: userParts }]);
 
+      const titleMatch = text.match(/TITLE:\s*([\s\S]*?)\nNARRATION:/);
+      const narrationMatch = text.match(/NARRATION:\s*([\s\S]*)/);
+
+      const title = titleMatch ? titleMatch[1].trim() : "判定できませんでした";
+      const narration = narrationMatch ? narrationMatch[1].trim() : text.trim();
+
+      // 現在認識している対象を保存
+      currentSubject = title;
+      currentDescription = narration;
+
       // 認識結果を会話の前提情報として保存
       // 追質問では元画像を再送信せず、対象と最初の説明だけをテキストで保持する
       conversationHistory = [
@@ -769,12 +779,6 @@
           }]
         }
       ];
-
-      const titleMatch = text.match(/TITLE:\s*([\s\S]*?)\nNARRATION:/);
-      const narrationMatch = text.match(/NARRATION:\s*([\s\S]*)/);
-
-      const title = titleMatch ? titleMatch[1].trim() : "判定できませんでした";
-      const narration = narrationMatch ? narrationMatch[1].trim() : text.trim();
 
       // 現在認識している対象を保存
       currentSubject = title;
