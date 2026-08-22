@@ -280,6 +280,74 @@
     color: var(--ink);
   }
 
+  /* ---------- 会話(チャット)エリア ---------- */
+
+  #chat_log {
+    margin-top: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .chat_msg {
+    max-width: 86%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    font-size: 13.5px;
+    line-height: 1.7;
+  }
+
+  .chat_msg.user {
+    align-self: flex-end;
+    background: var(--scan-soft);
+    color: var(--ink);
+    border-bottom-right-radius: 4px;
+  }
+
+  .chat_msg.assistant {
+    align-self: flex-start;
+    background: rgba(255,255,255,0.06);
+    color: var(--ink-dim);
+    border-bottom-left-radius: 4px;
+  }
+
+  #chat_controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--panel-edge);
+  }
+
+  #mic_btn {
+    flex-shrink: 0;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    background: var(--scan);
+    color: #06231d;
+    font-size: 20px;
+    position: relative;
+  }
+
+  #mic_btn.listening {
+    background: var(--danger);
+    color: #2a0906;
+    animation: micpulse 1s ease-in-out infinite;
+  }
+
+  @keyframes micpulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(240,104,94,0.5); }
+    50% { box-shadow: 0 0 0 10px rgba(240,104,94,0); }
+  }
+
+  #chat_status {
+    font-size: 13px;
+    color: var(--ink-dim);
+  }
+
   /* ---------- ステータス表示 ---------- */
 
   #status_layer {
@@ -453,6 +521,13 @@
       <button id="replay_btn">🔊 もう一度読み上げる</button>
       <button id="rescan_btn">再スキャン</button>
     </div>
+
+    <div id="chat_log"></div>
+
+    <div id="chat_controls">
+      <button id="mic_btn" aria-label="話しかける">🎤</button>
+      <div id="chat_status">マイクを押して質問してみてください</div>
+    </div>
   </div>
 
   <div id="start_layer">
@@ -514,9 +589,13 @@
     keyInput: document.getElementById('key_input'),
     keySave: document.getElementById('key_save'),
     keyClose: document.getElementById('key_close'),
+    chatLog: document.getElementById('chat_log'),
+    micBtn: document.getElementById('mic_btn'),
+    chatStatus: document.getElementById('chat_status'),
   };
 
   let lastNarration = "";
+  let conversationHistory = []; // Gemini に毎回送る会話履歴 [{role, parts}]
 
   // ============ カメラ起動 ============
   async function startCamera() {
@@ -583,13 +662,13 @@
     els.captureBtn.disabled = false;
   });
 
-  // ============ Gemini API 呼び出し ============
-  async function callGemini(parts) {
+  // ============ Gemini API 呼び出し(会話履歴つき) ============
+  async function callGemini(contents) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts }] }),
+      body: JSON.stringify({ contents }),
     });
     if (!res.ok) {
       const errBody = await res.json().catch(() => ({}));
@@ -618,10 +697,18 @@
         "TITLE: (タイトル・作者・巻数を1〜2行で)\n" +
         "NARRATION: (ナレーション文)";
 
-      const text = await callGemini([
+      const userParts = [
         { inline_data: { mime_type: "image/jpeg", data: base64Image } },
         { text: prompt },
-      ]);
+      ];
+
+      const text = await callGemini([{ role: 'user', parts: userParts }]);
+
+      // この本についての会話履歴として、画像判定のやり取りを積んでおく
+      conversationHistory = [
+        { role: 'user', parts: userParts },
+        { role: 'model', parts: [{ text }] },
+      ];
 
       const titleMatch = text.match(/TITLE:\s*([\s\S]*?)\nNARRATION:/);
       const narrationMatch = text.match(/NARRATION:\s*([\s\S]*)/);
@@ -665,7 +752,74 @@
     els.cameraFeed.style.display = 'block';
     els.hintText.style.display = 'block';
     els.scanFrame.classList.add('scanning');
+    conversationHistory = [];
+    els.chatLog.innerHTML = '';
+    els.chatStatus.textContent = 'マイクを押して質問してみてください';
   });
+
+  // ============ 音声での会話 ============
+  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognizer = null;
+  if (SpeechRecognitionCtor) {
+    recognizer = new SpeechRecognitionCtor();
+    recognizer.lang = 'ja-JP';
+    recognizer.interimResults = false;
+    recognizer.maxAlternatives = 1;
+  }
+
+  function addChatMessage(role, text) {
+    const bubble = document.createElement('div');
+    bubble.className = `chat_msg ${role === 'user' ? 'user' : 'assistant'}`;
+    bubble.textContent = text;
+    els.chatLog.appendChild(bubble);
+    els.chatLog.scrollTop = els.chatLog.scrollHeight;
+  }
+
+  async function askFollowUp(questionText) {
+    conversationHistory.push({ role: 'user', parts: [{ text: questionText }] });
+    addChatMessage('user', questionText);
+    els.chatStatus.textContent = '考え中...';
+
+    try {
+      const answer = await callGemini(conversationHistory);
+      conversationHistory.push({ role: 'model', parts: [{ text: answer }] });
+      addChatMessage('assistant', answer);
+      speak(answer);
+      els.chatStatus.textContent = 'マイクを押して質問してみてください';
+    } catch (err) {
+      addChatMessage('assistant', 'エラー: ' + err.message);
+      els.chatStatus.textContent = 'マイクを押して質問してみてください';
+    }
+  }
+
+  els.micBtn.addEventListener('click', () => {
+    if (!apiKey) {
+      els.settingsBtn.click();
+      return;
+    }
+    if (!recognizer) {
+      els.chatStatus.textContent = 'この端末は音声入力に対応していません';
+      return;
+    }
+    window.speechSynthesis.cancel();
+    els.micBtn.classList.add('listening');
+    els.chatStatus.textContent = '聞いています...';
+    recognizer.start();
+  });
+
+  if (recognizer) {
+    recognizer.addEventListener('result', (event) => {
+      const question = event.results[0][0].transcript;
+      askFollowUp(question);
+    });
+    recognizer.addEventListener('end', () => {
+      els.micBtn.classList.remove('listening');
+    });
+    recognizer.addEventListener('error', (event) => {
+      els.micBtn.classList.remove('listening');
+      els.chatStatus.textContent = '聞き取れませんでした。もう一度試してください';
+    });
+  }
 
 })();
 </script>
