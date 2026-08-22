@@ -161,6 +161,23 @@
     font-family: inherit;
   }
 
+  #top_bar_actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #reset_btn {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.14);
+    color: var(--ink);
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
+    line-height: 1;
+  }
+
   /* ---------- 下部コントロール ---------- */
 
   #bottom_bar {
@@ -496,11 +513,14 @@
     <div id="scan_line" class="scan-line-anim"></div>
   </div>
 
-  <div id="hint_text">本の表紙を枠の中に収めてください</div>
+  <div id="hint_text">対象を枠の中に収めてください</div>
 
   <div id="top_bar">
     <div id="brand">YUI SCANNER</div>
-    <button id="settings_btn">APIキー設定</button>
+    <div id="top_bar_actions">
+      <button id="reset_btn" title="最初から">🔄</button>
+      <button id="settings_btn">APIキー設定</button>
+    </div>
   </div>
 
   <div id="bottom_bar">
@@ -532,7 +552,7 @@
 
   <div id="start_layer">
     <div class="layer_title">YUI SCANNER</div>
-    <div class="layer_desc">カメラで本の表紙を映すと、<br>タイトルを判定して解説を読み上げます。</div>
+    <div class="layer_desc">カメラで映したものを判定して、<br>解説を読み上げます。本・ぬいぐるみ・動物など、なんでも試せます。</div>
     <button id="start_btn" class="primary_btn">カメラを起動する</button>
   </div>
 
@@ -585,6 +605,7 @@
     replayBtn: document.getElementById('replay_btn'),
     rescanBtn: document.getElementById('rescan_btn'),
     settingsBtn: document.getElementById('settings_btn'),
+    resetBtn: document.getElementById('reset_btn'),
     keyPanel: document.getElementById('key_panel'),
     keyInput: document.getElementById('key_input'),
     keySave: document.getElementById('key_save'),
@@ -644,11 +665,25 @@
 
     const video = els.cameraFeed;
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0);
 
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    // 送信サイズを抑えてトークン消費を減らす(最大辺800px)
+    const maxDim = 800;
+    let width = video.videoWidth;
+    let height = video.videoHeight;
+    if (width > maxDim || height > maxDim) {
+      if (width > height) {
+        height = Math.round((height * maxDim) / width);
+        width = maxDim;
+      } else {
+        width = Math.round((width * maxDim) / height);
+        height = maxDim;
+      }
+    }
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext('2d').drawImage(video, 0, 0, width, height);
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
     capturedBase64 = dataUrl.split(',')[1];
 
     els.capturedPreview.src = dataUrl;
@@ -668,7 +703,12 @@
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents }),
+      body: JSON.stringify({
+        contents,
+        generationConfig: {
+          thinkingConfig: { thinkingLevel: "high" }, // じっくり考えさせて精度を上げる
+        },
+      }),
     });
     if (!res.ok) {
       const errBody = await res.json().catch(() => ({}));
@@ -691,10 +731,11 @@
       setStatus('本のタイトルを判定中...');
 
       const prompt =
-        "この画像は本または漫画の表紙です。タイトル・作者名・巻数(わかれば)を判定してください。" +
-        "続けて、その本を音声で紹介する短いナレーション文(3〜4文、話し言葉、記号や箇条書きなしの自然な文章)も作ってください。" +
+        "この画像に写っている対象を判定してください。本・漫画、ぬいぐるみ、動物、有名な建物や観光地、食べ物など、何であっても構いません。" +
+        "まず対象のカテゴリと具体的な名称(本なら書名・作者、動物なら種類、建物なら名称など)を判定してください。" +
+        "続けて、それを音声で紹介する短いナレーション文(3〜4文、話し言葉、記号や箇条書きなしの自然な文章)も作ってください。" +
         "出力は必ず次の形式に従ってください(前置きや説明は不要):\n" +
-        "TITLE: (タイトル・作者・巻数を1〜2行で)\n" +
+        "TITLE: (カテゴリと名称を1〜2行で)\n" +
         "NARRATION: (ナレーション文)";
 
       const userParts = [
@@ -744,9 +785,12 @@
 
   els.replayBtn.addEventListener('click', () => speak(lastNarration));
 
-  // ============ 再スキャン ============
-  els.rescanBtn.addEventListener('click', () => {
+  // ============ リセット(最初から) ============
+  function resetSession() {
     window.speechSynthesis.cancel();
+    if (recognizer) {
+      try { recognizer.stop(); } catch (e) {}
+    }
     els.resultPanel.classList.remove('open');
     els.capturedPreview.style.display = 'none';
     els.cameraFeed.style.display = 'block';
@@ -755,7 +799,10 @@
     conversationHistory = [];
     els.chatLog.innerHTML = '';
     els.chatStatus.textContent = 'マイクを押して質問してみてください';
-  });
+  }
+
+  els.rescanBtn.addEventListener('click', resetSession);
+  els.resetBtn.addEventListener('click', resetSession);
 
   // ============ 音声での会話 ============
   const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
