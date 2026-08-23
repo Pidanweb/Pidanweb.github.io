@@ -178,6 +178,37 @@
     line-height: 1;
   }
 
+  /* ---------- ズームコントロール(光学ズーム対応機種のみ表示) ---------- */
+
+  #zoom_control {
+    position: absolute;
+    right: 18px;
+    bottom: 130px;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    z-index: 5;
+  }
+
+  #zoom_control.visible { display: flex; }
+
+  #zoom_slider {
+    writing-mode: vertical-lr;
+    direction: rtl;
+    width: 32px;
+    height: 130px;
+    accent-color: var(--scan);
+  }
+
+  #zoom_label {
+    font-size: 11px;
+    color: var(--ink-dim);
+    background: rgba(0,0,0,0.4);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+
   /* ---------- 下部コントロール ---------- */
 
   #bottom_bar {
@@ -337,27 +368,42 @@
     border-top: 1px solid var(--panel-edge);
   }
 
-  #mic_btn {
+  #character_avatar {
     flex-shrink: 0;
-    width: 50px;
-    height: 50px;
+    width: 58px;
+    height: 58px;
     border-radius: 50%;
     border: none;
-    background: var(--scan);
-    color: #06231d;
-    font-size: 20px;
+    background: rgba(255,255,255,0.08);
+    font-size: 26px;
     position: relative;
+    transition: background 0.2s ease, transform 0.15s ease;
   }
 
-  #mic_btn.listening {
-    background: var(--danger);
-    color: #2a0906;
+  #character_avatar:active {
+    transform: scale(0.94);
+  }
+
+  #character_avatar.state-listening {
+    background: var(--scan);
     animation: micpulse 1s ease-in-out infinite;
   }
 
+  #character_avatar.state-thinking {
+    background: var(--warn);
+  }
+
+  #character_avatar.state-speaking {
+    background: var(--scan-soft);
+  }
+
+  #character_avatar.state-error {
+    background: var(--danger);
+  }
+
   @keyframes micpulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(240,104,94,0.5); }
-    50% { box-shadow: 0 0 0 10px rgba(240,104,94,0); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(94,230,201,0.5); }
+    50% { box-shadow: 0 0 0 12px rgba(94,230,201,0); }
   }
 
   #chat_status {
@@ -515,6 +561,11 @@
 
   <div id="hint_text">対象を枠の中に収めてください</div>
 
+  <div id="zoom_control">
+    <input type="range" id="zoom_slider" min="1" max="1" step="0.1" value="1">
+    <div id="zoom_label">1.0x</div>
+  </div>
+
   <div id="top_bar">
     <div id="brand">YUI SCANNER</div>
     <div id="top_bar_actions">
@@ -545,8 +596,10 @@
     <div id="chat_log"></div>
 
     <div id="chat_controls">
-      <button id="mic_btn" aria-label="話しかける">🎤</button>
-      <div id="chat_status">マイクを押して質問してみてください</div>
+      <button id="character_avatar" aria-label="長押しでお話しモード">
+        <span id="character_face">🙂</span>
+      </button>
+      <div id="chat_status">長押しでお話しモード開始</div>
     </div>
   </div>
 
@@ -566,7 +619,7 @@
     <div class="layer_title">Gemini APIキー</div>
     <label>
       Google AI Studioで発行したAPIキーを貼り付けてください。<br>
-      このキーは自分のスマホ内(このページを開いている間だけ)に保持され、どこにも送信されません。
+      このキーはGemini APIへのリクエストを認証するためだけに使われます。それ以外の送信先はなく、スマホ内(このページを開いている間だけ)に保持されます。
     </label>
     <textarea id="key_input" placeholder="AQ.xxxxxxxxxxxxxxxxxxxxxxxx"></textarea>
     <div class="row">
@@ -582,6 +635,7 @@
   // ============ 状態 ============
   let apiKey = "";           // このセッション中だけメモリ上に保持(ページを閉じると消える)
   let stream = null;
+  let currentTrack = null;
   let capturedBase64 = null;
   const MODEL = "gemini-3.6-flash";
 
@@ -606,23 +660,46 @@
     rescanBtn: document.getElementById('rescan_btn'),
     settingsBtn: document.getElementById('settings_btn'),
     resetBtn: document.getElementById('reset_btn'),
+    zoomControl: document.getElementById('zoom_control'),
+    zoomSlider: document.getElementById('zoom_slider'),
+    zoomLabel: document.getElementById('zoom_label'),
     keyPanel: document.getElementById('key_panel'),
     keyInput: document.getElementById('key_input'),
     keySave: document.getElementById('key_save'),
     keyClose: document.getElementById('key_close'),
     chatLog: document.getElementById('chat_log'),
-    micBtn: document.getElementById('mic_btn'),
+    characterAvatar: document.getElementById('character_avatar'),
+    characterFace: document.getElementById('character_face'),
     chatStatus: document.getElementById('chat_status'),
   };
 
   let lastNarration = "";
+  let conversationHistory = []; // Gemini に毎回送る会話履歴 [{role, parts}]
+  let talkModeActive = false;
+  let talkBusy = false; // Gemini応答待ち・読み上げ中はtrue(この間は聞き取りを再開しない)
 
-  // 現在カメラで認識した対象
-  let currentSubject = "";
-  let currentDescription = "";
+  // ---- キャラクターの表情差分(今は仮の絵文字。あとで画像に差し替え可能) ----
+  const CHARACTER_FACES = {
+    normal:   '🙂',
+    listening:'👂',
+    thinking: '🤔',
+    speaking: '🗣️',
+    error:    '😵',
+  };
 
-  // Gemini に送る会話履歴
-  let conversationHistory = [];
+  const CHAT_STATUS_TEXT = {
+    normal:    '長押しでお話しモード開始',
+    listening: '聞いています...',
+    thinking:  '考え中...',
+    speaking:  '話しています...',
+    error:     'うまく聞き取れませんでした',
+  };
+
+  function setCharacterState(state) {
+    els.characterFace.textContent = CHARACTER_FACES[state] || CHARACTER_FACES.normal;
+    els.chatStatus.textContent = CHAT_STATUS_TEXT[state] || CHAT_STATUS_TEXT.normal;
+    els.characterAvatar.className = state === 'normal' ? '' : `state-${state}`;
+  }
 
   // ============ カメラ起動 ============
   async function startCamera() {
@@ -635,6 +712,20 @@
       els.startLayer.style.display = 'none';
       els.errorLayer.style.display = 'none';
       els.scanFrame.classList.add('scanning');
+
+      // 光学ズームに対応している機種かを確認する(非対応ならUIごと出さない)
+      currentTrack = stream.getVideoTracks()[0];
+      const caps = currentTrack.getCapabilities ? currentTrack.getCapabilities() : {};
+      if (caps.zoom && caps.zoom.max > caps.zoom.min) {
+        els.zoomSlider.min = caps.zoom.min;
+        els.zoomSlider.max = caps.zoom.max;
+        els.zoomSlider.step = caps.zoom.step || 0.1;
+        els.zoomSlider.value = caps.zoom.min;
+        els.zoomLabel.textContent = `${Number(caps.zoom.min).toFixed(1)}x`;
+        els.zoomControl.classList.add('visible');
+      } else {
+        els.zoomControl.classList.remove('visible');
+      }
     } catch (err) {
       els.startLayer.style.display = 'none';
       els.errorLayer.style.display = 'flex';
@@ -648,6 +739,18 @@
 
   els.startBtn.addEventListener('click', startCamera);
   els.errorRetryBtn.addEventListener('click', startCamera);
+
+  els.zoomSlider.addEventListener('input', async () => {
+    const value = parseFloat(els.zoomSlider.value);
+    els.zoomLabel.textContent = `${value.toFixed(1)}x`;
+    if (currentTrack) {
+      try {
+        await currentTrack.applyConstraints({ advanced: [{ zoom: value }] });
+      } catch (e) {
+        // 一部端末はズーム値の反映に失敗することがあるが、UI表示はそのままにする
+      }
+    }
+  });
 
   // ============ APIキー設定 ============
   els.settingsBtn.addEventListener('click', () => {
@@ -751,38 +854,17 @@
 
       const text = await callGemini([{ role: 'user', parts: userParts }]);
 
+      // この本についての会話履歴として、画像判定のやり取りを積んでおく
+      conversationHistory = [
+        { role: 'user', parts: userParts },
+        { role: 'model', parts: [{ text }] },
+      ];
+
       const titleMatch = text.match(/TITLE:\s*([\s\S]*?)\nNARRATION:/);
       const narrationMatch = text.match(/NARRATION:\s*([\s\S]*)/);
 
       const title = titleMatch ? titleMatch[1].trim() : "判定できませんでした";
       const narration = narrationMatch ? narrationMatch[1].trim() : text.trim();
-
-      // 現在認識している対象を保存
-      currentSubject = title;
-      currentDescription = narration;
-
-      // 認識結果を会話の前提情報として保存
-      // 追質問では元画像を再送信せず、対象と最初の説明だけをテキストで保持する
-      conversationHistory = [
-        {
-          role: 'user',
-          parts: [{
-            text:
-              `現在カメラで認識した対象は「${title}」です。\n` +
-              `最初の説明は以下です。\n${narration}`
-          }]
-        },
-        {
-          role: 'model',
-          parts: [{
-            text: narration
-          }]
-        }
-      ];
-
-      // 現在認識している対象を保存
-      currentSubject = title;
-      currentDescription = narration;
 
       els.resultTitle.textContent = title;
       els.resultNarration.textContent = narration;
@@ -801,12 +883,19 @@
   }
 
   // ============ 読み上げ ============
-  function speak(text) {
-    if (!('speechSynthesis' in window)) return;
+  function speak(text, onEnd) {
+    if (!('speechSynthesis' in window)) {
+      if (onEnd) onEnd();
+      return;
+    }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'ja-JP';
     utterance.rate = 1.15;
+    if (onEnd) {
+      utterance.onend = onEnd;
+      utterance.onerror = onEnd;
+    }
     window.speechSynthesis.speak(utterance);
   }
 
@@ -814,26 +903,22 @@
 
   // ============ リセット(最初から) ============
   function resetSession() {
+    endTalkMode(false);
     window.speechSynthesis.cancel();
-    if (recognizer) {
-      try { recognizer.stop(); } catch (e) {}
-    }
     els.resultPanel.classList.remove('open');
     els.capturedPreview.style.display = 'none';
     els.cameraFeed.style.display = 'block';
     els.hintText.style.display = 'block';
     els.scanFrame.classList.add('scanning');
     conversationHistory = [];
-    currentSubject = "";
-    currentDescription = "";
     els.chatLog.innerHTML = '';
-    els.chatStatus.textContent = 'マイクを押して質問してみてください';
+    setCharacterState('normal');
   }
 
   els.rescanBtn.addEventListener('click', resetSession);
   els.resetBtn.addEventListener('click', resetSession);
 
-  // ============ 音声での会話 ============
+  // ============ 音声での会話(お話しモード) ============
   const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recognizer = null;
   if (SpeechRecognitionCtor) {
@@ -843,6 +928,8 @@
     recognizer.maxAlternatives = 1;
   }
 
+  const EXIT_KEYWORDS = ['終わり', 'おわり', 'バイバイ', 'ばいばい', '終了', 'さようなら'];
+
   function addChatMessage(role, text) {
     const bubble = document.createElement('div');
     bubble.className = `chat_msg ${role === 'user' ? 'user' : 'assistant'}`;
@@ -851,93 +938,143 @@
     els.chatLog.scrollTop = els.chatLog.scrollHeight;
   }
 
-  async function askFollowUp(questionText) {
-    addChatMessage('user', questionText);
-    els.chatStatus.textContent = '考え中...';
-
-    // 現在の対象を必ず Gemini に伝える
-    const contextMessage =
-      `現在カメラで認識している対象は「${currentSubject}」です。\n` +
-      `最初の説明：${currentDescription}`;
-
-    // 今回の質問を履歴に追加
-    conversationHistory.push({
-      role: 'user',
-      parts: [{
-        text: questionText
-      }]
-    });
-
-    // 履歴が増えすぎないように、対象情報＋直近の会話だけを送る
-    let recentHistory = conversationHistory;
-
-    if (conversationHistory.length > 6) {
-      recentHistory = [
-        conversationHistory[0],
-        ...conversationHistory.slice(-5)
-      ];
-    }
-
-    // 今回だけ対象情報を先頭に追加
-    const messagesToSend = [
-      {
-        role: 'user',
-        parts: [{
-          text: contextMessage
-        }]
-      },
-      ...recentHistory
+  // トークン節約のため、最初の画像判定(2件)+ 直近のやり取りだけを送る
+  function trimmedHistory() {
+    if (conversationHistory.length <= 6) return conversationHistory;
+    return [
+      conversationHistory[0],
+      conversationHistory[1],
+      ...conversationHistory.slice(-4),
     ];
+  }
+
+  async function handleTalkModeQuestion(questionText) {
+    conversationHistory.push({ role: 'user', parts: [{ text: questionText }] });
+    addChatMessage('user', questionText);
+    setCharacterState('thinking');
 
     try {
-      const answer = await callGemini(messagesToSend);
-
-      conversationHistory.push({
-        role: 'model',
-        parts: [{
-          text: answer
-        }]
-      });
-
+      const answer = await callGemini(trimmedHistory());
+      conversationHistory.push({ role: 'model', parts: [{ text: answer }] });
       addChatMessage('assistant', answer);
-      speak(answer);
 
-      els.chatStatus.textContent =
-        'マイクを押して質問してみてください';
-
+      setCharacterState('speaking');
+      speak(answer, () => {
+        talkBusy = false;
+        if (talkModeActive) startListeningLoop();
+      });
     } catch (err) {
       addChatMessage('assistant', 'エラー: ' + err.message);
-      els.chatStatus.textContent =
-        'マイクを押して質問してみてください';
+      setCharacterState('error');
+      talkBusy = false;
+      if (talkModeActive) {
+        setTimeout(() => { if (talkModeActive) startListeningLoop(); }, 1200);
+      }
     }
   }
 
-  els.micBtn.addEventListener('click', () => {
+  function startListeningLoop() {
+    if (!talkModeActive || talkBusy) return;
+    setCharacterState('listening');
+    try {
+      recognizer.start();
+    } catch (e) {
+      // 直前の認識がまだ終了処理中の場合など、少し待って再試行
+      setTimeout(() => { if (talkModeActive && !talkBusy) { try { recognizer.start(); } catch (e2) {} } }, 300);
+    }
+  }
+
+  function startTalkMode() {
     if (!apiKey) {
       els.settingsBtn.click();
       return;
     }
     if (!recognizer) {
+      setCharacterState('error');
       els.chatStatus.textContent = 'この端末は音声入力に対応していません';
       return;
     }
-    window.speechSynthesis.cancel();
-    els.micBtn.classList.add('listening');
-    els.chatStatus.textContent = '聞いています...';
-    recognizer.start();
-  });
+    if (talkModeActive) return;
+
+    talkModeActive = true;
+    talkBusy = true;
+    setCharacterState('speaking');
+    speak('はい、なんでしょう？', () => {
+      talkBusy = false;
+      if (talkModeActive) startListeningLoop();
+    });
+  }
+
+  function endTalkMode(sayGoodbye) {
+    if (!talkModeActive) return;
+    talkModeActive = false;
+    talkBusy = false;
+    if (recognizer) {
+      try { recognizer.stop(); } catch (e) {}
+    }
+    if (sayGoodbye) {
+      setCharacterState('speaking');
+      speak('またね。', () => setCharacterState('normal'));
+    } else {
+      window.speechSynthesis.cancel();
+      setCharacterState('normal');
+    }
+  }
+
+  // ---- 長押しでお話しモードのON/OFFを切り替え ----
+  let pressTimer = null;
+  const LONG_PRESS_MS = 550;
+
+  function onPressStart(e) {
+    e.preventDefault();
+    pressTimer = setTimeout(() => {
+      pressTimer = null;
+      if (talkModeActive) {
+        endTalkMode(true);
+      } else {
+        startTalkMode();
+      }
+    }, LONG_PRESS_MS);
+  }
+
+  function onPressEnd() {
+    if (pressTimer) {
+      clearTimeout(pressTimer);
+      pressTimer = null;
+    }
+  }
+
+  els.characterAvatar.addEventListener('touchstart', onPressStart, { passive: false });
+  els.characterAvatar.addEventListener('touchend', onPressEnd);
+  els.characterAvatar.addEventListener('touchcancel', onPressEnd);
+  els.characterAvatar.addEventListener('mousedown', onPressStart);
+  els.characterAvatar.addEventListener('mouseup', onPressEnd);
+  els.characterAvatar.addEventListener('mouseleave', onPressEnd);
 
   if (recognizer) {
     recognizer.addEventListener('result', (event) => {
-      const question = event.results[0][0].transcript;
-      askFollowUp(question);
+      const transcript = event.results[0][0].transcript;
+
+      if (EXIT_KEYWORDS.some(k => transcript.includes(k))) {
+        endTalkMode(true);
+        return;
+      }
+
+      talkBusy = true;
+      handleTalkModeQuestion(transcript);
     });
+
     recognizer.addEventListener('end', () => {
-      els.micBtn.classList.remove('listening');
+      // 無音のまま終了した場合(結果が得られなかった場合)は、聞き取りを続行する
+      if (talkModeActive && !talkBusy) {
+        setTimeout(() => startListeningLoop(), 300);
+      }
     });
-    recognizer.addEventListener('error', (event) => {
-      els.micBtn.classList.remove('listening');
-      els.chatStatus.textContent = '聞き取れませんでした。もう一度試してください';
+
+    recognizer.addEventListener('error', () => {
+      if (talkModeActive && !talkBusy) {
+        setTimeout(() => { if (talkModeActive) startListeningLoop(); }, 500);
+      }
     });
   }
 
