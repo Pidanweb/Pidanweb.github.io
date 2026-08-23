@@ -411,6 +411,26 @@
     color: var(--ink-dim);
   }
 
+  #talk_end_btn {
+    margin-left: auto;
+    flex-shrink: 0;
+    display: none;
+    align-items: center;
+    gap: 6px;
+    background: var(--danger);
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 600;
+  }
+
+  #talk_end_btn.visible {
+    display: flex;
+  }
+
   /* ---------- ステータス表示 ---------- */
 
   #status_layer {
@@ -600,6 +620,7 @@
         <span id="character_face">🙂</span>
       </button>
       <div id="chat_status">長押しでお話しモード開始</div>
+      <button id="talk_end_btn">⏹ 終了</button>
     </div>
   </div>
 
@@ -671,6 +692,7 @@
     characterAvatar: document.getElementById('character_avatar'),
     characterFace: document.getElementById('character_face'),
     chatStatus: document.getElementById('chat_status'),
+    talkEndBtn: document.getElementById('talk_end_btn'),
   };
 
   let lastNarration = "";
@@ -806,6 +828,14 @@
     els.captureBtn.disabled = false;
   });
 
+  // すべてのやり取りに共通で適用する指示(記号読み上げ防止・回答の長さ制御)
+  const SYSTEM_PROMPT =
+    "あなたは音声で会話するアシスタントです。回答は必ずスピーカーで読み上げられます。次のルールを厳守してください。\n" +
+    "・アスタリスク(*)、シャープ(#)、箇条書きの記号、太字や見出しなどのMarkdown書式は絶対に使わない\n" +
+    "・数字の箇条書き(1. 2. のような形式)も使わない。文章として話す\n" +
+    "・回答は簡潔にする。特別な指示がない限り2〜3文、長くても4文までに収める\n" +
+    "・自然な話し言葉で、丁寧だがフレンドリーな口調にする";
+
   // ============ Gemini API 呼び出し(会話履歴つき) ============
   async function callGemini(contents) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -814,6 +844,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents,
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         generationConfig: {
           thinkingConfig: { thinkingLevel: "high" }, // じっくり考えさせて精度を上げる
         },
@@ -998,6 +1029,7 @@
 
     talkModeActive = true;
     talkBusy = true;
+    els.talkEndBtn.classList.add('visible');
     setCharacterState('speaking');
     speak('はい、なんでしょう？', () => {
       talkBusy = false;
@@ -1009,6 +1041,7 @@
     if (!talkModeActive) return;
     talkModeActive = false;
     talkBusy = false;
+    els.talkEndBtn.classList.remove('visible');
     if (recognizer) {
       try { recognizer.stop(); } catch (e) {}
     }
@@ -1020,6 +1053,8 @@
       setCharacterState('normal');
     }
   }
+
+  els.talkEndBtn.addEventListener('click', () => endTalkMode(true));
 
   // ---- 長押しでお話しモードのON/OFFを切り替え ----
   let pressTimer = null;
