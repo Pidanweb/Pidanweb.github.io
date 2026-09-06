@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>YUI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f3e9;
+    --panel: #ffffff;
+    --panel-edge: #e6ddc8;
+    --ink: #2c2f36;
+    --ink-dim: #7c8288;
+    --scan: #2fae90;
+    --scan-soft: rgba(47, 174, 144, 0.14);
+    --warn: #d98a33;
+    --danger: #e2554a;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #app {
+    position: relative;
+    height: 100dvh;
+    width: 100vw;
+    overflow: hidden;
+  }
+
+  .layer {
+    position: absolute;
+    inset: 0;
+    display: none;
+  }
+  .layer.active { display: flex; }
+
+  /* ---------- ①ダイブ演出 ---------- */
+
+  #dive_layer {
+    background: #000;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .dive_ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--scan);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    animation: diveRingExpand 1.8s ease-out infinite;
+  }
+  .dive_ring.r2 { animation-delay: 0.4s; }
+  .dive_ring.r3 { animation-delay: 0.8s; }
+
+  @keyframes diveRingExpand {
+    0%   { width: 10px; height: 10px; opacity: 0.9; border-width: 3px; }
+    80%  { opacity: 0.25; }
+    100% { width: 900px; height: 900px; opacity: 0; border-width: 1px; }
+  }
+
+  .dive_flash {
+    position: absolute;
+    inset: 0;
+    background: var(--scan);
+    opacity: 0;
+    animation: diveFlash 2.6s ease-in-out forwards;
+  }
+
+  @keyframes diveFlash {
+    0%   { opacity: 0; }
+    68%  { opacity: 0; }
+    74%  { opacity: 0.85; }
+    100% { opacity: 0; }
+  }
+
+  #dive_text {
+    position: relative;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: 0.3em;
+    color: var(--scan);
+    opacity: 0;
+    animation: diveTextFade 2.6s ease-in-out forwards;
+  }
+
+  @keyframes diveTextFade {
+    0%   { opacity: 0; letter-spacing: 0.6em; }
+    30%  { opacity: 1; letter-spacing: 0.3em; }
+    80%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  /* ---------- ②チュートリアル(ビジュアルノベル風) / ③初期設定 共通 ---------- */
+
+  #vn_layer {
+    flex-direction: column;
+    justify-content: flex-end;
+    background: radial-gradient(ellipse at top, #10151d 0%, var(--bg) 60%);
+  }
+
+  #home_layer {
+    flex-direction: column;
+    justify-content: flex-end;
+    background-image: url('chars/bg_scene.jpg');
+    background-size: cover;
+    background-position: center;
+  }
+
+  .vn_skip_btn {
+    position: absolute;
+    top: max(18px, env(safe-area-inset-top));
+    right: 18px;
+    background: rgba(0,0,0,0.055);
+    border: 1px solid rgba(0,0,0,0.12);
+    color: var(--ink-dim);
+    border-radius: 20px;
+    padding: 7px 14px;
+    font-size: 12px;
+    font-family: inherit;
+    z-index: 5;
+  }
+
+  .vn_character_wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 40px;
+  }
+
+  .character_stage {
+    position: relative;
+    width: min(72vw, 330px);
+    height: min(72vw, 330px);
+    border-radius: 50%;
+    overflow: hidden;
+    background-color: var(--panel-edge);
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  }
+
+  .vn_character_wrap img {
+    position: relative;
+    max-height: 96%;
+    max-width: 82%;
+    object-fit: contain;
+    filter: drop-shadow(0 6px 14px rgba(0,0,0,0.12));
+  }
+
+  .vn_box {
+    background: var(--panel);
+    border-top: 1px solid var(--panel-edge);
+    border-radius: 20px 20px 0 0;
+    padding: 20px 22px max(26px, env(safe-area-inset-bottom));
+  }
+
+  .vn_name {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--scan);
+    margin-bottom: 8px;
+    letter-spacing: 0.05em;
+  }
+
+  .vn_line {
+    font-size: 15px;
+    line-height: 1.9;
+    min-height: 4.8em;
+  }
+
+  .vn_next_row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 10px;
+  }
+
+  .vn_next_btn {
+    background: var(--scan-soft);
+    color: var(--scan);
+    border: none;
+    border-radius: 14px;
+    padding: 10px 20px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  /* ---------- 初期設定フォーム用パーツ ---------- */
+
+  .vn_input {
+    width: 100%;
+    background: rgba(0,0,0,0.045);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-family: inherit;
+    margin-top: 4px;
+  }
+
+  .vn_choice_grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+  }
+
+  .vn_choice_btn {
+    background: rgba(0,0,0,0.045);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-family: inherit;
+    font-size: 14px;
+    text-align: left;
+  }
+
+  .vn_choice_btn.selected {
+    background: var(--scan-soft);
+    border-color: var(--scan);
+    color: var(--scan);
+  }
+
+  /* ---------- ④ホーム画面 ---------- */
+
+  #home_layer {
+    justify-content: flex-start;
+  }
+
+  #home_top {
+    padding: max(20px, env(safe-area-inset-top)) 22px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    z-index: 6;
+  }
+
+  #home_brand {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 30px;
+    letter-spacing: 0.03em;
+    color: #2fae55;
+    text-shadow: 0 0 14px rgba(47,174,85,0.35);
+  }
+
+  #home_menu_btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-radius: 20px;
+    padding: 7px 14px 7px 12px;
+    font-size: 12.5px;
+    font-family: inherit;
+    font-weight: 600;
+  }
+
+  #home_menu_btn .burger {
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  #home_menu_panel {
+    position: absolute;
+    top: 56px;
+    right: 22px;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 16px;
+    padding: 8px;
+    display: none;
+    flex-direction: column;
+    min-width: 190px;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.1);
+    z-index: 7;
+  }
+  #home_menu_panel.open { display: flex; }
+
+  #home_menu_panel a {
+    display: block;
+    padding: 12px 14px;
+    border-radius: 10px;
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 14px;
+  }
+  #home_menu_panel a:active {
+    background: var(--scan-soft);
+  }
+
+  /* ---------- キャラクター表示エリア(右寄せ+背景ボード+カーペット) ---------- */
+
+  #home_stage_row {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    position: relative;
+    padding: 10px 20px 0;
+  }
+
+  #home_bubble_wrap {
+    flex: 1;
+    min-width: 0;
+    padding-right: 10px;
+  }
+
+  #home_bubble {
+    position: relative;
+    background: #ffffff;
+    border: 4px solid #1a1a1a;
+    border-radius: 26px;
+    padding: 22px 24px;
+    font-size: 21px;
+    font-weight: 600;
+    line-height: 1.7;
+    color: #1a1a1a;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+  }
+
+  /* 吹き出しのしっぽ(右のキャラ側を指す・黒縁+白中身の二重構造) */
+  #home_bubble::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: -17px;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 14px solid transparent;
+    border-bottom: 14px solid transparent;
+    border-left: 17px solid #1a1a1a;
+  }
+  #home_bubble::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: -10px;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 10px solid transparent;
+    border-bottom: 10px solid transparent;
+    border-left: 12px solid #ffffff;
+  }
+
+  #home_char_area {
+    position: relative;
+    width: 46vw;
+    max-width: 230px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 52vh;
+  }
+
+  #home_character_wrap {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: center;
+    width: 100%;
+  }
+
+  #home_character_wrap img {
+    max-height: 44vh;
+    max-width: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 8px 12px rgba(0,0,0,0.18));
+  }
+
+  /* 足元の楕円カーペット(台座) */
+  #home_rug {
+    position: relative;
+    z-index: 1;
+    width: 78%;
+    height: 22px;
+    margin-top: -8px;
+    border-radius: 50%;
+    background: #c48a5a;
+    opacity: 0.8;
+    filter: blur(0.3px);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.12);
+  }
+
+  #home_buttons {
+    display: flex;
+    gap: 12px;
+    padding: 18px 22px max(26px, env(safe-area-inset-bottom));
+    position: relative;
+    z-index: 2;
+  }
+
+  .home_nav_btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 18px 10px;
+    border-radius: 18px;
+    border: 3px solid #1a1a1a;
+    background: #ffffff;
+    font-family: inherit;
+    text-decoration: none;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.1);
+  }
+
+  .home_nav_btn .icon {
+    font-size: 28px;
+  }
+
+  .home_nav_btn .label {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+
+  #talk_nav_btn, #camera_nav_btn {
+    background: #ffffff;
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ①ダイブ演出 -->
+  <div id="dive_layer" class="layer">
+    <div class="dive_ring"></div>
+    <div class="dive_ring r2"></div>
+    <div class="dive_ring r3"></div>
+    <div class="dive_flash"></div>
+    <div id="dive_text">接続開始</div>
+  </div>
+
+  <!-- ②チュートリアル ③初期設定(ビジュアルノベル形式・共通レイヤー) -->
+  <div id="vn_layer" class="layer">
+    <button class="vn_skip_btn" id="vn_skip_btn">スキップ</button>
+    <div class="vn_character_wrap">
+      <div class="character_stage" id="vn_stage">
+        <img id="vn_character_img" src="chars/char_normal.png" alt="YUI">
+      </div>
+    </div>
+    <div class="vn_box">
+      <div class="vn_name">YUI</div>
+      <div class="vn_line" id="vn_line_text"></div>
+      <div id="vn_extra"></div>
+      <div class="vn_next_row">
+        <button class="vn_next_btn" id="vn_next_btn">次へ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ホーム画面 -->
+  <div id="home_layer" class="layer">
+    <div id="home_top">
+      <div id="home_brand">YUI</div>
+      <button id="home_menu_btn">
+        <span class="burger">☰</span>
+        <span>メニュー</span>
+      </button>
+      <div id="home_menu_panel">
+        <a href="settings.html">APIキー入力ページ</a>
+        <a href="usage.html">使い方ページ</a>
+      </div>
+    </div>
+
+    <div id="home_stage_row">
+      <div id="home_bubble_wrap">
+        <div id="home_bubble">こんにちは。</div>
+      </div>
+      <div id="home_char_area">
+        <div id="home_character_wrap">
+          <img id="home_character_img" src="chars/char_normal.png" alt="YUI">
+        </div>
+        <div id="home_rug"></div>
+      </div>
+    </div>
+
+    <div id="home_buttons">
+      <a id="talk_nav_btn" class="home_nav_btn" href="talk.html">
+        <span class="icon">💬</span>
+        <span class="label">お話しする</span>
+      </a>
+      <a id="camera_nav_btn" class="home_nav_btn" href="yui_scanner.html">
+        <span class="icon">📷</span>
+        <span class="label">カメラで質問する</span>
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const els = {
+    diveLayer: document.getElementById('dive_layer'),
+    vnLayer: document.getElementById('vn_layer'),
+    homeLayer: document.getElementById('home_layer'),
+    vnSkipBtn: document.getElementById('vn_skip_btn'),
+    vnCharacterImg: document.getElementById('vn_character_img'),
+    vnLineText: document.getElementById('vn_line_text'),
+    vnExtra: document.getElementById('vn_extra'),
+    vnNextBtn: document.getElementById('vn_next_btn'),
+    homeMenuBtn: document.getElementById('home_menu_btn'),
+    homeMenuPanel: document.getElementById('home_menu_panel'),
+    homeCharacterImg: document.getElementById('home_character_img'),
+    homeBubble: document.getElementById('home_bubble'),
+    vnStage: document.getElementById('vn_stage'),
+  };
+
+  // ---- 時間帯に応じた背景写真(VNキャラクターステージ用) ----
+  function timeOfDayBg() {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 11)  return 'chars/bg_morning.jpg';
+    if (hour >= 17 && hour < 20) return 'chars/bg_evening.jpg';
+    if (hour >= 20 || hour < 5)  return 'chars/bg_evening.jpg';
+    return 'chars/bg_day.jpg';
+  }
+  els.vnStage.style.backgroundImage = `url('${timeOfDayBg()}')`;
+
+  // ---- メニューの開閉 ----
+  els.homeMenuBtn.addEventListener('click', () => {
+    els.homeMenuPanel.classList.toggle('open');
+  });
+
+  const PROFILE_KEY = 'yui_profile';
+
+  function loadProfile() {
+    try {
+      const raw = localStorage.getItem(PROFILE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveProfile(profile) {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  }
+
+  function showLayer(layer) {
+    [els.diveLayer, els.vnLayer, els.homeLayer].forEach(l => l.classList.remove('active'));
+    layer.classList.add('active');
+  }
+
+  // ============ ①ダイブ演出 ============
+  function playDive(onFinish) {
+    showLayer(els.diveLayer);
+    // CSSアニメーションの尺(2.6秒)に合わせて次に進む
+    setTimeout(onFinish, 2600);
+  }
+
+  // ============ ②チュートリアル(ビジュアルノベル風) ============
+  const TUTORIAL_LINES = [
+    "はじめまして、わたしはYUI。あなたの毎日をサポートするナビゲーションAIだよ。",
+    "カメラで何かを映すと、それが何かを判定して、声で説明してくれる機能があるよ。本でも、ぬいぐるみでも、動物でも大丈夫。",
+    "会話中のキャラクターを短く押すと、1つだけ質問できるよ。長く押すと、そのまま会話を続けられるモードになるよ。",
+    "会話を終えたいときは「バイバイ」って言うか、終了ボタンを押してね。",
+    "それじゃあ、少しだけあなたのことを教えてもらってもいい？",
+  ];
+
+  let tutorialStep = 0;
+
+  function showTutorialStep() {
+    els.vnExtra.innerHTML = '';
+    els.vnLineText.textContent = TUTORIAL_LINES[tutorialStep];
+    els.vnNextBtn.textContent = (tutorialStep === TUTORIAL_LINES.length - 1) ? 'はじめる' : '次へ';
+  }
+
+  function startTutorial() {
+    tutorialStep = 0;
+    onboardingActive = false;
+    showLayer(els.vnLayer);
+    els.vnSkipBtn.style.display = 'block';
+    showTutorialStep();
+  }
+
+  els.vnNextBtn.addEventListener('click', () => {
+    if (onboardingActive) {
+      handleOnboardingNext();
+      return;
+    }
+    tutorialStep++;
+    if (tutorialStep >= TUTORIAL_LINES.length) {
+      startOnboarding();
+    } else {
+      showTutorialStep();
+    }
+  });
+
+  els.vnSkipBtn.addEventListener('click', () => {
+    // チュートリアルの説明部分だけスキップする(初期設定は必ず行う)
+    startOnboarding();
+  });
+
+  // ============ ③初期設定(オンボーディング) ============
+  const TONE_OPTIONS = [
+    { id: 'polite',    label: '丁寧(です・ます調)' },
+    { id: 'friendly',  label: 'フレンドリー(タメ口)' },
+    { id: 'tsundere',  label: 'ツンデレ気味' },
+    { id: 'cool',      label: 'クールで無口気味' },
+  ];
+
+  const FEEDBACK_OPTIONS = [
+    { id: 'gentle',    label: '優しく励ますタイプ' },
+    { id: 'direct',    label: '率直にはっきり言うタイプ' },
+    { id: 'playful',   label: 'ちょっとユーモラスに茶化すタイプ' },
+  ];
+
+  let onboardingActive = false;
+  let onboardingStep = 0; // 0: 名前 / 1: 口調 / 2: フィードバック
+  const draftProfile = { user_name: '', tone_style: 'friendly', feedback_style: 'gentle' };
+
+  function startOnboarding() {
+    onboardingActive = true;
+    onboardingStep = 0;
+    els.vnSkipBtn.style.display = 'none';
+    showLayer(els.vnLayer);
+    renderOnboardingStep();
+  }
+
+  function renderOnboardingStep() {
+    els.vnExtra.innerHTML = '';
+
+    if (onboardingStep === 0) {
+      els.vnLineText.textContent = 'なんて呼べばいい？';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'vn_input';
+      input.placeholder = '呼び名を入力';
+      input.id = 'name_input';
+      input.value = draftProfile.user_name;
+      els.vnExtra.appendChild(input);
+      els.vnNextBtn.textContent = '次へ';
+    }
+
+    if (onboardingStep === 1) {
+      els.vnLineText.textContent = 'どんな話し方をしてほしい？';
+      const grid = document.createElement('div');
+      grid.className = 'vn_choice_grid';
+      TONE_OPTIONS.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = 'vn_choice_btn' + (draftProfile.tone_style === opt.id ? ' selected' : '');
+        btn.textContent = opt.label;
+        btn.addEventListener('click', () => {
+          draftProfile.tone_style = opt.id;
+          renderOnboardingStep();
+        });
+        grid.appendChild(btn);
+      });
+      els.vnExtra.appendChild(grid);
+      els.vnNextBtn.textContent = '次へ';
+    }
+
+    if (onboardingStep === 2) {
+      els.vnLineText.textContent = '何か指摘したいとき、どんな伝え方がいい？';
+      const grid = document.createElement('div');
+      grid.className = 'vn_choice_grid';
+      FEEDBACK_OPTIONS.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = 'vn_choice_btn' + (draftProfile.feedback_style === opt.id ? ' selected' : '');
+        btn.textContent = opt.label;
+        btn.addEventListener('click', () => {
+          draftProfile.feedback_style = opt.id;
+          renderOnboardingStep();
+        });
+        grid.appendChild(btn);
+      });
+      els.vnExtra.appendChild(grid);
+      els.vnNextBtn.textContent = 'はじめる';
+    }
+  }
+
+  function handleOnboardingNext() {
+    if (onboardingStep === 0) {
+      const input = document.getElementById('name_input');
+      draftProfile.user_name = (input && input.value.trim()) || 'あなた';
+    }
+
+    if (onboardingStep < 2) {
+      onboardingStep++;
+      renderOnboardingStep();
+    } else {
+      draftProfile.onboarded = true;
+      saveProfile(draftProfile);
+      onboardingActive = false;
+      showHome();
+    }
+  }
+
+  // ============ ④ホーム画面 ============
+  function timeGreeting(name) {
+    const hour = new Date().getHours();
+    if (hour >= 6 && hour < 11)  return `おはよう、${name}。今日も一日、よろしくね。`;
+    if (hour >= 11 && hour < 14) return `お昼だね、${name}。ちゃんとご飯食べた？`;
+    if (hour >= 18 && hour < 23) return `おかえり、${name}。今日はどんな一日だった？`;
+    if (hour >= 23 || hour < 6)  return `こんな時間まで起きてるんだ、${name}。無理しないでね。`;
+    return `${name}、お疲れさま。何か手伝えることある？`;
+  }
+
+  // 待機中はランダムに表情を選ぶ(気分屋な感じを出す)
+  const IDLE_FACES = [
+    'chars/char_normal.png',
+    'chars/char_thinking.png',
+    'chars/char_error.png',
+    'chars/char_angry.png',
+  ];
+  function pickRandomFace() {
+    return IDLE_FACES[Math.floor(Math.random() * IDLE_FACES.length)];
+  }
+
+  function showHome() {
+    const profile = loadProfile();
+    const name = (profile && profile.user_name) || 'あなた';
+    els.homeBubble.textContent = timeGreeting(name);
+    els.homeCharacterImg.src = pickRandomFace();
+    showLayer(els.homeLayer);
+  }
+
+  // ============ 起動時の分岐 ============
+  const profile = loadProfile();
+  if (profile && profile.onboarded) {
+    showHome();
+  } else {
+    playDive(startTutorial);
+  }
+
+})();
+</script>
+
+</body>
+</html>
