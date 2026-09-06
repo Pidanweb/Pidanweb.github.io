@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>使い方 - YUI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f3e9;
+    --panel: #ffffff;
+    --panel-edge: #e6ddc8;
+    --ink: #2c2f36;
+    --ink-dim: #7c8288;
+    --scan: #2fae90;
+    --scan-soft: rgba(47, 174, 144, 0.14);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+  }
+  #app {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: max(20px, env(safe-area-inset-top)) 20px 50px;
+  }
+  #back_btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ink-dim);
+    text-decoration: none;
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+  h1 {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 20px;
+    margin: 0 0 20px;
+  }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 16px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+  }
+  h2 {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--scan);
+    margin: 0 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  h2 .icon { font-size: 18px; }
+  p, li {
+    font-size: 14px;
+    line-height: 1.85;
+    color: var(--ink);
+  }
+  ul { margin: 0; padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  .tag {
+    display: inline-block;
+    background: var(--scan-soft);
+    color: var(--scan);
+    border-radius: 10px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-right: 4px;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <a id="back_btn" href="index.html">← ホームに戻る</a>
+  <h1>使い方</h1>
+
+  <section>
+    <h2><span class="icon">💬</span>お話しする</h2>
+    <p>YUIと自由に会話できる画面です。</p>
+    <ul>
+      <li><span class="tag">マイク</span>ボタンを押すと、1回だけ話を聞き取って答えます。</li>
+      <li>下のテキスト欄からキーボードで入力することもできます。</li>
+      <li>会話の内容は、画面を開くたびに新しく始まります(前回までの会話は引き継ぎません)。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="icon">📷</span>カメラで質問する</h2>
+    <p>カメラに映したものを判定して、解説を読み上げます。本・漫画、ぬいぐるみ、動物、建物など、いろいろなものを試せます。</p>
+    <ul>
+      <li>画面下の丸いボタンで撮影します。</li>
+      <li>判定が終わると、結果と解説が表示され、自動で読み上げられます。</li>
+      <li>右上の🔄ボタンで、最初からやり直せます。</li>
+      <li>対応している機種では、右下にズームのスライダーが表示されます。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="icon">🙂</span>キャラクターとの会話操作</h2>
+    <p>結果が出たあと、キャラクターのアイコンでも会話できます。</p>
+    <ul>
+      <li><b>短く押す</b>：1問だけ質問して、すぐに答えが返ってきます。</li>
+      <li><b>長く押す</b>：会話モードが始まり、答えを聞いたあと自動でまた聞き取りを再開します。</li>
+      <li>会話モードを終えたいときは「バイバイ」「終わり」のように話すか、終了ボタンを押してください。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="icon">🔑</span>APIキーについて</h2>
+    <p>このアプリはGoogleのGemini APIを使って画像や会話を処理します。利用にはご自身のAPIキーが必要です。</p>
+    <ul>
+      <li>メニューの「APIキー入力ページ」から設定できます。</li>
+      <li>一度保存すれば、すべての画面で共通して使われます。</li>
+      <li>キーはこの端末内にのみ保存され、Gemini API以外には送信されません。</li>
+    </ul>
+  </section>
+</div>
+</body>
+</html>
