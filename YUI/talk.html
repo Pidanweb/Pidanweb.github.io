@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>YUIとお話し</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f3e9;
+    --panel: #ffffff;
+    --panel-edge: #e6ddc8;
+    --ink: #2c2f36;
+    --ink-dim: #7c8288;
+    --scan: #2fae90;
+    --scan-soft: rgba(47, 174, 144, 0.14);
+    --warn: #d98a33;
+    --danger: #e2554a;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    overflow: hidden;
+  }
+
+  #app {
+    position: relative;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---------- 上部バー ---------- */
+
+  #top_bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: max(16px, env(safe-area-inset-top)) 18px 12px;
+    border-bottom: 1px solid var(--panel-edge);
+  }
+
+  #back_btn {
+    background: rgba(0,0,0,0.055);
+    border: 1px solid rgba(0,0,0,0.12);
+    color: var(--ink);
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    font-size: 15px;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  #top_avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    background-color: rgba(0,0,0,0.055);
+    background-size: cover;
+    background-position: center;
+  }
+  #top_avatar img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+
+  #top_title {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+  }
+
+  #top_status {
+    font-size: 11.5px;
+    color: var(--ink-dim);
+  }
+
+  #settings_btn {
+    margin-left: auto;
+    background: rgba(0,0,0,0.055);
+    border: 1px solid rgba(0,0,0,0.12);
+    color: var(--ink-dim);
+    border-radius: 20px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-family: inherit;
+  }
+
+  /* ---------- チャットタイムライン ---------- */
+
+  #chat_scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .chat_row {
+    display: flex;
+    gap: 8px;
+    max-width: 88%;
+  }
+  .chat_row.user { align-self: flex-end; flex-direction: row-reverse; }
+  .chat_row.assistant { align-self: flex-start; }
+
+  .chat_avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    background-color: rgba(0,0,0,0.055);
+    background-size: cover;
+    background-position: center;
+  }
+  .chat_avatar img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+
+  .chat_bubble {
+    padding: 10px 14px;
+    border-radius: 16px;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .chat_row.user .chat_bubble {
+    background: var(--scan-soft);
+    color: var(--ink);
+    border-bottom-right-radius: 4px;
+  }
+  .chat_row.assistant .chat_bubble {
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-bottom-left-radius: 4px;
+  }
+
+  /* ---------- 下部入力エリア ---------- */
+
+  #input_bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px max(12px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--panel-edge);
+    background: var(--panel);
+  }
+
+  #mic_btn {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: var(--scan);
+    color: #06231d;
+    font-size: 18px;
+  }
+
+  #mic_btn.state-listening {
+    background: var(--danger);
+    color: #2a0906;
+    animation: micpulse 1s ease-in-out infinite;
+  }
+  #mic_btn.state-thinking { background: var(--warn); color: #2a1a04; }
+  #mic_btn.state-speaking { background: var(--scan-soft); color: var(--scan); }
+
+  @keyframes micpulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(240,104,94,0.5); }
+    50% { box-shadow: 0 0 0 10px rgba(240,104,94,0); }
+  }
+
+  #text_input {
+    flex: 1;
+    background: rgba(0,0,0,0.045);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-radius: 20px;
+    padding: 11px 16px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+
+  #send_btn {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0,0,0,0.055);
+    color: var(--ink);
+    font-size: 16px;
+  }
+
+  /* ---------- APIキー設定パネル ---------- */
+
+  #key_panel {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 30;
+    display: none;
+    flex-direction: column;
+    padding: max(24px, env(safe-area-inset-top)) 24px 24px;
+  }
+  #key_panel.active { display: flex; }
+
+  #key_panel .layer_title {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 20px;
+  }
+
+  #key_panel label {
+    font-size: 13px;
+    color: var(--ink-dim);
+    line-height: 1.7;
+    margin-top: 10px;
+    display: block;
+  }
+
+  #key_panel textarea {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 14px;
+    font-family: monospace;
+    resize: none;
+    height: 90px;
+    margin: 16px 0;
+  }
+
+  #key_panel .row {
+    display: flex;
+    gap: 10px;
+  }
+  #key_panel .row button {
+    flex: 1;
+    padding: 13px 0;
+    border-radius: 14px;
+    border: none;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  #key_save { background: var(--scan); color: #06231d; }
+  #key_close { background: rgba(0,0,0,0.055); color: var(--ink); }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <div id="top_bar">
+    <a id="back_btn" href="index.html">←</a>
+    <div id="top_avatar"><img id="top_avatar_img" src="chars/char_normal.png" alt="YUI"></div>
+    <div>
+      <div id="top_title">YUI</div>
+      <div id="top_status">短押しで質問 / テキスト入力もできます</div>
+    </div>
+    <button id="settings_btn">APIキー設定</button>
+  </div>
+
+  <div id="chat_scroll"></div>
+
+  <div id="input_bar">
+    <button id="mic_btn" aria-label="音声で質問">🎤</button>
+    <input id="text_input" type="text" placeholder="メッセージを入力...">
+    <button id="send_btn" aria-label="送信">➤</button>
+  </div>
+
+  <div id="key_panel">
+    <div class="layer_title">Gemini APIキー</div>
+    <label>
+      Google AI Studioで発行したAPIキーを貼り付けてください。<br>
+      このキーはGemini APIへのリクエストを認証するためだけに使われます。この端末内(localStorage)に保存され、次回からは入力不要になります。
+    </label>
+    <textarea id="key_input" placeholder="AQ.xxxxxxxxxxxxxxxxxxxxxxxx"></textarea>
+    <div class="row">
+      <button id="key_close">閉じる</button>
+      <button id="key_save">保存する</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const PROFILE_KEY = 'yui_profile';
+  const API_KEY_STORAGE = 'yui_api_key';
+  const MODEL = "gemini-3.6-flash";
+
+  const els = {
+    chatScroll: document.getElementById('chat_scroll'),
+    micBtn: document.getElementById('mic_btn'),
+    textInput: document.getElementById('text_input'),
+    sendBtn: document.getElementById('send_btn'),
+    settingsBtn: document.getElementById('settings_btn'),
+    keyPanel: document.getElementById('key_panel'),
+    keyInput: document.getElementById('key_input'),
+    keySave: document.getElementById('key_save'),
+    keyClose: document.getElementById('key_close'),
+    topAvatarImg: document.getElementById('top_avatar_img'),
+    topStatus: document.getElementById('top_status'),
+  };
+
+  // ============ 設定の読み込み ============
+  function loadProfile() {
+    try {
+      const raw = localStorage.getItem(PROFILE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+  const profile = loadProfile();
+  let apiKey = localStorage.getItem(API_KEY_STORAGE) || "";
+
+  const TONE_TEXT = {
+    polite:   "丁寧語(です・ます調)で話してください。",
+    friendly: "フレンドリーなタメ口で話してください。",
+    tsundere: "ややツンデレ気味に、素っ気なさの中に優しさが滲む話し方をしてください。",
+    cool:     "クールで無口気味に、必要なことだけ簡潔に話してください。",
+  };
+
+  const FEEDBACK_TEXT = {
+    gentle:  "指摘やアドバイスをするときは、優しく励ますような伝え方をしてください。",
+    direct:  "指摘やアドバイスをするときは、率直にはっきりと伝えてください。",
+    playful: "指摘やアドバイスをするときは、ちょっとユーモラスに茶化しながら伝えてください。",
+  };
+
+  const userName = profile.user_name || 'あなた';
+
+  const SYSTEM_PROMPT =
+    "あなたはナビゲーションAI「YUI」です。ユーザーの生活をサポートするパートナーとして振る舞ってください。\n" +
+    `ユーザーのことは「${userName}」と呼んでください。\n` +
+    (TONE_TEXT[profile.tone_style] || TONE_TEXT.friendly) + "\n" +
+    (FEEDBACK_TEXT[profile.feedback_style] || FEEDBACK_TEXT.gentle) + "\n" +
+    "回答は必ず音声で読み上げられます。次のルールを厳守してください。\n" +
+    "・アスタリスク(*)、シャープ(#)、箇条書きの記号、太字や見出しなどのMarkdown書式は絶対に使わない\n" +
+    "・数字の箇条書き(1. 2. のような形式)も使わない。文章として話す\n" +
+    "・回答は簡潔にする。特別な指示がない限り2〜3文、長くても4文までに収める\n" +
+    "・一貫して上記の性格・口調を維持してください";
+
+  let conversationHistory = [];
+
+  // ============ APIキー設定 ============
+  els.settingsBtn.addEventListener('click', () => {
+    els.keyInput.value = apiKey;
+    els.keyPanel.classList.add('active');
+  });
+  els.keyClose.addEventListener('click', () => els.keyPanel.classList.remove('active'));
+  els.keySave.addEventListener('click', () => {
+    apiKey = els.keyInput.value.trim();
+    localStorage.setItem(API_KEY_STORAGE, apiKey);
+    els.keyPanel.classList.remove('active');
+  });
+
+  // ============ チャット表示 ============
+  function addBubble(role, text) {
+    const row = document.createElement('div');
+    row.className = `chat_row ${role}`;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'chat_avatar';
+    if (role === 'assistant') avatar.style.backgroundImage = `url('${timeOfDayBg()}')`;
+    const img = document.createElement('img');
+    img.src = role === 'assistant' ? 'chars/char_normal.png' : '';
+    if (role === 'assistant') avatar.appendChild(img);
+
+    const bubble = document.createElement('div');
+    bubble.className = 'chat_bubble';
+    bubble.textContent = text;
+
+    if (role === 'assistant') row.appendChild(avatar);
+    row.appendChild(bubble);
+    els.chatScroll.appendChild(row);
+    els.chatScroll.scrollTop = els.chatScroll.scrollHeight;
+  }
+
+  addBubble('assistant', `${userName}、お話ししよう。何か聞きたいことある？`);
+
+  // ============ Gemini呼び出し ============
+  async function callGemini(contents) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents,
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        generationConfig: {
+          thinkingConfig: { thinkingLevel: 'low' },
+          maxOutputTokens: 350,
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody?.error?.message || `APIエラー (${res.status})`);
+    }
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  }
+
+  function trimmedHistory() {
+    if (conversationHistory.length <= 8) return conversationHistory;
+    return conversationHistory.slice(-8);
+  }
+
+  // ---- 時間帯に応じた背景写真 ----
+  function timeOfDayBg() {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 11)  return 'chars/bg_morning.jpg';
+    if (hour >= 17 && hour < 20) return 'chars/bg_evening.jpg';
+    if (hour >= 20 || hour < 5)  return 'chars/bg_evening.jpg';
+    return 'chars/bg_day.jpg';
+  }
+  const currentBg = timeOfDayBg();
+  document.getElementById('top_avatar').style.backgroundImage = `url('${currentBg}')`;
+
+  function setAvatarState(state) {
+    const map = {
+      normal: 'chars/char_normal.png',
+      listening: 'chars/char_thinking.png',
+      thinking: 'chars/char_thinking.png',
+      speaking: 'chars/char_normal.png',
+      error: 'chars/char_error.png',
+    };
+    els.topAvatarImg.src = map[state] || map.normal;
+    els.micBtn.className = state === 'normal' ? '' : `state-${state}`;
+  }
+
+  function speak(text, onEnd) {
+    if (!('speechSynthesis' in window)) { if (onEnd) onEnd(); return; }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ja-JP';
+    utterance.rate = 1.15;
+    if (onEnd) { utterance.onend = onEnd; utterance.onerror = onEnd; }
+    window.speechSynthesis.speak(utterance);
+  }
+
+  async function sendMessage(text) {
+    if (!text) return;
+    if (!apiKey) { els.settingsBtn.click(); return; }
+
+    conversationHistory.push({ role: 'user', parts: [{ text }] });
+    addBubble('user', text);
+    setAvatarState('thinking');
+    els.topStatus.textContent = '考え中...';
+
+    try {
+      const answer = await callGemini(trimmedHistory());
+      conversationHistory.push({ role: 'model', parts: [{ text: answer }] });
+      addBubble('assistant', answer);
+      setAvatarState('speaking');
+      els.topStatus.textContent = '話しています...';
+      speak(answer, () => {
+        setAvatarState('normal');
+        els.topStatus.textContent = '短押しで質問 / テキスト入力もできます';
+      });
+    } catch (err) {
+      addBubble('assistant', 'エラー: ' + err.message);
+      setAvatarState('error');
+      setTimeout(() => {
+        setAvatarState('normal');
+        els.topStatus.textContent = '短押しで質問 / テキスト入力もできます';
+      }, 1500);
+    }
+  }
+
+  // ============ テキスト入力 ============
+  els.sendBtn.addEventListener('click', () => {
+    const text = els.textInput.value.trim();
+    els.textInput.value = '';
+    sendMessage(text);
+  });
+  els.textInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const text = els.textInput.value.trim();
+      els.textInput.value = '';
+      sendMessage(text);
+    }
+  });
+
+  // ============ 音声入力(タップで1回だけ聞き取り) ============
+  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognizer = null;
+  if (SpeechRecognitionCtor) {
+    recognizer = new SpeechRecognitionCtor();
+    recognizer.lang = 'ja-JP';
+    recognizer.interimResults = false;
+    recognizer.maxAlternatives = 1;
+  }
+
+  let listening = false;
+
+  els.micBtn.addEventListener('click', () => {
+    if (!apiKey) { els.settingsBtn.click(); return; }
+    if (!recognizer) {
+      els.topStatus.textContent = 'この端末は音声入力に対応していません';
+      return;
+    }
+    if (listening) return;
+    listening = true;
+    setAvatarState('listening');
+    els.topStatus.textContent = '聞いています...';
+    try {
+      recognizer.start();
+    } catch (e) {
+      listening = false;
+      setAvatarState('normal');
+    }
+  });
+
+  if (recognizer) {
+    recognizer.addEventListener('result', (event) => {
+      const transcript = event.results[0][0].transcript;
+      sendMessage(transcript);
+    });
+    recognizer.addEventListener('end', () => {
+      listening = false;
+    });
+    recognizer.addEventListener('error', () => {
+      listening = false;
+      setAvatarState('normal');
+      els.topStatus.textContent = '聞き取れませんでした';
+      setTimeout(() => { els.topStatus.textContent = '短押しで質問 / テキスト入力もできます'; }, 1500);
+    });
+  }
+
+})();
+</script>
+
+</body>
+</html>
