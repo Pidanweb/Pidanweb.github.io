@@ -296,7 +296,14 @@
   #apps_layer {
     background: var(--bg);
     flex-direction: column;
+    align-items: center;
     padding: max(20px, env(safe-area-inset-top)) 22px max(24px, env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+
+  #apps_inner {
+    width: 100%;
+    max-width: 420px;
   }
 
   #apps_top {
@@ -326,6 +333,8 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 14px;
+    max-width: 340px;
+    margin: 0 auto;
   }
 
   .app_tile {
@@ -669,35 +678,40 @@
 
   <!-- ⑤アプリ一覧(ミニメニュー) -->
   <div id="apps_layer" class="layer">
-    <div id="apps_top">
-      <div id="apps_title">アプリ</div>
-      <button id="apps_close_btn">✕</button>
-    </div>
-    <div id="apps_grid">
-      <a class="app_tile" href="study.html">
-        <span class="app_icon">📚</span>
-        <span class="app_label">勉強</span>
-      </a>
-      <a class="app_tile" href="settings.html">
-        <span class="app_icon">⚙️</span>
-        <span class="app_label">設定</span>
-      </a>
-      <a class="app_tile" href="break.html">
-        <span class="app_icon">🍃</span>
-        <span class="app_label">息抜き</span>
-      </a>
-      <a class="app_tile" href="yui_scanner.html">
-        <span class="app_icon">📷</span>
-        <span class="app_label">カメラ</span>
-      </a>
-      <a class="app_tile" href="schedule.html">
-        <span class="app_icon">🗓️</span>
-        <span class="app_label">スケジュール</span>
-      </a>
-      <div class="app_tile soon"><span class="app_icon">➕</span><span class="app_label">Coming Soon</span></div>
-      <div class="app_tile soon"><span class="app_icon">➕</span><span class="app_label">Coming Soon</span></div>
-      <div class="app_tile soon"><span class="app_icon">➕</span><span class="app_label">Coming Soon</span></div>
-      <div class="app_tile soon"><span class="app_icon">➕</span><span class="app_label">Coming Soon</span></div>
+    <div id="apps_inner">
+      <div id="apps_top">
+        <div id="apps_title">アプリ</div>
+        <button id="apps_close_btn">✕</button>
+      </div>
+      <div id="apps_grid">
+        <a class="app_tile" href="study.html">
+          <span class="app_icon">📚</span>
+          <span class="app_label">勉強</span>
+        </a>
+        <a class="app_tile" href="settings.html">
+          <span class="app_icon">⚙️</span>
+          <span class="app_label">設定</span>
+        </a>
+        <a class="app_tile" href="break.html">
+          <span class="app_icon">🍃</span>
+          <span class="app_label">息抜き</span>
+        </a>
+        <a class="app_tile" href="yui_scanner.html">
+          <span class="app_icon">📷</span>
+          <span class="app_label">カメラ</span>
+        </a>
+        <a class="app_tile" href="schedule.html">
+          <span class="app_icon">🗓️</span>
+          <span class="app_label">スケジュール</span>
+        </a>
+        <a class="app_tile" href="draw_game.html">
+          <span class="app_icon">🎨</span>
+          <span class="app_label">お絵描き当て</span>
+        </a>
+        <div class="app_tile soon"><span class="app_icon">➕</span><span class="app_label">Coming Soon</span></div>
+        <div class="app_tile soon"><span class="app_icon">➕</span><span class="app_label">Coming Soon</span></div>
+        <div class="app_tile soon"><span class="app_icon">➕</span><span class="app_label">Coming Soon</span></div>
+      </div>
     </div>
   </div>
 

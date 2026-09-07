@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>お絵描き当てゲーム - YUI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f3e9;
+    --panel: #ffffff;
+    --panel-edge: #e6ddc8;
+    --ink: #2c2f36;
+    --ink-dim: #7c8288;
+    --scan: #2fae90;
+    --scan-soft: rgba(47, 174, 144, 0.14);
+    --warn: #d98a33;
+    --danger: #e2554a;
+  }
+  * { box-sizing: border-box; touch-action: manipulation; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    overflow: hidden;
+  }
+  #app {
+    position: relative;
+    height: 100dvh;
+    max-width: 480px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .screen {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    padding: max(18px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+  .screen.active { display: flex; }
+
+  #top_row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    flex-shrink: 0;
+  }
+  #back_home {
+    color: var(--ink-dim);
+    text-decoration: none;
+    font-size: 13px;
+  }
+  h1 {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 18px;
+    margin: 0;
+  }
+
+  /* ---------- モード選択画面 ---------- */
+  .option_group {
+    margin-bottom: 20px;
+  }
+  .option_group_label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink-dim);
+    margin-bottom: 8px;
+  }
+  .option_btn_row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .option_btn {
+    padding: 13px 16px;
+    border-radius: 12px;
+    border: 2px solid var(--panel-edge);
+    background: var(--panel);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 14px;
+    text-align: left;
+    font-weight: 600;
+  }
+  .option_btn .sub {
+    display: block;
+    font-size: 11.5px;
+    color: var(--ink-dim);
+    font-weight: 400;
+    margin-top: 2px;
+  }
+  .option_btn.selected {
+    border-color: var(--scan);
+    background: var(--scan-soft);
+    color: var(--scan);
+  }
+  .option_btn.selected .sub { color: var(--scan); }
+
+  #start_game_btn {
+    width: 100%;
+    padding: 15px 0;
+    border-radius: 14px;
+    border: none;
+    background: var(--scan);
+    color: #fff;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    margin-top: auto;
+  }
+
+  /* ---------- お題入力画面 ---------- */
+  #title_input_screen { align-items: center; justify-content: center; text-align: center; }
+  #title_timer {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 40px;
+    font-weight: 800;
+    color: var(--scan);
+    margin-bottom: 10px;
+  }
+  #title_input_desc {
+    font-size: 13.5px;
+    color: var(--ink-dim);
+    margin-bottom: 18px;
+  }
+  #title_input_field {
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 2px solid var(--panel-edge);
+    font-size: 16px;
+    font-family: inherit;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  #title_confirm_btn {
+    width: 100%;
+    padding: 14px 0;
+    border-radius: 12px;
+    border: none;
+    background: var(--scan);
+    color: #fff;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 700;
+  }
+  #title_timeout_buttons { display: none; flex-direction: column; gap: 10px; width: 100%; }
+  #title_timeout_buttons.show { display: flex; }
+  #title_timeout_buttons button {
+    padding: 14px 0;
+    border-radius: 12px;
+    border: none;
+    font-family: inherit;
+    font-size: 14.5px;
+    font-weight: 700;
+  }
+  #reload_title_btn { background: var(--scan-soft); color: var(--scan); }
+  #back_to_mode_btn { background: rgba(0,0,0,0.05); color: var(--ink); }
+
+  /* ---------- 描画画面 ---------- */
+  #round_bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    margin-bottom: 8px;
+    flex-shrink: 0;
+  }
+  #round_bar b { color: var(--ink); }
+  #draw_title_label {
+    background: var(--scan-soft);
+    color: var(--scan);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  #draw_timer_row {
+    text-align: center;
+    font-size: 13px;
+    color: var(--warn);
+    font-weight: 700;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+  }
+  #canvas_wrap {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    border-radius: 16px;
+    border: 2px solid var(--panel-edge);
+    background: #ffffff;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  #draw_canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+  }
+  #photo_preview {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #fff;
+    display: none;
+  }
+  #canvas_tools {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+    flex-shrink: 0;
+  }
+  #canvas_tools button {
+    flex: 1;
+    padding: 10px 0;
+    border-radius: 10px;
+    border: 1px solid var(--panel-edge);
+    background: var(--panel);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  #submit_row {
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  #photo_input_btn {
+    flex: 1;
+    padding: 14px 0;
+    border-radius: 12px;
+    border: 1px solid var(--panel-edge);
+    background: var(--panel);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 700;
+  }
+  #submit_btn {
+    flex: 1.4;
+    padding: 14px 0;
+    border-radius: 12px;
+    border: none;
+    background: var(--scan);
+    color: #fff;
+    font-family: inherit;
+    font-size: 14.5px;
+    font-weight: 700;
+  }
+  #submit_btn:disabled { opacity: 0.5; }
+
+  /* ---------- 結果画面 ---------- */
+  #result_screen { align-items: center; justify-content: center; text-align: center; }
+  #result_avatar {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    background: var(--scan-soft);
+    overflow: hidden;
+    margin-bottom: 14px;
+  }
+  #result_avatar img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+  #result_guess_bubble {
+    background: var(--panel);
+    border: 2px solid var(--panel-edge);
+    border-radius: 16px;
+    padding: 16px 18px;
+    font-size: 15px;
+    line-height: 1.7;
+    margin-bottom: 22px;
+  }
+  #result_question {
+    font-size: 13.5px;
+    color: var(--ink-dim);
+    margin-bottom: 12px;
+  }
+  #result_buttons {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+  }
+  #result_buttons button {
+    flex: 1;
+    padding: 14px 0;
+    border-radius: 12px;
+    border: none;
+    font-family: inherit;
+    font-size: 14.5px;
+    font-weight: 700;
+  }
+  #mark_correct_btn { background: var(--scan); color: #fff; }
+  #mark_wrong_btn { background: rgba(226,85,74,0.12); color: var(--danger); }
+
+  /* ---------- 最終結果画面 ---------- */
+  #final_screen { align-items: center; justify-content: center; text-align: center; }
+  #final_score {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 48px;
+    font-weight: 800;
+    color: var(--scan);
+    margin-bottom: 6px;
+  }
+  #final_comment {
+    background: var(--panel);
+    border: 2px solid var(--panel-edge);
+    border-radius: 16px;
+    padding: 16px 18px;
+    font-size: 14.5px;
+    line-height: 1.75;
+    margin: 14px 0 24px;
+  }
+  #final_buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+  }
+  #final_buttons button, #final_buttons a {
+    padding: 14px 0;
+    border-radius: 12px;
+    border: none;
+    font-family: inherit;
+    font-size: 14.5px;
+    font-weight: 700;
+    text-decoration: none;
+    text-align: center;
+    display: block;
+  }
+  #retry_btn { background: var(--scan); color: #fff; }
+  #exit_btn { background: rgba(0,0,0,0.05); color: var(--ink); }
+
+  /* ---------- 共通:考え中オーバーレイ ---------- */
+  #thinking_overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 30;
+  }
+  #thinking_overlay.active { display: flex; }
+  .spinner {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 3px solid rgba(47,174,144,0.25);
+    border-top-color: var(--scan);
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ①モード選択画面 -->
+  <div id="mode_screen" class="screen active">
+    <div id="top_row">
+      <a id="back_home" href="index.html">← ホームに戻る</a>
+      <h1>お絵描き当てゲーム</h1>
+      <div style="width:60px"></div>
+    </div>
+
+    <div class="option_group">
+      <div class="option_group_label">お題の決め方</div>
+      <div class="option_btn_row" id="title_mode_group">
+        <button class="option_btn selected" data-value="manual">
+          自分で入力する
+          <span class="sub">30秒以内に何を描くか入力します</span>
+        </button>
+        <button class="option_btn" data-value="random">
+          ランダムに出す
+          <span class="sub">動物・食べ物・家電・乗り物・趣味からランダム</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="option_group">
+      <div class="option_group_label">制限時間</div>
+      <div class="option_btn_row" id="time_mode_group">
+        <button class="option_btn" data-value="fast">
+          速いモード(75秒)
+        </button>
+        <button class="option_btn selected" data-value="normal">
+          普通モード(150秒)
+        </button>
+        <button class="option_btn" data-value="unlimited">
+          じっくり書くモード(時間無制限)
+          <span class="sub">「AIに見せる」を押すまで送信されません</span>
+        </button>
+      </div>
+    </div>
+
+    <button id="start_game_btn">スタート</button>
+  </div>
+
+  <!-- ②お題入力画面(自分で入力するモードのみ) -->
+  <div id="title_input_screen" class="screen">
+    <div id="title_timer">30</div>
+    <div id="title_input_desc">何を描くか入力してください(30秒以内)</div>
+    <input type="text" id="title_input_field" placeholder="例: ねこ">
+    <button id="title_confirm_btn">確定してスタート</button>
+    <div id="title_timeout_buttons">
+      <button id="reload_title_btn">もう一度お題を入力する</button>
+      <button id="back_to_mode_btn">メインに戻る</button>
+    </div>
+  </div>
+
+  <!-- ③描画画面 -->
+  <div id="draw_screen" class="screen">
+    <div id="round_bar">
+      <span>ラウンド <b id="round_num">1</b> / 5</span>
+      <span>スコア <b id="score_num">0</b></span>
+    </div>
+    <div id="draw_title_label">お題: <span id="draw_title_text"></span></div>
+    <div id="draw_timer_row"></div>
+
+    <div id="canvas_wrap">
+      <canvas id="draw_canvas"></canvas>
+      <img id="photo_preview" alt="撮影した絵">
+    </div>
+
+    <div id="canvas_tools">
+      <button id="undo_btn">戻す</button>
+      <button id="clear_btn">全部消す</button>
+      <button id="use_canvas_btn" style="display:none;">キャンバスに戻す</button>
+    </div>
+
+    <div id="submit_row">
+      <button id="photo_input_btn">📷 写真で提出</button>
+      <button id="submit_btn">AIに見せる</button>
+    </div>
+    <input type="file" id="photo_input" accept="image/*" style="display:none">
+  </div>
+
+  <!-- ④結果画面(1ラウンドごと) -->
+  <div id="result_screen" class="screen">
+    <div id="result_avatar"><img id="result_avatar_img" src="chars/char_thinking.png" alt="YUI"></div>
+    <div id="result_guess_bubble"></div>
+    <div id="result_question">YUIの推測、合っていましたか？</div>
+    <div id="result_buttons">
+      <button id="mark_wrong_btn">不正解</button>
+      <button id="mark_correct_btn">正解！</button>
+    </div>
+  </div>
+
+  <!-- ⑤最終結果画面 -->
+  <div id="final_screen" class="screen">
+    <div id="final_score_label">結果</div>
+    <div id="final_score">0 / 5</div>
+    <div id="final_comment"></div>
+    <div id="final_buttons">
+      <button id="retry_btn">もう一度あそぶ</button>
+      <a id="exit_btn" href="index.html">ホームに戻る</a>
+    </div>
+  </div>
+
+  <div id="thinking_overlay">
+    <div class="spinner"></div>
+    <div>YUIが考え中...</div>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const MODEL = "gemini-3.6-flash";
+  const API_KEY_STORAGE = 'yui_api_key';
+  const PROFILE_KEY = 'yui_profile';
+  const RANDOM_CATEGORIES = ['動物', '食べ物', '家電', '乗り物', '趣味'];
+  const TIME_LIMITS = { fast: 75, normal: 150, unlimited: null };
+
+  const apiKey = localStorage.getItem(API_KEY_STORAGE) || "";
+
+  function loadProfile() {
+    try {
+      const raw = localStorage.getItem(PROFILE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+  }
+  const profile = loadProfile();
+  const userName = profile.user_name || 'あなた';
+
+  const TONE_TEXT = {
+    polite:   "丁寧語(です・ます調)で話してください。",
+    friendly: "フレンドリーなタメ口で話してください。",
+    tsundere: "ややツンデレ気味に、素っ気なさの中に優しさが滲む話し方をしてください。",
+    cool:     "クールで無口気味に、必要なことだけ簡潔に話してください。",
+  };
+  const FEEDBACK_TEXT = {
+    gentle:  "優しく励ますような伝え方をしてください。",
+    direct:  "率直にはっきりと伝えてください。",
+    playful: "ちょっとユーモラスに茶化しながら伝えてください。",
+  };
+
+  const SYSTEM_PROMPT =
+    `あなたはナビゲーションAI「YUI」です。${userName}とお絵描き当てゲームで遊んでいます。` +
+    `ユーザーのことは「${userName}」と呼んでください。\n` +
+    (TONE_TEXT[profile.tone_style] || TONE_TEXT.friendly) + "\n" +
+    (FEEDBACK_TEXT[profile.feedback_style] || FEEDBACK_TEXT.gentle) + "\n" +
+    "回答は必ず音声ではなく画面に表示されるテキストです。次のルールを厳守してください。\n" +
+    "・アスタリスク(*)、シャープ(#)、箇条書きの記号、Markdown書式は絶対に使わない\n" +
+    "・回答は1〜2文の短いセリフにする\n" +
+    "・一貫して上記の性格・口調を維持してください";
+
+  // ============ 要素参照 ============
+  const els = {};
+  document.querySelectorAll('[id]').forEach(el => {
+    const key = el.id.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    els[key] = el;
+  });
+
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  // ============ モード選択 ============
+  let titleMode = 'manual';
+  let timeMode = 'normal';
+
+  els.titleModeGroup.querySelectorAll('.option_btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      els.titleModeGroup.querySelectorAll('.option_btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      titleMode = btn.dataset.value;
+    });
+  });
+  els.timeModeGroup.querySelectorAll('.option_btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      els.timeModeGroup.querySelectorAll('.option_btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      timeMode = btn.dataset.value;
+    });
+  });
+
+  // ============ ゲーム全体の状態 ============
+  let roundIndex = 0; // 0-4
+  let score = 0;
+  let currentTitle = '';
+  let currentGuess = '';
+  let drawTimerInterval = null;
+  let titleTimerInterval = null;
+  let usingPhoto = false;
+  let photoDataUrl = '';
+
+  els.startGameBtn.addEventListener('click', () => {
+    roundIndex = 0;
+    score = 0;
+    startRoundTitleSelection();
+  });
+
+  // ============ お題選択(ラウンド開始時に毎回呼ぶ) ============
+  function startRoundTitleSelection() {
+    if (titleMode === 'random') {
+      currentTitle = RANDOM_CATEGORIES[Math.floor(Math.random() * RANDOM_CATEGORIES.length)];
+      startDrawRound();
+    } else {
+      openTitleInputScreen();
+    }
+  }
+
+  function openTitleInputScreen() {
+    showScreen('title_input_screen');
+    els.titleInputField.value = '';
+    els.titleInputField.style.display = 'block';
+    els.titleConfirmBtn.style.display = 'block';
+    els.titleTimeoutButtons.classList.remove('show');
+    els.titleInputDesc.style.display = 'block';
+    els.titleInputDesc.textContent = '何を描くか入力してください(30秒以内)';
+
+    let remaining = 30;
+    els.titleTimer.textContent = remaining;
+    clearInterval(titleTimerInterval);
+    titleTimerInterval = setInterval(() => {
+      remaining--;
+      els.titleTimer.textContent = remaining;
+      if (remaining <= 0) {
+        clearInterval(titleTimerInterval);
+        handleTitleTimeout();
+      }
+    }, 1000);
+  }
+
+  function handleTitleTimeout() {
+    els.titleInputField.style.display = 'none';
+    els.titleConfirmBtn.style.display = 'none';
+    els.titleInputDesc.textContent = '時間切れです。';
+    els.titleTimeoutButtons.classList.add('show');
+  }
+
+  els.titleConfirmBtn.addEventListener('click', () => {
+    const val = els.titleInputField.value.trim();
+    if (!val) { els.titleInputField.focus(); return; }
+    clearInterval(titleTimerInterval);
+    currentTitle = val;
+    startDrawRound();
+  });
+
+  els.reloadTitleBtn.addEventListener('click', () => {
+    openTitleInputScreen();
+  });
+  els.backToModeBtn.addEventListener('click', () => {
+    showScreen('mode_screen');
+  });
+
+  // ============ 描画画面 ============
+  const canvas = els.drawCanvas;
+  const ctx = canvas.getContext('2d');
+  let undoStack = [];
+  let drawing = false;
+  let lastX = 0, lastY = 0;
+
+  function resizeCanvas() {
+    const rect = els.canvasWrap.getBoundingClientRect();
+    const prev = canvas.toDataURL();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    fillWhite();
+    const img = new Image();
+    img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    img.src = prev;
+  }
+  function fillWhite() {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function pushUndo() {
+    undoStack.push(canvas.toDataURL());
+    if (undoStack.length > 25) undoStack.shift();
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (usingPhoto) return;
+    drawing = true;
+    pushUndo();
+    lastX = e.offsetX; lastY = e.offsetY;
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!drawing || usingPhoto) return;
+    const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
+    ctx.lineWidth = Math.max(1.5, pressure * 7);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(e.offsetX, e.offsetY);
+    ctx.stroke();
+    lastX = e.offsetX; lastY = e.offsetY;
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(evt => {
+    canvas.addEventListener(evt, () => { drawing = false; });
+  });
+
+  els.undoBtn.addEventListener('click', () => {
+    if (undoStack.length === 0) return;
+    const prev = undoStack.pop();
+    const img = new Image();
+    img.onload = () => { fillWhite(); ctx.drawImage(img, 0, 0); };
+    img.src = prev;
+  });
+  els.clearBtn.addEventListener('click', () => {
+    pushUndo();
+    fillWhite();
+  });
+
+  // ---- 写真で提出 ----
+  els.photoInputBtn.addEventListener('click', () => els.photoInput.click());
+  els.photoInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      photoDataUrl = reader.result;
+      els.photoPreview.src = photoDataUrl;
+      els.photoPreview.style.display = 'block';
+      canvas.style.display = 'none';
+      els.useCanvasBtn.style.display = 'block';
+      usingPhoto = true;
+    };
+    reader.readAsDataURL(file);
+  });
+  els.useCanvasBtn.addEventListener('click', () => {
+    usingPhoto = false;
+    photoDataUrl = '';
+    els.photoPreview.style.display = 'none';
+    canvas.style.display = 'block';
+    els.useCanvasBtn.style.display = 'none';
+  });
+
+  function startDrawRound() {
+    els.roundNum.textContent = roundIndex + 1;
+    els.scoreNum.textContent = score;
+    els.drawTitleText.textContent = currentTitle;
+    usingPhoto = false;
+    els.photoPreview.style.display = 'none';
+    canvas.style.display = 'block';
+    els.useCanvasBtn.style.display = 'none';
+    undoStack = [];
+
+    showScreen('draw_screen');
+    resizeCanvas();
+
+    clearInterval(drawTimerInterval);
+    const limit = TIME_LIMITS[timeMode];
+    if (limit === null) {
+      els.drawTimerRow.textContent = '時間無制限。描き終えたら「AIに見せる」を押してください';
+    } else {
+      let remaining = limit;
+      updateTimerText(remaining);
+      drawTimerInterval = setInterval(() => {
+        remaining--;
+        updateTimerText(remaining);
+        if (remaining <= 0) {
+          clearInterval(drawTimerInterval);
+          submitToAI();
+        }
+      }, 1000);
+    }
+  }
+
+  function updateTimerText(sec) {
+    const m = Math.floor(sec / 60);
+    const s = String(sec % 60).padStart(2, '0');
+    els.drawTimerRow.textContent = `残り時間 ${m}:${s}`;
+  }
+
+  els.submitBtn.addEventListener('click', () => {
+    clearInterval(drawTimerInterval);
+    submitToAI();
+  });
+
+  // ============ 画像リサイズ(送信用) ============
+  function resizeDataUrl(dataUrl, maxDim, cb) {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+        else { w = Math.round(w * maxDim / h); h = maxDim; }
+      }
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const cctx = c.getContext('2d');
+      cctx.fillStyle = '#ffffff';
+      cctx.fillRect(0, 0, w, h);
+      cctx.drawImage(img, 0, 0, w, h);
+      cb(c.toDataURL('image/jpeg', 0.7));
+    };
+    img.src = dataUrl;
+  }
+
+  // ============ Gemini呼び出し ============
+  async function callGemini(base64Image) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const prompt =
+      "これはお絵描き当てゲームの一場面です。この絵に何が描かれているか、あなたの推測を答えてください。" +
+      "自信がなくても構わないので、最も近いと思う具体的なものを1つ挙げてください。前置きは不要です。";
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          role: 'user',
+          parts: [
+            { inline_data: { mime_type: 'image/jpeg', data: base64Image } },
+            { text: prompt },
+          ],
+        }],
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        generationConfig: {
+          thinkingConfig: { thinkingLevel: 'low' },
+          maxOutputTokens: 200,
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody?.error?.message || `APIエラー (${res.status})`);
+    }
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  }
+
+  async function submitToAI() {
+    if (!apiKey) {
+      alert('APIキーが設定されていません。ホーム画面のメニュー→設定から登録してください。');
+      return;
+    }
+    const sourceDataUrl = usingPhoto ? photoDataUrl : canvas.toDataURL('image/png');
+
+    els.thinkingOverlay.classList.add('active');
+    resizeDataUrl(sourceDataUrl, 600, async (jpegDataUrl) => {
+      const base64 = jpegDataUrl.split(',')[1];
+      try {
+        const guess = await callGemini(base64);
+        currentGuess = guess;
+        els.resultGuessBubble.textContent = guess;
+        showScreen('result_screen');
+      } catch (err) {
+        els.resultGuessBubble.textContent = 'エラー: ' + err.message;
+        showScreen('result_screen');
+      } finally {
+        els.thinkingOverlay.classList.remove('active');
+      }
+    });
+  }
+
+  // ============ 自己採点 ============
+  els.markCorrectBtn.addEventListener('click', () => { score++; nextRoundOrFinish(); });
+  els.markWrongBtn.addEventListener('click', () => { nextRoundOrFinish(); });
+
+  function nextRoundOrFinish() {
+    roundIndex++;
+    if (roundIndex >= 5) {
+      showFinal();
+    } else {
+      startRoundTitleSelection();
+    }
+  }
+
+  function showFinal() {
+    els.finalScore.textContent = `${score} / 5`;
+    let comment;
+    if (score === 5) comment = `満点ですか。${userName}、絵心があるんですね。ちょっとだけ見直しました。`;
+    else if (score >= 3) comment = `まずまずですね、${userName}。悪くない結果だと思いますよ。`;
+    else if (score >= 1) comment = `うーん、${userName}の画力についてはノーコメントにしておきます。`;
+    else comment = `0点とは、なかなかやりますね${userName}。次は期待していますよ。`;
+    els.finalComment.textContent = comment;
+    showScreen('final_screen');
+  }
+
+  els.retryBtn.addEventListener('click', () => {
+    showScreen('mode_screen');
+  });
+
+  window.addEventListener('resize', () => {
+    if (document.getElementById('draw_screen').classList.contains('active')) {
+      resizeCanvas();
+    }
+  });
+
+})();
+</script>
+
+</body>
+</html>
