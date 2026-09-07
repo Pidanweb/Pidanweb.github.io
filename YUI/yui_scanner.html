@@ -954,7 +954,7 @@
 
       const text = await callGemini(
         [{ role: 'user', parts: userParts }],
-        { thinkingLevel: 'high', maxOutputTokens: 500 }
+        { thinkingLevel: 'low', maxOutputTokens: 500 }
       );
 
       // この本についての会話履歴として、画像判定のやり取りを積んでおく

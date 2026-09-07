@@ -291,32 +291,79 @@
     line-height: 1;
   }
 
-  #home_menu_panel {
-    position: absolute;
-    top: 56px;
-    right: 22px;
+  /* ---------- アプリ一覧(ミニメニュー) ---------- */
+
+  #apps_layer {
+    background: var(--bg);
+    flex-direction: column;
+    padding: max(20px, env(safe-area-inset-top)) 22px max(24px, env(safe-area-inset-bottom));
+  }
+
+  #apps_top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 22px;
+  }
+
+  #apps_title {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 19px;
+  }
+
+  #apps_close_btn {
     background: var(--panel);
     border: 1px solid var(--panel-edge);
-    border-radius: 16px;
-    padding: 8px;
-    display: none;
-    flex-direction: column;
-    min-width: 190px;
-    box-shadow: 0 12px 28px rgba(0,0,0,0.1);
-    z-index: 7;
-  }
-  #home_menu_panel.open { display: flex; }
-
-  #home_menu_panel a {
-    display: block;
-    padding: 12px 14px;
-    border-radius: 10px;
     color: var(--ink);
-    text-decoration: none;
-    font-size: 14px;
+    border-radius: 50%;
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
   }
-  #home_menu_panel a:active {
-    background: var(--scan-soft);
+
+  #apps_grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+
+  .app_tile {
+    aspect-ratio: 1 / 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 20px;
+    background: #ffffff;
+    border: 3px solid #1a1a1a;
+    text-decoration: none;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+  }
+
+  .app_tile .app_icon {
+    font-size: 30px;
+  }
+
+  .app_tile .app_label {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+
+  .app_tile.soon {
+    background: rgba(0,0,0,0.035);
+    border: 3px dashed rgba(0,0,0,0.18);
+    box-shadow: none;
+  }
+  .app_tile.soon .app_icon,
+  .app_tile.soon .app_label {
+    color: var(--ink-dim);
+    opacity: 0.6;
+  }
+  .app_tile.soon .app_label {
+    font-size: 10.5px;
   }
 
   /* ---------- キャラクター表示エリア(右寄せ+背景ボード+カーペット) ---------- */
@@ -346,6 +393,29 @@
     line-height: 1.7;
     color: #1a1a1a;
     box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+  }
+
+  /* スマホの狭い画面幅では、文章量を保ったまま文字と余白を少し小さくする */
+  @media (max-width: 400px) {
+    #home_bubble {
+      border-width: 3px;
+      border-radius: 20px;
+      padding: 15px 16px;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    #home_bubble::before {
+      right: -13px;
+      border-top-width: 11px;
+      border-bottom-width: 11px;
+      border-left-width: 13px;
+    }
+    #home_bubble::after {
+      right: -8px;
+      border-top-width: 8px;
+      border-bottom-width: 8px;
+      border-left-width: 9px;
+    }
   }
 
   /* 吹き出しのしっぽ(右のキャラ側を指す・黒縁+白中身の二重構造) */
@@ -415,6 +485,26 @@
     box-shadow: 0 6px 14px rgba(0,0,0,0.12);
   }
 
+  /* ---------- キャラ背後の装飾小物(4つ・見た目だけ) ---------- */
+
+  #home_props_row {
+    position: absolute;
+    left: 16px;
+    bottom: 14%;
+    display: flex;
+    align-items: flex-end;
+    gap: 14px;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .prop_item {
+    width: 42px;
+    height: 42px;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15));
+    opacity: 0.9;
+  }
+
   #home_buttons {
     display: flex;
     gap: 12px;
@@ -448,8 +538,39 @@
     color: #1a1a1a;
   }
 
-  #talk_nav_btn, #camera_nav_btn {
+  /* 「今日の予定」カード(カメラボタンの跡地) */
+  #schedule_card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    padding: 14px 16px;
+    border-radius: 18px;
+    border: 3px solid #1a1a1a;
     background: #ffffff;
+    text-decoration: none;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.1);
+  }
+
+  #schedule_card .schedule_label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--scan);
+  }
+
+  #schedule_card .schedule_main {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1a1a1a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #schedule_card .schedule_sub {
+    font-size: 11.5px;
+    color: var(--ink-dim);
   }
 </style>
 </head>
@@ -492,10 +613,6 @@
         <span class="burger">☰</span>
         <span>メニュー</span>
       </button>
-      <div id="home_menu_panel">
-        <a href="settings.html">APIキー入力ページ</a>
-        <a href="usage.html">使い方ページ</a>
-      </div>
     </div>
 
     <div id="home_stage_row">
@@ -503,6 +620,33 @@
         <div id="home_bubble">こんにちは。</div>
       </div>
       <div id="home_char_area">
+        <div id="home_props_row">
+          <!-- 観葉植物 -->
+          <svg class="prop_item" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14 44h20l-2-14H16l-2 14Z" fill="#c48a5a" stroke="#1a1a1a" stroke-width="2"/>
+            <path d="M24 30c0-10-8-12-8-20 6 0 8 6 8 10 0-8 4-14 10-14 0 10-6 14-6 20" stroke="#1a1a1a" stroke-width="2" fill="#8bc98f"/>
+            <path d="M24 30c2-8-2-16-10-18" stroke="#1a1a1a" stroke-width="2" fill="none"/>
+          </svg>
+          <!-- 本 -->
+          <svg class="prop_item" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="8" y="26" width="32" height="8" rx="1.5" fill="#e2554a" stroke="#1a1a1a" stroke-width="2"/>
+            <rect x="10" y="18" width="28" height="8" rx="1.5" fill="#2fae90" stroke="#1a1a1a" stroke-width="2"/>
+            <rect x="12" y="10" width="24" height="8" rx="1.5" fill="#f7f3e9" stroke="#1a1a1a" stroke-width="2"/>
+          </svg>
+          <!-- マグカップ -->
+          <svg class="prop_item" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 18h20v14a6 6 0 0 1-6 6h-8a6 6 0 0 1-6-6V18Z" fill="#ffffff" stroke="#1a1a1a" stroke-width="2"/>
+            <path d="M32 22h3a4 4 0 0 1 0 8h-3" stroke="#1a1a1a" stroke-width="2" fill="none"/>
+            <path d="M17 12c0 2 2 2 2 4" stroke="#1a1a1a" stroke-width="1.6" fill="none"/>
+            <path d="M23 12c0 2 2 2 2 4" stroke="#1a1a1a" stroke-width="1.6" fill="none"/>
+          </svg>
+          <!-- ランプ -->
+          <svg class="prop_item" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14 16h20l-4 14H18l-4-14Z" fill="#f0c93e" stroke="#1a1a1a" stroke-width="2"/>
+            <rect x="22" y="30" width="4" height="10" fill="#8a8a8a" stroke="#1a1a1a" stroke-width="1.5"/>
+            <rect x="16" y="40" width="16" height="3" rx="1" fill="#1a1a1a"/>
+          </svg>
+        </div>
         <div id="home_character_wrap">
           <img id="home_character_img" src="chars/char_normal.png" alt="YUI">
         </div>
@@ -515,10 +659,45 @@
         <span class="icon">💬</span>
         <span class="label">お話しする</span>
       </a>
-      <a id="camera_nav_btn" class="home_nav_btn" href="yui_scanner.html">
-        <span class="icon">📷</span>
-        <span class="label">カメラで質問する</span>
+      <a id="schedule_card" href="schedule.html">
+        <span class="schedule_label">今日の予定</span>
+        <span class="schedule_main" id="schedule_main_text">予定はありません</span>
+        <span class="schedule_sub" id="schedule_sub_text">タップして追加</span>
       </a>
+    </div>
+  </div>
+
+  <!-- ⑤アプリ一覧(ミニメニュー) -->
+  <div id="apps_layer" class="layer">
+    <div id="apps_top">
+      <div id="apps_title">アプリ</div>
+      <button id="apps_close_btn">✕</button>
+    </div>
+    <div id="apps_grid">
+      <a class="app_tile" href="study.html">
+        <span class="app_icon">📚</span>
+        <span class="app_label">勉強</span>
+      </a>
+      <a class="app_tile" href="settings.html">
+        <span class="app_icon">⚙️</span>
+        <span class="app_label">設定</span>
+      </a>
+      <a class="app_tile" href="break.html">
+        <span class="app_icon">🍃</span>
+        <span class="app_label">息抜き</span>
+      </a>
+      <a class="app_tile" href="yui_scanner.html">
+        <span class="app_icon">📷</span>
+        <span class="app_label">カメラ</span>
+      </a>
+      <a class="app_tile" href="schedule.html">
+        <span class="app_icon">🗓️</span>
+        <span class="app_label">スケジュール</span>
+      </a>
+      <div class="app_tile soon"><span class="app_icon">➕</span><span class="app_label">Coming Soon</span></div>
+      <div class="app_tile soon"><span class="app_icon">➕</span><span class="app_label">Coming Soon</span></div>
+      <div class="app_tile soon"><span class="app_icon">➕</span><span class="app_label">Coming Soon</span></div>
+      <div class="app_tile soon"><span class="app_icon">➕</span><span class="app_label">Coming Soon</span></div>
     </div>
   </div>
 
@@ -530,16 +709,19 @@
     diveLayer: document.getElementById('dive_layer'),
     vnLayer: document.getElementById('vn_layer'),
     homeLayer: document.getElementById('home_layer'),
+    appsLayer: document.getElementById('apps_layer'),
+    appsCloseBtn: document.getElementById('apps_close_btn'),
     vnSkipBtn: document.getElementById('vn_skip_btn'),
     vnCharacterImg: document.getElementById('vn_character_img'),
     vnLineText: document.getElementById('vn_line_text'),
     vnExtra: document.getElementById('vn_extra'),
     vnNextBtn: document.getElementById('vn_next_btn'),
     homeMenuBtn: document.getElementById('home_menu_btn'),
-    homeMenuPanel: document.getElementById('home_menu_panel'),
     homeCharacterImg: document.getElementById('home_character_img'),
     homeBubble: document.getElementById('home_bubble'),
     vnStage: document.getElementById('vn_stage'),
+    scheduleMainText: document.getElementById('schedule_main_text'),
+    scheduleSubText: document.getElementById('schedule_sub_text'),
   };
 
   // ---- 時間帯に応じた背景写真(VNキャラクターステージ用) ----
@@ -552,9 +734,12 @@
   }
   els.vnStage.style.backgroundImage = `url('${timeOfDayBg()}')`;
 
-  // ---- メニューの開閉 ----
+  // ---- アプリ一覧(ミニメニュー)の開閉 ----
   els.homeMenuBtn.addEventListener('click', () => {
-    els.homeMenuPanel.classList.toggle('open');
+    showLayer(els.appsLayer);
+  });
+  els.appsCloseBtn.addEventListener('click', () => {
+    showLayer(els.homeLayer);
   });
 
   const PROFILE_KEY = 'yui_profile';
@@ -573,8 +758,45 @@
   }
 
   function showLayer(layer) {
-    [els.diveLayer, els.vnLayer, els.homeLayer].forEach(l => l.classList.remove('active'));
+    [els.diveLayer, els.vnLayer, els.homeLayer, els.appsLayer].forEach(l => l.classList.remove('active'));
     layer.classList.add('active');
+  }
+
+  // ---- 今日の予定を読み込んで表示(スケジュールアプリとlocalStorageを共有) ----
+  const SCHEDULE_KEY = 'yui_schedule';
+
+  function loadSchedule() {
+    try {
+      const raw = localStorage.getItem(SCHEDULE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function todayStr() {
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${mm}-${dd}`;
+  }
+
+  function renderTodaySchedule() {
+    const all = loadSchedule();
+    const today = todayStr();
+    const todays = all
+      .filter(ev => ev.date === today)
+      .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+
+    if (todays.length === 0) {
+      els.scheduleMainText.textContent = '予定はありません';
+      els.scheduleSubText.textContent = 'タップして追加';
+      return;
+    }
+
+    const first = todays[0];
+    els.scheduleMainText.textContent = `${first.time ? first.time + ' ' : ''}${first.task}`;
+    els.scheduleSubText.textContent = todays.length > 1 ? `他 ${todays.length - 1} 件` : '今日の予定';
   }
 
   // ============ ①ダイブ演出 ============
@@ -748,6 +970,7 @@
     const name = (profile && profile.user_name) || 'あなた';
     els.homeBubble.textContent = timeGreeting(name);
     els.homeCharacterImg.src = pickRandomFace();
+    renderTodaySchedule();
     showLayer(els.homeLayer);
   }
 
