@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>APIキー設定 - YUI</title>
+<title>設定 - YUI</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
@@ -66,6 +66,25 @@
     resize: none;
     height: 100px;
   }
+  textarea#personality_input {
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    height: 160px;
+    line-height: 1.7;
+  }
+  section.settings_section {
+    margin-bottom: 30px;
+  }
+  section.settings_section h2 {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 16px;
+    margin: 0 0 6px;
+  }
+  hr.section_divider {
+    border: none;
+    border-top: 1px solid var(--panel-edge);
+    margin: 26px 0;
+  }
   #status_msg {
     font-size: 13px;
     color: var(--scan);
@@ -110,21 +129,45 @@
 <body>
 <div id="app">
   <a id="back_btn" href="index.html">← ホームに戻る</a>
-  <h1>Gemini APIキー</h1>
-  <p class="desc">
-    <a class="link" href="https://aistudio.google.com/" target="_blank" rel="noopener">Google AI Studio</a>で発行したAPIキーを貼り付けてください。<br>
-    このキーはGemini APIへのリクエストを認証するためだけに使われます。それ以外の送信先はなく、この端末内(localStorage)に保存されます。
-  </p>
 
-  <textarea id="key_input" placeholder="AQ.xxxxxxxxxxxxxxxxxxxxxxxx"></textarea>
-  <div id="status_msg"></div>
+  <section class="settings_section">
+    <h1>設定</h1>
+  </section>
 
-  <button class="primary" id="save_btn">保存する</button>
-  <button class="secondary" id="clear_btn">キーを削除する</button>
+  <section class="settings_section">
+    <h2>AIの性格</h2>
+    <p class="desc">
+      YUIの喋り方・キャラクター設定を自由に書けます。空欄のままなら、はじめに選んだ口調のままです。<br>
+      書き方の例:<br>
+      「あなたはペプシマンです。ペプシマンの文字しか使えません。それ以外の文字は使わないでください」<br>
+      「あなたは犬です。ワンワンしか言えません」<br>
+      「あなたは長い封印から目覚めたキツネの幼女です。言葉は江戸時代周辺のもので『〜のじゃ』などを使います。年上なので優しい話し方です」
+    </p>
+    <textarea id="personality_input" placeholder="例: あなたは○○です。△△という口調・話し方しかできません。"></textarea>
+    <div id="personality_status"></div>
+    <button class="primary" id="personality_save_btn">性格を保存する</button>
+    <button class="secondary" id="personality_clear_btn">性格をリセットする(はじめの口調に戻す)</button>
+  </section>
 
-  <div class="note_box">
-    保存したキーは、この「APIキー設定」ページ・「お話しする」画面・「カメラで質問する」画面すべてで共通して使われます。
-  </div>
+  <hr class="section_divider">
+
+  <section class="settings_section">
+    <h2>Gemini APIキー</h2>
+    <p class="desc">
+      <a class="link" href="https://aistudio.google.com/" target="_blank" rel="noopener">Google AI Studio</a>で発行したAPIキーを貼り付けてください。<br>
+      このキーはGemini APIへのリクエストを認証するためだけに使われます。それ以外の送信先はなく、この端末内(localStorage)に保存されます。
+    </p>
+
+    <textarea id="key_input" placeholder="AQ.xxxxxxxxxxxxxxxxxxxxxxxx"></textarea>
+    <div id="status_msg"></div>
+
+    <button class="primary" id="save_btn">保存する</button>
+    <button class="secondary" id="clear_btn">キーを削除する</button>
+
+    <div class="note_box">
+      保存したキーは、この「設定」ページ・「お話しする」画面・「カメラで質問する」画面すべてで共通して使われます。
+    </div>
+  </section>
 
   <div class="note_box">
     アプリの使い方は<a class="link" href="usage.html">こちらのページ</a>にまとめています。
@@ -134,8 +177,11 @@
 <script>
 (() => {
   const API_KEY_STORAGE = 'yui_api_key';
+  const PROFILE_KEY = 'yui_profile';
   const keyInput = document.getElementById('key_input');
   const statusMsg = document.getElementById('status_msg');
+  const personalityInput = document.getElementById('personality_input');
+  const personalityStatus = document.getElementById('personality_status');
 
   keyInput.value = localStorage.getItem(API_KEY_STORAGE) || '';
 
@@ -150,6 +196,38 @@
     keyInput.value = '';
     statusMsg.textContent = '削除しました';
     setTimeout(() => { statusMsg.textContent = ''; }, 2000);
+  });
+
+  // ============ AIの性格(yui_profileに保存、初期設定の口調・呼び方はそのまま残す) ============
+  function loadProfile() {
+    try {
+      const raw = localStorage.getItem(PROFILE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function saveProfile(profile) {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  }
+
+  personalityInput.value = loadProfile().custom_personality || '';
+
+  document.getElementById('personality_save_btn').addEventListener('click', () => {
+    const profile = loadProfile();
+    profile.custom_personality = personalityInput.value.trim();
+    saveProfile(profile);
+    personalityStatus.textContent = '保存しました';
+    setTimeout(() => { personalityStatus.textContent = ''; }, 2000);
+  });
+
+  document.getElementById('personality_clear_btn').addEventListener('click', () => {
+    const profile = loadProfile();
+    profile.custom_personality = '';
+    saveProfile(profile);
+    personalityInput.value = '';
+    personalityStatus.textContent = 'リセットしました';
+    setTimeout(() => { personalityStatus.textContent = ''; }, 2000);
   });
 })();
 </script>
