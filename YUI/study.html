@@ -6,72 +6,894 @@
 <title>勉強 - YUI</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f7f3e9;
-    --panel: #ffffff;
-    --panel-edge: #e6ddc8;
-    --ink: #2c2f36;
-    --ink-dim: #7c8288;
-    --scan: #2fae90;
-    --scan-soft: rgba(47, 174, 144, 0.14);
+    --void: #05070a;
+    --panel: #0b0f16;
+    --panel-edge: rgba(51, 255, 209, 0.22);
+    --grid: rgba(51, 255, 209, 0.06);
+    --neon: #33ffd1;
+    --neon-dim: rgba(51, 255, 209, 0.16);
+    --danger: #ff2d55;
+    --danger-dim: rgba(255, 45, 85, 0.18);
+    --ink: #eaf6f2;
+    --ink-dim: #6f8b86;
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
     margin: 0;
-    min-height: 100%;
-    background: var(--bg);
+    height: 100%;
+    background: var(--void);
     color: var(--ink);
     font-family: 'Zen Kaku Gothic New', sans-serif;
+    overflow: hidden;
   }
-  #app {
-    max-width: 480px;
-    margin: 0 auto;
-    padding: max(20px, env(safe-area-inset-top)) 20px 40px;
-    text-align: center;
+  body {
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 34px 34px;
   }
-  #back_btn {
-    display: inline-flex;
+  #app { position: relative; height: 100dvh; overflow: hidden; }
+
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ---------- 共通スクリーン ---------- */
+  .screen {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
+  }
+  .screen.active { display: flex; }
+
+  #top_row {
+    display: flex;
     align-items: center;
-    gap: 6px;
-    color: var(--ink-dim);
-    text-decoration: none;
-    font-size: 13px;
-    margin-bottom: 40px;
-    align-self: flex-start;
+    gap: 10px;
+    margin-bottom: 6px;
+    min-height: 34px;
   }
-  .icon { font-size: 46px; margin-bottom: 14px; }
-  h1 {
+  .back_btn {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink-dim);
+    border-radius: 50%;
+    width: 34px;
+    height: 34px;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    flex-shrink: 0;
+  }
+  .page_title {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--ink-dim);
+    letter-spacing: 0.02em;
+  }
+
+  /* ================= ホーム ================= */
+  #screen_home { align-items: center; justify-content: center; gap: 26px; }
+  #home_glow {
+    position: absolute;
+    width: 340px; height: 340px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,45,85,0.20), transparent 70%);
+    filter: blur(6px);
+    pointer-events: none;
+  }
+  #start_btn {
+    position: relative;
+    width: 220px; height: 220px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 32% 28%, #10151d, var(--panel) 70%);
+    border: 2px solid var(--danger);
+    box-shadow: 0 0 22px rgba(255,45,85,0.35), inset 0 0 26px rgba(255,45,85,0.12);
+    color: var(--danger);
     font-family: 'M PLUS Rounded 1c', sans-serif;
     font-weight: 800;
-    font-size: 20px;
-    margin: 0 0 10px;
+    font-size: 26px;
+    letter-spacing: 0.06em;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    animation: pulse_ring 2.6s ease-in-out infinite;
   }
-  p {
+  #start_btn span.sub {
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    font-weight: 500;
+    font-size: 11.5px;
+    color: rgba(255,45,85,0.75);
+    letter-spacing: 0.1em;
+  }
+  @keyframes pulse_ring {
+    0%, 100% { box-shadow: 0 0 22px rgba(255,45,85,0.35), inset 0 0 26px rgba(255,45,85,0.12); }
+    50% { box-shadow: 0 0 38px rgba(255,45,85,0.55), inset 0 0 32px rgba(255,45,85,0.2); }
+  }
+  #home_hint {
     color: var(--ink-dim);
-    font-size: 14px;
-    line-height: 1.8;
-  }
-  .badge {
-    display: inline-block;
-    background: var(--scan-soft);
-    color: var(--scan);
-    border-radius: 20px;
-    padding: 6px 16px;
     font-size: 12.5px;
+    letter-spacing: 0.03em;
+  }
+  #home_streak {
+    font-size: 11px;
+    color: var(--neon);
+    background: var(--neon-dim);
+    border: 1px solid var(--panel-edge);
+    border-radius: 20px;
+    padding: 5px 14px;
+  }
+
+  /* ================= モード選択 ================= */
+  #screen_mode { justify-content: center; gap: 16px; }
+  .mode_card {
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 18px;
+    padding: 20px;
+    text-align: left;
+    color: var(--ink);
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .mode_card .glyph {
+    width: 46px; height: 46px;
+    border-radius: 12px;
+    background: var(--neon-dim);
+    color: var(--neon);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .mode_card h3 {
+    margin: 0 0 4px;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 16px;
+  }
+  .mode_card p { margin: 0; font-size: 12.5px; color: var(--ink-dim); line-height: 1.6; }
+
+  /* ================= カウントダウン設定 ================= */
+  #screen_countdown { justify-content: center; gap: 22px; }
+  #cd_label { text-align: center; color: var(--ink-dim); font-size: 13px; }
+  #cd_chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  .chip {
+    border: 1px solid var(--panel-edge);
+    background: var(--panel);
+    color: var(--ink);
+    border-radius: 14px;
+    padding: 14px 0;
+    width: 76px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
     font-weight: 700;
-    margin-top: 18px;
+  }
+  .chip span { display: block; font-family: 'Zen Kaku Gothic New', sans-serif; font-size: 10.5px; font-weight: 400; color: var(--ink-dim); margin-top: 2px; }
+  .chip.selected { border-color: var(--neon); color: var(--neon); box-shadow: 0 0 14px rgba(51,255,209,0.25); }
+  #cd_custom_row { display: flex; align-items: center; gap: 10px; justify-content: center; }
+  #cd_custom_row input {
+    width: 90px;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-radius: 12px;
+    padding: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    text-align: center;
+  }
+  #cd_start_btn {
+    margin-top: 6px;
+    background: var(--danger);
+    color: #180207;
+    border: none;
+    border-radius: 16px;
+    padding: 15px 0;
+    font-weight: 700;
+    font-size: 15px;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+  }
+  #cd_start_btn:disabled { opacity: 0.4; }
+
+  /* ================= 勉強中 ================= */
+  #screen_study { padding-top: max(20px, env(safe-area-inset-top)); }
+  #study_top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #study_end_btn {
+    background: transparent;
+    border: 1px solid var(--panel-edge);
+    color: var(--ink-dim);
+    border-radius: 20px;
+    padding: 7px 14px;
+    font-size: 12px;
+    font-family: inherit;
+  }
+  #study_stage {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 14px 0;
+  }
+  #timer_box {
+    width: 100%;
+    max-width: 320px;
+    aspect-ratio: 1 / 1;
+    border: 2px solid var(--neon);
+    border-radius: 26px;
+    background: linear-gradient(160deg, rgba(51,255,209,0.07), transparent 60%), var(--panel);
+    box-shadow: 0 0 30px rgba(51,255,209,0.18), inset 0 0 40px rgba(51,255,209,0.05);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+  #timer_mode_label {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    color: var(--neon);
+  }
+  #timer_digits {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 46px;
+    letter-spacing: 0.03em;
+  }
+  #timer_caption {
+    font-size: 11.5px;
+    color: var(--ink-dim);
+    letter-spacing: 0.04em;
+  }
+  #study_char {
+    position: absolute;
+    right: -6px;
+    bottom: 4px;
+    width: 92px;
+    height: 92px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid var(--panel-edge);
+    background: #000;
+  }
+  #study_char img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+  #study_bottom { display: flex; gap: 10px; }
+  #ask_btn {
+    flex: 1;
+    background: var(--neon-dim);
+    border: 1px solid var(--neon);
+    color: var(--neon);
+    border-radius: 16px;
+    padding: 15px 0;
+    font-weight: 700;
+    font-size: 14.5px;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+  }
+
+  #cd_finished {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(5,7,10,0.94);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    text-align: center;
+    padding: 0 30px;
+  }
+  #cd_finished.active { display: flex; }
+  #cd_finished h2 {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    color: var(--danger);
+    font-size: 20px;
+    margin: 0;
+  }
+  #cd_finished p { color: var(--ink-dim); font-size: 13px; margin: 0; }
+  #cd_finished button {
+    margin-top: 10px;
+    background: var(--danger);
+    color: #180207;
+    border: none;
+    border-radius: 14px;
+    padding: 13px 26px;
+    font-weight: 700;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+  }
+
+  /* ================= 質問オーバーレイ ================= */
+  #overlay_question {
+    position: fixed;
+    inset: 0;
+    background: var(--void);
+    z-index: 30;
+    display: none;
+    flex-direction: column;
+  }
+  #overlay_question.active { display: flex; }
+  #q_top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: max(16px, env(safe-area-inset-top)) 18px 12px;
+    border-bottom: 1px solid var(--panel-edge);
+  }
+  #q_avatar {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: #000;
+  }
+  #q_avatar img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+  #q_title { font-family: 'M PLUS Rounded 1c', sans-serif; font-weight: 700; font-size: 14.5px; }
+  #q_status { font-size: 11px; color: var(--ink-dim); }
+  #q_chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .q_row { display: flex; gap: 8px; max-width: 88%; }
+  .q_row.user { align-self: flex-end; flex-direction: row-reverse; }
+  .q_row.assistant { align-self: flex-start; }
+  .q_avatar_sm { width: 26px; height: 26px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background:#000; }
+  .q_avatar_sm img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+  .q_bubble { padding: 10px 14px; border-radius: 16px; font-size: 13.5px; line-height: 1.7; }
+  .q_row.user .q_bubble { background: var(--danger-dim); color: var(--ink); border: 1px solid rgba(255,45,85,0.3); border-bottom-right-radius: 4px; }
+  .q_row.assistant .q_bubble { background: var(--panel); border: 1px solid var(--panel-edge); color: var(--ink); border-bottom-left-radius: 4px; }
+  #q_input_bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px max(12px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--panel-edge);
+  }
+  #q_mic_btn {
+    flex-shrink: 0;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--neon);
+    background: var(--neon-dim);
+    color: var(--neon);
+    font-size: 18px;
+  }
+  #q_mic_btn.state-listening { background: var(--danger); border-color: var(--danger); color: #180207; animation: micpulse 1s ease-in-out infinite; }
+  #q_mic_btn.state-thinking { background: rgba(255,255,255,0.06); color: var(--ink-dim); }
+  @keyframes micpulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,45,85,0.5); }
+    50% { box-shadow: 0 0 0 10px rgba(255,45,85,0); }
+  }
+  #q_text_input {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-radius: 20px;
+    padding: 11px 16px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  #q_send_btn {
+    flex-shrink: 0;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--panel-edge);
+    background: transparent;
+    color: var(--ink);
+    font-size: 16px;
+  }
+  #q_resume_btn {
+    margin: 0 16px 12px;
+    background: transparent;
+    border: 1px solid var(--panel-edge);
+    color: var(--ink-dim);
+    border-radius: 14px;
+    padding: 10px 0;
+    font-size: 12.5px;
+    font-family: inherit;
   }
 </style>
 </head>
 <body>
 <div id="app">
-  <a id="back_btn" href="index.html">← ホームに戻る</a>
-  <div class="icon">📚</div>
-  <h1>勉強アプリ</h1>
-  <p>ここに、単語帳やクイズ、学習記録など<br>勉強をサポートする機能を追加していく予定です。</p>
-  <span class="badge">準備中</span>
+
+  <!-- ================= ホーム ================= -->
+  <div id="screen_home" class="screen active">
+    <div id="home_glow"></div>
+    <button id="start_btn">
+      勉強する
+      <span class="sub">TAP TO START</span>
+    </button>
+    <div id="home_hint">タップしてモードを選択</div>
+    <div id="home_streak" class="mono" id="streak_text">今日の勉強時間 0分</div>
+  </div>
+
+  <!-- ================= モード選択 ================= -->
+  <div id="screen_mode" class="screen">
+    <div id="top_row">
+      <a href="index.html" class="back_btn">←</a>
+      <div class="page_title">MODE SELECT</div>
+    </div>
+    <button class="mode_card" id="mode_up">
+      <div class="glyph">⏱</div>
+      <div><h3>勉強モード</h3><p>時間を決めずに、経過時間を測りながら集中する。終わったら自分で終了。</p></div>
+    </button>
+    <button class="mode_card" id="mode_down">
+      <div class="glyph">⏳</div>
+      <div><h3>カウントダウンモード</h3><p>時間を指定して、残り時間を見ながら集中する。0になったら音でお知らせ。</p></div>
+    </button>
+  </div>
+
+  <!-- ================= カウントダウン設定 ================= -->
+  <div id="screen_countdown" class="screen">
+    <div id="top_row">
+      <button class="back_btn" id="cd_back_btn">←</button>
+      <div class="page_title">COUNTDOWN SETUP</div>
+    </div>
+    <div id="cd_label">何分間、集中しますか？</div>
+    <div id="cd_chips">
+      <button class="chip" data-min="15">15<span>分</span></button>
+      <button class="chip" data-min="25">25<span>分</span></button>
+      <button class="chip" data-min="45">45<span>分</span></button>
+      <button class="chip" data-min="60">60<span>分</span></button>
+    </div>
+    <div id="cd_custom_row">
+      <input type="number" id="cd_custom_input" min="1" max="300" placeholder="自由入力">
+      <span style="color:var(--ink-dim); font-size:13px;">分</span>
+    </div>
+    <button id="cd_start_btn" disabled>この時間で開始</button>
+  </div>
+
+  <!-- ================= 勉強中 ================= -->
+  <div id="screen_study" class="screen">
+    <div id="study_top">
+      <div class="page_title" id="study_top_label">STUDY SESSION</div>
+      <button id="study_end_btn">終了する</button>
+    </div>
+    <div id="study_stage">
+      <div id="timer_box">
+        <div id="timer_mode_label">勉強モード</div>
+        <div id="timer_digits" class="mono">00:00</div>
+        <div id="timer_caption">経過時間</div>
+      </div>
+      <div id="study_char"><img id="study_char_img" src="chars/char_normal.png" alt="YUI"></div>
+      <div id="cd_finished">
+        <h2>タイムアップ！</h2>
+        <p>お疲れさま。今回は<span id="cd_finished_time" class="mono"></span>集中できました。</p>
+        <button id="cd_finished_btn">ホームに戻る</button>
+      </div>
+    </div>
+    <div id="study_bottom">
+      <button id="ask_btn">💬 質問する</button>
+    </div>
+  </div>
+
+  <!-- ================= 質問オーバーレイ ================= -->
+  <div id="overlay_question">
+    <div id="q_top">
+      <div id="q_avatar"><img id="q_avatar_img" src="chars/char_normal.png" alt="YUI"></div>
+      <div>
+        <div id="q_title">YUIに質問</div>
+        <div id="q_status">短押しで質問 / テキスト入力もできます</div>
+      </div>
+    </div>
+    <div id="q_chat"></div>
+    <button id="q_resume_btn">← 勉強に戻る（タイマー再開）</button>
+    <div id="q_input_bar">
+      <button id="q_mic_btn" aria-label="音声で質問">🎤</button>
+      <input id="q_text_input" type="text" placeholder="メッセージを入力...">
+      <button id="q_send_btn" aria-label="送信">➤</button>
+    </div>
+  </div>
+
 </div>
+
+<script>
+(() => {
+  const PROFILE_KEY = 'yui_profile';
+  const API_KEY_STORAGE = 'yui_api_key';
+  const STATS_KEY = 'yui_study_stats';
+  const MODEL = "gemini-3.6-flash";
+
+  const els = {
+    startBtn: document.getElementById('start_btn'),
+    streakText: document.getElementById('streak_text'),
+    screens: {
+      home: document.getElementById('screen_home'),
+      mode: document.getElementById('screen_mode'),
+      countdown: document.getElementById('screen_countdown'),
+      study: document.getElementById('screen_study'),
+    },
+    modeUp: document.getElementById('mode_up'),
+    modeDown: document.getElementById('mode_down'),
+    cdBackBtn: document.getElementById('cd_back_btn'),
+    cdChips: Array.from(document.querySelectorAll('.chip')),
+    cdCustomInput: document.getElementById('cd_custom_input'),
+    cdStartBtn: document.getElementById('cd_start_btn'),
+    studyTopLabel: document.getElementById('study_top_label'),
+    studyEndBtn: document.getElementById('study_end_btn'),
+    timerModeLabel: document.getElementById('timer_mode_label'),
+    timerDigits: document.getElementById('timer_digits'),
+    timerCaption: document.getElementById('timer_caption'),
+    studyCharImg: document.getElementById('study_char_img'),
+    cdFinished: document.getElementById('cd_finished'),
+    cdFinishedTime: document.getElementById('cd_finished_time'),
+    cdFinishedBtn: document.getElementById('cd_finished_btn'),
+    askBtn: document.getElementById('ask_btn'),
+    overlay: document.getElementById('overlay_question'),
+    qChat: document.getElementById('q_chat'),
+    qResumeBtn: document.getElementById('q_resume_btn'),
+    qTextInput: document.getElementById('q_text_input'),
+    qSendBtn: document.getElementById('q_send_btn'),
+    qMicBtn: document.getElementById('q_mic_btn'),
+    qAvatarImg: document.getElementById('q_avatar_img'),
+    qStatus: document.getElementById('q_status'),
+  };
+
+  // ============ プロフィール & 統計 ============
+  function loadProfile() {
+    try { return JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}'); }
+    catch (e) { return {}; }
+  }
+  const profile = loadProfile();
+  let apiKey = localStorage.getItem(API_KEY_STORAGE) || "";
+
+  function loadStats() {
+    try { return JSON.parse(localStorage.getItem(STATS_KEY) || '[]'); }
+    catch (e) { return []; }
+  }
+  function saveStatEntry(seconds, mode) {
+    if (seconds < 5) return;
+    const stats = loadStats();
+    stats.push({ date: new Date().toISOString(), seconds, mode });
+    localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+    renderTodayStreak();
+  }
+  function renderTodayStreak() {
+    const stats = loadStats();
+    const today = new Date().toDateString();
+    const totalSec = stats
+      .filter(s => new Date(s.date).toDateString() === today)
+      .reduce((sum, s) => sum + s.seconds, 0);
+    els.streakText.textContent = `今日の勉強時間 ${Math.floor(totalSec / 60)}分`;
+  }
+  renderTodayStreak();
+
+  // ============ 画面遷移 ============
+  function showScreen(name) {
+    Object.values(els.screens).forEach(s => s.classList.remove('active'));
+    els.screens[name].classList.add('active');
+  }
+  els.startBtn.addEventListener('click', () => showScreen('mode'));
+
+  document.querySelectorAll('#screen_mode .back_btn').forEach(b => {}); // (index.htmlへ直接遷移)
+
+  // ============ タイマー本体 ============
+  let timerMode = 'up';       // 'up' | 'down'
+  let elapsedSec = 0;
+  let remainingSec = 0;
+  let totalSec = 0;
+  let intervalId = null;
+
+  function fmt(sec) {
+    sec = Math.max(0, Math.round(sec));
+    const m = Math.floor(sec / 60).toString().padStart(2, '0');
+    const s = (sec % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  }
+
+  function tick() {
+    if (timerMode === 'up') {
+      elapsedSec += 1;
+      els.timerDigits.textContent = fmt(elapsedSec);
+    } else {
+      remainingSec -= 1;
+      els.timerDigits.textContent = fmt(remainingSec);
+      if (remainingSec <= 0) {
+        finishCountdown();
+      }
+    }
+  }
+
+  function startTimer() {
+    if (intervalId) clearInterval(intervalId);
+    intervalId = setInterval(tick, 1000);
+  }
+  function pauseTimer() {
+    if (intervalId) { clearInterval(intervalId); intervalId = null; }
+  }
+
+  function beginSession(mode, minutes) {
+    timerMode = mode;
+    elapsedSec = 0;
+    els.cdFinished.classList.remove('active');
+    if (mode === 'up') {
+      els.timerModeLabel.textContent = '勉強モード';
+      els.timerCaption.textContent = '経過時間';
+      els.studyTopLabel.textContent = 'STUDY SESSION';
+      els.timerDigits.textContent = fmt(0);
+    } else {
+      totalSec = minutes * 60;
+      remainingSec = totalSec;
+      els.timerModeLabel.textContent = 'カウントダウン';
+      els.timerCaption.textContent = '残り時間';
+      els.studyTopLabel.textContent = 'COUNTDOWN';
+      els.timerDigits.textContent = fmt(remainingSec);
+    }
+    showScreen('study');
+    startTimer();
+  }
+
+  function finishCountdown() {
+    pauseTimer();
+    playAlarm();
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
+    const studied = totalSec - Math.max(0, remainingSec);
+    els.cdFinishedTime.textContent = fmt(studied);
+    els.cdFinished.classList.add('active');
+    saveStatEntry(studied, 'down');
+  }
+
+  els.cdFinishedBtn.addEventListener('click', () => {
+    els.cdFinished.classList.remove('active');
+    showScreen('home');
+  });
+
+  els.studyEndBtn.addEventListener('click', () => {
+    pauseTimer();
+    const studied = timerMode === 'up' ? elapsedSec : (totalSec - Math.max(0, remainingSec));
+    saveStatEntry(studied, timerMode);
+    showScreen('home');
+  });
+
+  function playAlarm() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const notes = [880, 1108, 1318];
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.value = 0.001;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        const startAt = ctx.currentTime + i * 0.28;
+        gain.gain.exponentialRampToValueAtTime(0.22, startAt + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.26);
+        osc.start(startAt);
+        osc.stop(startAt + 0.3);
+      });
+    } catch (e) { /* 再生できない環境は無視 */ }
+  }
+
+  // ============ モード選択 ============
+  els.modeUp.addEventListener('click', () => beginSession('up', 0));
+  els.modeDown.addEventListener('click', () => showScreen('countdown'));
+  els.cdBackBtn.addEventListener('click', () => showScreen('mode'));
+
+  let selectedMinutes = null;
+  els.cdChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      els.cdChips.forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+      els.cdCustomInput.value = '';
+      selectedMinutes = parseInt(chip.dataset.min, 10);
+      els.cdStartBtn.disabled = false;
+    });
+  });
+  els.cdCustomInput.addEventListener('input', () => {
+    els.cdChips.forEach(c => c.classList.remove('selected'));
+    const v = parseInt(els.cdCustomInput.value, 10);
+    if (v > 0) { selectedMinutes = v; els.cdStartBtn.disabled = false; }
+    else { selectedMinutes = null; els.cdStartBtn.disabled = true; }
+  });
+  els.cdStartBtn.addEventListener('click', () => {
+    if (selectedMinutes) beginSession('down', selectedMinutes);
+  });
+
+  // ============ 質問機能（Gemini連携） ============
+  const TONE_TEXT = {
+    polite: "丁寧語(です・ます調)で話してください。",
+    friendly: "フレンドリーなタメ口で話してください。",
+    tsundere: "ややツンデレ気味に、素っ気なさの中に優しさが滲む話し方をしてください。",
+    cool: "クールで無口気味に、必要なことだけ簡潔に話してください。",
+  };
+  const FEEDBACK_TEXT = {
+    gentle: "指摘やアドバイスをするときは、優しく励ますような伝え方をしてください。",
+    direct: "指摘やアドバイスをするときは、率直にはっきりと伝えてください。",
+    playful: "指摘やアドバイスをするときは、ちょっとユーモラスに茶化しながら伝えてください。",
+  };
+  const userName = profile.user_name || 'あなた';
+  const SYSTEM_PROMPT =
+    "あなたはナビゲーションAI「YUI」です。今、ユーザーは勉強中にわからないことがあって質問してきています。\n" +
+    `ユーザーのことは「${userName}」と呼んでください。\n` +
+    (TONE_TEXT[profile.tone_style] || TONE_TEXT.friendly) + "\n" +
+    (FEEDBACK_TEXT[profile.feedback_style] || FEEDBACK_TEXT.gentle) + "\n" +
+    "勉強の邪魔にならないよう、質問には要点をしぼって簡潔に答えてください。\n" +
+    "回答は必ず音声で読み上げられます。次のルールを厳守してください。\n" +
+    "・アスタリスク(*)、シャープ(#)、箇条書きの記号、太字や見出しなどのMarkdown書式は絶対に使わない\n" +
+    "・数字の箇条書き(1. 2. のような形式)も使わない。文章として話す\n" +
+    "・回答は簡潔にする。特別な指示がない限り2〜3文、長くても4文までに収める\n" +
+    "・一貫して上記の性格・口調を維持してください";
+
+  let conversationHistory = [];
+
+  function addBubble(role, text) {
+    const row = document.createElement('div');
+    row.className = `q_row ${role}`;
+    if (role === 'assistant') {
+      const avatar = document.createElement('div');
+      avatar.className = 'q_avatar_sm';
+      const img = document.createElement('img');
+      img.src = 'chars/char_normal.png';
+      avatar.appendChild(img);
+      row.appendChild(avatar);
+    }
+    const bubble = document.createElement('div');
+    bubble.className = 'q_bubble';
+    bubble.textContent = text;
+    row.appendChild(bubble);
+    els.qChat.appendChild(row);
+    els.qChat.scrollTop = els.qChat.scrollHeight;
+  }
+
+  function setAvatarState(state) {
+    const map = {
+      normal: 'chars/char_normal.png',
+      listening: 'chars/char_thinking.png',
+      thinking: 'chars/char_thinking.png',
+      speaking: 'chars/char_normal.png',
+      error: 'chars/char_error.png',
+    };
+    els.qAvatarImg.src = map[state] || map.normal;
+    els.qMicBtn.className = state === 'normal' ? '' : `state-${state}`;
+  }
+
+  async function callGemini(contents) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents,
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        generationConfig: {
+          thinkingConfig: { thinkingLevel: 'low' },
+          maxOutputTokens: 300,
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody?.error?.message || `APIエラー (${res.status})`);
+    }
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  }
+
+  function trimmedHistory() {
+    if (conversationHistory.length <= 8) return conversationHistory;
+    return conversationHistory.slice(-8);
+  }
+
+  function speak(text, onEnd) {
+    if (!('speechSynthesis' in window)) { if (onEnd) onEnd(); return; }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ja-JP';
+    utterance.rate = 1.15;
+    if (onEnd) { utterance.onend = onEnd; utterance.onerror = onEnd; }
+    window.speechSynthesis.speak(utterance);
+  }
+
+  async function sendMessage(text) {
+    if (!text) return;
+    if (!apiKey) {
+      addBubble('assistant', 'APIキーが設定されていません。トーク画面(talk.html)でAPIキーを設定してください。');
+      return;
+    }
+    conversationHistory.push({ role: 'user', parts: [{ text }] });
+    addBubble('user', text);
+    setAvatarState('thinking');
+    els.qStatus.textContent = '考え中...';
+    try {
+      const answer = await callGemini(trimmedHistory());
+      conversationHistory.push({ role: 'model', parts: [{ text: answer }] });
+      addBubble('assistant', answer);
+      setAvatarState('speaking');
+      els.qStatus.textContent = '話しています...';
+      speak(answer, () => {
+        setAvatarState('normal');
+        els.qStatus.textContent = '短押しで質問 / テキスト入力もできます';
+      });
+    } catch (err) {
+      addBubble('assistant', 'エラー: ' + err.message);
+      setAvatarState('error');
+      setTimeout(() => {
+        setAvatarState('normal');
+        els.qStatus.textContent = '短押しで質問 / テキスト入力もできます';
+      }, 1500);
+    }
+  }
+
+  els.qSendBtn.addEventListener('click', () => {
+    const text = els.qTextInput.value.trim();
+    els.qTextInput.value = '';
+    sendMessage(text);
+  });
+  els.qTextInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const text = els.qTextInput.value.trim();
+      els.qTextInput.value = '';
+      sendMessage(text);
+    }
+  });
+
+  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognizer = null;
+  if (SpeechRecognitionCtor) {
+    recognizer = new SpeechRecognitionCtor();
+    recognizer.lang = 'ja-JP';
+    recognizer.interimResults = false;
+    recognizer.maxAlternatives = 1;
+  }
+  let listening = false;
+  els.qMicBtn.addEventListener('click', () => {
+    if (!apiKey) { sendMessage(''); addBubble('assistant', 'APIキーが設定されていません。トーク画面(talk.html)でAPIキーを設定してください。'); return; }
+    if (!recognizer) { els.qStatus.textContent = 'この端末は音声入力に対応していません'; return; }
+    if (listening) return;
+    listening = true;
+    setAvatarState('listening');
+    els.qStatus.textContent = '聞いています...';
+    try { recognizer.start(); } catch (e) { listening = false; setAvatarState('normal'); }
+  });
+  if (recognizer) {
+    recognizer.addEventListener('result', (event) => {
+      sendMessage(event.results[0][0].transcript);
+    });
+    recognizer.addEventListener('end', () => { listening = false; });
+    recognizer.addEventListener('error', () => {
+      listening = false;
+      setAvatarState('normal');
+      els.qStatus.textContent = '聞き取れませんでした';
+      setTimeout(() => { els.qStatus.textContent = '短押しで質問 / テキスト入力もできます'; }, 1500);
+    });
+  }
+
+  // ============ 質問オーバーレイの開閉（＝勉強タイマーの一時停止/再開） ============
+  els.askBtn.addEventListener('click', () => {
+    pauseTimer();
+    els.overlay.classList.add('active');
+    if (els.qChat.children.length === 0) {
+      addBubble('assistant', `${userName}、何がわからない？`);
+    }
+  });
+  els.qResumeBtn.addEventListener('click', () => {
+    els.overlay.classList.remove('active');
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    startTimer();
+  });
+
+})();
+</script>
 </body>
 </html>
