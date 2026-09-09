@@ -423,7 +423,7 @@
       <span class="sub">TAP TO START</span>
     </button>
     <div id="home_hint">タップしてモードを選択</div>
-    <div id="home_streak" class="mono" id="streak_text">今日の勉強時間 0分</div>
+    <div id="home_streak" class="mono">今日の勉強時間 0分</div>
   </div>
 
   <!-- ================= モード選択 ================= -->
@@ -515,7 +515,7 @@
 
   const els = {
     startBtn: document.getElementById('start_btn'),
-    streakText: document.getElementById('streak_text'),
+    streakText: document.getElementById('home_streak'),
     screens: {
       home: document.getElementById('screen_home'),
       mode: document.getElementById('screen_mode'),
@@ -757,14 +757,8 @@
   }
 
   function setAvatarState(state) {
-    const map = {
-      normal: 'chars/char_normal.png',
-      listening: 'chars/char_thinking.png',
-      thinking: 'chars/char_thinking.png',
-      speaking: 'chars/char_normal.png',
-      error: 'chars/char_error.png',
-    };
-    els.qAvatarImg.src = map[state] || map.normal;
+    // 画像はchar_normal.pngのみを使用（表情差分は今後追加予定）
+    els.qAvatarImg.src = 'chars/char_normal.png';
     els.qMicBtn.className = state === 'normal' ? '' : `state-${state}`;
   }
 
