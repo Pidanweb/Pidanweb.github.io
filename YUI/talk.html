@@ -344,12 +344,20 @@
   };
 
   const userName = profile.user_name || 'あなた';
+  const customPersonality = (profile.custom_personality || '').trim();
+
+  // 「AIの性格」に自由記述があれば、それを最優先のキャラクター設定として使う。
+  // 空欄なら、初期設定で選んだ口調(TONE_TEXT/FEEDBACK_TEXT)をこれまで通り使う。
+  const personalityBlock = customPersonality
+    ? "あなたは次のキャラクター設定になりきってください。設定に書かれた口調・話し方・言葉づかいを何よりも優先してください。\n" +
+      "----\n" + customPersonality + "\n----\n"
+    : "あなたはナビゲーションAI「YUI」です。ユーザーの生活をサポートするパートナーとして振る舞ってください。\n" +
+      (TONE_TEXT[profile.tone_style] || TONE_TEXT.friendly) + "\n" +
+      (FEEDBACK_TEXT[profile.feedback_style] || FEEDBACK_TEXT.gentle) + "\n";
 
   const SYSTEM_PROMPT =
-    "あなたはナビゲーションAI「YUI」です。ユーザーの生活をサポートするパートナーとして振る舞ってください。\n" +
+    personalityBlock +
     `ユーザーのことは「${userName}」と呼んでください。\n` +
-    (TONE_TEXT[profile.tone_style] || TONE_TEXT.friendly) + "\n" +
-    (FEEDBACK_TEXT[profile.feedback_style] || FEEDBACK_TEXT.gentle) + "\n" +
     "回答は必ず音声で読み上げられます。次のルールを厳守してください。\n" +
     "・アスタリスク(*)、シャープ(#)、箇条書きの記号、太字や見出しなどのMarkdown書式は絶対に使わない\n" +
     "・数字の箇条書き(1. 2. のような形式)も使わない。文章として話す\n" +
@@ -392,7 +400,21 @@
     els.chatScroll.scrollTop = els.chatScroll.scrollHeight;
   }
 
-  addBubble('assistant', `${userName}、お話ししよう。何か聞きたいことある？`);
+  if (customPersonality && apiKey) {
+    // 性格が設定されているときは、最初のひとこともその口調でAIに考えてもらう
+    setAvatarState('thinking');
+    callGemini([{ role: 'user', parts: [{ text: '(最初の挨拶をひとことだけ、設定した性格の口調でお願いします)' }] }])
+      .then((line) => {
+        addBubble('assistant', line || `${userName}、お話ししよう。何か聞きたいことある？`);
+        setAvatarState('normal');
+      })
+      .catch(() => {
+        addBubble('assistant', `${userName}、お話ししよう。何か聞きたいことある？`);
+        setAvatarState('normal');
+      });
+  } else {
+    addBubble('assistant', `${userName}、お話ししよう。何か聞きたいことある？`);
+  }
 
   // ============ Gemini呼び出し ============
   async function callGemini(contents) {
