@@ -238,6 +238,42 @@
     font-size: 12.5px;
     font-weight: 600;
   }
+  #color_row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    flex-shrink: 0;
+  }
+  #color_swatches {
+    display: flex;
+    gap: 6px;
+    flex: 1;
+    overflow-x: auto;
+  }
+  .color_swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--panel-edge);
+    flex-shrink: 0;
+    padding: 0;
+  }
+  .color_swatch.selected {
+    border-color: var(--scan);
+    box-shadow: 0 0 0 2px var(--scan-soft);
+  }
+  #custom_color_picker {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    padding: 0;
+    background: none;
+    flex-shrink: 0;
+  }
+  #custom_color_picker::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
+  #custom_color_picker::-webkit-color-swatch { border: 2px solid var(--panel-edge); border-radius: 50%; }
   #submit_row {
     display: flex;
     gap: 10px;
@@ -269,6 +305,33 @@
 
   /* ---------- 結果画面 ---------- */
   #result_screen { align-items: center; justify-content: center; text-align: center; }
+  #result_drawn_image_wrap {
+    width: 100%;
+    max-width: 220px;
+    aspect-ratio: 1 / 1;
+    border-radius: 16px;
+    border: 2px solid var(--panel-edge);
+    overflow: hidden;
+    background: #fff;
+    margin-bottom: 14px;
+  }
+  #result_drawn_image_wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  #save_image_btn {
+    width: 100%;
+    padding: 12px 0;
+    border-radius: 12px;
+    border: 1px solid var(--panel-edge);
+    background: var(--panel);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 700;
+    margin-bottom: 14px;
+  }
   #result_avatar {
     width: 96px;
     height: 96px;
@@ -442,6 +505,19 @@
       <img id="photo_preview" alt="撮影した絵">
     </div>
 
+    <div id="color_row">
+      <div id="color_swatches">
+        <button class="color_swatch selected" data-color="#1a1a1a" style="background:#1a1a1a;"></button>
+        <button class="color_swatch" data-color="#e2554a" style="background:#e2554a;"></button>
+        <button class="color_swatch" data-color="#d98a33" style="background:#d98a33;"></button>
+        <button class="color_swatch" data-color="#e8c93a" style="background:#e8c93a;"></button>
+        <button class="color_swatch" data-color="#2fae90" style="background:#2fae90;"></button>
+        <button class="color_swatch" data-color="#3a7fe8" style="background:#3a7fe8;"></button>
+        <button class="color_swatch" data-color="#8a5ce8" style="background:#8a5ce8;"></button>
+        <button class="color_swatch" data-color="#ffffff" style="background:#ffffff;"></button>
+      </div>
+      <input type="color" id="custom_color_picker" value="#1a1a1a">
+    </div>
     <div id="canvas_tools">
       <button id="undo_btn">戻す</button>
       <button id="clear_btn">全部消す</button>
@@ -457,9 +533,11 @@
 
   <!-- ④結果画面(1ラウンドごと) -->
   <div id="result_screen" class="screen">
+    <div id="result_drawn_image_wrap"><img id="result_drawn_image" alt="描いた絵"></div>
     <div id="result_avatar"><img id="result_avatar_img" src="chars/char_thinking.png" alt="YUI"></div>
     <div id="result_guess_bubble"></div>
     <div id="result_question">YUIの推測、合っていましたか？</div>
+    <button id="save_image_btn">💾 画像を保存</button>
     <div id="result_buttons">
       <button id="mark_wrong_btn">不正解</button>
       <button id="mark_correct_btn">正解！</button>
@@ -523,6 +601,8 @@
     "回答は必ず音声ではなく画面に表示されるテキストです。次のルールを厳守してください。\n" +
     "・アスタリスク(*)、シャープ(#)、箇条書きの記号、Markdown書式は絶対に使わない\n" +
     "・回答は1〜2文の短いセリフにする\n" +
+    "・絵が抽象的すぎる、線が少なすぎる、何を描いたのか本当に判断がつかない場合は、" +
+    "無理に何かに決めつけて答えず、正直に「わからない」という趣旨の返答をしてください\n" +
     "・一貫して上記の性格・口調を維持してください";
 
   // ============ 要素参照 ============
@@ -632,6 +712,30 @@
   let undoStack = [];
   let drawing = false;
   let lastX = 0, lastY = 0;
+  let currentColor = '#1a1a1a';
+  let lastSubmittedImageDataUrl = '';
+
+  // ペンタブのペン側面ボタンなどで発生する右クリックメニュー(画像を開く/保存する等)を
+  // キャンバスと絵の表示部分でだけ無効化する。
+  [canvas, els.photoPreview, els.resultDrawnImage].forEach(el => {
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+  });
+
+  // ---- 色選択 ----
+  function selectColor(hex) {
+    currentColor = hex;
+    document.querySelectorAll('.color_swatch').forEach(b => {
+      b.classList.toggle('selected', b.dataset.color.toLowerCase() === hex.toLowerCase());
+    });
+    els.customColorPicker.value = hex;
+  }
+  document.querySelectorAll('.color_swatch').forEach(btn => {
+    btn.addEventListener('click', () => selectColor(btn.dataset.color));
+  });
+  els.customColorPicker.addEventListener('input', (e) => {
+    document.querySelectorAll('.color_swatch').forEach(b => b.classList.remove('selected'));
+    currentColor = e.target.value;
+  });
 
   function resizeCanvas() {
     const rect = els.canvasWrap.getBoundingClientRect();
@@ -665,7 +769,7 @@
     const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
     ctx.lineWidth = Math.max(1.5, pressure * 7);
     ctx.lineCap = 'round';
-    ctx.strokeStyle = '#1a1a1a';
+    ctx.strokeStyle = currentColor;
     ctx.beginPath();
     ctx.moveTo(lastX, lastY);
     ctx.lineTo(e.offsetX, e.offsetY);
@@ -780,7 +884,9 @@
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const prompt =
       "これはお絵描き当てゲームの一場面です。この絵に何が描かれているか、あなたの推測を答えてください。" +
-      "自信がなくても構わないので、最も近いと思う具体的なものを1つ挙げてください。前置きは不要です。";
+      "自信がなくても構わないので、最も近いと思う具体的なものを1つ挙げてください。前置きは不要です。" +
+      "ただし、線が少なすぎたり抽象的すぎたりして本当に判断できない場合は、" +
+      "無理に当てはめず「わかりません」のように正直に答えてください。";
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -813,6 +919,8 @@
       return;
     }
     const sourceDataUrl = usingPhoto ? photoDataUrl : canvas.toDataURL('image/png');
+    lastSubmittedImageDataUrl = sourceDataUrl;
+    els.resultDrawnImage.src = sourceDataUrl;
 
     els.thinkingOverlay.classList.add('active');
     resizeDataUrl(sourceDataUrl, 600, async (jpegDataUrl) => {
@@ -830,6 +938,18 @@
       }
     });
   }
+
+  // ---- 画像を保存 ----
+  els.saveImageBtn.addEventListener('click', () => {
+    if (!lastSubmittedImageDataUrl) return;
+    const a = document.createElement('a');
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    a.href = lastSubmittedImageDataUrl;
+    a.download = `yui_drawing_${ts}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
 
   // ============ 自己採点 ============
   els.markCorrectBtn.addEventListener('click', () => { score++; nextRoundOrFinish(); });
