@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>パリィアクション</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #111318;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", sans-serif;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+  }
+  #stage {
+    position: relative;
+    width: 400px;
+    max-width: 96vw;
+    aspect-ratio: 400 / 600;
+  }
+  canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    background: linear-gradient(#2a2f45, #14151f);
+    border-radius: 8px;
+    box-shadow: 0 0 24px rgba(0,0,0,0.6);
+    touch-action: none;
+  }
+  #toolbar {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    align-items: center;
+  }
+  #toolbar label {
+    background: #2d3348;
+    color: #dde;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  #restartBtn {
+    background: #4a2d2d;
+    color: #fdd;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  #fileInput { display: none; }
+  #overlayMsg {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 22px;
+    font-weight: bold;
+    background: rgba(0,0,0,0.55);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    text-align: center;
+    letter-spacing: 2px;
+  }
+  #overlayMsg.show { opacity: 1; }
+  #overlayMsg span.sub {
+    font-size: 13px;
+    font-weight: normal;
+    margin-top: 8px;
+    opacity: 0.8;
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="game" width="400" height="600"></canvas>
+    <div id="overlayMsg"><div id="overlayMsgText"></div><span class="sub" id="overlayMsgSub"></span></div>
+  </div>
+  <div id="toolbar">
+    <label for="fileInput">🖼 キャラ画像を選択</label>
+    <input type="file" id="fileInput" accept="image/*">
+    <button id="restartBtn">リスタート</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ==============================
+  // 定数（バランス調整はここを変更）
+  // ==============================
+  const PLAYER_MAX_HP = 5;
+  const ENEMY_MAX_HP = 15;
+  const NORMAL_ATK_DMG = 1;
+  const SPECIAL_ATK_DMG = 3;
+  const ATTACK_WINDUP_MS = 300;     // 通常攻撃の発生隙
+  const MAX_GUARD_GAUGE = 3;
+  const PARRY_WINDOW_MS = 500;      // 指を離してからのパリィ受付
+  const SHORT_TAP_MS = 150;         // これ未満なら「短タップ」＝攻撃
+  const OVERHEAT_MS = 2000;         // ガードゲージ枯渇時の無防備時間
+  const ENEMY_IDLE_MIN_MS = 1500;
+  const ENEMY_IDLE_MAX_MS = 2000;
+  const TELEGRAPH_MS = 1000;        // 予兆から攻撃発生までの溜め時間
+  const HITSTOP_MS = 220;           // パリィ成功時のヒットストップ
+  const STAGGER_MS = 1300;          // パリィ成功後の必殺技演出時間
+  const GUARD_GAUGE_REGEN_MS = 2800; // ゲージ1本回復にかかる時間（仕様書に無いため補完）
+
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+
+  const overlayMsg = document.getElementById("overlayMsg");
+  const overlayMsgText = document.getElementById("overlayMsgText");
+  const overlayMsgSub = document.getElementById("overlayMsgSub");
+
+  // ==============================
+  // 状態
+  // ==============================
+  let playerImage = null; // アップロードされた画像
+
+  function freshState() {
+    return {
+      player: {
+        x: 95, y: 430, size: 100,
+        hp: PLAYER_MAX_HP,
+        guardGauge: MAX_GUARD_GAUGE,
+        state: "idle", // idle, guard, windup, parryWindow, overheat, hitstun, victoryPose
+        pressStartTime: 0,
+        isPointerDown: false,
+        stateTimer: 0,
+        guardRegenTimer: 0,
+        flashTimer: 0,      // 被弾時の赤フラッシュ演出
+        invincible: false,
+      },
+      enemy: {
+        x: 250, y: 90, size: 90,
+        hp: ENEMY_MAX_HP,
+        state: "idle", // idle, telegraph, resolveAttack, staggered, defeated
+        stateTimer: 0,
+        idleDuration: rand(ENEMY_IDLE_MIN_MS, ENEMY_IDLE_MAX_MS),
+        attackType: null, // "red" | "yellow"
+        shakeTimer: 0,
+      },
+      hitstopTimer: 0,
+      gameOver: false, // "win" | "lose" | null
+      swordEffect: null, // {timer, kind}
+      comboEffect: null, // {timer}
+      debugText: "",
+    };
+  }
+
+  let S = freshState();
+
+  function rand(min, max) { return min + Math.random() * (max - min); }
+
+  // ==============================
+  // 画像アップロード
+  // ==============================
+  document.getElementById("fileInput").addEventListener("change", function (e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (ev) {
+      const img = new Image();
+      img.onload = function () { playerImage = img; };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById("restartBtn").addEventListener("click", function () {
+    S = freshState();
+  });
+
+  // ==============================
+  // 入力（マウス / タッチ共通 = Pointer Events）
+  // ==============================
+  canvas.addEventListener("pointerdown", function (e) {
+    e.preventDefault();
+    if (S.gameOver) return;
+    const p = S.player;
+    if (p.state === "overheat" || p.state === "hitstun") return;
+    // 攻撃の発生隙中・パリィ受付中は新規入力を受け付けない（誤操作防止）
+    if (p.state === "windup" || p.state === "parryWindow") return;
+
+    p.isPointerDown = true;
+    p.pressStartTime = performance.now();
+  }, { passive: false });
+
+  function handleRelease(e) {
+    if (e) e.preventDefault();
+    const p = S.player;
+    if (!p.isPointerDown) return;
+    p.isPointerDown = false;
+    const heldMs = performance.now() - p.pressStartTime;
+
+    if (S.gameOver) return;
+
+    if (p.state === "guard") {
+      // ガードから指を離した → パリィ受付ウィンドウへ
+      p.state = "parryWindow";
+      p.stateTimer = 0;
+    } else if (p.state === "idle" && heldMs < SHORT_TAP_MS) {
+      // 短タップ＝通常攻撃
+      p.state = "windup";
+      p.stateTimer = 0;
+    } else if (p.state === "idle") {
+      // idleのまま規定時間未満で離した(guard未移行) → 何もしない
+    }
+  }
+  canvas.addEventListener("pointerup", handleRelease, { passive: false });
+  canvas.addEventListener("pointercancel", handleRelease, { passive: false });
+  canvas.addEventListener("pointerleave", function (e) {
+    // 画面外に出ても押しっぱなし扱いは継続しない（誤爆防止のため離した扱いにする）
+    if (S.player.isPointerDown) handleRelease(e);
+  });
+
+  // ==============================
+  // メインループ
+  // ==============================
+  let lastTime = performance.now();
+  function loop(now) {
+    let dt = now - lastTime;
+    lastTime = now;
+    if (dt > 100) dt = 100; // タブ切り替え等の巨大dt防止
+
+    if (S.hitstopTimer > 0) {
+      S.hitstopTimer -= dt;
+      // ヒットストップ中はロジック更新をスキップ（演出は動かす）
+    } else if (!S.gameOver) {
+      updatePlayer(dt);
+      updateEnemy(dt);
+    }
+    updateEffects(dt);
+    render();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // ==============================
+  // プレイヤー更新
+  // ==============================
+  function updatePlayer(dt) {
+    const p = S.player;
+
+    if (p.flashTimer > 0) p.flashTimer -= dt;
+
+    // 長押し判定はフレーム毎にチェック（pointermoveに依存しない：指/マウスを動かさなくても発火する）
+    if (p.isPointerDown && p.state === "idle" &&
+        performance.now() - p.pressStartTime >= SHORT_TAP_MS) {
+      p.state = "guard";
+    }
+
+    // ガードゲージの自然回復（ガード中でない時のみ）
+    if (p.guardGauge < MAX_GUARD_GAUGE && p.state !== "overheat" && p.state !== "guard") {
+      p.guardRegenTimer += dt;
+      if (p.guardRegenTimer >= GUARD_GAUGE_REGEN_MS) {
+        p.guardRegenTimer = 0;
+        p.guardGauge = Math.min(MAX_GUARD_GAUGE, p.guardGauge + 1);
+      }
+    }
+
+    switch (p.state) {
+      case "windup":
+        p.stateTimer += dt;
+        if (p.stateTimer >= ATTACK_WINDUP_MS) {
+          // 攻撃ヒット確定
+          dealDamageToEnemy(NORMAL_ATK_DMG);
+          p.state = "idle";
+        }
+        break;
+      case "parryWindow":
+        p.stateTimer += dt;
+        if (p.stateTimer >= PARRY_WINDOW_MS) {
+          p.state = "idle";
+        }
+        break;
+      case "overheat":
+        p.stateTimer += dt;
+        if (p.stateTimer >= OVERHEAT_MS) {
+          p.state = "idle";
+          p.guardGauge = MAX_GUARD_GAUGE; // オーバーヒート明けにゲージ全回復
+        }
+        break;
+      case "hitstun":
+        p.stateTimer += dt;
+        if (p.stateTimer >= 250) {
+          p.state = "idle";
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  function playerTakeDamage() {
+    const p = S.player;
+    p.hp -= 1;
+    p.flashTimer = 300;
+    p.state = "hitstun";
+    p.stateTimer = 0;
+    p.isPointerDown = false;
+    if (p.hp <= 0) {
+      p.hp = 0;
+      S.gameOver = "lose";
+    }
+  }
+
+  function playerConsumeGuard() {
+    const p = S.player;
+    p.guardGauge -= 1;
+    p.guardRegenTimer = 0;
+    if (p.guardGauge <= 0) {
+      p.guardGauge = 0;
+      p.state = "overheat";
+      p.stateTimer = 0;
+      p.isPointerDown = false;
+    }
+  }
+
+  // ==============================
+  // 敵更新
+  // ==============================
+  function updateEnemy(dt) {
+    const en = S.enemy;
+    if (en.shakeTimer > 0) en.shakeTimer -= dt;
+
+    switch (en.state) {
+      case "idle":
+        en.stateTimer += dt;
+        if (en.stateTimer >= en.idleDuration) {
+          en.state = "telegraph";
+          en.stateTimer = 0;
+          en.attackType = Math.random() < (1 / 3) ? "red" : "yellow";
+        }
+        break;
+      case "telegraph":
+        en.stateTimer += dt;
+        if (en.stateTimer >= TELEGRAPH_MS) {
+          resolveEnemyAttack();
+        }
+        break;
+      case "staggered":
+        en.stateTimer += dt;
+        if (en.stateTimer >= STAGGER_MS) {
+          en.state = "idle";
+          en.stateTimer = 0;
+          en.idleDuration = rand(ENEMY_IDLE_MIN_MS, ENEMY_IDLE_MAX_MS);
+        }
+        break;
+      case "resolveAttack":
+        // resolveEnemyAttack内で即座に状態遷移させるため通常ここには来ない
+        break;
+      default:
+        break;
+    }
+  }
+
+  function resolveEnemyAttack() {
+    const en = S.enemy;
+    const p = S.player;
+    const isRed = en.attackType === "red";
+
+    // プレイヤーの状態に応じた結果判定
+    if (p.state === "parryWindow" && isRed) {
+      // ---- パリィ成功！必殺技 ----
+      triggerParrySuccess();
+    } else if (p.state === "guard") {
+      // ガードで受ける（色を問わず被ダメ無し、ゲージ-1）
+      playerConsumeGuard();
+    } else if (p.state === "windup") {
+      // 攻撃の発生隙中に被弾 → キャンセルされて被ダメ
+      playerTakeDamage();
+    } else {
+      // idle / parryWindow(黄色) / overheat / hitstun 等 → 通常被弾
+      playerTakeDamage();
+    }
+
+    // 敵側は攻撃終了→待機へ
+    en.state = "idle";
+    en.stateTimer = 0;
+    en.idleDuration = rand(ENEMY_IDLE_MIN_MS, ENEMY_IDLE_MAX_MS);
+    en.attackType = null;
+  }
+
+  function triggerParrySuccess() {
+    const p = S.player;
+    const en = S.enemy;
+
+    p.invincible = true;
+    p.state = "idle";
+    p.stateTimer = 0;
+
+    en.state = "staggered";
+    en.stateTimer = 0;
+    en.shakeTimer = STAGGER_MS;
+
+    S.hitstopTimer = HITSTOP_MS;
+    S.swordEffect = { timer: STAGGER_MS };
+    S.comboEffect = { timer: STAGGER_MS };
+
+    dealDamageToEnemy(SPECIAL_ATK_DMG);
+
+    // 演出終了と同時に無敵解除
+    setTimeout(function () { p.invincible = false; }, STAGGER_MS + HITSTOP_MS);
+  }
+
+  function dealDamageToEnemy(amount) {
+    const en = S.enemy;
+    en.hp -= amount;
+    if (en.hp <= 0) {
+      en.hp = 0;
+      en.state = "defeated";
+      S.gameOver = "win";
+    }
+  }
+
+  function updateEffects(dt) {
+    if (S.swordEffect) {
+      S.swordEffect.timer -= dt;
+      if (S.swordEffect.timer <= 0) S.swordEffect = null;
+    }
+    if (S.comboEffect) {
+      S.comboEffect.timer -= dt;
+      if (S.comboEffect.timer <= 0) S.comboEffect = null;
+    }
+  }
+
+  // ==============================
+  // 描画
+  // ==============================
+  function render() {
+    ctx.clearRect(0, 0, W, H);
+
+    drawBackground();
+    drawEnemy();
+    drawPlayer();
+    drawEffects();
+    drawUI();
+    updateOverlay();
+  }
+
+  function drawBackground() {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#2b3050");
+    g.addColorStop(1, "#14151f");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    // 床ライン
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.beginPath();
+    ctx.moveTo(0, 500);
+    ctx.lineTo(W, 500);
+    ctx.stroke();
+  }
+
+  function drawPlayer() {
+    const p = S.player;
+    ctx.save();
+
+    // 被弾フラッシュ
+    if (p.flashTimer > 0) {
+      ctx.fillStyle = `rgba(255,60,60,${Math.min(0.35, p.flashTimer / 900)})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // キャラ本体（アップロード画像 or プレースホルダー）
+    if (playerImage) {
+      drawContainImage(playerImage, p.x, p.y, p.size, p.size);
+    } else {
+      ctx.fillStyle = "#3d6bd6";
+      ctx.fillRect(p.x, p.y, p.size, p.size);
+      ctx.fillStyle = "#dfe6ff";
+      ctx.font = "12px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("画像未設定", p.x + p.size / 2, p.y + p.size / 2);
+    }
+
+    // 被弾判定エリア（青い枠、キャラより一回り大きい固定サイズ）
+    const pad = 14;
+    ctx.strokeStyle = p.invincible ? "rgba(255,230,80,0.9)" : "#4fa3ff";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(p.x - pad, p.y - pad, p.size + pad * 2, p.size + pad * 2);
+
+    // 剣エフェクト（状態ごとに見た目を変える）
+    drawPlayerWeapon(p);
+
+    ctx.restore();
+  }
+
+  function drawContainImage(img, x, y, w, h) {
+    const ratio = Math.min(w / img.width, h / img.height);
+    const dw = img.width * ratio, dh = img.height * ratio;
+    const dx = x + (w - dw) / 2, dy = y + (h - dh) / 2;
+    ctx.drawImage(img, dx, dy, dw, dh);
+  }
+
+  function drawPlayerWeapon(p) {
+    const cx = p.x + p.size / 2;
+    const cy = p.y - 6;
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    if (p.state === "guard" || p.state === "parryWindow") {
+      // 剣を立てて構える
+      ctx.strokeStyle = p.state === "parryWindow" ? "#ffe650" : "#cfe0ff";
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(0, 10);
+      ctx.lineTo(0, -46);
+      ctx.stroke();
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.fillRect(-10, 6, 20, 8);
+    } else if (p.state === "windup") {
+      // 振りかぶり → 振り下ろし（発生隙0.3sで進行度を表現）
+      const t = Math.min(1, p.stateTimer / ATTACK_WINDUP_MS);
+      const angle = -1.3 + t * 1.9;
+      ctx.rotate(angle);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(0, 6);
+      ctx.lineTo(0, -50);
+      ctx.stroke();
+    } else if (p.state === "overheat") {
+      ctx.strokeStyle = "#888";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(-14, 0);
+      ctx.lineTo(14, -10);
+      ctx.stroke();
+    } else {
+      // idle: 軽く下げて持つ
+      ctx.strokeStyle = "#cfd6e6";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(0, 4);
+      ctx.lineTo(14, -30);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawEnemy() {
+    const en = S.enemy;
+    if (en.hp <= 0 && en.state === "defeated") {
+      ctx.save();
+      ctx.globalAlpha = 0.3;
+    }
+    ctx.save();
+    let sx = en.x, sy = en.y;
+    if (en.shakeTimer > 0) {
+      sx += (Math.random() - 0.5) * 6;
+      sy += (Math.random() - 0.5) * 6;
+    }
+
+    // 予兆フラッシュ
+    let bodyColor = "#c0392b";
+    if (en.state === "telegraph") {
+      const t = Math.min(1, en.stateTimer / TELEGRAPH_MS);
+      const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 6);
+      if (en.attackType === "red") {
+        bodyColor = `rgba(255,${Math.floor(40 + 40 * pulse)},${Math.floor(40 + 40 * pulse)},1)`;
+      } else {
+        bodyColor = `rgba(255,${Math.floor(210 + 30 * pulse)},60,1)`;
+      }
+    } else if (en.state === "staggered") {
+      bodyColor = "#7a5cff";
+    } else {
+      bodyColor = "#555f7a";
+    }
+
+    ctx.fillStyle = bodyColor;
+    ctx.fillRect(sx, sy, en.size, en.size);
+    ctx.strokeStyle = "rgba(0,0,0,0.4)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(sx, sy, en.size, en.size);
+
+    // 予兆アイコン（！マーク）
+    if (en.state === "telegraph") {
+      ctx.fillStyle = "#111";
+      ctx.font = "bold 22px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("!", sx + en.size / 2, sy + en.size / 2 + 8);
+    }
+
+    // 敵HPゲージ（頭上）
+    const barW = en.size, barH = 8;
+    const hpRatio = Math.max(0, en.hp / ENEMY_MAX_HP);
+    ctx.fillStyle = "#222";
+    ctx.fillRect(sx, sy - 16, barW, barH);
+    ctx.fillStyle = "#e74c3c";
+    ctx.fillRect(sx, sy - 16, barW * hpRatio, barH);
+    ctx.strokeStyle = "#000";
+    ctx.strokeRect(sx, sy - 16, barW, barH);
+
+    ctx.restore();
+    if (en.hp <= 0 && en.state === "defeated") ctx.restore();
+  }
+
+  function drawEffects() {
+    // パリィ成功時の連続攻撃演出（画面フラッシュ＋斬線）
+    if (S.comboEffect) {
+      const t = S.comboEffect.timer;
+      ctx.save();
+      ctx.globalAlpha = Math.min(0.5, t / 600);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+
+      ctx.save();
+      ctx.strokeStyle = "#fffbe0";
+      ctx.lineWidth = 4;
+      const en = S.enemy;
+      const cx = en.x + en.size / 2, cy = en.y + en.size / 2;
+      for (let i = 0; i < 4; i++) {
+        const ang = (i / 4) * Math.PI * 2 + t * 0.01;
+        ctx.beginPath();
+        ctx.moveTo(cx - Math.cos(ang) * 50, cy - Math.sin(ang) * 50);
+        ctx.lineTo(cx + Math.cos(ang) * 50, cy + Math.sin(ang) * 50);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawUI() {
+    const p = S.player, en = S.enemy;
+
+    // プレイヤーHP（ハート風の四角）
+    ctx.font = "12px sans-serif";
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "left";
+    ctx.fillText("HP", 12, 22);
+    for (let i = 0; i < PLAYER_MAX_HP; i++) {
+      ctx.fillStyle = i < p.hp ? "#ff5566" : "#333";
+      ctx.fillRect(40 + i * 20, 12, 16, 16);
+    }
+
+    // ガードゲージ
+    ctx.fillStyle = "#fff";
+    ctx.fillText("Guard", 12, 46);
+    for (let i = 0; i < MAX_GUARD_GAUGE; i++) {
+      ctx.fillStyle = i < p.guardGauge ? "#4fd6ff" : "#333";
+      ctx.fillRect(52 + i * 20, 36, 16, 16);
+    }
+
+    // 敵HP数値
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#fff";
+    ctx.fillText("敵HP " + en.hp + " / " + ENEMY_MAX_HP, W - 12, 22);
+
+    // 状態デバッグ表示
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    ctx.font = "11px monospace";
+    const label = {
+      idle: "待機",
+      guard: "ガード中",
+      windup: "攻撃中",
+      parryWindow: "パリィ受付",
+      overheat: "無防備(オーバーヒート)",
+      hitstun: "被弾",
+    }[p.state] || p.state;
+    ctx.fillText("STATE: " + label, W / 2, H - 8);
+  }
+
+  function updateOverlay() {
+    if (S.gameOver === "win") {
+      overlayMsg.classList.add("show");
+      overlayMsgText.textContent = "VICTORY";
+      overlayMsgSub.textContent = "タップ / クリックでリスタート";
+    } else if (S.gameOver === "lose") {
+      overlayMsg.classList.add("show");
+      overlayMsgText.textContent = "GAME OVER";
+      overlayMsgSub.textContent = "タップ / クリックでリスタート";
+    } else {
+      overlayMsg.classList.remove("show");
+    }
+  }
+
+  canvas.addEventListener("pointerdown", function () {
+    if (S.gameOver) {
+      S = freshState();
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
