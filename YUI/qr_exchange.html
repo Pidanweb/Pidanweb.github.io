@@ -336,6 +336,11 @@
     qrOutput.innerHTML = '';
     qrSizeInfo.textContent = '作成中…';
 
+    if (typeof QRCode === 'undefined') {
+      qrSizeInfo.textContent = 'QRコード生成ライブラリを読み込めませんでした。通信環境を確認してページを再読み込みしてください。';
+      return;
+    }
+
     const profile = loadProfile();
     const comment = (profile.self_intro || '').slice(0, 40);
     const avatarSrc = localStorage.getItem(CUSTOM_CHAR_KEY) || DEFAULT_CHAR_SRC;
@@ -349,7 +354,7 @@
 
     let size = 28;
     let quality = 0.5;
-    const maxAttempts = 12;
+    const maxAttempts = 25;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const canvas = document.createElement('canvas');
@@ -385,6 +390,7 @@
           `画像 ${size}×${size}px ・ QRマス目 ${moduleCount}×${moduleCount} ・ 表示 ${renderSize}px`;
         return;
       } catch (e) {
+        console.error('QR生成に失敗(このため画像を小さくして再挑戦します):', e);
         // 密度が高すぎる場合は、画質→サイズの順に落として再挑戦
         if (quality > 0.25) {
           quality -= 0.08;
@@ -414,6 +420,10 @@
 
   async function startScan() {
     scanResult.classList.remove('show');
+    if (typeof jsQR === 'undefined') {
+      scanStatus.textContent = 'QR読み取りライブラリを読み込めませんでした。通信環境を確認してページを再読み込みしてください。';
+      return;
+    }
     scanStatus.textContent = 'カメラを起動しています…';
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({
