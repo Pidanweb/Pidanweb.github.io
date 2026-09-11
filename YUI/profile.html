@@ -296,6 +296,7 @@
     }
 
     // ZIP生成およびダウンロード処理
+    // ※ index.html の「フレンドを迎える」機能が読み込む形式(friend.json / name / message / avatarFile)に合わせています
     async function downloadZip() {
       if (!generatedBlob) return;
 
@@ -304,24 +305,29 @@
       const aiName = document.getElementById('aiName').value || 'ai';
       const comment = document.getElementById('comment').value || '';
 
-      // 1. 生成されたプロフィールカード (PNG)
+      // 1. 生成されたプロフィールカード (PNG・見た目確認用のおまけ。読み込み側では使用しません)
       zip.file("profile_card.png", generatedBlob);
 
-      // 2. メタデータ (JSON)
-      const metaData = {
-        playerName: playerName,
-        aiName: aiName,
-        comment: comment,
-        createdAt: new Date().toISOString()
-      };
-      zip.file("info.json", JSON.stringify(metaData, null, 2));
-
-      // 3. 元のAI画像（存在する場合）
+      // 2. 元のAI画像（フレンドとして表示される際のアイコンに使われる実体データ）
       const fileInput = document.getElementById('aiImageInput');
+      let avatarFile = null;
       if (fileInput.files.length > 0) {
         const originalFile = fileInput.files[0];
-        zip.file(`original_ai_image.${originalFile.name.split('.').pop()}`, originalFile);
+        const ext = (originalFile.name.split('.').pop() || 'png').toLowerCase();
+        avatarFile = `avatar.${ext}`;
+        zip.file(avatarFile, originalFile);
       }
+
+      // 3. メタデータ (friend.json) ― index.html が読み込むキー名に合わせる
+      const friendData = {
+        version: 1,
+        name: aiName,            // 訪問時にホーム画面で表示されるAIの名前
+        message: comment,        // 訪問時にAIが言うひとこと
+        ownerName: playerName,   // 誰のAIかという参考情報(読み込み時には使用されません)
+        avatarFile: avatarFile,  // 上で保存した画像ファイル名。画像未アップロード時はnull→読み込み側でデフォルト画像が使われます
+        exportedAt: Date.now()
+      };
+      zip.file("friend.json", JSON.stringify(friendData, null, 2));
 
       // ZIPファイルの生成＆保存
       const content = await zip.generateAsync({ type: "blob" });
