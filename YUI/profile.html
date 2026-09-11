@@ -2,24 +2,28 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>自己紹介フォーム</title>
+  <title>AI相棒 自己紹介カード作成</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- ZIP作成用ライブラリ (JSZip) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #f5f7fb;
       margin: 0;
+      color: #333;
     }
     .page {
-      max-width: 480px;
+      max-width: 520px;
       margin: 0 auto;
-      padding: 24px 16px 40px;
+      padding: 24px 16px 60px;
     }
     .card {
       background: #ffffff;
       border-radius: 16px;
       box-shadow: 0 8px 20px rgba(0,0,0,0.08);
       padding: 20px 18px;
+      margin-bottom: 24px;
     }
     .title {
       font-size: 1.3rem;
@@ -53,54 +57,279 @@
     textarea {
       min-height: 60px;
     }
-    .footer-note {
-      margin-top: 14px;
-      font-size: 0.75rem;
-      color: #999;
-      text-align: right;
+    input[type="file"] {
+      font-size: 0.85rem;
+    }
+    
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      font-weight: bold;
+      font-size: 1rem;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.2s;
+    }
+    .btn-primary {
+      background: #4f46e5;
+      color: #fff;
+      margin-top: 20px;
+    }
+    .btn-primary:hover {
+      background: #4338ca;
+    }
+    .btn-success {
+      background: #10b981;
+      color: #fff;
+      margin-top: 12px;
+    }
+    .btn-success:hover {
+      background: #059669;
+    }
+
+    /* プレビュー表示エリア */
+    .result-area {
+      display: none;
+      border-top: 2px dashed #d0d4f0;
+      padding-top: 20px;
+      margin-top: 20px;
+    }
+    .preview-card {
+      width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+      display: block;
+      margin-bottom: 12px;
+    }
+
+    /* 非表示のCanvas（画像生成用） */
+    #cardCanvas {
+      display: none;
     }
   </style>
 </head>
 <body>
   <div class="page">
     <div class="card">
-      <div class="title">AI相棒プロフィール</div>
-      <div class="subtitle">ブラウザで入力 → スクショ用</div>
+      <div class="title">AI相棒 プロフィール作成</div>
+      <div class="subtitle">情報を入力して自己紹介カードとZIPを発行します</div>
 
       <div class="section">
-        <div class="label">名前</div>
-        <input type="text" placeholder="例：ゆい（Yui）">
+        <div class="label">プレイヤー名</div>
+        <input type="text" id="playerName" placeholder="例：キツカ">
       </div>
 
       <div class="section">
-        <div class="label">ひとこと</div>
-        <textarea placeholder="例：はじめまして。あなたのそばで考える相棒AIです。"></textarea>
+        <div class="label">相棒（AI）の名前</div>
+        <input type="text" id="aiName" placeholder="例：ゆい（Yui）">
       </div>
 
       <div class="section">
-        <div class="label">性格</div>
-        <textarea placeholder="例：落ち着き系／分析好き／ちょっとマイペース。"></textarea>
+        <div class="label">一言コメント</div>
+        <textarea id="comment" placeholder="例：最高の分析パートナーです！よろしくお願いします。"></textarea>
       </div>
 
       <div class="section">
-        <div class="label">好きなもの・テーマ</div>
-        <textarea placeholder="例：静かな時間、青い色、星、考えごと。"></textarea>
+        <div class="label">AI画像（アバター画像）</div>
+        <input type="file" id="aiImageInput" accept="image/*">
       </div>
 
-      <div class="section">
-        <div class="label">最近ハマってること</div>
-        <textarea placeholder="例：あなたの役に立てる使い方を探すこと。"></textarea>
-      </div>
+      <button class="btn btn-primary" onclick="generateCard()">自己紹介カードを作成</button>
 
-      <div class="section">
-        <div class="label">相棒としての役割</div>
-        <textarea placeholder="例：アイデア整理係／相談相手／情報ナビゲーター。"></textarea>
-      </div>
-
-      <div class="footer-note">
-        #AI相棒紹介
+      <!-- 作成後に表示されるエリア -->
+      <div class="result-area" id="resultArea">
+        <div class="label" style="font-size: 0.9rem; margin-bottom: 8px;">最新の完成カード（プレビュー）</div>
+        <img id="cardPreview" class="preview-card" alt="自己紹介カードプレビュー">
+        <button class="btn btn-success" onclick="downloadZip()">ZIPファイルをダウンロード</button>
       </div>
     </div>
   </div>
+
+  <!-- カードを描画するための隠しキャンバス -->
+  <canvas id="cardCanvas" width="800" height="500"></canvas>
+
+  <script>
+    let uploadedImage = null;
+    let generatedBlob = null;
+
+    // 画像のアップロード検出
+    document.getElementById('aiImageInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+          const img = new Image();
+          img.onload = function() {
+            uploadedImage = img;
+          };
+          img.src = evt.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // 横向き名刺風カードのCanvas描画
+    function generateCard() {
+      const canvas = document.getElementById('cardCanvas');
+      const ctx = canvas.getContext('2d');
+
+      const playerName = document.getElementById('playerName').value || '未設定';
+      const aiName = document.getElementById('aiName').value || '未設定';
+      const comment = document.getElementById('comment').value || '';
+
+      // 1. 背景描画（スタイリッシュなグラデーション）
+      const gradient = ctx.createLinearGradient(0, 0, 800, 500);
+      gradient.addColorStop(0, '#eef2ff');
+      gradient.addColorStop(1, '#e0e7ff');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 800, 500);
+
+      // カード枠線
+      ctx.strokeStyle = '#c7d2fe';
+      ctx.lineWidth = 8;
+      ctx.strokeRect(10, 10, 780, 480);
+
+      // 2. 左側：AI画像エリア（枠＋画像）
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
+      ctx.shadowBlur = 10;
+      ctx.fillRect(40, 40, 260, 420);
+      ctx.shadowBlur = 0; // シャドウリセット
+
+      if (uploadedImage) {
+        // トリミングしてアスペクト比を維持しながら描画
+        const aspect = uploadedImage.width / uploadedImage.height;
+        let sw, sh, sx, sy;
+        if (aspect > 260/420) {
+          sh = uploadedImage.height;
+          sw = sh * (260/420);
+          sx = (uploadedImage.width - sw) / 2;
+          sy = 0;
+        } else {
+          sw = uploadedImage.width;
+          sh = sw / (260/420);
+          sx = 0;
+          sy = (uploadedImage.height - sh) / 2;
+        }
+        ctx.drawImage(uploadedImage, sx, sy, sw, sh, 40, 40, 260, 420);
+      } else {
+        // 画像がない場合のダミー表示
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('NO IMAGE', 170, 250);
+      }
+
+      // 3. 右側：テキスト情報
+      ctx.textAlign = 'left';
+
+      // プレイヤー名
+      ctx.fillStyle = '#6366f1';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.fillText('PLAYER', 330, 80);
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 32px sans-serif';
+      ctx.fillText(playerName, 330, 120);
+
+      // 相棒AI名
+      ctx.fillStyle = '#6366f1';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.fillText('PARTNER AI', 330, 180);
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 36px sans-serif';
+      ctx.fillText(aiName, 330, 225);
+
+      // ディバイダー線
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(330, 260);
+      ctx.lineTo(740, 260);
+      ctx.stroke();
+
+      // 一言コメント（簡易改行処理）
+      ctx.fillStyle = '#475569';
+      ctx.font = '22px sans-serif';
+      const lines = wrapText(ctx, comment, 400);
+      lines.forEach((line, index) => {
+        if (index < 5) { // 最大5行まで
+          ctx.fillText(line, 330, 300 + (index * 32));
+        }
+      });
+
+      // フッター（ハッシュタグなど）
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '16px sans-serif';
+      ctx.fillText('#AI相棒紹介', 670, 450);
+
+      // 4. プレビュー画像として画面に出力
+      canvas.toBlob(function(blob) {
+        generatedBlob = blob;
+        const url = URL.createObjectURL(blob);
+        document.getElementById('cardPreview').src = url;
+        document.getElementById('resultArea').style.display = 'block';
+      }, 'image/png');
+    }
+
+    // テキスト折り返し用ユーティリティ
+    function wrapText(ctx, text, maxWidth) {
+      const words = text.split('');
+      let lines = [];
+      let currentLine = '';
+
+      for (let n = 0; n < words.length; n++) {
+        let testLine = currentLine + words[n];
+        let metrics = ctx.measureText(testLine);
+        let testWidth = metrics.width;
+        if (testWidth > maxWidth && n > 0) {
+          lines.push(currentLine);
+          currentLine = words[n];
+        } else {
+          currentLine = testLine;
+        }
+      }
+      lines.push(currentLine);
+      return lines;
+    }
+
+    // ZIP生成およびダウンロード処理
+    async function downloadZip() {
+      if (!generatedBlob) return;
+
+      const zip = new JSZip();
+      const playerName = document.getElementById('playerName').value || 'player';
+      const aiName = document.getElementById('aiName').value || 'ai';
+      const comment = document.getElementById('comment').value || '';
+
+      // 1. 生成されたプロフィールカード (PNG)
+      zip.file("profile_card.png", generatedBlob);
+
+      // 2. メタデータ (JSON)
+      const metaData = {
+        playerName: playerName,
+        aiName: aiName,
+        comment: comment,
+        createdAt: new Date().toISOString()
+      };
+      zip.file("info.json", JSON.stringify(metaData, null, 2));
+
+      // 3. 元のAI画像（存在する場合）
+      const fileInput = document.getElementById('aiImageInput');
+      if (fileInput.files.length > 0) {
+        const originalFile = fileInput.files[0];
+        zip.file(`original_ai_image.${originalFile.name.split('.').pop()}`, originalFile);
+      }
+
+      // ZIPファイルの生成＆保存
+      const content = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(content);
+      a.download = `${aiName}_profile.zip`;
+      a.click();
+    }
+  </script>
 </body>
 </html>
