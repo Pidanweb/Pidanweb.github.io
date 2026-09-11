@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <style>
   :root {
     --bg: #f7f3e9;
@@ -313,12 +313,31 @@
   const qrOutput = document.getElementById('qr_output');
   const qrSizeInfo = document.getElementById('qr_size_info');
 
+  const PX_PER_MODULE = 7; // カメラで読み取りやすいよう、1マスあたりこのピクセル数を確保する
+  const MAX_RENDER_SIZE = 480; // これを超えてしまう密度になったら、データを減らして再挑戦する
+
+  // 実際に組み立てたQRコードのマス目の数を調べるためだけに、画面に見えない場所へ一度描画してみる
+  function measureModuleCount(text) {
+    const tempDiv = document.createElement('div');
+    tempDiv.style.cssText = 'position:absolute; left:-9999px; top:-9999px;';
+    document.body.appendChild(tempDiv);
+    let moduleCount = null;
+    try {
+      const tmp = new QRCode(tempDiv, { text, width: 10, height: 10, correctLevel: QRCode.CorrectLevel.M });
+      moduleCount = (tmp._oQRCode && tmp._oQRCode.moduleCount) || null;
+    } finally {
+      document.body.removeChild(tempDiv);
+    }
+    if (!moduleCount) throw new Error('QRコードの計算に失敗しました');
+    return moduleCount;
+  }
+
   async function generateAndRenderQr() {
     qrOutput.innerHTML = '';
     qrSizeInfo.textContent = '作成中…';
 
     const profile = loadProfile();
-    const comment = (profile.self_intro || '').slice(0, 60);
+    const comment = (profile.self_intro || '').slice(0, 40);
     const avatarSrc = localStorage.getItem(CUSTOM_CHAR_KEY) || DEFAULT_CHAR_SRC;
 
     let img;
@@ -328,9 +347,9 @@
       img = await loadImageElement(DEFAULT_CHAR_SRC);
     }
 
-    let size = 32;
-    let quality = 0.6;
-    const maxAttempts = 10;
+    let size = 28;
+    let quality = 0.5;
+    const maxAttempts = 12;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const canvas = document.createElement('canvas');
@@ -348,23 +367,30 @@
       const base64Payload = btoa(uint8ToBinaryString(payloadBytes));
 
       try {
+        const moduleCount = measureModuleCount(base64Payload);
+        const renderSize = moduleCount * PX_PER_MODULE;
+        if (renderSize > MAX_RENDER_SIZE) {
+          throw new Error('too dense, need to shrink further');
+        }
+
         qrOutput.innerHTML = '';
         // eslint-disable-next-line no-new
         new QRCode(qrOutput, {
           text: base64Payload,
-          width: 240,
-          height: 240,
+          width: renderSize,
+          height: renderSize,
           correctLevel: QRCode.CorrectLevel.M,
         });
-        qrSizeInfo.textContent = `画像 ${size}×${size}px ・ データ量 約${base64Payload.length}文字`;
+        qrSizeInfo.textContent =
+          `画像 ${size}×${size}px ・ QRマス目 ${moduleCount}×${moduleCount} ・ 表示 ${renderSize}px`;
         return;
       } catch (e) {
-        // 収まらない場合は画質→サイズの順に落として再挑戦
+        // 密度が高すぎる場合は、画質→サイズの順に落として再挑戦
         if (quality > 0.25) {
-          quality -= 0.1;
+          quality -= 0.08;
         } else if (size > 16) {
           size -= 4;
-          quality = 0.6;
+          quality = 0.5;
         } else {
           qrSizeInfo.textContent = 'コメントが長すぎてQRコードに収まりませんでした。自己紹介を短くしてみてください。';
           return;
