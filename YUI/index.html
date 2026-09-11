@@ -494,6 +494,63 @@
     box-shadow: 0 6px 14px rgba(0,0,0,0.12);
   }
 
+  /* ---------- 遊びに来たキャラ(QR交換で受け取ったゲスト) ---------- */
+
+  #home_guest_wrap {
+    position: absolute;
+    left: -4px;
+    bottom: 26%;
+    z-index: 1;
+    width: 30%;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+  }
+
+  #home_guest_wrap.show { display: flex; }
+
+  #home_guest_bubble {
+    background: #ffffff;
+    border: 2px solid #1a1a1a;
+    border-radius: 10px;
+    padding: 5px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.4;
+    max-width: 96px;
+    text-align: center;
+    margin-bottom: 5px;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.12);
+  }
+
+  #home_guest_bubble::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -14px;
+    transform: translateX(-50%);
+    border: 7px solid transparent;
+    border-top-color: #1a1a1a;
+  }
+
+  #home_guest_img {
+    width: 100%;
+    max-height: 20vh;
+    object-fit: contain;
+    border-radius: 8px;
+    border: 2px solid #1a1a1a;
+    background: #fff;
+    filter: drop-shadow(0 5px 8px rgba(0,0,0,0.18));
+  }
+
+  #home_guest_hint {
+    font-size: 9px;
+    color: var(--ink-dim);
+    margin-top: 3px;
+    text-align: center;
+  }
+
   /* ---------- キャラ横の装飾小物(左右2つ・見た目だけ) ---------- */
 
   #home_props_row {
@@ -839,6 +896,11 @@
         <div id="home_bubble">こんにちは。</div>
       </div>
       <div id="home_char_area">
+        <div id="home_guest_wrap">
+          <div id="home_guest_bubble"></div>
+          <img id="home_guest_img" src="" alt="遊びに来たキャラ">
+          <div id="home_guest_hint">タップで帰す</div>
+        </div>
         <div id="home_props_row">
           <!-- 左:観葉植物 -->
           <button class="prop_btn" data-prop-index="0" aria-label="左の小物を変更(観葉植物)">
@@ -929,7 +991,10 @@
           <span class="app_icon">🎨</span>
           <span class="app_label">お絵描き当て</span>
         </a>
-        <div class="app_tile soon"><span class="app_icon">➕</span><span class="app_label">Coming Soon</span></div>
+        <a class="app_tile" href="qr_exchange.html">
+          <span class="app_icon">🤝</span>
+          <span class="app_label">QR交換</span>
+        </a>
         <div class="app_tile soon"><span class="app_icon">➕</span><span class="app_label">Coming Soon</span></div>
         <div class="app_tile soon"><span class="app_icon">➕</span><span class="app_label">Coming Soon</span></div>
       </div>
@@ -963,6 +1028,9 @@
     homeEmotionFace: document.getElementById('home_emotion_face'),
     homeEmotionText: document.getElementById('home_emotion_text'),
     diveTapBtn: document.getElementById('dive_tap_btn'),
+    homeGuestWrap: document.getElementById('home_guest_wrap'),
+    homeGuestImg: document.getElementById('home_guest_img'),
+    homeGuestBubble: document.getElementById('home_guest_bubble'),
     uploadModal: document.getElementById('upload_modal'),
     uploadModalClose: document.getElementById('upload_modal_close'),
     uploadCharBtn: document.getElementById('upload_char_btn'),
@@ -1192,6 +1260,36 @@
     els.homeCharacterImg.classList.remove('char_bounce');
   });
 
+  // ============ 遊びに来たキャラ(QR交換で受け取ったゲスト) ============
+  const GUEST_CHAR_KEY = 'yui_guest_char';
+
+  function loadGuestChar() {
+    try {
+      const raw = localStorage.getItem(GUEST_CHAR_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+  function clearGuestChar() {
+    localStorage.removeItem(GUEST_CHAR_KEY);
+    els.homeGuestWrap.classList.remove('show');
+  }
+
+  function renderGuestChar() {
+    const guest = loadGuestChar();
+    if (!guest || !guest.img) {
+      els.homeGuestWrap.classList.remove('show');
+      return null;
+    }
+    els.homeGuestImg.src = guest.img;
+    els.homeGuestBubble.textContent = guest.comment || 'あそびにきたよ！';
+    els.homeGuestWrap.classList.add('show');
+    return guest;
+  }
+
+  els.homeGuestWrap.addEventListener('click', () => {
+    clearGuestChar();
+  });
+
   // ============ ①ダイブ演出 ============
   function playDive(onFinish) {
     showLayer(els.diveLayer);
@@ -1386,6 +1484,12 @@
     renderTodaySchedule();
     showLayer(els.homeLayer);
     speak(greeting);
+
+    const guest = renderGuestChar();
+    if (guest) {
+      // 挨拶の読み上げと重ならないように、少し間を置いてから話してもらう
+      setTimeout(() => speak(guest.comment || 'あそびにきたよ！'), 3200);
+    }
   }
 
   // ============ 起動時の分岐 ============
