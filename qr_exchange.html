@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>QR交換 - YUI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<style>
+  :root {
+    --bg: #f7f3e9;
+    --panel: #ffffff;
+    --panel-edge: #e6ddc8;
+    --ink: #2c2f36;
+    --ink-dim: #7c8288;
+    --scan: #2fae90;
+    --scan-soft: rgba(47, 174, 144, 0.14);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+  }
+  #app {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: max(20px, env(safe-area-inset-top)) 20px 40px;
+  }
+  #back_btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ink-dim);
+    text-decoration: none;
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+  h1 {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 20px;
+    margin: 0 0 6px;
+  }
+  p.desc {
+    color: var(--ink-dim);
+    font-size: 13.5px;
+    line-height: 1.8;
+    margin: 0 0 18px;
+  }
+
+  #tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .tab_btn {
+    flex: 1;
+    background: rgba(0,0,0,0.045);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink-dim);
+    border-radius: 14px;
+    padding: 12px 0;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .tab_btn.active {
+    background: var(--scan);
+    border-color: var(--scan);
+    color: #ffffff;
+  }
+
+  .tab_panel { display: none; }
+  .tab_panel.active { display: block; }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 18px;
+    padding: 18px;
+    margin-bottom: 14px;
+  }
+
+  #qr_output {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 240px;
+    margin: 6px 0 4px;
+  }
+  #qr_output img, #qr_output canvas, #qr_output table {
+    border-radius: 10px;
+  }
+
+  #qr_size_info {
+    font-size: 12px;
+    color: var(--ink-dim);
+    text-align: center;
+  }
+
+  video#scan_video {
+    width: 100%;
+    border-radius: 14px;
+    background: #000;
+    display: block;
+  }
+
+  #scan_status {
+    font-size: 13px;
+    color: var(--scan);
+    min-height: 18px;
+    margin-top: 10px;
+    text-align: center;
+  }
+
+  #scan_result {
+    display: none;
+    text-align: center;
+  }
+  #scan_result.show { display: block; }
+  #scan_result_img {
+    width: 96px;
+    height: 96px;
+    object-fit: contain;
+    border-radius: 12px;
+    border: 2px solid #1a1a1a;
+    background: #fff;
+    margin-bottom: 10px;
+  }
+  #scan_result_comment {
+    background: var(--scan-soft);
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 13.5px;
+    font-weight: 700;
+    margin-bottom: 14px;
+  }
+
+  button.primary {
+    width: 100%;
+    background: var(--scan);
+    color: #ffffff;
+    border: none;
+    border-radius: 14px;
+    padding: 15px 0;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 15px;
+    margin-top: 10px;
+  }
+  button.secondary {
+    width: 100%;
+    background: rgba(0,0,0,0.045);
+    color: var(--ink);
+    border: none;
+    border-radius: 14px;
+    padding: 13px 0;
+    font-family: inherit;
+    font-size: 14px;
+    margin-top: 10px;
+  }
+  a.link_btn {
+    display: block;
+    text-align: center;
+    width: 100%;
+    background: var(--scan);
+    color: #ffffff;
+    border-radius: 14px;
+    padding: 15px 0;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 15px;
+    margin-top: 10px;
+    text-decoration: none;
+  }
+
+  .note_box {
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 14px;
+    padding: 14px 16px;
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    line-height: 1.8;
+    margin-top: 16px;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <a id="back_btn" href="index.html">← ホームに戻る</a>
+  <h1>QR交換</h1>
+  <p class="desc">
+    自分のキャラをQRコードにして見せたり、友だちのQRを読み取って遊びに来てもらったりできます。<br>
+    通信はすべてこの場でのやりとりだけで完結し、クラウドや外部サーバーは使いません。
+  </p>
+
+  <div id="tabs">
+    <button class="tab_btn active" id="tab_show_btn">見せる</button>
+    <button class="tab_btn" id="tab_scan_btn">読み取る</button>
+  </div>
+
+  <!-- 見せるタブ -->
+  <div class="tab_panel active" id="tab_show_panel">
+    <div class="card">
+      <div id="qr_output"></div>
+      <div id="qr_size_info"></div>
+    </div>
+    <button class="secondary" id="qr_refresh_btn">QRコードを作り直す</button>
+    <div class="note_box">
+      キャラ画像は小さく圧縮して埋め込むため、実物より粗いドット絵のような見た目になります。ひとことコメントは「設定」の自己紹介に書いた内容が使われます(未設定の場合は空になります)。
+    </div>
+  </div>
+
+  <!-- 読み取るタブ -->
+  <div class="tab_panel" id="tab_scan_panel">
+    <div class="card">
+      <video id="scan_video" playsinline muted></video>
+      <canvas id="scan_canvas" style="display:none;"></canvas>
+      <div id="scan_status"></div>
+
+      <div id="scan_result">
+        <img id="scan_result_img" src="" alt="遊びに来たキャラ">
+        <div id="scan_result_comment"></div>
+        <a class="link_btn" href="index.html">ホームで確認する</a>
+      </div>
+    </div>
+    <button class="primary" id="scan_start_btn">カメラを起動して読み取る</button>
+    <div class="note_box">
+      友だちのYUIの「見せる」画面をこのカメラに映してください。今のところ1人分だけ、ホーム画面に遊びに来ることができます(新しく読み取ると入れ替わります)。
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const PROFILE_KEY = 'yui_profile';
+  const CUSTOM_CHAR_KEY = 'yui_custom_char';
+  const GUEST_CHAR_KEY = 'yui_guest_char';
+  const DEFAULT_CHAR_SRC = 'chars/char_normal.png';
+
+  function loadProfile() {
+    try {
+      const raw = localStorage.getItem(PROFILE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+  }
+
+  // ============ バイト⇔文字列変換ヘルパー ============
+  function uint8ToBinaryString(bytes) {
+    let s = '';
+    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return s;
+  }
+  function binaryStringToUint8(str) {
+    const bytes = new Uint8Array(str.length);
+    for (let i = 0; i < str.length; i++) bytes[i] = str.charCodeAt(i);
+    return bytes;
+  }
+  function dataUrlToBytes(dataUrl) {
+    const base64 = dataUrl.split(',')[1];
+    return binaryStringToUint8(atob(base64));
+  }
+  function bytesToDataUrl(bytes, mime) {
+    return `data:${mime};base64,${btoa(uint8ToBinaryString(bytes))}`;
+  }
+  function loadImageElement(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+  }
+
+  // ============ 送信用バイナリ形式の組み立て・分解 ============
+  // [1:version][1:width][1:height][2:imgLen][imgLen:jpegBytes][1:commentLen][commentLen:UTF-8]
+  function buildPayload(imgBytes, size, comment) {
+    const commentBytes = new TextEncoder().encode(comment || '');
+    const commentLen = Math.min(commentBytes.length, 255);
+    const buf = new Uint8Array(1 + 1 + 1 + 2 + imgBytes.length + 1 + commentLen);
+    let o = 0;
+    buf[o++] = 1;
+    buf[o++] = size;
+    buf[o++] = size;
+    buf[o++] = (imgBytes.length >> 8) & 0xff;
+    buf[o++] = imgBytes.length & 0xff;
+    buf.set(imgBytes, o); o += imgBytes.length;
+    buf[o++] = commentLen;
+    buf.set(commentBytes.slice(0, commentLen), o);
+    return buf;
+  }
+  function parsePayload(buf) {
+    let o = 0;
+    const version = buf[o++];
+    const width = buf[o++];
+    const height = buf[o++];
+    const imgLen = (buf[o++] << 8) | buf[o++];
+    const imgBytes = buf.slice(o, o + imgLen); o += imgLen;
+    const commentLen = buf[o++];
+    const commentBytes = buf.slice(o, o + commentLen);
+    const comment = new TextDecoder('utf-8').decode(commentBytes);
+    return { version, width, height, imgBytes, comment };
+  }
+
+  // ============ 見せるタブ:QRコード生成 ============
+  const qrOutput = document.getElementById('qr_output');
+  const qrSizeInfo = document.getElementById('qr_size_info');
+
+  async function generateAndRenderQr() {
+    qrOutput.innerHTML = '';
+    qrSizeInfo.textContent = '作成中…';
+
+    const profile = loadProfile();
+    const comment = (profile.self_intro || '').slice(0, 60);
+    const avatarSrc = localStorage.getItem(CUSTOM_CHAR_KEY) || DEFAULT_CHAR_SRC;
+
+    let img;
+    try {
+      img = await loadImageElement(avatarSrc);
+    } catch (e) {
+      img = await loadImageElement(DEFAULT_CHAR_SRC);
+    }
+
+    let size = 32;
+    let quality = 0.6;
+    const maxAttempts = 10;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const side = Math.min(img.naturalWidth || img.width, img.naturalHeight || img.height);
+      const sx = ((img.naturalWidth || img.width) - side) / 2;
+      const sy = ((img.naturalHeight || img.height) - side) / 2;
+      ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+
+      const jpegDataUrl = canvas.toDataURL('image/jpeg', quality);
+      const imgBytes = dataUrlToBytes(jpegDataUrl);
+      const payloadBytes = buildPayload(imgBytes, size, comment);
+      const base64Payload = btoa(uint8ToBinaryString(payloadBytes));
+
+      try {
+        qrOutput.innerHTML = '';
+        // eslint-disable-next-line no-new
+        new QRCode(qrOutput, {
+          text: base64Payload,
+          width: 240,
+          height: 240,
+          correctLevel: QRCode.CorrectLevel.M,
+        });
+        qrSizeInfo.textContent = `画像 ${size}×${size}px ・ データ量 約${base64Payload.length}文字`;
+        return;
+      } catch (e) {
+        // 収まらない場合は画質→サイズの順に落として再挑戦
+        if (quality > 0.25) {
+          quality -= 0.1;
+        } else if (size > 16) {
+          size -= 4;
+          quality = 0.6;
+        } else {
+          qrSizeInfo.textContent = 'コメントが長すぎてQRコードに収まりませんでした。自己紹介を短くしてみてください。';
+          return;
+        }
+      }
+    }
+    qrSizeInfo.textContent = 'QRコードの作成に失敗しました。少し時間をおいて試してください。';
+  }
+
+  document.getElementById('qr_refresh_btn').addEventListener('click', generateAndRenderQr);
+
+  // ============ 読み取るタブ:カメラ + jsQRでスキャン ============
+  const video = document.getElementById('scan_video');
+  const canvas = document.getElementById('scan_canvas');
+  const scanStatus = document.getElementById('scan_status');
+  const scanResult = document.getElementById('scan_result');
+  const scanStartBtn = document.getElementById('scan_start_btn');
+
+  let mediaStream = null;
+  let scanning = false;
+
+  async function startScan() {
+    scanResult.classList.remove('show');
+    scanStatus.textContent = 'カメラを起動しています…';
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+        audio: false,
+      });
+    } catch (e) {
+      scanStatus.textContent = 'カメラを使えませんでした。ブラウザの設定でカメラへのアクセスを許可してください。';
+      return;
+    }
+    video.srcObject = mediaStream;
+    await video.play();
+    scanning = true;
+    scanStatus.textContent = '友だちのQRコードをカメラに映してください';
+    requestAnimationFrame(scanLoop);
+  }
+
+  function stopScan() {
+    scanning = false;
+    if (mediaStream) {
+      mediaStream.getTracks().forEach((t) => t.stop());
+      mediaStream = null;
+    }
+  }
+
+  function scanLoop() {
+    if (!scanning) return;
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      if (code && code.data) {
+        onScanSuccess(code.data);
+        return;
+      }
+    }
+    requestAnimationFrame(scanLoop);
+  }
+
+  function onScanSuccess(text) {
+    stopScan();
+    try {
+      const bytes = binaryStringToUint8(atob(text));
+      const parsed = parsePayload(bytes);
+      const imgDataUrl = bytesToDataUrl(parsed.imgBytes, 'image/jpeg');
+      const guest = { img: imgDataUrl, comment: parsed.comment, receivedAt: Date.now() };
+      localStorage.setItem(GUEST_CHAR_KEY, JSON.stringify(guest));
+
+      document.getElementById('scan_result_img').src = imgDataUrl;
+      document.getElementById('scan_result_comment').textContent = parsed.comment || 'あそびにきたよ！';
+      scanResult.classList.add('show');
+      scanStatus.textContent = '読み取りました！';
+    } catch (e) {
+      scanStatus.textContent = 'YUIのQRコードとして読み取れませんでした。もう一度お試しください。';
+      startScan();
+    }
+  }
+
+  scanStartBtn.addEventListener('click', startScan);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopScan();
+  });
+  window.addEventListener('pagehide', stopScan);
+
+  // ============ タブ切り替え ============
+  const tabShowBtn = document.getElementById('tab_show_btn');
+  const tabScanBtn = document.getElementById('tab_scan_btn');
+  const tabShowPanel = document.getElementById('tab_show_panel');
+  const tabScanPanel = document.getElementById('tab_scan_panel');
+
+  function activateTab(name) {
+    const showing = name === 'show';
+    tabShowBtn.classList.toggle('active', showing);
+    tabScanBtn.classList.toggle('active', !showing);
+    tabShowPanel.classList.toggle('active', showing);
+    tabScanPanel.classList.toggle('active', !showing);
+    if (showing) stopScan();
+  }
+  tabShowBtn.addEventListener('click', () => activateTab('show'));
+  tabScanBtn.addEventListener('click', () => activateTab('scan'));
+
+  generateAndRenderQr();
+})();
+</script>
+</body>
+</html>
