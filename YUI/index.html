@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   :root {
     --bg: #f7f3e9;
@@ -494,63 +495,6 @@
     box-shadow: 0 6px 14px rgba(0,0,0,0.12);
   }
 
-  /* ---------- 遊びに来たキャラ(QR交換で受け取ったゲスト) ---------- */
-
-  #home_guest_wrap {
-    position: absolute;
-    left: -4px;
-    bottom: 26%;
-    z-index: 1;
-    width: 30%;
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    cursor: pointer;
-  }
-
-  #home_guest_wrap.show { display: flex; }
-
-  #home_guest_bubble {
-    background: #ffffff;
-    border: 2px solid #1a1a1a;
-    border-radius: 10px;
-    padding: 5px 8px;
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 1.4;
-    max-width: 96px;
-    text-align: center;
-    margin-bottom: 5px;
-    box-shadow: 0 3px 6px rgba(0,0,0,0.12);
-  }
-
-  #home_guest_bubble::after {
-    content: '';
-    position: absolute;
-    left: 50%;
-    bottom: -14px;
-    transform: translateX(-50%);
-    border: 7px solid transparent;
-    border-top-color: #1a1a1a;
-  }
-
-  #home_guest_img {
-    width: 100%;
-    max-height: 20vh;
-    object-fit: contain;
-    border-radius: 8px;
-    border: 2px solid #1a1a1a;
-    background: #fff;
-    filter: drop-shadow(0 5px 8px rgba(0,0,0,0.18));
-  }
-
-  #home_guest_hint {
-    font-size: 9px;
-    color: var(--ink-dim);
-    margin-top: 3px;
-    text-align: center;
-  }
-
   /* ---------- キャラ横の装飾小物(左右2つ・見た目だけ) ---------- */
 
   #home_props_row {
@@ -586,6 +530,46 @@
 
   .prop_btn img {
     border-radius: 10px;
+  }
+
+  /* ---------- 遊びに来たフレンドAI(キャラ上部に表示) ---------- */
+
+  #visiting_friends_row {
+    position: absolute;
+    top: 2px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    z-index: 4;
+    pointer-events: none;
+  }
+
+  .visiting_friend_btn {
+    pointer-events: auto;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 50%;
+    border: 3px solid var(--scan);
+    background: #ffffff;
+    overflow: hidden;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.18);
+    animation: friendBtnPop 0.3s ease-out;
+  }
+
+  .visiting_friend_btn img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  @keyframes friendBtnPop {
+    0%   { transform: scale(0.4); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
   }
 
   /* ---------- 画像アップロードのメニュー(モーダル) ---------- */
@@ -896,11 +880,7 @@
         <div id="home_bubble">こんにちは。</div>
       </div>
       <div id="home_char_area">
-        <div id="home_guest_wrap">
-          <div id="home_guest_bubble"></div>
-          <img id="home_guest_img" src="" alt="遊びに来たキャラ">
-          <div id="home_guest_hint">タップで帰す</div>
-        </div>
+        <div id="visiting_friends_row"></div>
         <div id="home_props_row">
           <!-- 左:観葉植物 -->
           <button class="prop_btn" data-prop-index="0" aria-label="左の小物を変更(観葉植物)">
@@ -929,6 +909,7 @@
     </div>
     <input type="file" id="char_file_input" accept="image/*" style="display:none">
     <input type="file" id="prop_file_input" accept="image/*" style="display:none">
+    <input type="file" id="friend_zip_input" accept=".zip" style="display:none">
 
     <!-- キャラ/小物の画像アップロードメニュー -->
     <div id="upload_modal">
@@ -991,10 +972,10 @@
           <span class="app_icon">🎨</span>
           <span class="app_label">お絵描き当て</span>
         </a>
-        <a class="app_tile" href="qr_exchange.html">
-          <span class="app_icon">🤝</span>
-          <span class="app_label">QR交換</span>
-        </a>
+        <label class="app_tile" for="friend_zip_input" style="cursor:pointer;">
+          <span class="app_icon">🎁</span>
+          <span class="app_label">フレンドを迎える</span>
+        </label>
         <div class="app_tile soon"><span class="app_icon">➕</span><span class="app_label">Coming Soon</span></div>
         <div class="app_tile soon"><span class="app_icon">➕</span><span class="app_label">Coming Soon</span></div>
       </div>
@@ -1028,14 +1009,13 @@
     homeEmotionFace: document.getElementById('home_emotion_face'),
     homeEmotionText: document.getElementById('home_emotion_text'),
     diveTapBtn: document.getElementById('dive_tap_btn'),
-    homeGuestWrap: document.getElementById('home_guest_wrap'),
-    homeGuestImg: document.getElementById('home_guest_img'),
-    homeGuestBubble: document.getElementById('home_guest_bubble'),
     uploadModal: document.getElementById('upload_modal'),
     uploadModalClose: document.getElementById('upload_modal_close'),
     uploadCharBtn: document.getElementById('upload_char_btn'),
     uploadPropLeftBtn: document.getElementById('upload_prop_left_btn'),
     uploadPropRightBtn: document.getElementById('upload_prop_right_btn'),
+    friendZipInput: document.getElementById('friend_zip_input'),
+    visitingFriendsRow: document.getElementById('visiting_friends_row'),
   };
 
   // ---- 時間帯に応じた背景写真(VNキャラクターステージ用) ----
@@ -1174,6 +1154,124 @@
     try { localStorage.setItem(PROPS_IMAGE_KEY, JSON.stringify(list)); } catch (e) { alert('画像の保存に失敗しました(サイズが大きすぎるかもしれません)。'); }
   }
 
+  // ============ フレンドAI(他の人が送ってきたAI)の受け入れ・表示 ============
+  const FRIENDS_KEY = 'yui_visiting_friends';
+  const FRIEND_MAX = 100;                    // 保存できるフレンドの上限人数
+  const FRIEND_VISIT_MS = 24 * 60 * 60 * 1000; // 1日だけキャラの隣に表示
+  const FRIEND_SHOW_MAX = 5;                  // 同時に画面へ並べる最大数(表示のごちゃつき防止)
+
+  function loadFriends() {
+    try {
+      const raw = localStorage.getItem(FRIENDS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) { return []; }
+  }
+
+  function saveFriends(list) {
+    try {
+      localStorage.setItem(FRIENDS_KEY, JSON.stringify(list));
+    } catch (e) {
+      alert('フレンドの保存に失敗しました(データが大きすぎるかもしれません)。');
+    }
+  }
+
+  // 上限を超えたら、古いフレンド(受け取った日時が古い順)から削除する
+  function addFriend(friend) {
+    let list = loadFriends();
+    list.push(friend);
+    if (list.length > FRIEND_MAX) {
+      list.sort((a, b) => a.receivedAt - b.receivedAt);
+      list = list.slice(list.length - FRIEND_MAX);
+    }
+    saveFriends(list);
+  }
+
+  // 受け取ってから24時間以内のフレンドだけを「今遊びに来ている」フレンドとする
+  function activeFriends() {
+    const now = Date.now();
+    return loadFriends()
+      .filter(f => (now - f.receivedAt) < FRIEND_VISIT_MS)
+      .sort((a, b) => a.receivedAt - b.receivedAt);
+  }
+
+  let friendBubbleTimeout = null;
+  function showFriendMessage(f) {
+    clearTimeout(friendBubbleTimeout);
+    els.homeBubble.textContent = `${f.name}「${f.message}」`;
+    speak(`${f.name}より、${f.message}`);
+    friendBubbleTimeout = setTimeout(() => {
+      const profile = loadProfile();
+      const name = (profile && profile.user_name) || 'あなた';
+      els.homeBubble.textContent = timeGreeting(name);
+    }, 5000);
+  }
+
+  function renderVisitingFriends() {
+    const container = els.visitingFriendsRow;
+    if (!container) return;
+    container.innerHTML = '';
+    activeFriends().slice(-FRIEND_SHOW_MAX).forEach((f) => {
+      const btn = document.createElement('button');
+      btn.className = 'visiting_friend_btn';
+      btn.title = `${f.name}(タップして一言を聞く)`;
+      const img = document.createElement('img');
+      img.src = f.avatarDataUrl;
+      img.alt = f.name;
+      btn.appendChild(img);
+      btn.addEventListener('click', () => showFriendMessage(f));
+      container.appendChild(btn);
+    });
+  }
+
+  // ZIPファイル(friend.htmlで作成したもの)を読み込んでフレンドとして迎える
+  els.friendZipInput.addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    if (typeof JSZip === 'undefined') {
+      alert('フレンドを迎える機能の読み込みに失敗しました。通信環境を確認してもう一度お試しください。');
+      els.friendZipInput.value = '';
+      return;
+    }
+
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const jsonEntry = zip.file('friend.json');
+      if (!jsonEntry) throw new Error('friend.json not found');
+      const jsonText = await jsonEntry.async('string');
+      const data = JSON.parse(jsonText);
+
+      let avatarDataUrl = 'chars/char_normal.png';
+      const avatarEntry = data.avatarFile && zip.file(data.avatarFile);
+      if (avatarEntry) {
+        const blob = await avatarEntry.async('blob');
+        avatarDataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      const friend = {
+        id: `f_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        name: String(data.name || '名無しのAI').slice(0, 15),
+        message: String(data.message || 'よろしくね！').slice(0, 20),
+        avatarDataUrl: avatarDataUrl,
+        receivedAt: Date.now()
+      };
+
+      addFriend(friend);
+      renderVisitingFriends();
+      showFriendMessage(friend);
+    } catch (err) {
+      alert('フレンドファイルの読み込みに失敗しました。正しいZIPファイルか確認してください。');
+    } finally {
+      els.friendZipInput.value = '';
+      showLayer(els.homeLayer);
+    }
+  });
+
   function fileToDataUrl(file, callback) {
     const reader = new FileReader();
     reader.onload = () => callback(reader.result);
@@ -1258,36 +1356,6 @@
   });
   els.homeCharacterImg.addEventListener('animationend', () => {
     els.homeCharacterImg.classList.remove('char_bounce');
-  });
-
-  // ============ 遊びに来たキャラ(QR交換で受け取ったゲスト) ============
-  const GUEST_CHAR_KEY = 'yui_guest_char';
-
-  function loadGuestChar() {
-    try {
-      const raw = localStorage.getItem(GUEST_CHAR_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch (e) { return null; }
-  }
-  function clearGuestChar() {
-    localStorage.removeItem(GUEST_CHAR_KEY);
-    els.homeGuestWrap.classList.remove('show');
-  }
-
-  function renderGuestChar() {
-    const guest = loadGuestChar();
-    if (!guest || !guest.img) {
-      els.homeGuestWrap.classList.remove('show');
-      return null;
-    }
-    els.homeGuestImg.src = guest.img;
-    els.homeGuestBubble.textContent = guest.comment || 'あそびにきたよ！';
-    els.homeGuestWrap.classList.add('show');
-    return guest;
-  }
-
-  els.homeGuestWrap.addEventListener('click', () => {
-    clearGuestChar();
   });
 
   // ============ ①ダイブ演出 ============
@@ -1482,14 +1550,9 @@
 
     renderCustomProps();
     renderTodaySchedule();
+    renderVisitingFriends();
     showLayer(els.homeLayer);
     speak(greeting);
-
-    const guest = renderGuestChar();
-    if (guest) {
-      // 挨拶の読み上げと重ならないように、少し間を置いてから話してもらう
-      setTimeout(() => speak(guest.comment || 'あそびにきたよ！'), 3200);
-    }
   }
 
   // ============ 起動時の分岐 ============

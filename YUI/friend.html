@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   :root {
     --bg: #f7f3e9;
@@ -264,6 +265,21 @@
   <div class="note_box">
     「カードを画像として保存」を押すと、端末に画像ファイルとしてダウンロードされます。SNSでのシェアや印刷にご活用ください。
   </div>
+
+  <!-- 3. フレンドAIの送信データ作成エリア -->
+  <h2 style="font-size:16px; font-family:'M PLUS Rounded 1c'; margin:26px 0 8px;">AIを送る（フレンド機能）</h2>
+  <div class="card">
+    <div class="form_group">
+      <label>訪問時に言うひとこと（最大20文字）</label>
+      <input type="text" id="input_visit_message" maxlength="20" placeholder="遊びに来たよ！">
+    </div>
+    <button class="primary" id="download_ai_zip_btn">AIデータをZIPでダウンロード</button>
+  </div>
+
+  <div class="note_box">
+    ダウンロードされたZIPファイルには、あなたの相棒画像・名前・ひとことメッセージが入っています。<br>
+    このファイルをLINEなどでフレンドに送り、相手がホーム画面の「フレンドを迎える」からこのZIPを選ぶと、1日だけあなたのAIが相手のキャラの隣に遊びに行きます。
+  </div>
 </div>
 
 <script>
@@ -279,6 +295,7 @@
   const inputIntro = document.getElementById('input_intro');
   const inputOther = document.getElementById('input_other');
   const inputHpUrl = document.getElementById('input_hp_url');
+  const inputVisitMessage = document.getElementById('input_visit_message');
 
   const cardAvatarImg = document.getElementById('card_avatar_img');
   const cardDisplayName = document.getElementById('card_display_name');
@@ -298,6 +315,7 @@
         inputIntro.value = data.intro || '';
         inputOther.value = data.other || '';
         inputHpUrl.value = data.hpUrl || '';
+        inputVisitMessage.value = data.visitMessage || '';
         if (data.imgData) {
           currentImageDataUrl = data.imgData;
           partnerPreview.src = data.imgData;
@@ -352,6 +370,7 @@
       intro: inputIntro.value.trim(),
       other: inputOther.value.trim(),
       hpUrl: inputHpUrl.value.trim(),
+      visitMessage: inputVisitMessage.value.trim(),
       imgData: currentImageDataUrl
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(profileData));
@@ -408,6 +427,52 @@
       }
     };
     img.src = currentImageDataUrl;
+  });
+
+  // フレンドAI用データ（画像＋ひとこと）をZIPでダウンロード
+  document.getElementById('download_ai_zip_btn').addEventListener('click', async () => {
+    if (typeof JSZip === 'undefined') {
+      alert('ZIP機能の読み込みに失敗しました。通信環境を確認してもう一度お試しください。');
+      return;
+    }
+
+    const name = (inputName.value.trim() || '名無し').slice(0, 15);
+    const message = (inputVisitMessage.value.trim() || 'よろしくね！').slice(0, 20);
+
+    try {
+      const zip = new JSZip();
+
+      // 相棒画像をBlob化してZIPに格納
+      const imgResponse = await fetch(currentImageDataUrl);
+      const imgBlob = await imgResponse.blob();
+      const ext = imgBlob.type.includes('png') ? 'png'
+                : (imgBlob.type.includes('jpeg') || imgBlob.type.includes('jpg')) ? 'jpg'
+                : 'png';
+      const avatarFile = `avatar.${ext}`;
+      zip.file(avatarFile, imgBlob);
+
+      // メタ情報（名前・ひとこと等）
+      const friendData = {
+        version: 1,
+        name: name,
+        message: message,
+        avatarFile: avatarFile,
+        exportedAt: Date.now()
+      };
+      zip.file('friend.json', JSON.stringify(friendData, null, 2));
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(content);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `friend_${name}_${Date.now()}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('ZIPファイルの作成に失敗しました。もう一度お試しください。');
+    }
   });
 
   loadData();
