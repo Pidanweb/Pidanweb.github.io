@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>自己紹介 & QRカード - YUI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f3e9;
+    --panel: #ffffff;
+    --panel-edge: #e6ddc8;
+    --ink: #2c2f36;
+    --ink-dim: #7c8288;
+    --scan: #2fae90;
+    --scan-soft: rgba(47, 174, 144, 0.14);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+  }
+  #app {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: max(20px, env(safe-area-inset-top)) 20px 40px;
+  }
+  #back_btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ink-dim);
+    text-decoration: none;
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+  h1 {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 20px;
+    margin: 0 0 6px;
+  }
+  p.desc {
+    color: var(--ink-dim);
+    font-size: 13.5px;
+    line-height: 1.8;
+    margin: 0 0 18px;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 18px;
+    padding: 18px;
+    margin-bottom: 14px;
+  }
+
+  /* フォーム入力要素 */
+  .form_group {
+    margin-bottom: 14px;
+  }
+  .form_group label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--ink-dim);
+    margin-bottom: 6px;
+  }
+  .form_group input[type="text"],
+  .form_group textarea {
+    width: 100%;
+    border: 1px solid var(--panel-edge);
+    border-radius: 10px;
+    padding: 10px;
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--ink);
+    background: #faf8f3;
+  }
+  .form_group textarea {
+    resize: vertical;
+    height: 64px;
+  }
+
+  /* 画像選択 */
+  .img_picker_box {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  #partner_preview {
+    width: 64px;
+    height: 64px;
+    border-radius: 12px;
+    border: 1px solid var(--panel-edge);
+    object-fit: cover;
+    background: #fff;
+  }
+
+  /* 自己紹介カード（レイアウト固定・リアルタイムプレビュー） */
+  .profile_card_preview {
+    width: 100%;
+    background: #ffffff;
+    border: 2px solid var(--scan);
+    border-radius: 16px;
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    position: relative;
+    overflow: hidden;
+  }
+  .card_avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    object-fit: cover;
+    border: 1px solid var(--panel-edge);
+    flex-shrink: 0;
+  }
+  .card_body {
+    flex: 1;
+    min-width: 0;
+  }
+  .card_name {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 15px;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .card_short_comment {
+    font-size: 12px;
+    color: var(--ink-dim);
+    line-height: 1.4;
+    word-break: break-all;
+  }
+  .card_qr_box {
+    width: 58px;
+    height: 58px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    border: 1px solid var(--panel-edge);
+    border-radius: 8px;
+    padding: 2px;
+  }
+  .card_qr_box img, .card_qr_box canvas {
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* ボタン */
+  button.primary {
+    width: 100%;
+    background: var(--scan);
+    color: #ffffff;
+    border: none;
+    border-radius: 14px;
+    padding: 15px 0;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 15px;
+    margin-top: 10px;
+    cursor: pointer;
+  }
+  button.secondary {
+    width: 100%;
+    background: rgba(0,0,0,0.045);
+    color: var(--ink);
+    border: none;
+    border-radius: 14px;
+    padding: 13px 0;
+    font-family: inherit;
+    font-size: 14px;
+    margin-top: 10px;
+    cursor: pointer;
+  }
+
+  .note_box {
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 14px;
+    padding: 14px 16px;
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    line-height: 1.8;
+    margin-top: 16px;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <a id="back_btn" href="index.html">← ホームに戻る</a>
+  <h1>自己紹介 & カード作成</h1>
+  <p class="desc">
+    自分のプロフィールを設定してカードを作成できます。<br>
+    右端のQRコードには、あなたのWebページ（HP）へのリンクが埋め込まれます。
+  </p>
+
+  <!-- 1. 入力エリア -->
+  <div class="card">
+    <div class="form_group">
+      <label>お名前</label>
+      <input type="text" id="input_name" maxlength="15" placeholder="名前を入力">
+    </div>
+
+    <div class="form_group">
+      <label>相棒画像（アイコン）</label>
+      <div class="img_picker_box">
+        <img id="partner_preview" src="chars/char_normal.png" alt="相棒画像">
+        <input type="file" id="input_img_file" accept="image/*" style="font-size:12px;">
+      </div>
+    </div>
+
+    <div class="form_group">
+      <label>カード用ショートコメント（最大10文字）</label>
+      <input type="text" id="input_card_comment" maxlength="10" placeholder="よろしくね！">
+    </div>
+
+    <div class="form_group">
+      <label>自己紹介文（最大50文字）</label>
+      <textarea id="input_intro" maxlength="50" placeholder="ここに自己紹介を入力してください"></textarea>
+    </div>
+
+    <div class="form_group">
+      <label>その他・自由項目（最大50文字）</label>
+      <textarea id="input_other" maxlength="50" placeholder="好きなもの、SNSアカウントなど"></textarea>
+    </div>
+
+    <div class="form_group">
+      <label>リンク先HPのURL</label>
+      <input type="text" id="input_hp_url" placeholder="https://example.com/my_page">
+    </div>
+
+    <button class="primary" id="save_profile_btn">プロフィールを保存・反映</button>
+  </div>
+
+  <!-- 2. 完成カード表示エリア -->
+  <h2 style="font-size:16px; font-family:'M PLUS Rounded 1c'; margin:20px 0 8px;">自己紹介カード プレビュー</h2>
+  <div class="profile_card_preview" id="card_element">
+    <img id="card_avatar_img" class="card_avatar" src="chars/char_normal.png" alt="相棒">
+    <div class="card_body">
+      <div class="card_name" id="card_display_name">名前</div>
+      <div class="card_short_comment" id="card_display_comment">よろしくね！</div>
+    </div>
+    <!-- 右端のQRコード表示部 -->
+    <div class="card_qr_box" id="card_qr_output" title="HPへジャンプするQRコード"></div>
+  </div>
+
+  <button class="secondary" id="download_card_btn">カードを画像（PNG）として保存</button>
+
+  <div class="note_box">
+    「カードを画像として保存」を押すと、端末に画像ファイルとしてダウンロードされます。SNSでのシェアや印刷にご活用ください。
+  </div>
+</div>
+
+<script>
+(() => {
+  const STORAGE_KEY = 'yui_profile_data';
+  const DEFAULT_IMG = 'chars/char_normal.png';
+
+  // DOM要素
+  const inputName = document.getElementById('input_name');
+  const inputImgFile = document.getElementById('input_img_file');
+  const partnerPreview = document.getElementById('partner_preview');
+  const inputCardComment = document.getElementById('input_card_comment');
+  const inputIntro = document.getElementById('input_intro');
+  const inputOther = document.getElementById('input_other');
+  const inputHpUrl = document.getElementById('input_hp_url');
+
+  const cardAvatarImg = document.getElementById('card_avatar_img');
+  const cardDisplayName = document.getElementById('card_display_name');
+  const cardDisplayComment = document.getElementById('card_display_comment');
+  const cardQrOutput = document.getElementById('card_qr_output');
+
+  let currentImageDataUrl = DEFAULT_IMG;
+
+  // 初期読み込み
+  function loadData() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const data = JSON.parse(raw);
+        inputName.value = data.name || '';
+        inputCardComment.value = data.cardComment || '';
+        inputIntro.value = data.intro || '';
+        inputOther.value = data.other || '';
+        inputHpUrl.value = data.hpUrl || '';
+        if (data.imgData) {
+          currentImageDataUrl = data.imgData;
+          partnerPreview.src = data.imgData;
+        }
+      }
+    } catch(e) {}
+    updateCardPreview();
+  }
+
+  // カード表示の更新
+  function updateCardPreview() {
+    cardDisplayName.textContent = inputName.value.trim() || '未設定';
+    cardDisplayComment.textContent = inputCardComment.value.trim() || 'よろしくね！';
+    cardAvatarImg.src = currentImageDataUrl;
+
+    // 右端QRコード生成
+    cardQrOutput.innerHTML = '';
+    const url = inputHpUrl.value.trim() || window.location.href;
+    if (typeof QRCode !== 'undefined') {
+      new QRCode(cardQrOutput, {
+        text: url,
+        width: 54,
+        height: 54,
+        correctLevel: QRCode.CorrectLevel.L
+      });
+    }
+  }
+
+  // 画像ファイルの読み込み処理
+  inputImgFile.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      currentImageDataUrl = evt.target.result;
+      partnerPreview.src = currentImageDataUrl;
+      updateCardPreview();
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // リアルタイム反映
+  [inputName, inputCardComment, inputHpUrl].forEach(el => {
+    el.addEventListener('input', updateCardPreview);
+  });
+
+  // 保存ボタン
+  document.getElementById('save_profile_btn').addEventListener('click', () => {
+    const profileData = {
+      name: inputName.value.trim(),
+      cardComment: inputCardComment.value.trim(),
+      intro: inputIntro.value.trim(),
+      other: inputOther.value.trim(),
+      hpUrl: inputHpUrl.value.trim(),
+      imgData: currentImageDataUrl
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(profileData));
+    alert('プロフィールを保存しました！');
+    updateCardPreview();
+  });
+
+  // Canvasを使ったカード画像のCanvas化・PNGダウンロード処理
+  document.getElementById('download_card_btn').addEventListener('click', () => {
+    const canvas = document.createElement('canvas');
+    const width = 400;
+    const height = 120;
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+
+    // 背景描画
+    ctx.fillStyle = '#ffffff';
+    ctx.roundRect(0, 0, width, height, 16);
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#2fae90';
+    ctx.stroke();
+
+    // アバター描画
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      ctx.drawImage(img, 16, 20, 80, 80);
+
+      // テキスト描画
+      ctx.fillStyle = '#2c2f36';
+      ctx.font = 'bold 18px "Zen Kaku Gothic New", sans-serif';
+      ctx.fillText(cardDisplayName.textContent, 110, 48);
+
+      ctx.fillStyle = '#7c8288';
+      ctx.font = '14px "Zen Kaku Gothic New", sans-serif';
+      ctx.fillText(cardDisplayComment.textContent, 110, 78);
+
+      // QRコード画像取得＆描画
+      const qrImg = cardQrOutput.querySelector('img') || cardQrOutput.querySelector('canvas');
+      if (qrImg) {
+        const qrCanvasImg = new Image();
+        qrCanvasImg.onload = () => {
+          ctx.drawImage(qrCanvasImg, 304, 20, 80, 80);
+          
+          // ダウンロード実行
+          const a = document.createElement('a');
+          a.download = `profile_card_${Date.now()}.png`;
+          a.href = canvas.toDataURL('image/png');
+          a.click();
+        };
+        qrCanvasImg.src = qrImg.src || (qrImg.toDataURL && qrImg.toDataURL());
+      }
+    };
+    img.src = currentImageDataUrl;
+  });
+
+  loadData();
+})();
+</script>
+</body>
+</html>
