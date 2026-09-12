@@ -116,7 +116,9 @@
   #vn_layer {
     flex-direction: column;
     justify-content: flex-end;
-    background: radial-gradient(ellipse at top, #10151d 0%, var(--bg) 60%);
+    background-image: url('chars/初期設定背景.PNG');
+    background-size: cover;
+    background-position: center;
   }
 
   #home_layer {
@@ -125,20 +127,6 @@
     background-image: url('chars/bg_scene.jpg');
     background-size: cover;
     background-position: center;
-  }
-
-  .vn_skip_btn {
-    position: absolute;
-    top: max(18px, env(safe-area-inset-top));
-    right: 18px;
-    background: rgba(0,0,0,0.055);
-    border: 1px solid rgba(0,0,0,0.12);
-    color: var(--ink-dim);
-    border-radius: 20px;
-    padding: 7px 14px;
-    font-size: 12px;
-    font-family: inherit;
-    z-index: 5;
   }
 
   .vn_character_wrap {
@@ -192,6 +180,7 @@
     font-size: 15px;
     line-height: 1.9;
     min-height: 4.8em;
+    white-space: pre-line;
   }
 
   .vn_next_row {
@@ -247,6 +236,54 @@
     background: var(--scan-soft);
     border-color: var(--scan);
     color: var(--scan);
+  }
+
+  textarea.vn_input {
+    min-height: 84px;
+    resize: none;
+    line-height: 1.6;
+  }
+
+  .appearance_picker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+  }
+
+  .appearance_preview {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--panel-edge);
+    background: var(--panel-edge);
+  }
+
+  .vn_status_text {
+    min-height: 1.4em;
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    margin-top: 6px;
+  }
+
+  .vn_status_text.error { color: var(--danger); }
+
+  /* ---------- 姿選択:カーテン演出 ---------- */
+
+  #vn_curtain_img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    object-fit: cover;
+    z-index: 3;
+    opacity: 0;
+    pointer-events: none;
+    filter: none;
   }
 
   /* ---------- ④ホーム画面 ---------- */
@@ -846,14 +883,14 @@
 
   <!-- ②チュートリアル ③初期設定(ビジュアルノベル形式・共通レイヤー) -->
   <div id="vn_layer" class="layer">
-    <button class="vn_skip_btn" id="vn_skip_btn">スキップ</button>
     <div class="vn_character_wrap">
       <div class="character_stage" id="vn_stage">
-        <img id="vn_character_img" src="chars/char_normal.png" alt="YUI">
+        <img id="vn_character_img" src="chars/初期AI.png" alt="YUI">
+        <img id="vn_curtain_img" src="chars/カーテン.png" alt="">
       </div>
     </div>
     <div class="vn_box">
-      <div class="vn_name">YUI</div>
+      <div class="vn_name" id="vn_name_label">YUI</div>
       <div class="vn_line" id="vn_line_text"></div>
       <div id="vn_extra"></div>
       <div class="vn_next_row">
@@ -861,6 +898,9 @@
       </div>
     </div>
   </div>
+  <input type="file" id="onboard_char_file_input" accept="image/*" style="display:none">
+  <audio id="setup_bgm" src="chars/BGM.mp3" loop preload="auto"></audio>
+  <audio id="decide_se" src="chars/決定音.mp3" preload="auto"></audio>
 
   <!-- ④ホーム画面 -->
   <div id="home_layer" class="layer">
@@ -995,11 +1035,16 @@
     homeLayer: document.getElementById('home_layer'),
     appsLayer: document.getElementById('apps_layer'),
     appsCloseBtn: document.getElementById('apps_close_btn'),
-    vnSkipBtn: document.getElementById('vn_skip_btn'),
     vnCharacterImg: document.getElementById('vn_character_img'),
+    vnCurtainImg: document.getElementById('vn_curtain_img'),
+    vnNameLabel: document.getElementById('vn_name_label'),
     vnLineText: document.getElementById('vn_line_text'),
     vnExtra: document.getElementById('vn_extra'),
     vnNextBtn: document.getElementById('vn_next_btn'),
+    onboardCharInput: document.getElementById('onboard_char_file_input'),
+    setupBgm: document.getElementById('setup_bgm'),
+    decideSe: document.getElementById('decide_se'),
+    homeBrand: document.getElementById('home_brand'),
     homeMenuBtn: document.getElementById('home_menu_btn'),
     homeCharacterImg: document.getElementById('home_character_img'),
     homeBubble: document.getElementById('home_bubble'),
@@ -1040,6 +1085,7 @@
   });
 
   const PROFILE_KEY = 'yui_profile';
+  const GEMINI_API_KEY_STORAGE = 'yui_gemini_api_key';
 
   function loadProfile() {
     try {
@@ -1371,151 +1417,313 @@
       els.diveTapBtn.classList.add('show');
     }, 2600);
 
-    // ユーザーのタップ(ジェスチャー)を挟むことで、直後の音声読み上げがブラウザにブロックされないようにする
+    // ユーザーのタップ(ジェスチャー)を挟むことで、直後の音声読み上げ・BGM再生がブラウザにブロックされないようにする
     els.diveTapBtn.addEventListener('click', () => {
       els.diveTapBtn.classList.remove('show');
+      playSetupBgm();
       onFinish();
     }, { once: true });
   }
 
-  // ============ ②チュートリアル(ビジュアルノベル風) ============
-  const TUTORIAL_LINES = [
-    "はじめまして、わたしはYUI。あなたの毎日をサポートするナビゲーションAIだよ。",
-    "カメラで何かを映すと、それが何かを判定して、声で説明してくれる機能があるよ。本でも、ぬいぐるみでも、動物でも大丈夫。",
-    "会話中のキャラクターを短く押すと、1つだけ質問できるよ。長く押すと、そのまま会話を続けられるモードになるよ。",
-    "会話を終えたいときは「バイバイ」って言うか、終了ボタンを押してね。",
-    "それじゃあ、少しだけあなたのことを教えてもらってもいい？",
-  ];
-
-  let tutorialStep = 0;
-
-  function showTutorialStep() {
-    els.vnExtra.innerHTML = '';
-    els.vnLineText.textContent = TUTORIAL_LINES[tutorialStep];
-    els.vnNextBtn.textContent = (tutorialStep === TUTORIAL_LINES.length - 1) ? 'はじめる' : '次へ';
-    speak(TUTORIAL_LINES[tutorialStep]);
+  // ============ 初期設定中のBGM・決定効果音 ============
+  function playSetupBgm() {
+    if (!els.setupBgm) return;
+    els.setupBgm.volume = 0.25; // 控えめな音量でループ
+    els.setupBgm.currentTime = 0;
+    els.setupBgm.play().catch(() => {
+      // 端末側でブロックされた場合は静かに諦める(タップ済みなので通常は再生される)
+    });
+  }
+  function stopSetupBgm() {
+    if (!els.setupBgm) return;
+    els.setupBgm.pause();
+    els.setupBgm.currentTime = 0;
+  }
+  function playDecideSe() {
+    if (!els.decideSe) return;
+    try {
+      els.decideSe.currentTime = 0;
+      els.decideSe.play().catch(() => {});
+    } catch (e) {}
   }
 
-  function startTutorial() {
-    tutorialStep = 0;
-    onboardingActive = false;
-    showLayer(els.vnLayer);
-    els.vnSkipBtn.style.display = 'block';
-    showTutorialStep();
+  // ============ 姿選択:カーテン演出 ============
+  // カーテン.pngで一瞬隠している間に裏で画像を差し替え、1秒後にゆっくりカーテンを取り除く
+  function revealWithCurtain(newSrc, onDone) {
+    const curtain = els.vnCurtainImg;
+    curtain.style.transition = 'none';
+    curtain.style.display = 'block';
+    curtain.style.opacity = '1';
+    void curtain.offsetWidth; // 強制的に再描画してtransition:noneを確実に反映させる
+
+    els.vnCharacterImg.src = newSrc;
+
+    setTimeout(() => {
+      curtain.style.transition = 'opacity 0.6s ease';
+      curtain.style.opacity = '0';
+      setTimeout(() => {
+        curtain.style.display = 'none';
+        if (onDone) onDone();
+      }, 650);
+    }, 1000);
   }
-
-  els.vnNextBtn.addEventListener('click', () => {
-    if (onboardingActive) {
-      handleOnboardingNext();
-      return;
-    }
-    tutorialStep++;
-    if (tutorialStep >= TUTORIAL_LINES.length) {
-      startOnboarding();
-    } else {
-      showTutorialStep();
-    }
-  });
-
-  els.vnSkipBtn.addEventListener('click', () => {
-    // チュートリアルの説明部分だけスキップする(初期設定は必ず行う)
-    startOnboarding();
-  });
 
   // ============ ③初期設定(オンボーディング) ============
-  const TONE_OPTIONS = [
-    { id: 'polite',    label: '丁寧(です・ます調)' },
-    { id: 'friendly',  label: 'フレンドリー(タメ口)' },
-    { id: 'tsundere',  label: 'ツンデレ気味' },
-    { id: 'cool',      label: 'クールで無口気味' },
-  ];
+  // ステップ構成:
+  // 0=挨拶 / 1=プレイヤー名入力 / 2=名前の復唱 / 3=姿選択(カーテン演出)
+  // 4=姿へのお礼 / 5=AI名入力 / 6=AI名のお礼 / 7=性格の自由記述 / 8=Gemini APIキー
+  let onboardingStep = 0;
+  let geminiConfirmed = false;
+  const draftProfile = {
+    user_name: '',
+    appearance: '',      // 空ならデフォルト(char_normal.png)を使う
+    ai_name: '',
+    personality: '',
+    gemini_api_key: '',
+  };
 
-  const FEEDBACK_OPTIONS = [
-    { id: 'gentle',    label: '優しく励ますタイプ' },
-    { id: 'direct',    label: '率直にはっきり言うタイプ' },
-    { id: 'playful',   label: 'ちょっとユーモラスに茶化すタイプ' },
-  ];
-
-  let onboardingActive = false;
-  let onboardingStep = 0; // 0: 名前 / 1: 口調 / 2: フィードバック
-  const draftProfile = { user_name: '', tone_style: 'friendly', feedback_style: 'gentle' };
+  function updateAiNameDisplays(name) {
+    if (els.vnNameLabel) els.vnNameLabel.textContent = name;
+  }
 
   function startOnboarding() {
-    onboardingActive = true;
     onboardingStep = 0;
-    els.vnSkipBtn.style.display = 'none';
+    geminiConfirmed = false;
     showLayer(els.vnLayer);
+    els.vnCharacterImg.src = 'chars/初期AI.png';
     renderOnboardingStep();
   }
 
   function renderOnboardingStep() {
     els.vnExtra.innerHTML = '';
+    els.vnNextBtn.disabled = false;
 
     if (onboardingStep === 0) {
-      els.vnLineText.textContent = 'なんて呼べばいい？';
+      els.vnLineText.textContent = 'はじめまして、わたしはYUI。あなたの毎日をサポートするナビゲーションAIだよ。';
+      els.vnNextBtn.textContent = '次へ';
+      speak(els.vnLineText.textContent);
+    }
+
+    if (onboardingStep === 1) {
+      els.vnLineText.textContent = 'まずはあなたのことを教えて';
       const input = document.createElement('input');
       input.type = 'text';
       input.className = 'vn_input';
-      input.placeholder = '呼び名を入力';
+      input.placeholder = 'プレイヤーネームの入力';
       input.id = 'name_input';
       input.value = draftProfile.user_name;
       els.vnExtra.appendChild(input);
       els.vnNextBtn.textContent = '次へ';
     }
 
-    if (onboardingStep === 1) {
-      els.vnLineText.textContent = 'どんな話し方をしてほしい？';
-      const grid = document.createElement('div');
-      grid.className = 'vn_choice_grid';
-      TONE_OPTIONS.forEach(opt => {
-        const btn = document.createElement('button');
-        btn.className = 'vn_choice_btn' + (draftProfile.tone_style === opt.id ? ' selected' : '');
-        btn.textContent = opt.label;
-        btn.addEventListener('click', () => {
-          draftProfile.tone_style = opt.id;
-          renderOnboardingStep();
-        });
-        grid.appendChild(btn);
-      });
-      els.vnExtra.appendChild(grid);
+    if (onboardingStep === 2) {
+      els.vnLineText.textContent = `「${draftProfile.user_name}」だね、よろしくね`;
       els.vnNextBtn.textContent = '次へ';
+      speak(els.vnLineText.textContent);
     }
 
-    if (onboardingStep === 2) {
-      els.vnLineText.textContent = '何か指摘したいとき、どんな伝え方がいい？';
-      const grid = document.createElement('div');
-      grid.className = 'vn_choice_grid';
-      FEEDBACK_OPTIONS.forEach(opt => {
-        const btn = document.createElement('button');
-        btn.className = 'vn_choice_btn' + (draftProfile.feedback_style === opt.id ? ' selected' : '');
-        btn.textContent = opt.label;
-        btn.addEventListener('click', () => {
-          draftProfile.feedback_style = opt.id;
-          renderOnboardingStep();
-        });
-        grid.appendChild(btn);
-      });
-      els.vnExtra.appendChild(grid);
+    if (onboardingStep === 3) {
+      els.vnLineText.textContent = '次に私の姿を選んでね';
+      const wrap = document.createElement('div');
+      wrap.className = 'appearance_picker';
+
+      const preview = document.createElement('img');
+      preview.className = 'appearance_preview';
+      preview.id = 'appearance_preview_img';
+      preview.src = draftProfile.appearance || 'chars/char_normal.png';
+      wrap.appendChild(preview);
+
+      const uploadBtn = document.createElement('button');
+      uploadBtn.type = 'button';
+      uploadBtn.className = 'vn_choice_btn';
+      uploadBtn.textContent = '🖼️ 画像をアップロード';
+      uploadBtn.addEventListener('click', () => els.onboardCharInput.click());
+      wrap.appendChild(uploadBtn);
+
+      els.vnExtra.appendChild(wrap);
+      els.vnNextBtn.textContent = '決定';
+    }
+
+    if (onboardingStep === 4) {
+      els.vnLineText.textContent = '素敵な姿をありがとう、';
+      els.vnNextBtn.textContent = '次へ';
+      speak(els.vnLineText.textContent);
+    }
+
+    if (onboardingStep === 5) {
+      els.vnLineText.textContent = '私の名前を教えて';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'vn_input';
+      input.placeholder = 'YUI';
+      input.id = 'ai_name_input';
+      input.value = draftProfile.ai_name;
+      els.vnExtra.appendChild(input);
+      els.vnNextBtn.textContent = '決定';
+    }
+
+    if (onboardingStep === 6) {
+      els.vnLineText.textContent = `ありがとう、私は「${draftProfile.ai_name}」\nこれからあなたをサポートするね`;
+      els.vnNextBtn.textContent = '次へ';
+      speak(`ありがとう、私は${draftProfile.ai_name}。これからあなたをサポートするね`);
+    }
+
+    if (onboardingStep === 7) {
+      els.vnLineText.textContent = '最後に私はあなたにどのように接したらよい？';
+      const textarea = document.createElement('textarea');
+      textarea.className = 'vn_input';
+      textarea.rows = 3;
+      textarea.id = 'personality_input';
+      textarea.placeholder = '記入例:丁寧に、優しく教えてくれる感じで';
+      textarea.value = draftProfile.personality;
+      els.vnExtra.appendChild(textarea);
+      els.vnNextBtn.textContent = '決定';
+    }
+
+    if (onboardingStep === 8) {
+      renderGeminiStep();
+    }
+  }
+
+  function renderGeminiStep() {
+    els.vnExtra.innerHTML = '';
+
+    if (!geminiConfirmed) {
+      els.vnLineText.textContent =
+        'Gemini APIキー\n' +
+        'Google AI Studioで発行したAPIキーを貼り付けてください。\n' +
+        'このキーはGemini APIへのリクエストを認証するためだけに使われます。それ以外の送信先はなく、この端末内(localStorage)に保存されます。';
+
+      const input = document.createElement('input');
+      input.type = 'password';
+      input.className = 'vn_input';
+      input.placeholder = 'Gemini APIキーを貼り付け';
+      input.id = 'gemini_key_input';
+      input.value = draftProfile.gemini_api_key;
+      els.vnExtra.appendChild(input);
+
+      const status = document.createElement('div');
+      status.className = 'vn_status_text';
+      status.id = 'gemini_status';
+      els.vnExtra.appendChild(status);
+
+      els.vnNextBtn.textContent = '接続を確認する';
+    } else {
       els.vnNextBtn.textContent = 'はじめる';
     }
   }
 
+  async function testGeminiKey(apiKey, profile) {
+    const model = 'gemini-flash-latest';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+    const promptText =
+      `あなたは「${profile.ai_name}」という名前のナビゲーションAIです。次の性格・話し方を守ってユーザーに接してください:${profile.personality}\n` +
+      `ユーザーの名前は「${profile.user_name}」です。今はじめて出会った場面として、短い挨拶を1〜2文だけ返してください。`;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] }),
+    });
+    if (!res.ok) throw new Error('request_failed');
+    const data = await res.json();
+    const text = data && data.candidates && data.candidates[0] &&
+      data.candidates[0].content && data.candidates[0].content.parts &&
+      data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+    if (!text) throw new Error('empty_response');
+    return text.trim();
+  }
+
+  async function handleGeminiDecide() {
+    const input = document.getElementById('gemini_key_input');
+    const apiKey = (input && input.value.trim()) || '';
+    const status = document.getElementById('gemini_status');
+
+    if (!apiKey) {
+      if (status) { status.textContent = 'APIキーを入力してね。'; status.classList.add('error'); }
+      return;
+    }
+
+    els.vnNextBtn.disabled = true;
+    if (status) { status.textContent = '確認中…'; status.classList.remove('error'); }
+
+    try {
+      const greeting = await testGeminiKey(apiKey, draftProfile);
+      draftProfile.gemini_api_key = apiKey;
+      geminiConfirmed = true;
+      els.vnExtra.innerHTML = '';
+      els.vnLineText.textContent = greeting;
+      speak(greeting);
+      els.vnNextBtn.textContent = 'はじめる';
+      els.vnNextBtn.disabled = false;
+    } catch (err) {
+      if (status) { status.textContent = 'キーの確認に失敗しました。正しいAPIキーか確認してね。'; status.classList.add('error'); }
+      els.vnNextBtn.disabled = false;
+    }
+  }
+
+  function finishOnboarding() {
+    if (draftProfile.appearance) saveCustomChar(draftProfile.appearance); // ホーム画面のキャラ画像アップロードと保存先を共有
+    try { localStorage.setItem(GEMINI_API_KEY_STORAGE, draftProfile.gemini_api_key); } catch (e) {}
+    draftProfile.onboarded = true;
+    saveProfile(draftProfile);
+    stopSetupBgm();
+    showHome();
+  }
+
   function handleOnboardingNext() {
-    if (onboardingStep === 0) {
+    playDecideSe();
+
+    if (onboardingStep === 1) {
       const input = document.getElementById('name_input');
       draftProfile.user_name = (input && input.value.trim()) || 'あなた';
     }
 
-    if (onboardingStep < 2) {
-      onboardingStep++;
-      renderOnboardingStep();
-    } else {
-      draftProfile.onboarded = true;
-      saveProfile(draftProfile);
-      onboardingActive = false;
-      showHome();
+    if (onboardingStep === 3) {
+      els.vnNextBtn.disabled = true;
+      revealWithCurtain(draftProfile.appearance || 'chars/char_normal.png', () => {
+        onboardingStep++;
+        renderOnboardingStep();
+      });
+      return;
     }
+
+    if (onboardingStep === 5) {
+      const input = document.getElementById('ai_name_input');
+      draftProfile.ai_name = (input && input.value.trim()) || 'YUI';
+      updateAiNameDisplays(draftProfile.ai_name);
+    }
+
+    if (onboardingStep === 7) {
+      const textarea = document.getElementById('personality_input');
+      draftProfile.personality = (textarea && textarea.value.trim()) || '丁寧で優しい話し方';
+    }
+
+    if (onboardingStep === 8) {
+      if (!geminiConfirmed) {
+        handleGeminiDecide();
+      } else {
+        finishOnboarding();
+      }
+      return;
+    }
+
+    onboardingStep++;
+    renderOnboardingStep();
   }
+
+  els.vnNextBtn.addEventListener('click', handleOnboardingNext);
+
+  // ---- 姿選択ステップでの画像アップロード ----
+  els.onboardCharInput.addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    fileToDataUrl(file, (dataUrl) => {
+      draftProfile.appearance = dataUrl;
+      const preview = document.getElementById('appearance_preview_img');
+      if (preview) preview.src = dataUrl;
+    });
+  });
 
   // ============ ④ホーム画面 ============
   function timeGreeting(name) {
@@ -1541,6 +1749,8 @@
   function showHome() {
     const profile = loadProfile();
     const name = (profile && profile.user_name) || 'あなた';
+    const aiName = (profile && profile.ai_name) || 'YUI';
+    if (els.homeBrand) els.homeBrand.textContent = aiName;
     const greeting = timeGreeting(name);
     els.homeBubble.textContent = greeting;
 
@@ -1558,13 +1768,18 @@
     speak(greeting);
   }
 
-  // ============ 起動時の分岐 ============
+  // ============ 起動時の分岐（テスト用：毎回初回設定から開始） ============
+  // テスト中はローカルストレージの保存状況を無視して、常にダイブ演出＆初期設定から開始します
+  playDive(startOnboarding);
+
+  /* 本番用の処理（一時的にコメントアウト中）
   const profile = loadProfile();
   if (profile && profile.onboarded) {
     showHome();
   } else {
-    playDive(startTutorial);
+    playDive(startOnboarding);
   }
+  */
 
 })();
 </script>
