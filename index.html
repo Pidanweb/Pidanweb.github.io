@@ -1,0 +1,1578 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>YUI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f3e9;
+    --panel: #ffffff;
+    --panel-edge: #e6ddc8;
+    --ink: #2c2f36;
+    --ink-dim: #7c8288;
+    --scan: #2fae90;
+    --scan-soft: rgba(47, 174, 144, 0.14);
+    --warn: #d98a33;
+    --danger: #e2554a;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #app {
+    position: relative;
+    height: 100dvh;
+    width: 100vw;
+    overflow: hidden;
+  }
+
+  .layer {
+    position: absolute;
+    inset: 0;
+    display: none;
+  }
+  .layer.active { display: flex; }
+
+  /* ---------- ①ダイブ演出 ---------- */
+
+  #dive_layer {
+    background: #000;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .dive_ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--scan);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    animation: diveRingExpand 1.8s ease-out infinite;
+  }
+  .dive_ring.r2 { animation-delay: 0.4s; }
+  .dive_ring.r3 { animation-delay: 0.8s; }
+
+  @keyframes diveRingExpand {
+    0%   { width: 10px; height: 10px; opacity: 0.9; border-width: 3px; }
+    80%  { opacity: 0.25; }
+    100% { width: 900px; height: 900px; opacity: 0; border-width: 1px; }
+  }
+
+  .dive_flash {
+    position: absolute;
+    inset: 0;
+    background: var(--scan);
+    opacity: 0;
+    animation: diveFlash 2.6s ease-in-out forwards;
+  }
+
+  @keyframes diveFlash {
+    0%   { opacity: 0; }
+    68%  { opacity: 0; }
+    74%  { opacity: 0.85; }
+    100% { opacity: 0; }
+  }
+
+  #dive_text {
+    position: relative;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: 0.3em;
+    color: var(--scan);
+    opacity: 0;
+    animation: diveTextFade 2.6s ease-in-out forwards;
+  }
+
+  @keyframes diveTextFade {
+    0%   { opacity: 0; letter-spacing: 0.6em; }
+    30%  { opacity: 1; letter-spacing: 0.3em; }
+    80%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  /* ---------- ②チュートリアル(ビジュアルノベル風) / ③初期設定 共通 ---------- */
+
+  #vn_layer {
+    flex-direction: column;
+    justify-content: flex-end;
+    background: radial-gradient(ellipse at top, #10151d 0%, var(--bg) 60%);
+  }
+
+  #home_layer {
+    flex-direction: column;
+    justify-content: flex-end;
+    background-image: url('chars/bg_scene.jpg');
+    background-size: cover;
+    background-position: center;
+  }
+
+  .vn_skip_btn {
+    position: absolute;
+    top: max(18px, env(safe-area-inset-top));
+    right: 18px;
+    background: rgba(0,0,0,0.055);
+    border: 1px solid rgba(0,0,0,0.12);
+    color: var(--ink-dim);
+    border-radius: 20px;
+    padding: 7px 14px;
+    font-size: 12px;
+    font-family: inherit;
+    z-index: 5;
+  }
+
+  .vn_character_wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 40px;
+  }
+
+  .character_stage {
+    position: relative;
+    width: min(72vw, 330px);
+    height: min(72vw, 330px);
+    border-radius: 50%;
+    overflow: hidden;
+    background-color: var(--panel-edge);
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  }
+
+  .vn_character_wrap img {
+    position: relative;
+    max-height: 96%;
+    max-width: 82%;
+    object-fit: contain;
+    filter: drop-shadow(0 6px 14px rgba(0,0,0,0.12));
+  }
+
+  .vn_box {
+    background: var(--panel);
+    border-top: 1px solid var(--panel-edge);
+    border-radius: 20px 20px 0 0;
+    padding: 20px 22px max(26px, env(safe-area-inset-bottom));
+  }
+
+  .vn_name {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--scan);
+    margin-bottom: 8px;
+    letter-spacing: 0.05em;
+  }
+
+  .vn_line {
+    font-size: 15px;
+    line-height: 1.9;
+    min-height: 4.8em;
+  }
+
+  .vn_next_row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 10px;
+  }
+
+  .vn_next_btn {
+    background: var(--scan-soft);
+    color: var(--scan);
+    border: none;
+    border-radius: 14px;
+    padding: 10px 20px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  /* ---------- 初期設定フォーム用パーツ ---------- */
+
+  .vn_input {
+    width: 100%;
+    background: rgba(0,0,0,0.045);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-family: inherit;
+    margin-top: 4px;
+  }
+
+  .vn_choice_grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+  }
+
+  .vn_choice_btn {
+    background: rgba(0,0,0,0.045);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-family: inherit;
+    font-size: 14px;
+    text-align: left;
+  }
+
+  .vn_choice_btn.selected {
+    background: var(--scan-soft);
+    border-color: var(--scan);
+    color: var(--scan);
+  }
+
+  /* ---------- ④ホーム画面 ---------- */
+
+  #home_layer {
+    justify-content: flex-start;
+  }
+
+  #home_top {
+    padding: max(20px, env(safe-area-inset-top)) 22px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    z-index: 6;
+  }
+
+  #home_brand {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 30px;
+    letter-spacing: 0.03em;
+    color: #2fae55;
+    text-shadow: 0 0 14px rgba(47,174,85,0.35);
+  }
+
+  #home_menu_btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-radius: 20px;
+    padding: 7px 14px 7px 12px;
+    font-size: 12.5px;
+    font-family: inherit;
+    font-weight: 600;
+  }
+
+  #home_menu_btn .burger {
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  /* ---------- アプリ一覧(ミニメニュー) ---------- */
+
+  #apps_layer {
+    background: var(--bg);
+    flex-direction: column;
+    align-items: center;
+    padding: max(20px, env(safe-area-inset-top)) 22px max(24px, env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+
+  #apps_inner {
+    width: 100%;
+    max-width: 420px;
+  }
+
+  #apps_top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 22px;
+  }
+
+  #apps_title {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 19px;
+  }
+
+  #apps_close_btn {
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-radius: 50%;
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+  }
+
+  #apps_grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    max-width: 340px;
+    margin: 0 auto;
+  }
+
+  .app_tile {
+    aspect-ratio: 1 / 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 20px;
+    background: #ffffff;
+    border: 3px solid #1a1a1a;
+    text-decoration: none;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+  }
+
+  .app_tile .app_icon {
+    font-size: 30px;
+  }
+
+  .app_tile .app_label {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+
+  .app_tile.soon {
+    background: rgba(0,0,0,0.035);
+    border: 3px dashed rgba(0,0,0,0.18);
+    box-shadow: none;
+  }
+  .app_tile.soon .app_icon,
+  .app_tile.soon .app_label {
+    color: var(--ink-dim);
+    opacity: 0.6;
+  }
+  .app_tile.soon .app_label {
+    font-size: 10.5px;
+  }
+
+  /* ---------- キャラクター表示エリア(右寄せ+背景ボード+カーペット) ---------- */
+
+  #home_stage_row {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    position: relative;
+    padding: 10px 20px 0;
+  }
+
+  #home_bubble_wrap {
+    flex: 1;
+    min-width: 0;
+    padding-right: 10px;
+  }
+
+  #home_bubble {
+    position: relative;
+    background: #ffffff;
+    border: 4px solid #1a1a1a;
+    border-radius: 26px;
+    padding: 22px 24px;
+    font-size: 21px;
+    font-weight: 600;
+    line-height: 1.7;
+    color: #1a1a1a;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+  }
+
+  /* スマホの狭い画面幅では、文章量を保ったまま文字と余白を少し小さくする */
+  @media (max-width: 400px) {
+    #home_bubble {
+      border-width: 3px;
+      border-radius: 20px;
+      padding: 15px 16px;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    #home_bubble::before {
+      right: -13px;
+      border-top-width: 11px;
+      border-bottom-width: 11px;
+      border-left-width: 13px;
+    }
+    #home_bubble::after {
+      right: -8px;
+      border-top-width: 8px;
+      border-bottom-width: 8px;
+      border-left-width: 9px;
+    }
+  }
+
+  /* 吹き出しのしっぽ(右のキャラ側を指す・黒縁+白中身の二重構造) */
+  #home_bubble::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: -17px;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 14px solid transparent;
+    border-bottom: 14px solid transparent;
+    border-left: 17px solid #1a1a1a;
+  }
+  #home_bubble::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: -10px;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 10px solid transparent;
+    border-bottom: 10px solid transparent;
+    border-left: 12px solid #ffffff;
+  }
+
+  #home_char_area {
+    position: relative;
+    width: 46vw;
+    max-width: 230px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 52vh;
+  }
+
+  #home_character_wrap {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: center;
+    width: 100%;
+  }
+
+  #home_character_wrap img {
+    max-height: 44vh;
+    max-width: 76%;
+    object-fit: contain;
+    filter: drop-shadow(0 8px 12px rgba(0,0,0,0.18));
+  }
+
+  /* 足元の楕円カーペット(台座) */
+  #home_rug {
+    position: relative;
+    z-index: 1;
+    width: 78%;
+    height: 22px;
+    margin-top: -8px;
+    border-radius: 50%;
+    background: #c48a5a;
+    opacity: 0.8;
+    filter: blur(0.3px);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.12);
+  }
+
+  /* ---------- キャラ横の装飾小物(左右2つ・見た目だけ) ---------- */
+
+  #home_props_row {
+    position: absolute;
+    left: -6px;
+    right: -6px;
+    bottom: 12%;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    z-index: 0;
+  }
+
+  .prop_btn {
+    width: 54px;
+    height: 54px;
+    padding: 0;
+    border: none;
+    background: none;
+    display: block;
+    cursor: pointer;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15));
+    opacity: 0.92;
+  }
+
+  .prop_btn img,
+  .prop_btn svg.prop_item {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: contain;
+  }
+
+  .prop_btn img {
+    border-radius: 10px;
+  }
+
+  /* ---------- 遊びに来たフレンドAI(キャラ上部に表示) ---------- */
+
+  #visiting_friends_row {
+    position: absolute;
+    top: 2px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    z-index: 4;
+    pointer-events: none;
+  }
+
+  .visiting_friend_btn {
+    pointer-events: auto;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 50%;
+    border: 3px solid var(--scan);
+    background: #ffffff;
+    overflow: hidden;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.18);
+    animation: friendBtnPop 0.3s ease-out;
+  }
+
+  .visiting_friend_btn img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  @keyframes friendBtnPop {
+    0%   { transform: scale(0.4); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* ---------- 画像アップロードのメニュー(モーダル) ---------- */
+
+  #char_edit_btn {
+    position: absolute;
+    right: 4px;
+    bottom: 6px;
+    z-index: 3;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 3px solid #1a1a1a;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  }
+
+  /* ---------- キャラタップ時の共通リアクション(上下バウンス) ---------- */
+
+  @keyframes charTapBounce {
+    0%   { transform: translateY(0); }
+    30%  { transform: translateY(-14px); }
+    55%  { transform: translateY(2px); }
+    100% { transform: translateY(0); }
+  }
+
+  #home_character_wrap img.char_bounce {
+    animation: charTapBounce 0.5s ease-out;
+  }
+
+  #home_character_wrap {
+    cursor: pointer;
+  }
+
+  /* ---------- 現在の感情表示(YUIロゴの下) ---------- */
+
+  #home_brand_wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  #home_emotion {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--ink-dim);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  #home_emotion .emotion_face {
+    font-size: 13px;
+  }
+
+  #home_buttons {
+    display: flex;
+    gap: 12px;
+    padding: 18px 22px max(26px, env(safe-area-inset-bottom));
+    position: relative;
+    z-index: 2;
+  }
+
+  .home_nav_btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 18px 10px;
+    border-radius: 18px;
+    border: 3px solid #1a1a1a;
+    background: #ffffff;
+    font-family: inherit;
+    text-decoration: none;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.1);
+  }
+
+  .home_nav_btn .icon {
+    font-size: 28px;
+  }
+
+  .home_nav_btn .label {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+
+  /* 「今日の予定」カード(カメラボタンの跡地・複数件スクロール表示) */
+  #schedule_card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 14px 8px;
+    border-radius: 18px;
+    border: 3px solid #1a1a1a;
+    background: #ffffff;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.1);
+    max-height: 118px;
+    overflow: hidden;
+  }
+
+  #schedule_card .schedule_label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--scan);
+    flex-shrink: 0;
+  }
+
+  #schedule_list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 2px;
+  }
+
+  .schedule_row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    text-decoration: none;
+  }
+
+  .schedule_row .schedule_time {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--scan);
+    flex-shrink: 0;
+  }
+
+  .schedule_row .schedule_task {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #1a1a1a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .schedule_empty {
+    font-size: 12px;
+    color: var(--ink-dim);
+  }
+
+  .schedule_add_row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--scan);
+    text-decoration: none;
+    padding: 6px 2px 4px;
+    flex-shrink: 0;
+  }
+
+  /* ---------- 画像アップロードメニュー(モーダル) ---------- */
+
+  #upload_modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 22, 26, 0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 20px;
+  }
+
+  #upload_modal.active { display: flex; }
+
+  #upload_modal_card {
+    width: min(86vw, 320px);
+    background: var(--panel);
+    border-radius: 20px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.25);
+  }
+
+  #upload_modal_title {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 16px;
+    margin-bottom: 2px;
+  }
+
+  .upload_option_btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    background: rgba(0,0,0,0.045);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-radius: 12px;
+    padding: 13px 14px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .upload_option_icon {
+    font-size: 18px;
+    width: 22px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  #upload_modal_close {
+    margin-top: 4px;
+    background: none;
+    border: none;
+    color: var(--ink-dim);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 6px;
+  }
+
+  /* ---------- ①ダイブ演出:タップして開始 ---------- */
+
+  .dive_tap_btn {
+    position: absolute;
+    left: 50%;
+    bottom: max(56px, calc(env(safe-area-inset-bottom) + 40px));
+    transform: translateX(-50%);
+    display: none;
+    align-items: center;
+    gap: 8px;
+    background: rgba(47, 174, 144, 0.1);
+    border: 1px solid var(--scan);
+    color: var(--scan);
+    border-radius: 30px;
+    padding: 13px 26px;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    z-index: 5;
+    animation: diveTapPulse 1.4s ease-in-out infinite;
+  }
+
+  .dive_tap_btn.show { display: flex; }
+
+  @keyframes diveTapPulse {
+    0%, 100% { opacity: 0.55; transform: translateX(-50%) scale(1); }
+    50%      { opacity: 1;    transform: translateX(-50%) scale(1.05); }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ①ダイブ演出 -->
+  <div id="dive_layer" class="layer">
+    <div class="dive_ring"></div>
+    <div class="dive_ring r2"></div>
+    <div class="dive_ring r3"></div>
+    <div class="dive_flash"></div>
+    <div id="dive_text">接続開始</div>
+    <button id="dive_tap_btn" class="dive_tap_btn">タップしてはじめる</button>
+  </div>
+
+  <!-- ②チュートリアル ③初期設定(ビジュアルノベル形式・共通レイヤー) -->
+  <div id="vn_layer" class="layer">
+    <button class="vn_skip_btn" id="vn_skip_btn">スキップ</button>
+    <div class="vn_character_wrap">
+      <div class="character_stage" id="vn_stage">
+        <img id="vn_character_img" src="chars/char_normal.png" alt="YUI">
+      </div>
+    </div>
+    <div class="vn_box">
+      <div class="vn_name">YUI</div>
+      <div class="vn_line" id="vn_line_text"></div>
+      <div id="vn_extra"></div>
+      <div class="vn_next_row">
+        <button class="vn_next_btn" id="vn_next_btn">次へ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ホーム画面 -->
+  <div id="home_layer" class="layer">
+    <div id="home_top">
+      <div id="home_brand_wrap">
+        <div id="home_brand">YUI</div>
+        <div id="home_emotion">現在の感情：<span class="emotion_face" id="home_emotion_face">😊</span><span id="home_emotion_text">笑顔</span></div>
+      </div>
+      <button id="home_menu_btn">
+        <span class="burger">☰</span>
+        <span>メニュー</span>
+      </button>
+    </div>
+
+    <div id="home_stage_row">
+      <div id="home_bubble_wrap">
+        <div id="home_bubble">こんにちは。</div>
+      </div>
+      <div id="home_char_area">
+        <div id="visiting_friends_row"></div>
+        <div id="home_props_row">
+          <!-- 左:観葉植物 -->
+          <button class="prop_btn" data-prop-index="0" aria-label="左の小物を変更(観葉植物)">
+            <svg class="prop_item" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M14 44h20l-2-14H16l-2 14Z" fill="#c48a5a" stroke="#1a1a1a" stroke-width="2"/>
+              <path d="M24 30c0-10-8-12-8-20 6 0 8 6 8 10 0-8 4-14 10-14 0 10-6 14-6 20" stroke="#1a1a1a" stroke-width="2" fill="#8bc98f"/>
+              <path d="M24 30c2-8-2-16-10-18" stroke="#1a1a1a" stroke-width="2" fill="none"/>
+            </svg>
+          </button>
+          <!-- 右:マグカップ -->
+          <button class="prop_btn" data-prop-index="1" aria-label="右の小物を変更(マグカップ)">
+            <svg class="prop_item" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 18h20v14a6 6 0 0 1-6 6h-8a6 6 0 0 1-6-6V18Z" fill="#ffffff" stroke="#1a1a1a" stroke-width="2"/>
+              <path d="M32 22h3a4 4 0 0 1 0 8h-3" stroke="#1a1a1a" stroke-width="2" fill="none"/>
+              <path d="M17 12c0 2 2 2 2 4" stroke="#1a1a1a" stroke-width="1.6" fill="none"/>
+              <path d="M23 12c0 2 2 2 2 4" stroke="#1a1a1a" stroke-width="1.6" fill="none"/>
+            </svg>
+          </button>
+        </div>
+        <div id="home_character_wrap">
+          <img id="home_character_img" src="chars/char_normal.png" alt="YUI">
+        </div>
+        <button id="char_edit_btn" aria-label="画像を変更">🖼️</button>
+        <div id="home_rug"></div>
+      </div>
+    </div>
+    <input type="file" id="char_file_input" accept="image/*" style="display:none">
+    <input type="file" id="prop_file_input" accept="image/*" style="display:none">
+    <input type="file" id="friend_zip_input" accept=".zip" style="display:none">
+
+    <!-- キャラ/小物の画像アップロードメニュー -->
+    <div id="upload_modal">
+      <div id="upload_modal_card">
+        <div id="upload_modal_title">画像をアップロード</div>
+        <button class="upload_option_btn" id="upload_char_btn">
+          <span class="upload_option_icon">🧑</span>キャラクターの画像を変更
+        </button>
+        <button class="upload_option_btn" id="upload_prop_left_btn">
+          <span class="upload_option_icon">⬅️</span>左の小物を変更
+        </button>
+        <button class="upload_option_btn" id="upload_prop_right_btn">
+          <span class="upload_option_icon">➡️</span>右の小物を変更
+        </button>
+        <button id="upload_modal_close">閉じる</button>
+      </div>
+    </div>
+
+    <div id="home_buttons">
+      <a id="talk_nav_btn" class="home_nav_btn" href="talk.html">
+        <span class="icon">💬</span>
+        <span class="label">お話しする</span>
+      </a>
+      <div id="schedule_card">
+        <span class="schedule_label">今日の予定</span>
+        <div id="schedule_list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤アプリ一覧(ミニメニュー) -->
+  <div id="apps_layer" class="layer">
+    <div id="apps_inner">
+      <div id="apps_top">
+        <div id="apps_title">アプリ</div>
+        <button id="apps_close_btn">✕</button>
+      </div>
+      <div id="apps_grid">
+        <a class="app_tile" href="study.html">
+          <span class="app_icon">📚</span>
+          <span class="app_label">勉強</span>
+        </a>
+        <a class="app_tile" href="settings.html">
+          <span class="app_icon">⚙️</span>
+          <span class="app_label">設定</span>
+        </a>
+        <a class="app_tile" href="break.html">
+          <span class="app_icon">🍃</span>
+          <span class="app_label">息抜き</span>
+        </a>
+        <a class="app_tile" href="yui_scanner.html">
+          <span class="app_icon">📷</span>
+          <span class="app_label">カメラ</span>
+        </a>
+        <a class="app_tile" href="schedule.html">
+          <span class="app_icon">🗓️</span>
+          <span class="app_label">スケジュール</span>
+        </a>
+        <a class="app_tile" href="draw_game.html">
+          <span class="app_icon">🎨</span>
+          <span class="app_label">お絵描き当て</span>
+        </a>
+        <label class="app_tile" for="friend_zip_input" style="cursor:pointer;">
+          <span class="app_icon">🎁</span>
+          <span class="app_label">フレンドを迎える</span>
+        </label>
+        <a class="app_tile" href="https://pidanweb.github.io/YUI/profile.html" target="_blank" rel="noopener">
+          <span class="app_icon">🪪</span>
+          <span class="app_label">プロフィール</span>
+        </a>
+        <div class="app_tile soon"><span class="app_icon">➕</span><span class="app_label">Coming Soon</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const els = {
+    diveLayer: document.getElementById('dive_layer'),
+    vnLayer: document.getElementById('vn_layer'),
+    homeLayer: document.getElementById('home_layer'),
+    appsLayer: document.getElementById('apps_layer'),
+    appsCloseBtn: document.getElementById('apps_close_btn'),
+    vnSkipBtn: document.getElementById('vn_skip_btn'),
+    vnCharacterImg: document.getElementById('vn_character_img'),
+    vnLineText: document.getElementById('vn_line_text'),
+    vnExtra: document.getElementById('vn_extra'),
+    vnNextBtn: document.getElementById('vn_next_btn'),
+    homeMenuBtn: document.getElementById('home_menu_btn'),
+    homeCharacterImg: document.getElementById('home_character_img'),
+    homeBubble: document.getElementById('home_bubble'),
+    vnStage: document.getElementById('vn_stage'),
+    scheduleList: document.getElementById('schedule_list'),
+    charEditBtn: document.getElementById('char_edit_btn'),
+    charFileInput: document.getElementById('char_file_input'),
+    propFileInput: document.getElementById('prop_file_input'),
+    homeCharacterWrap: document.getElementById('home_character_wrap'),
+    homeEmotionFace: document.getElementById('home_emotion_face'),
+    homeEmotionText: document.getElementById('home_emotion_text'),
+    diveTapBtn: document.getElementById('dive_tap_btn'),
+    uploadModal: document.getElementById('upload_modal'),
+    uploadModalClose: document.getElementById('upload_modal_close'),
+    uploadCharBtn: document.getElementById('upload_char_btn'),
+    uploadPropLeftBtn: document.getElementById('upload_prop_left_btn'),
+    uploadPropRightBtn: document.getElementById('upload_prop_right_btn'),
+    friendZipInput: document.getElementById('friend_zip_input'),
+    visitingFriendsRow: document.getElementById('visiting_friends_row'),
+  };
+
+  // ---- 時間帯に応じた背景写真(VNキャラクターステージ用) ----
+  function timeOfDayBg() {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 11)  return 'chars/bg_morning.jpg';
+    if (hour >= 17 && hour < 20) return 'chars/bg_evening.jpg';
+    if (hour >= 20 || hour < 5)  return 'chars/bg_evening.jpg';
+    return 'chars/bg_day.jpg';
+  }
+  els.vnStage.style.backgroundImage = `url('${timeOfDayBg()}')`;
+
+  // ---- アプリ一覧(ミニメニュー)の開閉 ----
+  els.homeMenuBtn.addEventListener('click', () => {
+    showLayer(els.appsLayer);
+  });
+  els.appsCloseBtn.addEventListener('click', () => {
+    showLayer(els.homeLayer);
+  });
+
+  const PROFILE_KEY = 'yui_profile';
+
+  function loadProfile() {
+    try {
+      const raw = localStorage.getItem(PROFILE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveProfile(profile) {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  }
+
+  // ---- 音声読み上げ(ブラウザ標準speechSynthesis) ----
+  function speak(text) {
+    if (!text || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'ja-JP';
+      utter.rate = 1.0;
+      utter.pitch = 1.05;
+      const jaVoice = window.speechSynthesis.getVoices().find(v => v.lang && v.lang.startsWith('ja'));
+      if (jaVoice) utter.voice = jaVoice;
+      window.speechSynthesis.speak(utter);
+    } catch (e) {
+      // 音声合成が使えない端末では静かに諦める
+    }
+  }
+
+  function showLayer(layer) {
+    [els.diveLayer, els.vnLayer, els.homeLayer, els.appsLayer].forEach(l => l.classList.remove('active'));
+    layer.classList.add('active');
+  }
+
+  // ---- 今日の予定を読み込んで表示(スケジュールアプリとlocalStorageを共有) ----
+  const SCHEDULE_KEY = 'yui_schedule';
+
+  function loadSchedule() {
+    try {
+      const raw = localStorage.getItem(SCHEDULE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function todayStr() {
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${mm}-${dd}`;
+  }
+
+  function renderTodaySchedule() {
+    const all = loadSchedule();
+    const today = todayStr();
+    const todays = all
+      .filter(ev => ev.date === today)
+      .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+
+    els.scheduleList.innerHTML = '';
+
+    if (todays.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'schedule_empty';
+      empty.textContent = '予定はありません';
+      els.scheduleList.appendChild(empty);
+    } else {
+      todays.forEach(ev => {
+        const row = document.createElement('a');
+        row.className = 'schedule_row';
+        row.href = 'schedule.html';
+        if (ev.time) {
+          const time = document.createElement('span');
+          time.className = 'schedule_time';
+          time.textContent = ev.time;
+          row.appendChild(time);
+        }
+        const task = document.createElement('span');
+        task.className = 'schedule_task';
+        task.textContent = ev.task;
+        row.appendChild(task);
+        els.scheduleList.appendChild(row);
+      });
+    }
+
+    // 予定の追加ボタンはスクロールリストの一番下に配置
+    const addRow = document.createElement('a');
+    addRow.className = 'schedule_add_row';
+    addRow.href = 'schedule.html';
+    addRow.textContent = '＋ 予定を追加';
+    els.scheduleList.appendChild(addRow);
+  }
+
+  // ============ 画像アップロード(キャラ・小物を好きな画像に差し替え) ============
+  const CHAR_IMAGE_KEY = 'yui_custom_char';
+  const PROPS_IMAGE_KEY = 'yui_custom_props';
+
+  function loadCustomChar() {
+    try { return localStorage.getItem(CHAR_IMAGE_KEY) || null; } catch (e) { return null; }
+  }
+  function saveCustomChar(dataUrl) {
+    try { localStorage.setItem(CHAR_IMAGE_KEY, dataUrl); } catch (e) { alert('画像の保存に失敗しました(サイズが大きすぎるかもしれません)。'); }
+  }
+
+  function loadCustomProps() {
+    try {
+      const raw = localStorage.getItem(PROPS_IMAGE_KEY);
+      return raw ? JSON.parse(raw) : [null, null];
+    } catch (e) { return [null, null]; }
+  }
+  function saveCustomProps(list) {
+    try { localStorage.setItem(PROPS_IMAGE_KEY, JSON.stringify(list)); } catch (e) { alert('画像の保存に失敗しました(サイズが大きすぎるかもしれません)。'); }
+  }
+
+  // ============ フレンドAI(他の人が送ってきたAI)の受け入れ・表示 ============
+  const FRIENDS_KEY = 'yui_visiting_friends';
+  const FRIEND_MAX = 100;                    // 保存できるフレンドの上限人数
+  const FRIEND_VISIT_MS = 24 * 60 * 60 * 1000; // 1日だけキャラの隣に表示
+  const FRIEND_SHOW_MAX = 5;                  // 同時に画面へ並べる最大数(表示のごちゃつき防止)
+
+  function loadFriends() {
+    try {
+      const raw = localStorage.getItem(FRIENDS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) { return []; }
+  }
+
+  function saveFriends(list) {
+    try {
+      localStorage.setItem(FRIENDS_KEY, JSON.stringify(list));
+    } catch (e) {
+      alert('フレンドの保存に失敗しました(データが大きすぎるかもしれません)。');
+    }
+  }
+
+  // 上限を超えたら、古いフレンド(受け取った日時が古い順)から削除する
+  function addFriend(friend) {
+    let list = loadFriends();
+    list.push(friend);
+    if (list.length > FRIEND_MAX) {
+      list.sort((a, b) => a.receivedAt - b.receivedAt);
+      list = list.slice(list.length - FRIEND_MAX);
+    }
+    saveFriends(list);
+  }
+
+  // 受け取ってから24時間以内のフレンドだけを「今遊びに来ている」フレンドとする
+  function activeFriends() {
+    const now = Date.now();
+    return loadFriends()
+      .filter(f => (now - f.receivedAt) < FRIEND_VISIT_MS)
+      .sort((a, b) => a.receivedAt - b.receivedAt);
+  }
+
+  let friendBubbleTimeout = null;
+  function showFriendMessage(f) {
+    clearTimeout(friendBubbleTimeout);
+    els.homeBubble.textContent = `${f.name}「${f.message}」`;
+    speak(`${f.name}より、${f.message}`);
+    friendBubbleTimeout = setTimeout(() => {
+      const profile = loadProfile();
+      const name = (profile && profile.user_name) || 'あなた';
+      els.homeBubble.textContent = timeGreeting(name);
+    }, 5000);
+  }
+
+  function renderVisitingFriends() {
+    const container = els.visitingFriendsRow;
+    if (!container) return;
+    container.innerHTML = '';
+    activeFriends().slice(-FRIEND_SHOW_MAX).forEach((f) => {
+      const btn = document.createElement('button');
+      btn.className = 'visiting_friend_btn';
+      btn.title = `${f.name}(タップして一言を聞く)`;
+      const img = document.createElement('img');
+      img.src = f.avatarDataUrl;
+      img.alt = f.name;
+      btn.appendChild(img);
+      btn.addEventListener('click', () => showFriendMessage(f));
+      container.appendChild(btn);
+    });
+  }
+
+  // ZIPファイル(friend.htmlで作成したもの)を読み込んでフレンドとして迎える
+  els.friendZipInput.addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    if (typeof JSZip === 'undefined') {
+      alert('フレンドを迎える機能の読み込みに失敗しました。通信環境を確認してもう一度お試しください。');
+      els.friendZipInput.value = '';
+      return;
+    }
+
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const jsonEntry = zip.file('friend.json');
+      if (!jsonEntry) throw new Error('friend.json not found');
+      const jsonText = await jsonEntry.async('string');
+      const data = JSON.parse(jsonText);
+
+      let avatarDataUrl = 'chars/char_normal.png';
+      const avatarEntry = data.avatarFile && zip.file(data.avatarFile);
+      if (avatarEntry) {
+        const blob = await avatarEntry.async('blob');
+        avatarDataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      const friend = {
+        id: `f_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        name: String(data.name || '名無しのAI').slice(0, 15),
+        message: String(data.message || 'よろしくね！').slice(0, 20),
+        avatarDataUrl: avatarDataUrl,
+        receivedAt: Date.now()
+      };
+
+      addFriend(friend);
+      renderVisitingFriends();
+      showFriendMessage(friend);
+    } catch (err) {
+      alert('フレンドファイルの読み込みに失敗しました。正しいZIPファイルか確認してください。');
+    } finally {
+      els.friendZipInput.value = '';
+      showLayer(els.homeLayer);
+    }
+  });
+
+  function fileToDataUrl(file, callback) {
+    const reader = new FileReader();
+    reader.onload = () => callback(reader.result);
+    reader.readAsDataURL(file);
+  }
+
+  // ---- 画像アップロードメニュー(モーダル) ----
+  function openUploadModal() {
+    els.uploadModal.classList.add('active');
+  }
+  function closeUploadModal() {
+    els.uploadModal.classList.remove('active');
+  }
+  els.charEditBtn.addEventListener('click', openUploadModal);
+  els.uploadModalClose.addEventListener('click', closeUploadModal);
+  els.uploadModal.addEventListener('click', (e) => {
+    if (e.target === els.uploadModal) closeUploadModal(); // 背景タップで閉じる
+  });
+
+  els.uploadCharBtn.addEventListener('click', () => {
+    closeUploadModal();
+    els.charFileInput.value = '';
+    els.charFileInput.click();
+  });
+  els.charFileInput.addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    fileToDataUrl(file, (dataUrl) => {
+      saveCustomChar(dataUrl);
+      els.homeCharacterImg.src = dataUrl;
+    });
+  });
+
+  // ---- 小物画像の差し替え(左右2スロット) ----
+  function renderCustomProps() {
+    const props = loadCustomProps();
+    document.querySelectorAll('.prop_btn').forEach((btn) => {
+      const idx = Number(btn.dataset.propIndex);
+      const custom = props[idx];
+      if (custom) {
+        btn.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = custom;
+        img.alt = '小物';
+        btn.appendChild(img);
+      }
+    });
+  }
+
+  let activePropIndex = null;
+  function openPropPicker(index) {
+    closeUploadModal();
+    activePropIndex = index;
+    els.propFileInput.value = '';
+    els.propFileInput.click();
+  }
+  els.uploadPropLeftBtn.addEventListener('click', () => openPropPicker(0));
+  els.uploadPropRightBtn.addEventListener('click', () => openPropPicker(1));
+  // 小物を直接タップした場合もそれぞれの画像アップロードを開けるようにしておく
+  document.querySelectorAll('.prop_btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      openPropPicker(Number(btn.dataset.propIndex));
+    });
+  });
+  els.propFileInput.addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (activePropIndex === null || !file) return;
+    fileToDataUrl(file, (dataUrl) => {
+      const props = loadCustomProps();
+      props[activePropIndex] = dataUrl;
+      saveCustomProps(props);
+      renderCustomProps();
+    });
+  });
+
+  // ---- キャラをタップした時の共通リアクション(上下バウンス) ----
+  els.homeCharacterWrap.addEventListener('click', () => {
+    els.homeCharacterImg.classList.remove('char_bounce');
+    // 再描画を挟んでからクラスを付け直すことで、連打してもアニメーションが再生されるようにする
+    void els.homeCharacterImg.offsetWidth;
+    els.homeCharacterImg.classList.add('char_bounce');
+  });
+  els.homeCharacterImg.addEventListener('animationend', () => {
+    els.homeCharacterImg.classList.remove('char_bounce');
+  });
+
+  // ============ ①ダイブ演出 ============
+  function playDive(onFinish) {
+    showLayer(els.diveLayer);
+    els.diveTapBtn.classList.remove('show');
+
+    // CSSアニメーション(2.6秒)が終わったら「タップしてはじめる」を表示
+    setTimeout(() => {
+      els.diveTapBtn.classList.add('show');
+    }, 2600);
+
+    // ユーザーのタップ(ジェスチャー)を挟むことで、直後の音声読み上げがブラウザにブロックされないようにする
+    els.diveTapBtn.addEventListener('click', () => {
+      els.diveTapBtn.classList.remove('show');
+      onFinish();
+    }, { once: true });
+  }
+
+  // ============ ②チュートリアル(ビジュアルノベル風) ============
+  const TUTORIAL_LINES = [
+    "はじめまして、わたしはYUI。あなたの毎日をサポートするナビゲーションAIだよ。",
+    "カメラで何かを映すと、それが何かを判定して、声で説明してくれる機能があるよ。本でも、ぬいぐるみでも、動物でも大丈夫。",
+    "会話中のキャラクターを短く押すと、1つだけ質問できるよ。長く押すと、そのまま会話を続けられるモードになるよ。",
+    "会話を終えたいときは「バイバイ」って言うか、終了ボタンを押してね。",
+    "それじゃあ、少しだけあなたのことを教えてもらってもいい？",
+  ];
+
+  let tutorialStep = 0;
+
+  function showTutorialStep() {
+    els.vnExtra.innerHTML = '';
+    els.vnLineText.textContent = TUTORIAL_LINES[tutorialStep];
+    els.vnNextBtn.textContent = (tutorialStep === TUTORIAL_LINES.length - 1) ? 'はじめる' : '次へ';
+    speak(TUTORIAL_LINES[tutorialStep]);
+  }
+
+  function startTutorial() {
+    tutorialStep = 0;
+    onboardingActive = false;
+    showLayer(els.vnLayer);
+    els.vnSkipBtn.style.display = 'block';
+    showTutorialStep();
+  }
+
+  els.vnNextBtn.addEventListener('click', () => {
+    if (onboardingActive) {
+      handleOnboardingNext();
+      return;
+    }
+    tutorialStep++;
+    if (tutorialStep >= TUTORIAL_LINES.length) {
+      startOnboarding();
+    } else {
+      showTutorialStep();
+    }
+  });
+
+  els.vnSkipBtn.addEventListener('click', () => {
+    // チュートリアルの説明部分だけスキップする(初期設定は必ず行う)
+    startOnboarding();
+  });
+
+  // ============ ③初期設定(オンボーディング) ============
+  const TONE_OPTIONS = [
+    { id: 'polite',    label: '丁寧(です・ます調)' },
+    { id: 'friendly',  label: 'フレンドリー(タメ口)' },
+    { id: 'tsundere',  label: 'ツンデレ気味' },
+    { id: 'cool',      label: 'クールで無口気味' },
+  ];
+
+  const FEEDBACK_OPTIONS = [
+    { id: 'gentle',    label: '優しく励ますタイプ' },
+    { id: 'direct',    label: '率直にはっきり言うタイプ' },
+    { id: 'playful',   label: 'ちょっとユーモラスに茶化すタイプ' },
+  ];
+
+  let onboardingActive = false;
+  let onboardingStep = 0; // 0: 名前 / 1: 口調 / 2: フィードバック
+  const draftProfile = { user_name: '', tone_style: 'friendly', feedback_style: 'gentle' };
+
+  function startOnboarding() {
+    onboardingActive = true;
+    onboardingStep = 0;
+    els.vnSkipBtn.style.display = 'none';
+    showLayer(els.vnLayer);
+    renderOnboardingStep();
+  }
+
+  function renderOnboardingStep() {
+    els.vnExtra.innerHTML = '';
+
+    if (onboardingStep === 0) {
+      els.vnLineText.textContent = 'なんて呼べばいい？';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'vn_input';
+      input.placeholder = '呼び名を入力';
+      input.id = 'name_input';
+      input.value = draftProfile.user_name;
+      els.vnExtra.appendChild(input);
+      els.vnNextBtn.textContent = '次へ';
+    }
+
+    if (onboardingStep === 1) {
+      els.vnLineText.textContent = 'どんな話し方をしてほしい？';
+      const grid = document.createElement('div');
+      grid.className = 'vn_choice_grid';
+      TONE_OPTIONS.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = 'vn_choice_btn' + (draftProfile.tone_style === opt.id ? ' selected' : '');
+        btn.textContent = opt.label;
+        btn.addEventListener('click', () => {
+          draftProfile.tone_style = opt.id;
+          renderOnboardingStep();
+        });
+        grid.appendChild(btn);
+      });
+      els.vnExtra.appendChild(grid);
+      els.vnNextBtn.textContent = '次へ';
+    }
+
+    if (onboardingStep === 2) {
+      els.vnLineText.textContent = '何か指摘したいとき、どんな伝え方がいい？';
+      const grid = document.createElement('div');
+      grid.className = 'vn_choice_grid';
+      FEEDBACK_OPTIONS.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = 'vn_choice_btn' + (draftProfile.feedback_style === opt.id ? ' selected' : '');
+        btn.textContent = opt.label;
+        btn.addEventListener('click', () => {
+          draftProfile.feedback_style = opt.id;
+          renderOnboardingStep();
+        });
+        grid.appendChild(btn);
+      });
+      els.vnExtra.appendChild(grid);
+      els.vnNextBtn.textContent = 'はじめる';
+    }
+  }
+
+  function handleOnboardingNext() {
+    if (onboardingStep === 0) {
+      const input = document.getElementById('name_input');
+      draftProfile.user_name = (input && input.value.trim()) || 'あなた';
+    }
+
+    if (onboardingStep < 2) {
+      onboardingStep++;
+      renderOnboardingStep();
+    } else {
+      draftProfile.onboarded = true;
+      saveProfile(draftProfile);
+      onboardingActive = false;
+      showHome();
+    }
+  }
+
+  // ============ ④ホーム画面 ============
+  function timeGreeting(name) {
+    const hour = new Date().getHours();
+    if (hour >= 6 && hour < 11)  return `おはよう、${name}。今日も一日、よろしくね。`;
+    if (hour >= 11 && hour < 14) return `お昼だね、${name}。ちゃんとご飯食べた？`;
+    if (hour >= 18 && hour < 23) return `おかえり、${name}。今日はどんな一日だった？`;
+    if (hour >= 23 || hour < 6)  return `こんな時間まで起きてるんだ、${name}。無理しないでね。`;
+    return `${name}、お疲れさま。何か手伝えることある？`;
+  }
+
+  // 待機中はランダムに表情(=感情)を選ぶ(気分屋な感じを出す)
+  const IDLE_FACES = [
+    { src: 'chars/char_normal.png',   emoji: '😊', label: '笑顔' },
+    { src: 'chars/char_thinking.png', emoji: '🤔', label: '考え中' },
+    { src: 'chars/char_error.png',    emoji: '😥', label: '困り顔' },
+    { src: 'chars/char_angry.png',    emoji: '😠', label: 'ぷんすか' },
+  ];
+  function pickRandomFace() {
+    return IDLE_FACES[Math.floor(Math.random() * IDLE_FACES.length)];
+  }
+
+  function showHome() {
+    const profile = loadProfile();
+    const name = (profile && profile.user_name) || 'あなた';
+    const greeting = timeGreeting(name);
+    els.homeBubble.textContent = greeting;
+
+    const emotion = pickRandomFace();
+    const customChar = loadCustomChar();
+    // 画像をアップロード済みならその画像を、未設定ならデフォルトの表情画像を使う
+    els.homeCharacterImg.src = customChar || emotion.src;
+    els.homeEmotionFace.textContent = emotion.emoji;
+    els.homeEmotionText.textContent = emotion.label;
+
+    renderCustomProps();
+    renderTodaySchedule();
+    renderVisitingFriends();
+    showLayer(els.homeLayer);
+    speak(greeting);
+  }
+
+  // ============ 起動時の分岐（テスト用：毎回初回設定から開始） ============
+  // テスト中はローカルストレージの保存状況を無視して、常にダイブ演出＆チュートリアルから開始します
+  playDive(startTutorial);
+
+  /* 本番用の処理（一時的にコメントアウト中）
+  const profile = loadProfile();
+  if (profile && profile.onboarded) {
+    showHome();
+  } else {
+    playDive(startTutorial);
+  }
+  */
+
+})();
+</script>
+
+</body>
+</html>
