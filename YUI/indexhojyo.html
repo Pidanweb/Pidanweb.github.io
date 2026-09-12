@@ -866,7 +866,7 @@
     50%      { opacity: 1;    transform: translateX(-50%) scale(1.05); }
   }
 
-  /* ---------- 長押し進捗リング(音声モード選択・アクセシビリティ導線用) ---------- */
+  /* ---------- 長押し進捗リング(補助モード共通) ---------- */
   #lp_ring {
     position: fixed;
     top: 50%;
@@ -887,6 +887,41 @@
     inset: 8px;
     border-radius: 50%;
     background: var(--panel);
+  }
+
+  /* ---------- 決定ボタンの代わりの案内テキスト ---------- */
+  #vn_action_hint {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--scan);
+    text-align: right;
+    margin-top: 10px;
+  }
+
+  /* ---------- 音声入力エリア(タップで開始/終了) ---------- */
+  .voice_input_area {
+    width: 100%;
+    background: rgba(0,0,0,0.045);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 15px;
+    font-family: inherit;
+    margin-top: 4px;
+    min-height: 1.6em;
+    line-height: 1.6;
+  }
+  .voice_input_area.placeholder { color: var(--ink-dim); }
+  .voice_input_area.recording {
+    border-color: var(--scan);
+    color: var(--scan);
+    background: var(--scan-soft);
+    animation: voiceRecPulse 1.1s ease-in-out infinite;
+  }
+  @keyframes voiceRecPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(47,174,144,0.25); }
+    50%      { box-shadow: 0 0 0 8px rgba(47,174,144,0); }
   }
 
   /* ---------- ホーム画面:長押し→上下ドラッグでカメラ/トークモード切替 ---------- */
@@ -949,14 +984,12 @@
       <div class="vn_name" id="vn_name_label">YUI</div>
       <div class="vn_line" id="vn_line_text"></div>
       <div id="vn_extra"></div>
-      <div class="vn_next_row">
-        <button class="vn_next_btn" id="vn_next_btn">次へ</button>
-      </div>
+      <div id="vn_action_hint"></div>
     </div>
   </div>
-  <input type="file" id="onboard_char_file_input" accept="image/*" style="display:none">
   <audio id="setup_bgm" src="chars/BGM.mp3" loop preload="auto"></audio>
   <audio id="decide_se" src="chars/決定音.mp3" preload="auto"></audio>
+  <audio id="end_se" src="chars/終了音.mp3" preload="auto"></audio>
   <div id="lp_ring"></div>
 
   <!-- ④ホーム画面 -->
@@ -1108,10 +1141,11 @@
     vnNameLabel: document.getElementById('vn_name_label'),
     vnLineText: document.getElementById('vn_line_text'),
     vnExtra: document.getElementById('vn_extra'),
-    vnNextBtn: document.getElementById('vn_next_btn'),
-    onboardCharInput: document.getElementById('onboard_char_file_input'),
+    vnActionHint: document.getElementById('vn_action_hint'),
     setupBgm: document.getElementById('setup_bgm'),
     decideSe: document.getElementById('decide_se'),
+    endSe: document.getElementById('end_se'),
+    lpRing: document.getElementById('lp_ring'),
     homeBrand: document.getElementById('home_brand'),
     homeMenuBtn: document.getElementById('home_menu_btn'),
     homeCharacterImg: document.getElementById('home_character_img'),
@@ -1514,6 +1548,19 @@
       els.decideSe.play().catch(() => {});
     } catch (e) {}
   }
+  function playEndSe() {
+    if (!els.endSe) return;
+    try {
+      els.endSe.currentTime = 0;
+      els.endSe.play().catch(() => {});
+    } catch (e) {}
+  }
+
+  // ---- 決定ボタンの代わりの案内テキスト・進行ロック ----
+  function setActionHint(text) {
+    if (els.vnActionHint) els.vnActionHint.textContent = text;
+  }
+  let advanceLocked = false; // カーテン演出中やAPIキー確認中は長押しでの進行を止めておく
 
   // ============ 姿選択:カーテン演出 ============
   // カーテン.pngで一瞬隠している間に裏で画像を差し替え、1秒後にゆっくりカーテンを取り除く
@@ -1538,9 +1585,9 @@
 
   // ============ ③初期設定(オンボーディング) ============
   // ステップ構成:
-  // -1=音声読み上げ機能(補助モード)を使うか確認 / 0=挨拶 / 1=プレイヤー名入力 / 2=名前の復唱
-  // 3=姿選択(カーテン演出) / 4=姿へのお礼 / 5=AI名入力 / 6=AI名のお礼 / 7=性格の自由記述 / 8=Gemini APIキー
-  let onboardingStep = -1;
+  // 0=挨拶 / 1=プレイヤー名入力 / 2=名前の復唱 / 3=姿選択(カーテン演出)
+  // 4=姿へのお礼 / 5=AI名入力 / 6=AI名のお礼 / 7=性格の自由記述 / 8=Gemini APIキー
+  let onboardingStep = 0;
   let geminiConfirmed = false;
   const draftProfile = {
     user_name: '',
@@ -1555,105 +1602,104 @@
   }
 
   function startOnboarding() {
-    onboardingStep = -1;
+    onboardingStep = 0;
     geminiConfirmed = false;
     showLayer(els.vnLayer);
     els.vnCharacterImg.src = 'chars/初期AI.png';
     renderOnboardingStep();
   }
 
+  // 音声入力で埋めるステップと、そのdraftProfile反映先の対応表
+  const VOICE_FIELD_BY_STEP = {
+    1: {
+      onFinal: (v) => { draftProfile.user_name = v || 'あなた'; },
+    },
+    5: {
+      onFinal: (v) => {
+        draftProfile.ai_name = v || 'YUI';
+        updateAiNameDisplays(draftProfile.ai_name);
+      },
+    },
+    7: {
+      onFinal: (v) => { draftProfile.personality = v || '丁寧で優しい話し方'; },
+    },
+  };
+
+  // タップで開始/終了する音声入力エリアを作る(画面タップ = 録音開始・終了)
+  function renderVoiceInputArea(value, placeholder) {
+    const area = document.createElement('div');
+    area.className = 'voice_input_area';
+    area.id = 'voice_display';
+    area.dataset.placeholder = placeholder;
+    if (value) {
+      area.textContent = value;
+    } else {
+      area.textContent = placeholder;
+      area.classList.add('placeholder');
+    }
+    els.vnExtra.appendChild(area);
+  }
+
   function renderOnboardingStep() {
     els.vnExtra.innerHTML = '';
-    els.vnNextBtn.disabled = false;
-
-    if (onboardingStep === -1) {
-      els.vnLineText.textContent =
-        '音声読み上げ機能(補助モード)を使いますか？\n' +
-        '画面中央あたりを3秒くらい長押しすると「使う」になるよ。使わない場合はそのまま「次へ」を押してね。';
-      els.vnNextBtn.textContent = '次へ(使わない)';
-      speak('音声読み上げ機能を使いますか？画面中央あたりを3秒長押しすると使う、になります。使わない場合はそのまま次へを押してください。');
-    }
+    advanceLocked = false;
 
     if (onboardingStep === 0) {
       els.vnLineText.textContent = 'はじめまして、わたしはYUI。あなたの毎日をサポートするナビゲーションAIだよ。';
-      els.vnNextBtn.textContent = '次へ';
+      setActionHint('→ 画面を3秒長押しで次へ');
       speak(els.vnLineText.textContent);
     }
 
     if (onboardingStep === 1) {
       els.vnLineText.textContent = 'まずはあなたのことを教えて';
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'vn_input';
-      input.placeholder = 'プレイヤーネームの入力';
-      input.id = 'name_input';
-      input.value = draftProfile.user_name;
-      els.vnExtra.appendChild(input);
-      els.vnNextBtn.textContent = '次へ';
+      renderVoiceInputArea(draftProfile.user_name, '画面をタップして名前を話してね');
+      setActionHint('→ タップで音声入力／3秒長押しで次へ');
+      speak('まずはあなたのことを教えて。画面をタップして名前を話してね。話し終わったらもう一度タップしてね。');
     }
 
     if (onboardingStep === 2) {
       els.vnLineText.textContent = `「${draftProfile.user_name}」だね、よろしくね`;
-      els.vnNextBtn.textContent = '次へ';
+      setActionHint('→ 画面を3秒長押しで次へ');
       speak(els.vnLineText.textContent);
     }
 
     if (onboardingStep === 3) {
-      els.vnLineText.textContent = '次に私の姿を選んでね';
+      els.vnLineText.textContent = '次に私の姿を選ぶよ。今回はこのままの姿で進むね。';
       const wrap = document.createElement('div');
       wrap.className = 'appearance_picker';
-
       const preview = document.createElement('img');
       preview.className = 'appearance_preview';
-      preview.id = 'appearance_preview_img';
       preview.src = draftProfile.appearance || 'chars/char_normal.png';
       wrap.appendChild(preview);
-
-      const uploadBtn = document.createElement('button');
-      uploadBtn.type = 'button';
-      uploadBtn.className = 'vn_choice_btn';
-      uploadBtn.textContent = '🖼️ 画像をアップロード';
-      uploadBtn.addEventListener('click', () => els.onboardCharInput.click());
-      wrap.appendChild(uploadBtn);
-
       els.vnExtra.appendChild(wrap);
-      els.vnNextBtn.textContent = '決定';
+      setActionHint('→ 画面を3秒長押しで次へ');
+      speak('次に私の姿を選ぶよ。今回はこのままの姿で進むね。画面を3秒長押しして次に進んでね。');
     }
 
     if (onboardingStep === 4) {
       els.vnLineText.textContent = '素敵な姿をありがとう、';
-      els.vnNextBtn.textContent = '次へ';
+      setActionHint('→ 画面を3秒長押しで次へ');
       speak(els.vnLineText.textContent);
     }
 
     if (onboardingStep === 5) {
       els.vnLineText.textContent = '私の名前を教えて';
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'vn_input';
-      input.placeholder = 'YUI';
-      input.id = 'ai_name_input';
-      input.value = draftProfile.ai_name;
-      els.vnExtra.appendChild(input);
-      els.vnNextBtn.textContent = '決定';
+      renderVoiceInputArea(draftProfile.ai_name, '画面をタップして名前を話してね');
+      setActionHint('→ タップで音声入力／3秒長押しで次へ');
+      speak('私の名前を教えて。画面をタップして名前を話してね。話し終わったらもう一度タップしてね。');
     }
 
     if (onboardingStep === 6) {
       els.vnLineText.textContent = `ありがとう、私は「${draftProfile.ai_name}」\nこれからあなたをサポートするね`;
-      els.vnNextBtn.textContent = '次へ';
+      setActionHint('→ 画面を3秒長押しで次へ');
       speak(`ありがとう、私は${draftProfile.ai_name}。これからあなたをサポートするね`);
     }
 
     if (onboardingStep === 7) {
       els.vnLineText.textContent = '最後に私はあなたにどのように接したらよい？';
-      const textarea = document.createElement('textarea');
-      textarea.className = 'vn_input';
-      textarea.rows = 3;
-      textarea.id = 'personality_input';
-      textarea.placeholder = '記入例:丁寧に、優しく教えてくれる感じで';
-      textarea.value = draftProfile.personality;
-      els.vnExtra.appendChild(textarea);
-      els.vnNextBtn.textContent = '決定';
+      renderVoiceInputArea(draftProfile.personality, '画面をタップして話してね(例:丁寧に、優しく教えてくれる感じで)');
+      setActionHint('→ タップで音声入力／3秒長押しで次へ');
+      speak('最後に私はあなたにどのように接したらいい？画面をタップして話してね。話し終わったらもう一度タップしてね。');
     }
 
     if (onboardingStep === 8) {
@@ -1670,6 +1716,7 @@
         'Google AI Studioで発行したAPIキーを貼り付けてください。\n' +
         'このキーはGemini APIへのリクエストを認証するためだけに使われます。それ以外の送信先はなく、この端末内(localStorage)に保存されます。';
 
+      // ここだけは通常通りタップしてキーボード入力できる欄にする(音声入力は非対応)
       const input = document.createElement('input');
       input.type = 'password';
       input.className = 'vn_input';
@@ -1683,9 +1730,9 @@
       status.id = 'gemini_status';
       els.vnExtra.appendChild(status);
 
-      els.vnNextBtn.textContent = '接続を確認する';
+      setActionHint('→ 画面を3秒長押しで接続を確認');
     } else {
-      els.vnNextBtn.textContent = 'はじめる';
+      setActionHint('→ 画面を3秒長押しではじめる');
     }
   }
 
@@ -1720,7 +1767,7 @@
       return;
     }
 
-    els.vnNextBtn.disabled = true;
+    advanceLocked = true;
     if (status) { status.textContent = '確認中…'; status.classList.remove('error'); }
 
     try {
@@ -1730,11 +1777,11 @@
       els.vnExtra.innerHTML = '';
       els.vnLineText.textContent = greeting;
       speak(greeting);
-      els.vnNextBtn.textContent = 'はじめる';
-      els.vnNextBtn.disabled = false;
+      setActionHint('→ 画面を3秒長押しではじめる');
+      advanceLocked = false;
     } catch (err) {
       if (status) { status.textContent = 'キーの確認に失敗しました。正しいAPIキーか確認してね。'; status.classList.add('error'); }
-      els.vnNextBtn.disabled = false;
+      advanceLocked = false;
     }
   }
 
@@ -1747,32 +1794,18 @@
     showHome();
   }
 
-  function handleOnboardingNext() {
-    playDecideSe();
-
-    if (onboardingStep === 1) {
-      const input = document.getElementById('name_input');
-      draftProfile.user_name = (input && input.value.trim()) || 'あなた';
-    }
+  // 画面全体3秒長押し = 次へ進む(決定ボタンの代わり)
+  function advanceOnboarding() {
+    if (advanceLocked) return;
 
     if (onboardingStep === 3) {
-      els.vnNextBtn.disabled = true;
+      advanceLocked = true;
       revealWithCurtain(draftProfile.appearance || 'chars/char_normal.png', () => {
+        advanceLocked = false;
         onboardingStep++;
         renderOnboardingStep();
       });
       return;
-    }
-
-    if (onboardingStep === 5) {
-      const input = document.getElementById('ai_name_input');
-      draftProfile.ai_name = (input && input.value.trim()) || 'YUI';
-      updateAiNameDisplays(draftProfile.ai_name);
-    }
-
-    if (onboardingStep === 7) {
-      const textarea = document.getElementById('personality_input');
-      draftProfile.personality = (textarea && textarea.value.trim()) || '丁寧で優しい話し方';
     }
 
     if (onboardingStep === 8) {
@@ -1788,44 +1821,121 @@
     renderOnboardingStep();
   }
 
-  els.vnNextBtn.addEventListener('click', handleOnboardingNext);
+  // ============ 音声認識(画面タップで開始/終了) ============
+  let voiceRecognition = null;
+  let isRecording = false;
+  let getRecognizedFinalText = null;
 
-  // ---- 姿選択ステップでの画像アップロード ----
-  els.onboardCharInput.addEventListener('change', (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    fileToDataUrl(file, (dataUrl) => {
-      draftProfile.appearance = dataUrl;
-      const preview = document.getElementById('appearance_preview_img');
-      if (preview) preview.src = dataUrl;
-    });
-  });
+  function speechRecognitionSupported() {
+    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  }
 
-  // ============ 音声モード選択ステップ:画面中央3秒長押しでindexhojyo.htmlへ ============
-  (function setupVoiceModeLongPress() {
+  function startVoiceRecognition(onFinal) {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      alert('この端末・ブラウザは音声入力に対応していません。');
+      return;
+    }
+    const display = document.getElementById('voice_display');
+    let finalText = '';
+
+    voiceRecognition = new SR();
+    voiceRecognition.lang = 'ja-JP';
+    voiceRecognition.interimResults = true;
+    voiceRecognition.continuous = true;
+    voiceRecognition.maxAlternatives = 1;
+
+    isRecording = true;
+    getRecognizedFinalText = () => finalText;
+
+    if (display) {
+      display.classList.remove('placeholder');
+      display.classList.add('recording');
+      display.textContent = '🎤 聞き取り中…';
+    }
+
+    voiceRecognition.onresult = (e) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalText += t;
+        else interim += t;
+      }
+      if (display) display.textContent = (finalText + interim).trim() || '🎤 聞き取り中…';
+    };
+    voiceRecognition.onerror = () => {};
+    voiceRecognition.onend = () => {
+      // ブラウザの都合で自動終了しても、ユーザーがまだ終了タップしていなければ聞き取りを再開する
+      if (isRecording) {
+        try { voiceRecognition.start(); } catch (e) {}
+      }
+    };
+
+    try { voiceRecognition.start(); } catch (e) {}
+  }
+
+  function stopVoiceRecognition(onFinal) {
+    isRecording = false;
+    const finalText = (getRecognizedFinalText && getRecognizedFinalText()) || '';
+    if (voiceRecognition) {
+      try { voiceRecognition.onend = null; voiceRecognition.stop(); } catch (e) {}
+      voiceRecognition = null;
+    }
+    playEndSe();
+
+    const cleaned = finalText.trim();
+    const display = document.getElementById('voice_display');
+    if (display) {
+      display.classList.remove('recording');
+      if (cleaned) {
+        display.textContent = cleaned;
+        display.classList.remove('placeholder');
+      } else {
+        display.textContent = display.dataset.placeholder || '';
+        display.classList.add('placeholder');
+      }
+    }
+    if (onFinal) onFinal(cleaned);
+  }
+
+  function handleShortTap() {
+    const field = VOICE_FIELD_BY_STEP[onboardingStep];
+    if (!field) return; // 音声入力の対象ステップ以外ではタップは何もしない
+    if (!isRecording) {
+      startVoiceRecognition(field.onFinal);
+    } else {
+      stopVoiceRecognition(field.onFinal);
+    }
+  }
+
+  function handleLongPressComplete() {
+    if (isRecording) return; // 話している最中は長押しで進めないようにする
+    playDecideSe();
+    advanceOnboarding();
+  }
+
+  // ============ 画面全体のジェスチャー(オンボーディング中:タップ=音声入力/長押し3秒=次へ) ============
+  (function setupOnboardingGesture() {
     const LONG_PRESS_MS = 3000;
     const MOVE_CANCEL_PX = 24;
-    const lpRing = document.getElementById('lp_ring');
     let downX = 0, downY = 0, timer = null, raf = null, moved = false;
 
     function isExcluded(t) {
-      return !!(t && t.closest && t.closest('button, input, textarea, a'));
+      return !!(t && t.closest && t.closest('input, textarea, select'));
     }
 
-    function showRing() { if (lpRing) lpRing.style.opacity = '1'; }
+    function showRing() { if (els.lpRing) els.lpRing.style.opacity = '1'; }
     function hideRing() {
-      if (!lpRing) return;
-      lpRing.style.opacity = '0';
-      lpRing.style.setProperty('--p', '0');
+      if (!els.lpRing) return;
+      els.lpRing.style.opacity = '0';
+      els.lpRing.style.setProperty('--p', '0');
     }
-
     function clearAll() {
       if (timer) { clearTimeout(timer); timer = null; }
       if (raf) { cancelAnimationFrame(raf); raf = null; }
     }
 
     function onDown(e) {
-      if (onboardingStep !== -1) return;
       if (!els.vnLayer.classList.contains('active')) return;
       if (isExcluded(e.target)) return;
       downX = e.clientX;
@@ -1836,7 +1946,7 @@
 
       function frame() {
         const elapsed = Date.now() - start;
-        if (lpRing) lpRing.style.setProperty('--p', String(Math.min(1, elapsed / LONG_PRESS_MS)));
+        if (els.lpRing) els.lpRing.style.setProperty('--p', String(Math.min(1, elapsed / LONG_PRESS_MS)));
         if (elapsed < LONG_PRESS_MS && !moved) raf = requestAnimationFrame(frame);
       }
       raf = requestAnimationFrame(frame);
@@ -1844,10 +1954,7 @@
       timer = setTimeout(() => {
         clearAll();
         hideRing();
-        if (!moved) {
-          playDecideSe();
-          window.location.href = 'indexhojyo.html';
-        }
+        if (!moved) handleLongPressComplete();
       }, LONG_PRESS_MS);
     }
 
@@ -1860,15 +1967,25 @@
       }
     }
 
-    function onUpCancel() {
+    function onUp(e) {
+      if (isExcluded(e.target)) return;
+      const wasWaiting = !!timer;
+      clearAll();
+      hideRing();
+      if (wasWaiting && !moved) {
+        handleShortTap();
+      }
+    }
+
+    function onCancel() {
       clearAll();
       hideRing();
     }
 
     document.addEventListener('pointerdown', onDown);
     document.addEventListener('pointermove', onMove);
-    document.addEventListener('pointerup', onUpCancel);
-    document.addEventListener('pointercancel', onUpCancel);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onCancel);
   })();
 
   // ============ ホーム画面:長押し→上下ドラッグでカメラ/トークモード切替 ============
