@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>モノバケ - バトル＆スキャンRPG</title>
+  
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #0b0c1b;
+      color: #F3F1E7;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .main-container {
+      width: 100%;
+      max-width: 420px;
+      background: #12142B;
+      min-height: 100vh;
+      padding: 16px;
+      box-sizing: border-box;
+      position: relative;
+    }
+    .card { background: #1F2347; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.1); }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+    .btn-action { width: 100%; padding: 12px; background: #23E0C4; color: #08221E; border: none; border-radius: 10px; font-weight: bold; font-size: 14px; cursor: pointer; }
+    .btn-action:disabled { opacity: 0.4; cursor: not-allowed; }
+    
+    /* ポケモン風バトル画面レイアウト */
+    .battle-stage { position: relative; background: radial-gradient(circle, #1c2050 0%, #0d0f24 100%); border-radius: 12px; padding: 12px; border: 1px solid rgba(255,255,255,0.1); margin-bottom: 12px; }
+    .status-box { background: rgba(18, 20, 43, 0.85); border-radius: 8px; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.15); }
+    .hp-bar-outer { background: #000; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 4px; border: 1px solid #333; }
+    .hp-bar-inner { height: 100%; transition: width 0.3s ease; }
+    .battle-log { background: #000; border-radius: 8px; padding: 10px; font-size: 12px; height: 90px; overflow-y: auto; line-height: 1.5; color: #23E0C4; border: 1px solid rgba(255,255,255,0.1); margin-bottom: 12px; }
+    .move-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .move-btn { background: #1F2347; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 10px; color: #fff; text-align: left; cursor: pointer; }
+    .move-btn:disabled { opacity: 0.3; }
+    .pp-badge { background: #F2B84B; color: #000; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+  const { useState, useRef, useEffect } = React;
+
+  // 属性ルール
+  const TYPE_CHART = {
+    火: { strong: "風", weak: "水", color: "#FF6B4A" },
+    水: { strong: "火", weak: "風", color: "#3EC6E0" },
+    風: { strong: "水", weak: "火", color: "#7ED957" },
+  };
+
+  const STORAGE_KEY = "monobake_save_v4";
+  function loadData() {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) return JSON.parse(saved);
+    return {
+      partner: {
+        name: "ナビモン", attribute: "風", level: 1, exp: 0,
+        stats: { hp: 60, atk: 14, def: 9, spd: 13 },
+        moves: {
+          normal: { cost: 1, name: "体当たり", flavor: "全力でぶつかる" },
+          strong: { cost: 3, name: "疾風連撃", flavor: "風を纏った大技" },
+          utility: { cost: 2, name: "応急手当", flavor: "HPを少し回復する" },
+        }
+      },
+      zukan: []
+    };
+  }
+
+  function saveData(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+
+  // 相性ダメージ計算（ポケモン計算式ベース）
+  function calcDamage(attacker, defender, moveMult) {
+    let typeMult = 1.0;
+    const chart = TYPE_CHART[attacker.attribute];
+    if (chart.strong === defender.attribute) typeMult = 1.5;
+    if (chart.weak === defender.attribute) typeMult = 0.5;
+
+    const rand = 0.9 + Math.random() * 0.2; // 0.9 ~ 1.1 の乱数
+    const rawDmg = (attacker.stats.atk * moveMult * typeMult * rand) - (defender.stats.def * 0.4);
+    return { dmg: Math.max(1, Math.round(rawDmg)), typeMult };
+  }
+
+  // ==========================================
+  // バトルコンポーネント
+  // ==========================================
+  function BattleScreen({ partner, enemy, onBattleEnd }) {
+    const [pMaxHp] = useState(partner.stats.hp);
+    const [pHp, setPHp] = useState(partner.stats.hp);
+    const [pCost, setPCost] = useState(3); // 初期所持コスト
+
+    const [eMaxHp] = useState(enemy.stats.hp);
+    const [eHp, setEHp] = useState(enemy.stats.hp);
+
+    const [logs, setLogs] = useState([`野生の ${enemy.name} があらわれた！`]);
+    const [isBusy, setIsBusy] = useState(false);
+
+    const addLog = (text) => setLogs(prev => [...prev.slice(-15), text]);
+
+    // ターン実行（SPD比較処理）
+    const handlePlayerMove = (moveKey) => {
+      if (isBusy) return;
+      const pMove = partner.moves[moveKey];
+      if (pCost < pMove.cost) return alert("コスト（PP）が足りません！");
+
+      setIsBusy(true);
+      setPCost(prev => prev - pMove.cost);
+
+      // SPD判定 (素早さが高い方が先制)
+      const pFirst = partner.stats.spd >= enemy.stats.spd;
+
+      if (pFirst) {
+        // プレイヤー先攻
+        executePlayerAttack(moveKey, () => {
+          if (eHp > 0) {
+            setTimeout(() => executeEnemyAttack(() => endTurn()), 800);
+          } else {
+            endTurn();
+          }
+        });
+      } else {
+        // 敵が先攻
+        addLog(`⚡ ${enemy.name} のほうが すばやい！`);
+        executeEnemyAttack(() => {
+          if (pHp > 0) {
+            setTimeout(() => executePlayerAttack(moveKey, () => endTurn()), 800);
+          } else {
+            endTurn();
+          }
+        });
+      }
+    };
+
+    // プレイヤーの攻撃処理
+    const executePlayerAttack = (moveKey, callback) => {
+      const move = partner.moves[moveKey];
+      addLog(`▶ ${partner.name} の ${move.name}！`);
+
+      if (moveKey === "utility") {
+        // 回復技の処理
+        const heal = Math.round(pMaxHp * 0.3);
+        setPHp(prev => Math.min(pMaxHp, prev + heal));
+        addLog(`  ${partner.name} の HPが ${heal} 回復した！`);
+      } else {
+        const mult = moveKey === "strong" ? 1.6 : 1.0;
+        const { dmg, typeMult } = calcDamage(partner, enemy, mult);
+        setEHp(prev => {
+          const next = Math.max(0, prev - dmg);
+          if (next === 0) addLog(`💥 野生の ${enemy.name} を たおした！`);
+          return next;
+        });
+        let effText = typeMult > 1.0 ? " (こうかは ばつぐんだ！)" : typeMult < 1.0 ? " (いまひとつの ようだ...)" : "";
+        addLog(`  ${enemy.name} に ${dmg} のダメージ！${effText}`);
+      }
+      setTimeout(callback, 600);
+    };
+
+    // 敵の攻撃処理
+    const executeEnemyAttack = (callback) => {
+      const eMoveKeys = ["normal", "strong", "utility"];
+      const pickedKey = eMoveKeys[Math.floor(Math.random() * eMoveKeys.length)];
+      const move = enemy.moves[pickedKey] || enemy.moves.normal;
+
+      addLog(`▶ 野生の ${enemy.name} の ${move.name}！`);
+      const mult = pickedKey === "strong" ? 1.5 : 1.0;
+      const { dmg, typeMult } = calcDamage(enemy, partner, mult);
+
+      setPHp(prev => {
+        const next = Math.max(0, prev - dmg);
+        if (next === 0) addLog(`💀 ${partner.name} は たおれてしまった...`);
+        return next;
+      });
+      let effText = typeMult > 1.0 ? " (こうかは ばつぐんだ！)" : typeMult < 1.0 ? " (いまひとつの ようだ...)" : "";
+      addLog(`  ${partner.name} に ${dmg} のダメージ！${effText}`);
+      setTimeout(callback, 600);
+    };
+
+    // ターン終了処理（PP回復＆決着判定）
+    const endTurn = () => {
+      if (eHp <= 0) {
+        setTimeout(() => onBattleEnd(true), 1200);
+      } else if (pHp <= 0) {
+        setTimeout(() => onBattleEnd(false), 1200);
+      } else {
+        // コスト+2回復（最大5）
+        setPCost(prev => Math.min(5, prev + 2));
+        setIsBusy(false);
+      }
+    };
+
+    return (
+      <div>
+        {/* バトルステージ */}
+        <div className="battle-stage">
+          {/* 敵エリア */}
+          <div style={{ marginBottom: "20px" }}>
+            <div className="status-box" style={{ width: "70%" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
+                <strong>{enemy.name}</strong>
+                <span className="tag" style={{ background: TYPE_CHART[enemy.attribute].color, color: "#000" }}>{enemy.attribute}</span>
+              </div>
+              <div className="hp-bar-outer">
+                <div className="hp-bar-inner" style={{ width: `${(eHp / eMaxHp) * 100}%`, background: "#FF5D73" }} />
+              </div>
+              <div style={{ fontSize: "10px", textAlign: "right", color: "#9A9CC0", marginTop: "2px" }}>HP: {eHp}/{eMaxHp}</div>
+            </div>
+            <div style={{ textAlign: "center", margin: "10px 0" }}>
+              <img src={enemy.photo} alt={enemy.name} style={{ width: "100px", height: "100px", objectFit: "cover", borderRadius: "50%", border: "3px solid #FF5D73" }} />
+            </div>
+          </div>
+
+          {/* 味方（相棒）エリア */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+            <div className="status-box" style={{ width: "75%" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
+                <strong>{partner.name} <span style={{ color: "#23E0C4" }}>Lv.{partner.level}</span></strong>
+                <span className="tag" style={{ background: TYPE_CHART[partner.attribute].color, color: "#000" }}>{partner.attribute}</span>
+              </div>
+              <div className="hp-bar-outer">
+                <div className="hp-bar-inner" style={{ width: `${(pHp / pMaxHp) * 100}%`, background: "#23E0C4" }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#9A9CC0", marginTop: "2px" }}>
+                <span>PP: <strong style={{ color: "#F2B84B" }}>{"★".repeat(pCost)}</strong></span>
+                <span>HP: {pHp}/{pMaxHp}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 実況ログ */}
+        <div className="battle-log">
+          {logs.map((l, i) => <div key={i}>{l}</div>)}
+        </div>
+
+        {/* コマンド選択 */}
+        <div className="move-grid">
+          {Object.keys(partner.moves).map(k => {
+            const m = partner.moves[k];
+            return (
+              <button
+                key={k}
+                className="move-btn"
+                disabled={isBusy || pCost < m.cost}
+                onClick={() => handlePlayerMove(k)}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                  <strong style={{ fontSize: "12px" }}>{m.name}</strong>
+                  <span className="pp-badge">コスト{m.cost}</span>
+                </div>
+                <div style={{ fontSize: "10px", color: "#9A9CC0" }}>{m.flavor}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // アプリ全体管理コンポーネント
+  // ==========================================
+  function App() {
+    const [data, setData] = useState(loadData);
+    const [mode, setMode] = useState("home"); // home | battle
+    const [currentEnemy, setCurrentEnemy] = useState(null);
+
+    // テスト用のサンプル敵データでバトルを開始
+    const startSampleBattle = () => {
+      const dummyEnemy = {
+        name: "サビくぎ丸",
+        attribute: "火",
+        stats: { hp: 45, atk: 12, def: 8, spd: 10 },
+        photo: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=200",
+        moves: {
+          normal: { cost: 1, name: "サビ攻撃", flavor: "赤サビを飛ばす" },
+          strong: { cost: 3, name: "貫通バスター", flavor: "鋭く突き刺す" }
+        }
+      };
+      setCurrentEnemy(dummyEnemy);
+      setMode("battle");
+    };
+
+    const handleBattleEnd = (won) => {
+      if (won) {
+        // 勝利時：相棒のレベルアップ計算
+        const nextExp = data.partner.exp + 50;
+        let nextLevel = data.partner.level;
+        let nextStats = { ...data.partner.stats };
+
+        if (nextExp >= 100) {
+          nextLevel += 1;
+          nextStats.hp += 8;
+          nextStats.atk += 3;
+          nextStats.def += 2;
+          nextStats.spd += 2;
+          alert(`🎉 勝利！ ${data.partner.name} は Lv.${nextLevel} にレベルアップした！`);
+        } else {
+          alert(`🎉 勝利！ 経験値を 50 獲得した！`);
+        }
+
+        const updated = {
+          ...data,
+          partner: { ...data.partner, level: nextLevel, exp: nextExp % 100, stats: nextStats }
+        };
+        setData(updated);
+        saveData(updated);
+      } else {
+        alert("💦 負けてしまった... もう一度挑戦しよう！");
+      }
+      setMode("home");
+    };
+
+    return (
+      <div className="main-container">
+        {mode === "home" ? (
+          <div>
+            <div className="card">
+              <h2>相棒: {data.partner.name}</h2>
+              <p style={{ color: "#23E0C4", fontWeight: "bold" }}>Lv. {data.partner.level} (EXP: {data.partner.exp}/100)</p>
+              <div style={{ fontSize: "12px", color: "#9A9CC0", marginTop: "8px" }}>
+                HP: {data.partner.stats.hp} / ATK: {data.partner.stats.atk} / DEF: {data.partner.stats.def} / SPD: {data.partner.stats.spd}
+              </div>
+            </div>
+
+            <div className="card" style={{ textAlign: "center", padding: "30px 16px" }}>
+              <h3>⚔️ モノバケ・テストバトル</h3>
+              <p style={{ fontSize: "12px", color: "#9A9CC0", marginBottom: "16px" }}>
+                ポケモン風の素早さ比較＆コスト管理バトルをテストできます。
+              </p>
+              <button className="btn-action" onClick={startSampleBattle}>
+                テスト敵とバトル開始！
+              </button>
+            </div>
+          </div>
+        ) : (
+          <BattleScreen partner={data.partner} enemy={currentEnemy} onBattleEnd={handleBattleEnd} />
+        )}
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+
+</body>
+</html>
