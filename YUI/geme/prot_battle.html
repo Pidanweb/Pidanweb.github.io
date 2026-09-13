@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>モノバケ - バトル＆スキャンRPG</title>
+  <title>モノバケ - 相棒育成＆カメラスキャンRPG</title>
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -29,20 +29,28 @@
       box-sizing: border-box;
       position: relative;
     }
+    .nav-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+    .tab-btn { flex: 1; padding: 10px 4px; border: none; background: #1B1E3D; color: #9A9CC0; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer; }
+    .tab-btn.active { background: #23E0C4; color: #08221E; }
     .card { background: #1F2347; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.1); }
     .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
     .btn-action { width: 100%; padding: 12px; background: #23E0C4; color: #08221E; border: none; border-radius: 10px; font-weight: bold; font-size: 14px; cursor: pointer; }
     .btn-action:disabled { opacity: 0.4; cursor: not-allowed; }
     
-    /* ポケモン風バトル画面レイアウト */
+    .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 10px 0; text-align: center; }
+    .stat-box { background: #12142B; padding: 6px; border-radius: 6px; }
+    .stat-box .lbl { font-size: 10px; color: #9A9CC0; }
+    .stat-box .val { font-size: 13px; font-weight: bold; }
+    .api-key-input { width: 100%; padding: 8px; margin-top: 6px; border-radius: 6px; border: 1px solid #333; background: #000; color: #fff; box-sizing: border-box; }
+
+    /* バトル用レイアウト */
     .battle-stage { position: relative; background: radial-gradient(circle, #1c2050 0%, #0d0f24 100%); border-radius: 12px; padding: 12px; border: 1px solid rgba(255,255,255,0.1); margin-bottom: 12px; }
     .status-box { background: rgba(18, 20, 43, 0.85); border-radius: 8px; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.15); }
     .hp-bar-outer { background: #000; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 4px; border: 1px solid #333; }
     .hp-bar-inner { height: 100%; transition: width 0.3s ease; }
-    .battle-log { background: #000; border-radius: 8px; padding: 10px; font-size: 12px; height: 90px; overflow-y: auto; line-height: 1.5; color: #23E0C4; border: 1px solid rgba(255,255,255,0.1); margin-bottom: 12px; }
+    .battle-log { background: #000; border-radius: 8px; padding: 10px; font-size: 12px; height: 80px; overflow-y: auto; line-height: 1.4; color: #23E0C4; border: 1px solid rgba(255,255,255,0.1); margin-bottom: 12px; }
     .move-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .move-btn { background: #1F2347; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 10px; color: #fff; text-align: left; cursor: pointer; }
-    .move-btn:disabled { opacity: 0.3; }
     .pp-badge { background: #F2B84B; color: #000; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: bold; }
   </style>
 </head>
@@ -51,54 +59,190 @@
 <div id="root"></div>
 
 <script type="text/babel">
-  const { useState, useRef, useEffect } = React;
+  const { useState, useRef } = React;
 
-  // 属性ルール
   const TYPE_CHART = {
     火: { strong: "風", weak: "水", color: "#FF6B4A" },
     水: { strong: "火", weak: "風", color: "#3EC6E0" },
     風: { strong: "水", weak: "火", color: "#7ED957" },
   };
 
-  const STORAGE_KEY = "monobake_save_v4";
-  function loadData() {
+  const RARITY_BASE = {
+    C: { hp: 35, atk: 8, def: 6, spd: 10 },
+    B: { hp: 45, atk: 11, def: 8, spd: 12 },
+    A: { hp: 58, atk: 15, def: 11, spd: 14 },
+    S: { hp: 72, atk: 19, def: 14, spd: 16 },
+  };
+
+  function hashStr(s) {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return h;
+  }
+
+  function buildStats(rarity, name) {
+    const base = RARITY_BASE[rarity] || RARITY_BASE.C;
+    const h = hashStr(name || "monster");
+    const variance = (shift) => 1 + (((h >> shift) % 21) - 10) / 100;
+    return {
+      hp: Math.round(base.hp * variance(0)),
+      atk: Math.round(base.atk * variance(3)),
+      def: Math.round(base.def * variance(6)),
+      spd: Math.round(base.spd * variance(9)),
+    };
+  }
+
+  const STORAGE_KEY = "monobake_save_v2";
+
+  // ---- index.html(YUI本体)と共有するストレージ ----
+  // APIキー・相棒の見た目(画像)・相棒の名前は index.html 側の設定を正として読み込む。
+  // ここでは書き込み専用の複製を持たず、常に共有ストレージを参照することで
+  // index側で変更された内容がすぐこちらにも反映されるようにする。
+  const GEMINI_API_KEY_STORAGE = "yui_gemini_api_key"; // index.htmlと同じキー名
+  const PROFILE_KEY = "yui_profile";                   // index.htmlと同じキー名
+  const CHAR_IMAGE_KEY = "yui_custom_char";             // index.htmlと同じキー名
+
+  function loadSharedApiKey() {
+    try { return localStorage.getItem(GEMINI_API_KEY_STORAGE) || ""; } catch (e) { return ""; }
+  }
+  function saveSharedApiKey(key) {
+    try { localStorage.setItem(GEMINI_API_KEY_STORAGE, key); } catch (e) { /* 無視 */ }
+  }
+  function loadSharedProfile() {
+    try {
+      const raw = localStorage.getItem(PROFILE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+  function loadSharedCharImage() {
+    try { return localStorage.getItem(CHAR_IMAGE_KEY) || null; } catch (e) { return null; }
+  }
+  // index.htmlで設定済みの「相棒AIの名前・見た目」を取得する。未設定ならフォールバック値を使う。
+  function getPartnerIdentity() {
+    const profile = loadSharedProfile();
+    return {
+      name: (profile && profile.ai_name) || "ナビモン",
+      photo: loadSharedCharImage(), // 未設定ならnull(絵文字表示にフォールバック)
+    };
+  }
+
+  function loadLocalData() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) return JSON.parse(saved);
     return {
       partner: {
-        name: "ナビモン", attribute: "風", level: 1, exp: 0,
-        stats: { hp: 60, atk: 14, def: 9, spd: 13 },
+        attribute: "風", level: 1, exp: 0,
+        stats: { hp: 55, atk: 13, def: 8, spd: 12 },
         moves: {
           normal: { cost: 1, name: "体当たり", flavor: "全力でぶつかる" },
           strong: { cost: 3, name: "疾風連撃", flavor: "風を纏った大技" },
           utility: { cost: 2, name: "応急手当", flavor: "HPを少し回復する" },
-        }
+        },
       },
-      zukan: []
+      zukan: [],
     };
   }
 
-  function saveData(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+  function saveLocalData(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
 
-  // 相性ダメージ計算（ポケモン計算式ベース）
+  function resizeImage(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const max = 400;
+          let w = img.width, h = img.height;
+          if (w > h) { if (w > max) { h = Math.round(h * (max / w)); w = max; } }
+          else { if (h > max) { w = Math.round(w * (max / h)); h = max; } }
+          canvas.width = w; canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/jpeg", 0.7));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // 敵モンスターの設定生成(JSON)と、画像への「顔パーツ合成」を1回のリクエストで行う。
+  // 画像編集ができるモデル(gemini-3.1-flash-image)を使うことで、
+  // 撮影した物体そのものに目・口を描き足した画像がそのまま返ってくる。
+  const ENEMY_GEN_PROMPT = `あなたは「撮影した日用品を敵モンスターに変えるゲーム」の生成エンジンです。
+入力画像の中心的な物体を1つ選び、次の2つを出力してください。
+
+1. 先頭に、以下のJSON形式のテキストだけをコードブロックとして出力する(説明文は付けない):
+{"name":"(12文字以内の日本語モンスター名)","attribute":"火・水・風のいずれか1つ","rarity":"C・B・A・Sのいずれか1つ(珍しさ・複雑さが高いほど上位)","description":"(30文字以内の紹介文)","moves":{"normal":{"cost":1,"name":"(10文字以内)","flavor":"(20文字以内の演出セリフ)"},"strong":{"cost":3,"name":"...","flavor":"..."},"utility":{"cost":2,"name":"...(回復技)","flavor":"..."}}}
+
+2. 続けて、入力画像を編集した画像を1枚生成する。編集内容: 物体の形・色・素材はそのまま変えず、そこに漫画的な目と口(必要なら眉や簡単な手足の線)だけを描き足し、その物体自身が生きたモンスターに見えるようにする。背景や物体そのものの造形を大きく変えないこと。`;
+
+  async function analyzeImageWithGemini(dataUrl, apiKey) {
+    const base64Data = dataUrl.split(",")[1];
+    // 画像編集(顔パーツ合成)に対応したモデルを使用。
+    // もしこのモデルが重い/使えない場合は、末尾を "gemini-3.1-flash-lite-image" に変えると
+    // より軽量・低コストな版に切り替えられる(画質・編集精度は少し下がる)。
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent?key=${apiKey}`;
+
+    const requestBody = {
+      contents: [{
+        parts: [
+          { text: ENEMY_GEN_PROMPT },
+          { inlineData: { mimeType: "image/jpeg", data: base64Data } }
+        ]
+      }],
+      generationConfig: {
+        responseModalities: ["TEXT", "IMAGE"]
+      }
+    };
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.error?.message || "APIキーが無効または通信エラーです");
+    }
+
+    const resData = await res.json();
+    const parts = resData.candidates?.[0]?.content?.parts || [];
+    const textPart = parts.find(p => typeof p.text === "string");
+    const imagePart = parts.find(p => p.inlineData && p.inlineData.data);
+
+    if (!textPart) throw new Error("モンスター設定の生成に失敗しました");
+    if (!imagePart) throw new Error("モンスター画像の生成に失敗しました(モデルが画像を返しませんでした)");
+
+    const jsonMatch = textPart.text.replace(/```json|```/g, "").match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("JSON形式で解析できませんでした");
+    const json = JSON.parse(jsonMatch[0]);
+
+    json.stats = buildStats(json.rarity, json.name);
+    // 生成された「顔付き」画像を、この後の表示・保存すべてに使う
+    json.photo = `data:${imagePart.inlineData.mimeType || "image/png"};base64,${imagePart.inlineData.data}`;
+    return json;
+  }
+
   function calcDamage(attacker, defender, moveMult) {
     let typeMult = 1.0;
     const chart = TYPE_CHART[attacker.attribute];
     if (chart.strong === defender.attribute) typeMult = 1.5;
     if (chart.weak === defender.attribute) typeMult = 0.5;
 
-    const rand = 0.9 + Math.random() * 0.2; // 0.9 ~ 1.1 の乱数
+    const rand = 0.9 + Math.random() * 0.2;
     const rawDmg = (attacker.stats.atk * moveMult * typeMult * rand) - (defender.stats.def * 0.4);
     return { dmg: Math.max(1, Math.round(rawDmg)), typeMult };
   }
 
   // ==========================================
-  // バトルコンポーネント
+  // バトル画面
   // ==========================================
   function BattleScreen({ partner, enemy, onBattleEnd }) {
     const [pMaxHp] = useState(partner.stats.hp);
     const [pHp, setPHp] = useState(partner.stats.hp);
-    const [pCost, setPCost] = useState(3); // 初期所持コスト
+    const [pCost, setPCost] = useState(3);
 
     const [eMaxHp] = useState(enemy.stats.hp);
     const [eHp, setEHp] = useState(enemy.stats.hp);
@@ -108,7 +252,6 @@
 
     const addLog = (text) => setLogs(prev => [...prev.slice(-15), text]);
 
-    // ターン実行（SPD比較処理）
     const handlePlayerMove = (moveKey) => {
       if (isBusy) return;
       const pMove = partner.moves[moveKey];
@@ -117,38 +260,27 @@
       setIsBusy(true);
       setPCost(prev => prev - pMove.cost);
 
-      // SPD判定 (素早さが高い方が先制)
       const pFirst = partner.stats.spd >= enemy.stats.spd;
 
       if (pFirst) {
-        // プレイヤー先攻
         executePlayerAttack(moveKey, () => {
-          if (eHp > 0) {
-            setTimeout(() => executeEnemyAttack(() => endTurn()), 800);
-          } else {
-            endTurn();
-          }
+          if (eHp > 0) setTimeout(() => executeEnemyAttack(() => endTurn()), 800);
+          else endTurn();
         });
       } else {
-        // 敵が先攻
         addLog(`⚡ ${enemy.name} のほうが すばやい！`);
         executeEnemyAttack(() => {
-          if (pHp > 0) {
-            setTimeout(() => executePlayerAttack(moveKey, () => endTurn()), 800);
-          } else {
-            endTurn();
-          }
+          if (pHp > 0) setTimeout(() => executePlayerAttack(moveKey, () => endTurn()), 800);
+          else endTurn();
         });
       }
     };
 
-    // プレイヤーの攻撃処理
     const executePlayerAttack = (moveKey, callback) => {
       const move = partner.moves[moveKey];
       addLog(`▶ ${partner.name} の ${move.name}！`);
 
       if (moveKey === "utility") {
-        // 回復技の処理
         const heal = Math.round(pMaxHp * 0.3);
         setPHp(prev => Math.min(pMaxHp, prev + heal));
         addLog(`  ${partner.name} の HPが ${heal} 回復した！`);
@@ -166,7 +298,6 @@
       setTimeout(callback, 600);
     };
 
-    // 敵の攻撃処理
     const executeEnemyAttack = (callback) => {
       const eMoveKeys = ["normal", "strong", "utility"];
       const pickedKey = eMoveKeys[Math.floor(Math.random() * eMoveKeys.length)];
@@ -186,14 +317,10 @@
       setTimeout(callback, 600);
     };
 
-    // ターン終了処理（PP回復＆決着判定）
     const endTurn = () => {
-      if (eHp <= 0) {
-        setTimeout(() => onBattleEnd(true), 1200);
-      } else if (pHp <= 0) {
-        setTimeout(() => onBattleEnd(false), 1200);
-      } else {
-        // コスト+2回復（最大5）
+      if (eHp <= 0) setTimeout(() => onBattleEnd(true), 1200);
+      else if (pHp <= 0) setTimeout(() => onBattleEnd(false), 1200);
+      else {
         setPCost(prev => Math.min(5, prev + 2));
         setIsBusy(false);
       }
@@ -201,10 +328,8 @@
 
     return (
       <div>
-        {/* バトルステージ */}
         <div className="battle-stage">
-          {/* 敵エリア */}
-          <div style={{ marginBottom: "20px" }}>
+          <div style={{ marginBottom: "16px" }}>
             <div className="status-box" style={{ width: "70%" }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
                 <strong>{enemy.name}</strong>
@@ -216,11 +341,10 @@
               <div style={{ fontSize: "10px", textAlign: "right", color: "#9A9CC0", marginTop: "2px" }}>HP: {eHp}/{eMaxHp}</div>
             </div>
             <div style={{ textAlign: "center", margin: "10px 0" }}>
-              <img src={enemy.photo} alt={enemy.name} style={{ width: "100px", height: "100px", objectFit: "cover", borderRadius: "50%", border: "3px solid #FF5D73" }} />
+              <img src={enemy.photo} alt={enemy.name} style={{ width: "90px", height: "90px", objectFit: "cover", borderRadius: "50%", border: "3px solid #FF5D73" }} />
             </div>
           </div>
 
-          {/* 味方（相棒）エリア */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
             <div className="status-box" style={{ width: "75%" }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
@@ -235,15 +359,20 @@
                 <span>HP: {pHp}/{pMaxHp}</span>
               </div>
             </div>
+            <div style={{ textAlign: "center", margin: "10px 0" }}>
+              {partner.photo ? (
+                <img src={partner.photo} alt={partner.name} style={{ width: "90px", height: "90px", objectFit: "cover", borderRadius: "50%", border: "3px solid #23E0C4" }} />
+              ) : (
+                <div style={{ width: "90px", height: "90px", borderRadius: "50%", border: "3px solid #23E0C4", background: "#1B1E3D", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "36px" }}>🤖</div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* 実況ログ */}
         <div className="battle-log">
           {logs.map((l, i) => <div key={i}>{l}</div>)}
         </div>
 
-        {/* コマンド選択 */}
         <div className="move-grid">
           {Object.keys(partner.moves).map(k => {
             const m = partner.moves[k];
@@ -254,7 +383,7 @@
                 disabled={isBusy || pCost < m.cost}
                 onClick={() => handlePlayerMove(k)}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
                   <strong style={{ fontSize: "12px" }}>{m.name}</strong>
                   <span className="pp-badge">コスト{m.cost}</span>
                 </div>
@@ -268,35 +397,96 @@
   }
 
   // ==========================================
-  // アプリ全体管理コンポーネント
+  // メインApp
   // ==========================================
   function App() {
-    const [data, setData] = useState(loadData);
-    const [mode, setMode] = useState("home"); // home | battle
-    const [currentEnemy, setCurrentEnemy] = useState(null);
+    const [gameData, setGameData] = useState(loadLocalData);
+    const [apiKey, setApiKey] = useState(loadSharedApiKey);       // index.htmlと共通のキー
+    const [identity, setIdentity] = useState(getPartnerIdentity); // index.htmlと共通の名前・見た目
+    const [tab, setTab] = useState("scan"); // デフォルトをスキャンに設定
+    const [loading, setLoading] = useState(false);
+    const [previewEnemy, setPreviewEnemy] = useState(null);
+    const [activeBattleEnemy, setActiveBattleEnemy] = useState(null);
+    const fileInputRef = useRef(null);
 
-    // テスト用のサンプル敵データでバトルを開始
-    const startSampleBattle = () => {
-      const dummyEnemy = {
-        name: "サビくぎ丸",
-        attribute: "火",
-        stats: { hp: 45, atk: 12, def: 8, spd: 10 },
-        photo: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=200",
-        moves: {
-          normal: { cost: 1, name: "サビ攻撃", flavor: "赤サビを飛ばす" },
-          strong: { cost: 3, name: "貫通バスター", flavor: "鋭く突き刺す" }
-        }
+    // index.html側で相棒の見た目や名前、APIキーが変更された場合に追従する
+    // (別タブ/別ウィンドウでindex.htmlを編集した場合の反映用)
+    React.useEffect(() => {
+      const onFocus = () => {
+        setIdentity(getPartnerIdentity());
+        setApiKey(loadSharedApiKey());
       };
-      setCurrentEnemy(dummyEnemy);
-      setMode("battle");
+      window.addEventListener("focus", onFocus);
+      return () => window.removeEventListener("focus", onFocus);
+    }, []);
+
+    // 図鑑ページ(prot_zukan.html)で「この相手とバトルする」を押した場合、
+    // 一時キーで渡された相手IDを拾って自動でバトル開始する
+    React.useEffect(() => {
+      const PENDING_BATTLE_KEY = "monobake_pending_battle_id";
+      try {
+        const pendingId = localStorage.getItem(PENDING_BATTLE_KEY);
+        if (pendingId) {
+          localStorage.removeItem(PENDING_BATTLE_KEY);
+          const target = gameData.zukan.find((z) => z.id === pendingId);
+          if (target) {
+            setActiveBattleEnemy(target);
+            setTab("battle");
+          }
+        }
+      } catch (e) { /* 無視 */ }
+      // 初回マウント時のみ実行
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const handleApiKeyChange = (e) => {
+      const key = e.target.value;
+      setApiKey(key);
+      saveSharedApiKey(key); // index.htmlの初期設定と同じ場所に書き込む
+    };
+
+    const handleFileChange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (!apiKey) return alert("Gemini APIキーを設定してください(index画面の初期設定と共通です)");
+
+      setLoading(true);
+      try {
+        const dataUrl = await resizeImage(file);
+        const enemyJson = await analyzeImageWithGemini(dataUrl, apiKey);
+
+        const newEnemy = {
+          ...enemyJson, // enemyJson.photo は既に「顔が合成済みの」AI編集画像
+          id: `enemy_${Date.now()}`,
+          createdAt: new Date().toLocaleDateString()
+        };
+
+        setPreviewEnemy(newEnemy);
+
+        // 図鑑に自動で登録保存
+        const updatedZukan = [newEnemy, ...gameData.zukan.filter(z => z.name !== newEnemy.name)];
+        const updatedData = { ...gameData, zukan: updatedZukan };
+        setGameData(updatedData);
+        saveLocalData(updatedData);
+
+      } catch (err) {
+        alert("エラー: " + err.message);
+      } finally {
+        setLoading(false);
+        e.target.value = "";
+      }
+    };
+
+    const startBattle = (enemy) => {
+      setActiveBattleEnemy(enemy);
+      setTab("battle");
     };
 
     const handleBattleEnd = (won) => {
       if (won) {
-        // 勝利時：相棒のレベルアップ計算
-        const nextExp = data.partner.exp + 50;
-        let nextLevel = data.partner.level;
-        let nextStats = { ...data.partner.stats };
+        const nextExp = gameData.partner.exp + 50;
+        let nextLevel = gameData.partner.level;
+        let nextStats = { ...gameData.partner.stats };
 
         if (nextExp >= 100) {
           nextLevel += 1;
@@ -304,47 +494,173 @@
           nextStats.atk += 3;
           nextStats.def += 2;
           nextStats.spd += 2;
-          alert(`🎉 勝利！ ${data.partner.name} は Lv.${nextLevel} にレベルアップした！`);
+          alert(`🎉 勝利！ ${identity.name} は Lv.${nextLevel} にレベルアップ！`);
         } else {
-          alert(`🎉 勝利！ 経験値を 50 獲得した！`);
+          alert(`🎉 勝利！ 経験値を 50 獲得！`);
         }
 
         const updated = {
-          ...data,
-          partner: { ...data.partner, level: nextLevel, exp: nextExp % 100, stats: nextStats }
+          ...gameData,
+          partner: { ...gameData.partner, level: nextLevel, exp: nextExp % 100, stats: nextStats }
         };
-        setData(updated);
-        saveData(updated);
+        setGameData(updated);
+        saveLocalData(updated);
       } else {
-        alert("💦 負けてしまった... もう一度挑戦しよう！");
+        alert("💦 負けてしまった... レベルを上げて再挑戦しよう！");
       }
-      setMode("home");
+      setPreviewEnemy(null);
+      setActiveBattleEnemy(null);
+      setTab("scan");
     };
+
+    // 戦績(レベル・技など)はこのゲーム側の保存データ、名前と見た目はindex.html側の設定を使う
+    const partner = { ...gameData.partner, name: identity.name, photo: identity.photo };
 
     return (
       <div className="main-container">
-        {mode === "home" ? (
+        {/* ナビゲーションタブ */}
+        {tab !== "battle" && (
+          <div>
+            <div style={{ textAlign: "right", marginBottom: "8px" }}>
+              <a href="prot_zukan.html" style={{ fontSize: "11px", color: "#23E0C4", textDecoration: "none", border: "1px solid #23E0C4", borderRadius: "20px", padding: "4px 10px" }}>
+                🖼 カード図鑑を開く
+              </a>
+            </div>
+            <div className="nav-tabs">
+              <button className={`tab-btn ${tab === "scan" ? "active" : ""}`} onClick={() => setTab("scan")}>📸 スキャン</button>
+              <button className={`tab-btn ${tab === "zukan" ? "active" : ""}`} onClick={() => setTab("zukan")}>📖 図鑑 ({gameData.zukan.length})</button>
+              <button className={`tab-btn ${tab === "partner" ? "active" : ""}`} onClick={() => setTab("partner")}>🦖 相棒AI</button>
+            </div>
+          </div>
+        )}
+
+        {/* 1. スキャン画面 */}
+        {tab === "scan" && (
+          <div>
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              ref={fileInputRef}
+              style={{ display: "none" }}
+              onChange={handleFileChange}
+            />
+
+            {!previewEnemy ? (
+              <div className="card" style={{ textAlign: "center", padding: "40px 16px" }}>
+                <div style={{ fontSize: "48px", marginBottom: "12px" }}>📸</div>
+                <h3>身の回りのものをスキャン</h3>
+                <p style={{ color: "#9A9CC0", fontSize: "12px", marginBottom: "20px" }}>
+                  カメラで撮影するとGeminiが敵モンスターに変換します。
+                </p>
+                <button className="btn-action" disabled={loading} onClick={() => fileInputRef.current?.click()}>
+                  {loading ? "Gemini解析中..." : "📷 カメラを起動して撮影"}
+                </button>
+              </div>
+            ) : (
+              <div className="card">
+                <h3 style={{ color: "#FF5D73", marginBottom: "8px" }}>⚠️ 敵出現！</h3>
+                <img src={previewEnemy.photo} alt={previewEnemy.name} style={{ width: "100%", height: "180px", objectFit: "cover", borderRadius: "8px" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
+                  <h4>{previewEnemy.name}</h4>
+                  <span className="tag" style={{ background: TYPE_CHART[previewEnemy.attribute].color, color: "#000" }}>{previewEnemy.attribute}</span>
+                </div>
+                <p style={{ fontSize: "12px", color: "#9A9CC0" }}>{previewEnemy.description}</p>
+                
+                <div className="stat-grid">
+                  <div className="stat-box"><div className="lbl">HP</div><div className="val">{previewEnemy.stats.hp}</div></div>
+                  <div className="stat-box"><div className="lbl">攻撃</div><div className="val">{previewEnemy.stats.atk}</div></div>
+                  <div className="stat-box"><div className="lbl">防御</div><div className="val">{previewEnemy.stats.def}</div></div>
+                  <div className="stat-box"><div className="lbl">SPD</div><div className="val">{previewEnemy.stats.spd}</div></div>
+                </div>
+
+                <button className="btn-action" style={{ background: "#FF5D73", color: "#fff", marginTop: "8px" }} onClick={() => startBattle(previewEnemy)}>
+                  ⚔️ 相棒（Lv.{partner.level}）でバトル開始
+                </button>
+                <button className="btn-action" style={{ background: "transparent", color: "#9A9CC0", border: "1px solid rgba(255,255,255,0.2)", marginTop: "6px" }} onClick={() => setPreviewEnemy(null)}>
+                  撮り直す
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 2. 図鑑画面（図鑑から再戦も可能） */}
+        {tab === "zukan" && (
+          <div>
+            {gameData.zukan.length === 0 ? (
+              <div className="card" style={{ textAlign: "center", color: "#9A9CC0" }}>まだスキャンした敵がいません。スキャン画面から登録しよう！</div>
+            ) : (
+              gameData.zukan.map(item => (
+                <div key={item.id} className="card" style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                  <img src={item.photo} alt={item.name} style={{ width: "65px", height: "65px", borderRadius: "8px", objectFit: "cover" }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <strong>{item.name}</strong>
+                      <span className="tag" style={{ background: TYPE_CHART[item.attribute]?.color || "#ccc", color: "#000" }}>{item.attribute}</span>
+                    </div>
+                    <div style={{ fontSize: "11px", color: "#9A9CC0", margin: "4px 0" }}>
+                      HP:{item.stats.hp} / ATK:{item.stats.atk} / SPD:{item.stats.spd}
+                    </div>
+                    <button className="btn-action" style={{ padding: "6px", fontSize: "11px", background: "#1B1E3D", color: "#23E0C4", border: "1px solid #23E0C4" }} onClick={() => startBattle(item)}>
+                      ⚔️ この敵と再戦
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* 3. 相棒ステータス＆設定画面 */}
+        {tab === "partner" && (
           <div>
             <div className="card">
-              <h2>相棒: {data.partner.name}</h2>
-              <p style={{ color: "#23E0C4", fontWeight: "bold" }}>Lv. {data.partner.level} (EXP: {data.partner.exp}/100)</p>
-              <div style={{ fontSize: "12px", color: "#9A9CC0", marginTop: "8px" }}>
-                HP: {data.partner.stats.hp} / ATK: {data.partner.stats.atk} / DEF: {data.partner.stats.def} / SPD: {data.partner.stats.spd}
+              <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "8px" }}>
+                {partner.photo ? (
+                  <img src={partner.photo} alt={partner.name} style={{ width: "56px", height: "56px", borderRadius: "50%", objectFit: "cover", border: "2px solid #23E0C4" }} />
+                ) : (
+                  <div style={{ width: "56px", height: "56px", borderRadius: "50%", background: "#12142B", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "26px" }}>🤖</div>
+                )}
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <h2 style={{ margin: 0 }}>{partner.name}</h2>
+                    <span className="tag" style={{ background: TYPE_CHART[partner.attribute].color, color: "#000" }}>{partner.attribute}属性</span>
+                  </div>
+                  <p style={{ color: "#23E0C4", fontWeight: "bold", margin: "4px 0 0" }}>Lv. {partner.level} (EXP: {partner.exp}/100)</p>
+                </div>
+              </div>
+              <p style={{ color: "#9A9CC0", fontSize: "11px", margin: "0 0 10px" }}>
+                名前と見た目は index画面(YUI初期設定)の相棒設定と共通です。変更したい場合はそちらで編集してください。
+              </p>
+
+              <div className="stat-grid">
+                <div className="stat-box"><div className="lbl">HP</div><div className="val">{partner.stats.hp}</div></div>
+                <div className="stat-box"><div className="lbl">攻撃</div><div className="val">{partner.stats.atk}</div></div>
+                <div className="stat-box"><div className="lbl">防御</div><div className="val">{partner.stats.def}</div></div>
+                <div className="stat-box"><div className="lbl">SPD</div><div className="val">{partner.stats.spd}</div></div>
               </div>
             </div>
 
-            <div className="card" style={{ textAlign: "center", padding: "30px 16px" }}>
-              <h3>⚔️ モノバケ・テストバトル</h3>
-              <p style={{ fontSize: "12px", color: "#9A9CC0", marginBottom: "16px" }}>
-                ポケモン風の素早さ比較＆コスト管理バトルをテストできます。
+            <div className="card" style={{ fontSize: "12px" }}>
+              <h4>設定: Gemini APIキー</h4>
+              <p style={{ color: "#9A9CC0", margin: "4px 0" }}>
+                index画面の初期設定で入力したものと共通のキーです。ここで変更すると index画面側にも反映されます。
               </p>
-              <button className="btn-action" onClick={startSampleBattle}>
-                テスト敵とバトル開始！
-              </button>
+              <input
+                type="password"
+                className="api-key-input"
+                placeholder="AIzaSy..."
+                value={apiKey}
+                onChange={handleApiKeyChange}
+              />
             </div>
           </div>
-        ) : (
-          <BattleScreen partner={data.partner} enemy={currentEnemy} onBattleEnd={handleBattleEnd} />
+        )}
+
+        {/* 4. バトル画面 */}
+        {tab === "battle" && activeBattleEnemy && (
+          <BattleScreen partner={partner} enemy={activeBattleEnemy} onBattleEnd={handleBattleEnd} />
         )}
       </div>
     );

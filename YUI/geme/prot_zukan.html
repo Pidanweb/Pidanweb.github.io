@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>モノバケ - 相棒育成＆スキャンRPG (Gemini版)</title>
-  
+  <title>モノバケ図鑑</title>
+
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -29,18 +29,62 @@
       box-sizing: border-box;
       position: relative;
     }
-    .nav-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
-    .tab-btn { flex: 1; padding: 12px 6px; border: none; background: #1B1E3D; color: #9A9CC0; border-radius: 8px; font-weight: bold; font-size: 13px; cursor: pointer; }
-    .tab-btn.active { background: #23E0C4; color: #08221E; }
-    .card { background: #1F2347; border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.1); }
-    .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-right: 6px; }
-    .btn-action { width: 100%; padding: 14px; background: #23E0C4; color: #08221E; border: none; border-radius: 10px; font-weight: bold; font-size: 15px; cursor: pointer; }
-    .btn-action:disabled { opacity: 0.5; }
-    .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 12px 0; text-align: center; }
+    .page-title { font-size: 20px; font-weight: bold; margin: 0 0 4px; }
+    .page-sub { font-size: 12px; color: #9A9CC0; margin: 0 0 16px; }
+    .link-btn {
+      display: inline-block; font-size: 12px; color: #23E0C4; text-decoration: none;
+      border: 1px solid #23E0C4; border-radius: 20px; padding: 6px 14px; margin-bottom: 16px;
+    }
+
+    .card { background: #1F2347; border-radius: 12px; padding: 14px; margin-bottom: 16px; border: 1px solid rgba(255,255,255,0.1); }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+    .rarity-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; background: rgba(242,184,75,0.18); color: #F2B84B; }
+
+    .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 10px 0; text-align: center; }
     .stat-box { background: #12142B; padding: 6px; border-radius: 6px; }
     .stat-box .lbl { font-size: 10px; color: #9A9CC0; }
-    .stat-box .val { font-size: 14px; font-weight: bold; }
-    .api-key-input { width: 100%; padding: 8px; margin-top: 6px; border-radius: 6px; border: 1px solid #333; background: #000; color: #fff; box-sizing: border-box; }
+    .stat-box .val { font-size: 13px; font-weight: bold; }
+
+    /* 相棒AIカード */
+    .partner-card { display: flex; gap: 12px; align-items: center; cursor: pointer; }
+    .partner-avatar { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; border: 2px solid #23E0C4; flex-shrink: 0; }
+    .partner-avatar-fallback { width: 60px; height: 60px; border-radius: 50%; background: #12142B; display: flex; align-items: center; justify-content: center; font-size: 28px; flex-shrink: 0; border: 2px solid #23E0C4; }
+
+    /* モンスターカードグリッド */
+    .section-title { font-size: 14px; font-weight: bold; color: #9A9CC0; margin: 4px 0 10px; }
+    .monster-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .monster-tile {
+      background: #1F2347; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+      padding: 8px 6px 10px; text-align: center; cursor: pointer;
+    }
+    .monster-tile:active { transform: scale(0.96); }
+    .monster-tile img { width: 100%; aspect-ratio: 1/1; object-fit: cover; border-radius: 8px; margin-bottom: 6px; }
+    .monster-tile .mt-name { font-size: 11px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .monster-tile .mt-tags { display: flex; justify-content: center; gap: 4px; margin-top: 4px; }
+    .monster-tile .mt-tags .tag, .monster-tile .mt-tags .rarity-tag { font-size: 9px; padding: 1px 5px; }
+
+    .empty-box { text-align: center; color: #9A9CC0; padding: 40px 10px; font-size: 13px; }
+
+    /* 詳細モーダル */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      display: flex; align-items: flex-end; justify-content: center; z-index: 50;
+    }
+    .modal-card {
+      width: 100%; max-width: 420px; background: #1F2347; border-radius: 20px 20px 0 0;
+      padding: 18px 18px max(18px, env(safe-area-inset-bottom)); max-height: 88vh; overflow-y: auto;
+      box-sizing: border-box;
+    }
+    .modal-close-row { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+    .modal-close-btn { background: rgba(255,255,255,0.08); border: none; color: #F3F1E7; border-radius: 50%; width: 30px; height: 30px; font-size: 14px; cursor: pointer; }
+    .modal-photo { width: 100%; aspect-ratio: 1.3/1; object-fit: cover; border-radius: 12px; margin-bottom: 12px; background: #0b0c1b; }
+    .modal-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+    .modal-name-row h2 { margin: 0; font-size: 20px; }
+    .modal-desc { color: #9A9CC0; font-size: 13px; margin: 4px 0 12px; }
+    .move-row { background: #12142B; border-radius: 8px; padding: 9px 12px; margin-bottom: 8px; }
+    .move-row .mv-top { display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; }
+    .move-row .mv-flavor { color: #9A9CC0; font-size: 11px; margin-top: 2px; }
+    .btn-action { width: 100%; padding: 13px; background: #23E0C4; color: #08221E; border: none; border-radius: 10px; font-weight: bold; font-size: 14px; cursor: pointer; margin-top: 4px; }
   </style>
 </head>
 <body>
@@ -48,345 +92,208 @@
 <div id="root"></div>
 
 <script type="text/babel">
-  const { useState, useRef } = React;
+  const { useState } = React;
 
   const TYPE_CHART = {
-    火: { strong: "風", weak: "水", color: "#FF6B4A" },
-    水: { strong: "火", weak: "風", color: "#3EC6E0" },
-    風: { strong: "水", weak: "火", color: "#7ED957" },
+    火: { color: "#FF6B4A" },
+    水: { color: "#3EC6E0" },
+    風: { color: "#7ED957" },
   };
+  const MOVE_LABEL = { normal: "通常技", strong: "強力技", utility: "回復技" };
 
-  const RARITY_BASE = {
-    C: { hp: 35, atk: 8, def: 6, spd: 10 },
-    B: { hp: 45, atk: 11, def: 8, spd: 12 },
-    A: { hp: 58, atk: 15, def: 11, spd: 14 },
-    S: { hp: 72, atk: 19, def: 14, spd: 16 },
-  };
+  // ---- prot_battle.html / index.html と共有するストレージ ----
+  const STORAGE_KEY = "monobake_save_v2";       // prot_battle.htmlと同じキー名(モンスター図鑑・相棒の戦績)
+  const PROFILE_KEY = "yui_profile";            // index.htmlと同じキー名
+  const CHAR_IMAGE_KEY = "yui_custom_char";     // index.htmlと同じキー名
+  const PENDING_BATTLE_KEY = "monobake_pending_battle_id"; // バトル画面へ渡す「選択した相手」の一時受け渡し用
 
-  function hashStr(s) {
-    let h = 0;
-    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-    return h;
+  function loadGameData() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) { /* 無視 */ }
+    return { partner: null, zukan: [] };
   }
-
-  function buildStats(rarity, name) {
-    const base = RARITY_BASE[rarity] || RARITY_BASE.C;
-    const h = hashStr(name || "monster");
-    const variance = (shift) => 1 + (((h >> shift) % 21) - 10) / 100;
+  function loadSharedProfile() {
+    try {
+      const raw = localStorage.getItem(PROFILE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+  function loadSharedCharImage() {
+    try { return localStorage.getItem(CHAR_IMAGE_KEY) || null; } catch (e) { return null; }
+  }
+  function getPartnerIdentity() {
+    const profile = loadSharedProfile();
     return {
-      hp: Math.round(base.hp * variance(0)),
-      atk: Math.round(base.atk * variance(3)),
-      def: Math.round(base.def * variance(6)),
-      spd: Math.round(base.spd * variance(9)),
+      name: (profile && profile.ai_name) || "ナビモン",
+      photo: loadSharedCharImage(),
     };
   }
 
-  const STORAGE_KEY = "monobake_save_gemini_v1";
-  function loadLocalData() {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
-    return {
-      apiKey: "",
-      partner: {
-        name: "ナビモン", attribute: "風", level: 1, exp: 0,
-        stats: { hp: 50, atk: 12, def: 8, spd: 12 },
-        moves: {
-          normal: { cost: 1, name: "体当たり", flavor: "元気よくぶつかる" },
-          strong: { cost: 3, name: "相棒ストライク", flavor: "絆を込めた強力な一撃" },
-          utility: { cost: 2, name: "応急手当", flavor: "気持ちを落ち着かせて回復" },
-        },
-      },
-      zukan: [],
-    };
+  function TypeTag({ attribute }) {
+    const color = (TYPE_CHART[attribute] || {}).color || "#B8BEC9";
+    return <span className="tag" style={{ background: color, color: "#000" }}>{attribute}</span>;
   }
 
-  function saveLocalData(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
-
-  function resizeImage(file) {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          const max = 400;
-          let w = img.width, h = img.height;
-          if (w > h) { if (w > max) { h = Math.round(h * (max / w)); w = max; } }
-          else { if (h > max) { w = Math.round(w * (max / h)); h = max; } }
-          canvas.width = w; canvas.height = h;
-          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-          resolve(canvas.toDataURL("image/jpeg", 0.7));
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
+  // ---- 図鑑カード一覧(モンスター) ----
+  function MonsterTile({ monster, onOpen }) {
+    return (
+      <div className="monster-tile" onClick={() => onOpen(monster)}>
+        <img src={monster.photo} alt={monster.name} />
+        <div className="mt-name">{monster.name}</div>
+        <div className="mt-tags">
+          <TypeTag attribute={monster.attribute} />
+          <span className="rarity-tag">{monster.rarity}</span>
+        </div>
+      </div>
+    );
   }
 
-  // Gemini API (gemini-1.5-flash) の呼び出し処理
-  async function analyzeImageWithGemini(dataUrl, apiKey) {
-    const base64Data = dataUrl.split(",")[1];
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
-    const requestBody = {
-      contents: [
-        {
-          parts: [
-            { text: "画像の中心的物体を1つ選び、RPGの敵モンスターとしてステータスと技を設定してください。" },
-            { inlineData: { mimeType: "image/jpeg", data: base64Data } }
-          ]
-        }
-      ],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: {
-            name: { type: "STRING", description: "物体の特徴を活かした日本語のモンスター名(12文字以内)" },
-            attribute: { type: "STRING", enum: ["火", "水", "風"] },
-            rarity: { type: "STRING", enum: ["C", "B", "A", "S"] },
-            description: { type: "STRING", description: "特徴を表す一言(30文字以内)" },
-            moves: {
-              type: "OBJECT",
-              properties: {
-                normal: {
-                  type: "OBJECT",
-                  properties: {
-                    cost: { type: "INTEGER" },
-                    name: { type: "STRING" },
-                    flavor: { type: "STRING" }
-                  },
-                  required: ["cost", "name", "flavor"]
-                },
-                strong: {
-                  type: "OBJECT",
-                  properties: {
-                    cost: { type: "INTEGER" },
-                    name: { type: "STRING" },
-                    flavor: { type: "STRING" }
-                  },
-                  required: ["cost", "name", "flavor"]
-                },
-                utility: {
-                  type: "OBJECT",
-                  properties: {
-                    cost: { type: "INTEGER" },
-                    name: { type: "STRING" },
-                    flavor: { type: "STRING" }
-                  },
-                  required: ["cost", "name", "flavor"]
-                }
-              },
-              required: ["normal", "strong", "utility"]
-            }
-          },
-          required: ["name", "attribute", "rarity", "description", "moves"]
-        }
-      }
+  // ---- モンスター詳細モーダル ----
+  function MonsterDetailModal({ monster, onClose }) {
+    const goBattle = () => {
+      // prot_battle.html 側に「この相手と戦いたい」ことを伝える
+      try { localStorage.setItem(PENDING_BATTLE_KEY, monster.id); } catch (e) { /* 無視 */ }
+      window.location.href = "prot_battle.html";
     };
 
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody)
-    });
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-close-row">
+            <button className="modal-close-btn" onClick={onClose}>✕</button>
+          </div>
+          <img className="modal-photo" src={monster.photo} alt={monster.name} />
+          <div className="modal-name-row">
+            <h2>{monster.name}</h2>
+            <TypeTag attribute={monster.attribute} />
+            <span className="rarity-tag">{monster.rarity}</span>
+          </div>
+          <p className="modal-desc">{monster.description}</p>
 
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson.error?.message || "Gemini API通信失敗: APIキーを確認してください");
-    }
+          <div className="stat-grid">
+            <div className="stat-box"><div className="lbl">HP</div><div className="val">{monster.stats.hp}</div></div>
+            <div className="stat-box"><div className="lbl">攻撃</div><div className="val">{monster.stats.atk}</div></div>
+            <div className="stat-box"><div className="lbl">防御</div><div className="val">{monster.stats.def}</div></div>
+            <div className="stat-box"><div className="lbl">SPD</div><div className="val">{monster.stats.spd}</div></div>
+          </div>
 
-    const resData = await res.json();
-    const rawText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!rawText) throw new Error("AIからの応答の取得に失敗しました");
+          {monster.moves && Object.keys(monster.moves).map((k) => (
+            <div className="move-row" key={k}>
+              <div className="mv-top">
+                <span>{monster.moves[k].name}</span>
+                <span style={{ color: "#9A9CC0", fontWeight: "normal" }}>{MOVE_LABEL[k] || k}</span>
+              </div>
+              <div className="mv-flavor">{monster.moves[k].flavor}</div>
+            </div>
+          ))}
 
-    const json = JSON.parse(rawText);
-    json.stats = buildStats(json.rarity, json.name);
-    return json;
+          {monster.createdAt && (
+            <p style={{ fontSize: 11, color: "#6b6f95", marginTop: 8 }}>発見日: {monster.createdAt}</p>
+          )}
+
+          <button className="btn-action" onClick={goBattle}>⚔️ この相手とバトルする</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- 相棒AI詳細モーダル ----
+  function PartnerDetailModal({ identity, partnerData, onClose }) {
+    if (!partnerData) return null;
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-close-row">
+            <button className="modal-close-btn" onClick={onClose}>✕</button>
+          </div>
+          {identity.photo ? (
+            <img className="modal-photo" src={identity.photo} alt={identity.name} style={{ objectFit: "contain", background: "#0b0c1b" }} />
+          ) : (
+            <div className="modal-photo" style={{ display: "flex", alignItems: "center", justifyContent: "center", fontSize: 60 }}>🤖</div>
+          )}
+          <div className="modal-name-row">
+            <h2>{identity.name}</h2>
+            <TypeTag attribute={partnerData.attribute} />
+          </div>
+          <p className="modal-desc">Lv.{partnerData.level} ・ EXP {partnerData.exp}/100</p>
+
+          <div className="stat-grid">
+            <div className="stat-box"><div className="lbl">HP</div><div className="val">{partnerData.stats.hp}</div></div>
+            <div className="stat-box"><div className="lbl">攻撃</div><div className="val">{partnerData.stats.atk}</div></div>
+            <div className="stat-box"><div className="lbl">防御</div><div className="val">{partnerData.stats.def}</div></div>
+            <div className="stat-box"><div className="lbl">SPD</div><div className="val">{partnerData.stats.spd}</div></div>
+          </div>
+
+          {partnerData.moves && Object.keys(partnerData.moves).map((k) => (
+            <div className="move-row" key={k}>
+              <div className="mv-top">
+                <span>{partnerData.moves[k].name}</span>
+                <span style={{ color: "#9A9CC0", fontWeight: "normal" }}>{MOVE_LABEL[k] || k}</span>
+              </div>
+              <div className="mv-flavor">{partnerData.moves[k].flavor}</div>
+            </div>
+          ))}
+
+          <p style={{ fontSize: 11, color: "#6b6f95", marginTop: 8 }}>
+            名前と見た目は index画面の初期設定と共通です。
+          </p>
+        </div>
+      </div>
+    );
   }
 
   function App() {
-    const [gameData, setGameData] = useState(loadLocalData);
-    const [tab, setTab] = useState("partner");
-    const [loading, setLoading] = useState(false);
-    const [previewEnemy, setPreviewEnemy] = useState(null);
-    const fileInputRef = useRef(null);
+    const [gameData] = useState(loadGameData);
+    const [identity] = useState(getPartnerIdentity);
+    const [openMonster, setOpenMonster] = useState(null);
+    const [openPartner, setOpenPartner] = useState(false);
 
-    const handleApiKeyChange = (e) => {
-      const key = e.target.value;
-      const updated = { ...gameData, apiKey: key };
-      setGameData(updated);
-      saveLocalData(updated);
-    };
-
-    const handleFileChange = async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      if (!gameData.apiKey) {
-        alert("Gemini APIキーを入力してください");
-        return;
-      }
-      setLoading(true);
-      try {
-        const dataUrl = await resizeImage(file);
-        const enemyJson = await analyzeImageWithGemini(dataUrl, gameData.apiKey);
-        
-        const newEnemy = {
-          ...enemyJson,
-          id: `enemy_${Date.now()}`,
-          photo: dataUrl,
-          createdAt: new Date().toLocaleDateString()
-        };
-
-        setPreviewEnemy(newEnemy);
-        
-        const updatedZukan = [newEnemy, ...gameData.zukan.filter(z => z.name !== newEnemy.name)];
-        const updatedData = { ...gameData, zukan: updatedZukan };
-        setGameData(updatedData);
-        saveLocalData(updatedData);
-
-      } catch (err) {
-        alert("エラー: " + err.message);
-      } finally {
-        setLoading(false);
-        e.target.value = "";
-      }
-    };
-
-    const partner = gameData.partner;
+    const zukan = gameData.zukan || [];
 
     return (
       <div className="main-container">
-        <div className="nav-tabs">
-          <button className={`tab-btn ${tab === "partner" ? "active" : ""}`} onClick={() => setTab("partner")}>相棒AI</button>
-          <button className={`tab-btn ${tab === "scan" ? "active" : ""}`} onClick={() => setTab("scan")}>スキャン</button>
-          <button className={`tab-btn ${tab === "zukan" ? "active" : ""}`} onClick={() => setTab("zukan")}>図鑑 ({gameData.zukan.length})</button>
+        <div className="page-title">📖 図鑑</div>
+        <p className="page-sub">これまでに出会ったモンスターと、あなたの相棒AI</p>
+        <a className="link-btn" href="prot_battle.html">📸 スキャン・バトル画面へ</a>
+
+        {/* 相棒AIカード */}
+        <div className="card partner-card" onClick={() => setOpenPartner(true)}>
+          {identity.photo ? (
+            <img className="partner-avatar" src={identity.photo} alt={identity.name} />
+          ) : (
+            <div className="partner-avatar-fallback">🤖</div>
+          )}
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: "bold", fontSize: 15 }}>{identity.name}</div>
+            <div style={{ fontSize: 11, color: "#9A9CC0" }}>
+              {gameData.partner ? `Lv.${gameData.partner.level} ・ あなたの相棒AI` : "あなたの相棒AI"}
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: "#23E0C4" }}>詳細 ›</div>
         </div>
 
-        {tab === "partner" && (
-          <div>
-            <div className="card">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <h2>{partner.name}</h2>
-                <span className="tag" style={{ background: TYPE_CHART[partner.attribute].color, color: "#000" }}>
-                  {partner.attribute}属性
-                </span>
-              </div>
-              <p style={{ color: "#23E0C4", fontWeight: "bold", margin: "4px 0" }}>Lv. {partner.level}</p>
-              
-              <div className="stat-grid">
-                <div className="stat-box"><div className="lbl">HP</div><div className="val">{partner.stats.hp}</div></div>
-                <div className="stat-box"><div className="lbl">攻撃</div><div className="val">{partner.stats.atk}</div></div>
-                <div className="stat-box"><div className="lbl">防御</div><div className="val">{partner.stats.def}</div></div>
-                <div className="stat-box"><div className="lbl">SPD</div><div className="val">{partner.stats.spd}</div></div>
-              </div>
-
-              <h4 style={{ margin: "12px 0 6px", fontSize: "13px" }}>所持技</h4>
-              {Object.keys(partner.moves).map(k => (
-                <div key={k} style={{ fontSize: "12px", background: "#12142B", padding: "8px", borderRadius: "6px", marginBottom: "4px" }}>
-                  <span style={{ color: "#F2B84B" }}>[コスト{partner.moves[k].cost}]</span> <strong>{partner.moves[k].name}</strong>
-                  <div style={{ color: "#9A9CC0", fontSize: "11px" }}>{partner.moves[k].flavor}</div>
-                </div>
-              ))}
-            </div>
-
-            <div className="card" style={{ fontSize: "12px" }}>
-              <h4>設定: Gemini APIキー</h4>
-              <p style={{ color: "#9A9CC0", margin: "4px 0" }}>Google AI Studioで取得したAPIキーを入力してください</p>
-              <input
-                type="password"
-                className="api-key-input"
-                placeholder="AIzaSy..."
-                value={gameData.apiKey}
-                onChange={handleApiKeyChange}
-              />
-            </div>
+        {/* モンスター一覧 */}
+        <div className="section-title">出会ったモンスター（{zukan.length}体）</div>
+        {zukan.length === 0 ? (
+          <div className="empty-box">
+            まだモンスターがいません。<br />
+            「スキャン・バトル画面」で物を撮影してみよう。
+          </div>
+        ) : (
+          <div className="monster-grid">
+            {zukan.map((m) => (
+              <MonsterTile key={m.id} monster={m} onOpen={setOpenMonster} />
+            ))}
           </div>
         )}
 
-        {tab === "scan" && (
-          <div>
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              ref={fileInputRef}
-              style={{ display: "none" }}
-              onChange={handleFileChange}
-            />
-            
-            {!previewEnemy ? (
-              <div className="card" style={{ textAlign: "center", padding: "40px 16px" }}>
-                <div style={{ fontSize: "48px", marginBottom: "12px" }}>📸</div>
-                <h3>身の回りのものをスキャン</h3>
-                <p style={{ color: "#9A9CC0", fontSize: "12px", marginBottom: "20px" }}>
-                  iPhone/スマホのカメラで撮影した物体をGemini 1.5 Flashが瞬時に解析します。
-                </p>
-                <button
-                  className="btn-action"
-                  disabled={loading}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {loading ? "Gemini解析中..." : "📷 カメラを起動して撮影"}
-                </button>
-              </div>
-            ) : (
-              <div className="card">
-                <h3 style={{ color: "#FF5D73", marginBottom: "8px" }}>⚠️ 敵出現！</h3>
-                <img src={previewEnemy.photo} alt={previewEnemy.name} style={{ width: "100%", height: "180px", objectFit: "cover", borderRadius: "8px" }} />
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
-                  <h4>{previewEnemy.name}</h4>
-                  <span className="tag" style={{ background: TYPE_CHART[previewEnemy.attribute].color, color: "#000" }}>
-                    {previewEnemy.attribute}
-                  </span>
-                </div>
-                <p style={{ fontSize: "12px", color: "#9A9CC0" }}>{previewEnemy.description}</p>
-                
-                <div className="stat-grid">
-                  <div className="stat-box"><div className="lbl">HP</div><div className="val">{previewEnemy.stats.hp}</div></div>
-                  <div className="stat-box"><div className="lbl">攻撃</div><div className="val">{previewEnemy.stats.atk}</div></div>
-                  <div className="stat-box"><div className="lbl">防御</div><div className="val">{previewEnemy.stats.def}</div></div>
-                  <div className="stat-box"><div className="lbl">SPD</div><div className="val">{previewEnemy.stats.spd}</div></div>
-                </div>
-
-                <button className="btn-action" style={{ background: "#FF5D73", color: "#fff", marginTop: "8px" }} onClick={() => alert("バトル機能へ展開可能！")}>
-                  ⚔️ バトルを開始する
-                </button>
-                <button
-                  className="btn-action"
-                  style={{ background: "transparent", color: "#9A9CC0", border: "1px solid rgba(255,255,255,0.2)", marginTop: "6px" }}
-                  onClick={() => setPreviewEnemy(null)}
-                >
-                  撮り直す
-                </button>
-              </div>
-            )}
-          </div>
+        {openMonster && (
+          <MonsterDetailModal monster={openMonster} onClose={() => setOpenMonster(null)} />
         )}
-
-        {tab === "zukan" && (
-          <div>
-            {gameData.zukan.length === 0 ? (
-              <div className="card" style={{ textAlign: "center", color: "#9A9CC0" }}>まだスキャンした敵がいません。</div>
-            ) : (
-              gameData.zukan.map(item => (
-                <div key={item.id} className="card" style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                  <img src={item.photo} alt={item.name} style={{ width: "60px", height: "60px", borderRadius: "8px", objectFit: "cover" }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <strong>{item.name}</strong>
-                      <span className="tag" style={{ background: TYPE_CHART[item.attribute]?.color || "#ccc", color: "#000" }}>
-                        {item.attribute}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: "11px", color: "#9A9CC0", marginTop: "2px" }}>
-                      HP:{item.stats.hp} / ATK:{item.stats.atk} / SPD:{item.stats.spd}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+        {openPartner && (
+          <PartnerDetailModal identity={identity} partnerData={gameData.partner} onClose={() => setOpenPartner(false)} />
         )}
       </div>
     );
