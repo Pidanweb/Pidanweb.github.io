@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>モノバケ - 相棒育成＆物体スキャンRPG</title>
+  <title>モノバケ - 相棒育成＆スキャンRPG (Gemini版)</title>
   
-  <!-- React & Babel をブラウザで直接動かすためのCDNライブラリ -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -41,7 +40,6 @@
     .stat-box { background: #12142B; padding: 6px; border-radius: 6px; }
     .stat-box .lbl { font-size: 10px; color: #9A9CC0; }
     .stat-box .val { font-size: 14px; font-weight: bold; }
-    .api-key-box { background: rgba(255,93,115,0.1); border: 1px solid #FF5D73; padding: 10px; border-radius: 8px; margin-bottom: 12px; font-size: 12px; }
     .api-key-input { width: 100%; padding: 8px; margin-top: 6px; border-radius: 6px; border: 1px solid #333; background: #000; color: #fff; box-sizing: border-box; }
   </style>
 </head>
@@ -50,9 +48,8 @@
 <div id="root"></div>
 
 <script type="text/babel">
-  const { useState, useRef, useEffect } = React;
+  const { useState, useRef } = React;
 
-  // 1. 3属性ルール
   const TYPE_CHART = {
     火: { strong: "風", weak: "水", color: "#FF6B4A" },
     水: { strong: "火", weak: "風", color: "#3EC6E0" },
@@ -65,22 +62,6 @@
     A: { hp: 58, atk: 15, def: 11, spd: 14 },
     S: { hp: 72, atk: 19, def: 14, spd: 16 },
   };
-
-  const SYSTEM_PROMPT = `あなたは「撮影された日常の物体をモンスター（敵）化するゲーム」のエンジンです。
-渡された画像の中心的な物体を1つ選び、以下のJSON形式のみで返してください。説明文やコードフェンスは禁止です。
-
-フィールド定義:
-- name: 物体の特徴を活かした日本語モンスター名(12文字以内)
-- attribute: 次の3つのうち必ず1つ選ぶ: "火", "水", "風"
-- rarity: 物体の珍しさ・複雑さから1つ: "C","B","A","S"
-- description: 特徴を表す一言(30文字以内)
-- moves: 3つの技オブジェクト
-  - normal: 基本攻撃 (cost: 1, name: 10文字以内, flavor: 20文字以内)
-  - strong: 大技 (cost: 3, name: 10文字以内, flavor: 20文字以内)
-  - utility: とくいわざ (cost: 2, name: 10文字以内, flavor: 20文字以内)
-
-出力例:
-{"name":"あつあつマグ","attribute":"火","rarity":"B","description":"いつも湯気を立てている","moves":{"normal":{"cost":1,"name":"湯気攻撃","flavor":"熱い湯気をかける"},"strong":{"cost":3,"name":"沸騰アタック","flavor":"一気に吹きこぼれる"},"utility":{"cost":2,"name":"保温ガード","flavor":"温かさで守る"}}}`;
 
   function hashStr(s) {
     let h = 0;
@@ -100,18 +81,14 @@
     };
   }
 
-  // LocalStorage 保存関数
-  const STORAGE_KEY = "monobake_save_v3";
+  const STORAGE_KEY = "monobake_save_gemini_v1";
   function loadLocalData() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) return JSON.parse(saved);
     return {
       apiKey: "",
       partner: {
-        name: "ナビモン",
-        attribute: "風",
-        level: 1,
-        exp: 0,
+        name: "ナビモン", attribute: "風", level: 1, exp: 0,
         stats: { hp: 50, atk: 12, def: 8, spd: 12 },
         moves: {
           normal: { cost: 1, name: "体当たり", flavor: "元気よくぶつかる" },
@@ -123,9 +100,7 @@
     };
   }
 
-  function saveLocalData(data) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }
+  function saveLocalData(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
 
   function resizeImage(file) {
     return new Promise((resolve) => {
@@ -148,37 +123,84 @@
     });
   }
 
-  async function analyzeImage(dataUrl, apiKey) {
-    const base64 = dataUrl.split(",")[1];
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true" // ブラウザ直接通信を許可
-      },
-      body: JSON.stringify({
-        model: "claude-3-5-sonnet-20241022",
-        max_tokens: 800,
-        system: SYSTEM_PROMPT,
-        messages: [{
-          role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } },
-            { type: "text", text: "敵モンスターのJSONのみを出力してください。" }
-          ]
-        }]
-      })
-    });
-    if (!res.ok) throw new Error("API通信失敗: APIキーを確認してください");
-    const data = await res.json();
-    const rawText = data.content?.find(b => b.type === "text")?.text || "";
-    const cleaned = rawText.replace(/```json|```/g, "").trim();
-    const json = JSON.parse(cleaned.match(/\{[\s\S]*\}/)[0]);
+  // Gemini API (gemini-1.5-flash) の呼び出し処理
+  async function analyzeImageWithGemini(dataUrl, apiKey) {
+    const base64Data = dataUrl.split(",")[1];
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-    if (!TYPE_CHART[json.attribute]) json.attribute = "風";
-    if (!RARITY_BASE[json.rarity]) json.rarity = "C";
+    const requestBody = {
+      contents: [
+        {
+          parts: [
+            { text: "画像の中心的物体を1つ選び、RPGの敵モンスターとしてステータスと技を設定してください。" },
+            { inlineData: { mimeType: "image/jpeg", data: base64Data } }
+          ]
+        }
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            name: { type: "STRING", description: "物体の特徴を活かした日本語のモンスター名(12文字以内)" },
+            attribute: { type: "STRING", enum: ["火", "水", "風"] },
+            rarity: { type: "STRING", enum: ["C", "B", "A", "S"] },
+            description: { type: "STRING", description: "特徴を表す一言(30文字以内)" },
+            moves: {
+              type: "OBJECT",
+              properties: {
+                normal: {
+                  type: "OBJECT",
+                  properties: {
+                    cost: { type: "INTEGER" },
+                    name: { type: "STRING" },
+                    flavor: { type: "STRING" }
+                  },
+                  required: ["cost", "name", "flavor"]
+                },
+                strong: {
+                  type: "OBJECT",
+                  properties: {
+                    cost: { type: "INTEGER" },
+                    name: { type: "STRING" },
+                    flavor: { type: "STRING" }
+                  },
+                  required: ["cost", "name", "flavor"]
+                },
+                utility: {
+                  type: "OBJECT",
+                  properties: {
+                    cost: { type: "INTEGER" },
+                    name: { type: "STRING" },
+                    flavor: { type: "STRING" }
+                  },
+                  required: ["cost", "name", "flavor"]
+                }
+              },
+              required: ["normal", "strong", "utility"]
+            }
+          },
+          required: ["name", "attribute", "rarity", "description", "moves"]
+        }
+      }
+    };
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.error?.message || "Gemini API通信失敗: APIキーを確認してください");
+    }
+
+    const resData = await res.json();
+    const rawText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!rawText) throw new Error("AIからの応答の取得に失敗しました");
+
+    const json = JSON.parse(rawText);
     json.stats = buildStats(json.rarity, json.name);
     return json;
   }
@@ -201,13 +223,13 @@
       const file = e.target.files?.[0];
       if (!file) return;
       if (!gameData.apiKey) {
-        alert("Claude APIキーを入力してください");
+        alert("Gemini APIキーを入力してください");
         return;
       }
       setLoading(true);
       try {
         const dataUrl = await resizeImage(file);
-        const enemyJson = await analyzeImage(dataUrl, gameData.apiKey);
+        const enemyJson = await analyzeImageWithGemini(dataUrl, gameData.apiKey);
         
         const newEnemy = {
           ...enemyJson,
@@ -235,14 +257,12 @@
 
     return (
       <div className="main-container">
-        {/* タブ */}
         <div className="nav-tabs">
           <button className={`tab-btn ${tab === "partner" ? "active" : ""}`} onClick={() => setTab("partner")}>相棒AI</button>
           <button className={`tab-btn ${tab === "scan" ? "active" : ""}`} onClick={() => setTab("scan")}>スキャン</button>
           <button className={`tab-btn ${tab === "zukan" ? "active" : ""}`} onClick={() => setTab("zukan")}>図鑑 ({gameData.zukan.length})</button>
         </div>
 
-        {/* 相棒画面 */}
         {tab === "partner" && (
           <div>
             <div className="card">
@@ -271,12 +291,12 @@
             </div>
 
             <div className="card" style={{ fontSize: "12px" }}>
-              <h4>設定: APIキー</h4>
-              <p style={{ color: "#9A9CC0", margin: "4px 0" }}>Claude APIのキーを設定してください（スマホ内に安全にローカル保存されます）</p>
+              <h4>設定: Gemini APIキー</h4>
+              <p style={{ color: "#9A9CC0", margin: "4px 0" }}>Google AI Studioで取得したAPIキーを入力してください</p>
               <input
                 type="password"
                 className="api-key-input"
-                placeholder="sk-ant-..."
+                placeholder="AIzaSy..."
                 value={gameData.apiKey}
                 onChange={handleApiKeyChange}
               />
@@ -284,10 +304,8 @@
           </div>
         )}
 
-        {/* スキャン画面（iPhoneのカメラ連携） */}
         {tab === "scan" && (
           <div>
-            {/* iPhone/Androidの標準カメラを呼び出すinput */}
             <input
               type="file"
               accept="image/*"
@@ -302,14 +320,14 @@
                 <div style={{ fontSize: "48px", marginBottom: "12px" }}>📸</div>
                 <h3>身の回りのものをスキャン</h3>
                 <p style={{ color: "#9A9CC0", fontSize: "12px", marginBottom: "20px" }}>
-                  iPhoneのカメラで日常の物品を撮影すると、敵モンスターとして登場します。
+                  iPhone/スマホのカメラで撮影した物体をGemini 1.5 Flashが瞬時に解析します。
                 </p>
                 <button
                   className="btn-action"
                   disabled={loading}
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  {loading ? "AI解析中..." : "📷 カメラを起動して撮影"}
+                  {loading ? "Gemini解析中..." : "📷 カメラを起動して撮影"}
                 </button>
               </div>
             ) : (
@@ -331,8 +349,8 @@
                   <div className="stat-box"><div className="lbl">SPD</div><div className="val">{previewEnemy.stats.spd}</div></div>
                 </div>
 
-                <button className="btn-action" style={{ background: "#FF5D73", color: "#fff", marginTop: "8px" }} onClick={() => alert("※バトル画面との合体準備完了！")}>
-                  ⚔️ 相棒（Lv.{partner.level}）でバトル
+                <button className="btn-action" style={{ background: "#FF5D73", color: "#fff", marginTop: "8px" }} onClick={() => alert("バトル機能へ展開可能！")}>
+                  ⚔️ バトルを開始する
                 </button>
                 <button
                   className="btn-action"
@@ -346,7 +364,6 @@
           </div>
         )}
 
-        {/* 図鑑画面 */}
         {tab === "zukan" && (
           <div>
             {gameData.zukan.length === 0 ? (
