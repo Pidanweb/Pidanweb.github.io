@@ -166,23 +166,72 @@
     });
   }
 
-  // 敵モンスターの設定生成(JSON)と、画像への「顔パーツ合成」を1回のリクエストで行う。
-  // 画像編集ができるモデル(gemini-3.1-flash-image)を使うことで、
-  // 撮影した物体そのものに目・口を描き足した画像がそのまま返ってくる。
-  const ENEMY_GEN_PROMPT = `あなたは「撮影した日用品を敵モンスターに変えるゲーム」の生成エンジンです。
-入力画像の中心的な物体を1つ選び、次の2つを出力してください。
+  // ---- 顔パーツをこちら側で描き足す(Canvas処理・API呼び出し不要・無料) ----
+  // Gemini の画像生成モデル(gemini-3.1-flash-image)は従量課金が前提で、
+  // 無料枠だけのAPIキーだと quota exceeded (0クォータ) や 429 で弾かれることがある。
+  // そのため「顔を足す」処理はAIに頼らず、撮影した写真の上に
+  // プログラム側で目と口を描画する方式に変更した。
+  function addCartoonFace(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
 
-1. 先頭に、以下のJSON形式のテキストだけをコードブロックとして出力する(説明文は付けない):
-{"name":"(12文字以内の日本語モンスター名)","attribute":"火・水・風のいずれか1つ","rarity":"C・B・A・Sのいずれか1つ(珍しさ・複雑さが高いほど上位)","description":"(30文字以内の紹介文)","moves":{"normal":{"cost":1,"name":"(10文字以内)","flavor":"(20文字以内の演出セリフ)"},"strong":{"cost":3,"name":"...","flavor":"..."},"utility":{"cost":2,"name":"...(回復技)","flavor":"..."}}}
+        const cx = canvas.width / 2;
+        const cy = canvas.height * 0.42;
+        const eyeOffsetX = canvas.width * 0.13;
+        const eyeR = Math.max(4, canvas.width * 0.045);
 
-2. 続けて、入力画像を編集した画像を1枚生成する。編集内容: 物体の形・色・素材はそのまま変えず、そこに漫画的な目と口(必要なら眉や簡単な手足の線)だけを描き足し、その物体自身が生きたモンスターに見えるようにする。背景や物体そのものの造形を大きく変えないこと。`;
+        [-1, 1].forEach((dir) => {
+          // 白目
+          ctx.beginPath();
+          ctx.fillStyle = "#ffffff";
+          ctx.ellipse(cx + dir * eyeOffsetX, cy, eyeR, eyeR * 1.15, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.lineWidth = Math.max(1, eyeR * 0.15);
+          ctx.strokeStyle = "#161616";
+          ctx.stroke();
+          // 黒目
+          ctx.beginPath();
+          ctx.fillStyle = "#161616";
+          ctx.ellipse(cx + dir * eyeOffsetX, cy + eyeR * 0.1, eyeR * 0.5, eyeR * 0.55, 0, 0, Math.PI * 2);
+          ctx.fill();
+          // ハイライト
+          ctx.beginPath();
+          ctx.fillStyle = "#ffffff";
+          ctx.ellipse(cx + dir * eyeOffsetX - eyeR * 0.15, cy - eyeR * 0.15, eyeR * 0.15, eyeR * 0.15, 0, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        // 口(にっこりカーブ)
+        const mouthY = cy + eyeR * 2.2;
+        const mouthWidth = canvas.width * 0.16;
+        ctx.beginPath();
+        ctx.strokeStyle = "#161616";
+        ctx.lineWidth = Math.max(2, canvas.width * 0.012);
+        ctx.lineCap = "round";
+        ctx.arc(cx, mouthY - mouthWidth * 0.3, mouthWidth, 0.15 * Math.PI, 0.85 * Math.PI);
+        ctx.stroke();
+
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      img.onerror = () => reject(new Error("顔の描画に失敗しました"));
+      img.src = dataUrl;
+    });
+  }
+
+  // 敵モンスターの設定生成(JSON)。画像編集は行わず、テキストのみをAIに生成させる
+  // (無料枠の手厚い軽量モデルだけで完結させ、画像生成のクォータ問題を回避する)。
+  const ENEMY_GEN_PROMPT = "画像の中心的物体を1つ選び、RPGの敵モンスターとして設定してください。";
 
   async function analyzeImageWithGemini(dataUrl, apiKey) {
     const base64Data = dataUrl.split(",")[1];
-    // 画像編集(顔パーツ合成)に対応したモデルを使用。
-    // もしこのモデルが重い/使えない場合は、末尾を "gemini-3.1-flash-lite-image" に変えると
-    // より軽量・低コストな版に切り替えられる(画質・編集精度は少し下がる)。
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent?key=${apiKey}`;
+    // テキスト生成のみを行う軽量モデル。画像は生成しないので無料枠の対象になりやすい。
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`;
 
     const requestBody = {
       contents: [{
@@ -192,7 +241,26 @@
         ]
       }],
       generationConfig: {
-        responseModalities: ["TEXT", "IMAGE"]
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            name: { type: "STRING", description: "物体の特徴を活かした日本語モンスター名(12文字以内)" },
+            attribute: { type: "STRING", enum: ["火", "水", "風"] },
+            rarity: { type: "STRING", enum: ["C", "B", "A", "S"] },
+            description: { type: "STRING", description: "特徴を表す一言(30文字以内)" },
+            moves: {
+              type: "OBJECT",
+              properties: {
+                normal: { type: "OBJECT", properties: { cost: { type: "INTEGER" }, name: { type: "STRING" }, flavor: { type: "STRING" } }, required: ["cost", "name", "flavor"] },
+                strong: { type: "OBJECT", properties: { cost: { type: "INTEGER" }, name: { type: "STRING" }, flavor: { type: "STRING" } }, required: ["cost", "name", "flavor"] },
+                utility: { type: "OBJECT", properties: { cost: { type: "INTEGER" }, name: { type: "STRING" }, flavor: { type: "STRING" } }, required: ["cost", "name", "flavor"] }
+              },
+              required: ["normal", "strong", "utility"]
+            }
+          },
+          required: ["name", "attribute", "rarity", "description", "moves"]
+        }
       }
     };
 
@@ -208,20 +276,12 @@
     }
 
     const resData = await res.json();
-    const parts = resData.candidates?.[0]?.content?.parts || [];
-    const textPart = parts.find(p => typeof p.text === "string");
-    const imagePart = parts.find(p => p.inlineData && p.inlineData.data);
-
-    if (!textPart) throw new Error("モンスター設定の生成に失敗しました");
-    if (!imagePart) throw new Error("モンスター画像の生成に失敗しました(モデルが画像を返しませんでした)");
-
-    const jsonMatch = textPart.text.replace(/```json|```/g, "").match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("JSON形式で解析できませんでした");
-    const json = JSON.parse(jsonMatch[0]);
-
+    const rawText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!rawText) throw new Error("AIからの応答の取得に失敗しました");
+    const json = JSON.parse(rawText);
     json.stats = buildStats(json.rarity, json.name);
-    // 生成された「顔付き」画像を、この後の表示・保存すべてに使う
-    json.photo = `data:${imagePart.inlineData.mimeType || "image/png"};base64,${imagePart.inlineData.data}`;
+    // 写真そのものに、こちら側で目と口を描き足す(API呼び出しなし)
+    json.photo = await addCartoonFace(dataUrl);
     return json;
   }
 
@@ -456,7 +516,7 @@
         const enemyJson = await analyzeImageWithGemini(dataUrl, apiKey);
 
         const newEnemy = {
-          ...enemyJson, // enemyJson.photo は既に「顔が合成済みの」AI編集画像
+          ...enemyJson, // enemyJson.photo は既に顔を描き足し済みの画像(Canvas処理・API不使用)
           id: `enemy_${Date.now()}`,
           createdAt: new Date().toLocaleDateString()
         };
