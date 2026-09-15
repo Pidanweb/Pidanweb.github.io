@@ -212,12 +212,19 @@
     });
   }
 
-  // ステップ1: 画像解析とステータス生成 (最新の gemini-3.5-flash-lite を使用)
+  // ステップ1: 画像解析とステータス生成 (ドット絵風プロンプト指定)
   async function analyzeImageWithGemini(dataUrl, apiKey) {
     const base64Data = dataUrl.split(",")[1];
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
 
-    const ENEMY_GEN_PROMPT = "画像の中心的物体を1つ選び、RPGの敵モンスターとして設定してください。また、その物体をモチーフにしたかっこいい/かわいいモンスターの見た目（英語プロンプト）も image_prompt に記述してください。";
+    const ENEMY_GEN_PROMPT = `
+画像の中心的物体を1つ選び、RPGの敵モンスターとして設定してください。
+また、その物体をモチーフにしたドット絵モンスターの英語プロンプトを image_prompt に記述してください。
+
+【image_prompt のルール】
+- モンスターの特徴を表現した英語記述にすること。
+- スタイル指定として必ず "16-bit pixel art style, retro RPG monster sprite, retro game, black background" を末尾に含めてください。
+    `;
 
     const requestBody = {
       contents: [{
@@ -235,7 +242,7 @@
             attribute: { type: "STRING", enum: ["火", "水", "風"] },
             rarity: { type: "STRING", enum: ["C", "B", "A", "S"] },
             description: { type: "STRING", description: "特徴を表す一言(30文字以内)" },
-            image_prompt: { type: "STRING", description: "モンスター生成用の英語テキスト説明(例: A cute plastic bottle monster, anime style)" },
+            image_prompt: { type: "STRING", description: "ドット絵用の英語プロンプト(例: A flaming stapler monster, 16-bit pixel art style, retro RPG sprite)" },
             moves: {
               type: "OBJECT",
               properties: {
@@ -259,21 +266,24 @@
 
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson.error?.message || "APIキーが無効または通信エラーです");
+      const detail = errJson.error?.message || `HTTPエラー ${res.status}`;
+      throw new Error(`[解析失敗] ${detail}`);
     }
 
     const resData = await res.json();
     const rawText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!rawText) throw new Error("AIからの応答の取得に失敗しました");
+    if (!rawText) throw new Error("[解析失敗] Geminiからの応答データが空でした");
+    
     const json = JSON.parse(rawText);
     json.stats = buildStats(json.rarity, json.name);
     return json;
   }
 
-  // ステップ2: Geminiモデルによるモンスター画像生成
+  // ステップ2: ドット絵画像生成 & エラー詳細の返却
   async function generateMonsterImageWithGemini(promptText, apiKey) {
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
-    const fullPrompt = `Create a game character illustration of a monster based on: ${promptText}. Video game monster style, clean background, high quality.`;
+    
+    const fullPrompt = `16-bit pixel art sprite of a monster: ${promptText}. Video game pixel art, detailed retro graphics, solid dark background, centered composition.`;
 
     const requestBody = {
       contents: [{
@@ -289,7 +299,8 @@
 
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson.error?.message || "画像生成に失敗しました（無料枠の上限に達した可能性があります）");
+      const detail = errJson.error?.message || `HTTPエラー ${res.status}`;
+      throw new Error(`[画像生成失敗] ${detail}`);
     }
 
     const resData = await res.json();
@@ -300,7 +311,7 @@
         return `data:${mime};base64,${part.inlineData.data}`;
       }
     }
-    throw new Error("生成画像データが見つかりませんでした");
+    throw new Error("[画像生成失敗] 生成画像データの取得に失敗しました");
   }
 
   function calcDamage(attacker, defender, moveMult) {
@@ -417,7 +428,7 @@
               <div style={{ fontSize: "10px", textAlign: "right", color: "#9A9CC0", marginTop: "2px" }}>HP: {eHp}/{eMaxHp}</div>
             </div>
             <div style={{ textAlign: "center", margin: "10px 0" }}>
-              <img src={enemy.photo} alt={enemy.name} style={{ width: "90px", height: "90px", objectFit: "cover", borderRadius: "50%", border: "3px solid #FF5D73" }} />
+              <img src={enemy.photo} alt={enemy.name} style={{ width: "90px", height: "90px", objectFit: "cover", borderRadius: "8px", border: "3px solid #FF5D73", imageRendering: "pixelated" }} />
             </div>
           </div>
 
@@ -509,16 +520,24 @@
       try {
         setLoadingMsg("画像を解析中...");
         const dataUrl = await resizeImage(file);
-        const enemyJson = await analyzeImageWithGemini(dataUrl, apiKey);
+        
+        let enemyJson = null;
+        try {
+          enemyJson = await analyzeImageWithGemini(dataUrl, apiKey);
+        } catch (parseErr) {
+          alert(`⚠️ 画像解析エラーが発生しました:\n${parseErr.message}`);
+          throw parseErr;
+        }
 
         let finalPhoto = "";
 
         if (useAiImageGen) {
           try {
-            setLoadingMsg("AIでモンスター画像を生成中...");
+            setLoadingMsg("ドット絵モンスターを生成中...");
             finalPhoto = await generateMonsterImageWithGemini(enemyJson.image_prompt, apiKey);
           } catch (imgErr) {
-            console.warn("AI画像生成失敗。キャンバス顔描画にフォールバックします:", imgErr);
+            console.error(imgErr);
+            alert(`⚠️ AI画像生成エラーが発生したため、簡易画像に切り替えます:\n${imgErr.message}`);
             finalPhoto = await addCartoonFace(dataUrl);
           }
         } else {
@@ -540,7 +559,7 @@
         saveLocalData(updatedData);
 
       } catch (err) {
-        alert("エラー: " + err.message);
+        console.error("全体エラー:", err);
       } finally {
         setLoading(false);
         setLoadingMsg("");
@@ -620,7 +639,7 @@
                 <div style={{ fontSize: "48px", marginBottom: "12px" }}>📸</div>
                 <h3>身の回りのものをスキャン</h3>
                 <p style={{ color: "#9A9CC0", fontSize: "12px", marginBottom: "16px" }}>
-                  カメラで撮影するとGeminiが敵モンスターに変換します。
+                  カメラで撮影するとGeminiがドット絵モンスターに変換します。
                 </p>
 
                 <div style={{ marginBottom: "20px", fontSize: "12px", background: "#12142B", padding: "8px", borderRadius: "8px", display: "inline-block" }}>
@@ -630,10 +649,10 @@
                       checked={useAiImageGen}
                       onChange={(e) => setUseAiImageGen(e.target.checked)}
                     />
-                    Gemini AI画像生成を使用する
+                    Gemini AI画像生成（ドット絵）を使用する
                   </label>
                   <div style={{ fontSize: "10px", color: "#9A9CC0", marginTop: "2px" }}>
-                    {useAiImageGen ? "AIがイラストを新規作成" : "写真そのまま＋顔パーツ合成（高速・無制限）"}
+                    {useAiImageGen ? "AIがレトロドット絵を新規作成" : "写真そのまま＋顔パーツ合成（高速・無制限）"}
                   </div>
                 </div>
 
@@ -644,7 +663,7 @@
             ) : (
               <div className="card">
                 <h3 style={{ color: "#FF5D73", marginBottom: "8px" }}>⚠️ 敵出現！</h3>
-                <img src={previewEnemy.photo} alt={previewEnemy.name} style={{ width: "100%", height: "180px", objectFit: "cover", borderRadius: "8px" }} />
+                <img src={previewEnemy.photo} alt={previewEnemy.name} style={{ width: "100%", height: "180px", objectFit: "cover", borderRadius: "8px", imageRendering: "pixelated" }} />
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
                   <h4>{previewEnemy.name}</h4>
                   <span className="tag" style={{ background: TYPE_CHART[previewEnemy.attribute].color, color: "#000" }}>{previewEnemy.attribute}</span>
@@ -677,7 +696,7 @@
             ) : (
               gameData.zukan.map(item => (
                 <div key={item.id} className="card" style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                  <img src={item.photo} alt={item.name} style={{ width: "65px", height: "65px", borderRadius: "8px", objectFit: "cover" }} />
+                  <img src={item.photo} alt={item.name} style={{ width: "65px", height: "65px", borderRadius: "8px", objectFit: "cover", imageRendering: "pixelated" }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <strong>{item.name}</strong>
