@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>モノバケ - 相棒育成＆カメラスキャンRPG</title>
+  <title>モノバケ - 分離処理テスト版</title>
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -27,15 +27,13 @@
       min-height: 100vh;
       padding: 16px;
       box-sizing: border-box;
-      position: relative;
     }
-    .nav-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
-    .tab-btn { flex: 1; padding: 10px 4px; border: none; background: #1B1E3D; color: #9A9CC0; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer; }
-    .tab-btn.active { background: #23E0C4; color: #08221E; }
     .card { background: #1F2347; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.1); }
     .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
-    .btn-action { width: 100%; padding: 12px; background: #23E0C4; color: #08221E; border: none; border-radius: 10px; font-weight: bold; font-size: 14px; cursor: pointer; }
+    .btn-action { width: 100%; padding: 12px; background: #23E0C4; color: #08221E; border: none; border-radius: 10px; font-weight: bold; font-size: 14px; cursor: pointer; margin-top: 8px; }
     .btn-action:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-save { background: #F2B84B; color: #000; }
+    .btn-secondary { background: transparent; color: #9A9CC0; border: 1px solid rgba(255,255,255,0.2); }
     
     .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 10px 0; text-align: center; }
     .stat-box { background: #12142B; padding: 6px; border-radius: 6px; }
@@ -43,15 +41,8 @@
     .stat-box .val { font-size: 13px; font-weight: bold; }
     .api-key-input { width: 100%; padding: 8px; margin-top: 6px; border-radius: 6px; border: 1px solid #333; background: #000; color: #fff; box-sizing: border-box; }
 
-    /* バトル用レイアウト */
-    .battle-stage { position: relative; background: radial-gradient(circle, #1c2050 0%, #0d0f24 100%); border-radius: 12px; padding: 12px; border: 1px solid rgba(255,255,255,0.1); margin-bottom: 12px; }
-    .status-box { background: rgba(18, 20, 43, 0.85); border-radius: 8px; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.15); }
-    .hp-bar-outer { background: #000; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 4px; border: 1px solid #333; }
-    .hp-bar-inner { height: 100%; transition: width 0.3s ease; }
-    .battle-log { background: #000; border-radius: 8px; padding: 10px; font-size: 12px; height: 80px; overflow-y: auto; line-height: 1.4; color: #23E0C4; border: 1px solid rgba(255,255,255,0.1); margin-bottom: 12px; }
-    .move-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .move-btn { background: #1F2347; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 10px; color: #fff; text-align: left; cursor: pointer; }
-    .pp-badge { background: #F2B84B; color: #000; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: bold; }
+    .step-header { font-size: 14px; font-weight: bold; color: #23E0C4; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px; }
+    .error-box { background: #421118; border: 1px solid #FF5D73; color: #FFD1D7; padding: 8px; border-radius: 6px; font-size: 11px; margin-top: 8px; white-space: pre-wrap; word-break: break-all; }
   </style>
 </head>
 <body>
@@ -62,40 +53,13 @@
   const { useState, useRef } = React;
 
   const TYPE_CHART = {
-    火: { strong: "風", weak: "水", color: "#FF6B4A" },
-    水: { strong: "火", weak: "風", color: "#3EC6E0" },
-    風: { strong: "水", weak: "火", color: "#7ED957" },
+    火: { color: "#FF6B4A" },
+    水: { color: "#3EC6E0" },
+    風: { color: "#7ED957" },
   };
-
-  const RARITY_BASE = {
-    C: { hp: 35, atk: 8, def: 6, spd: 10 },
-    B: { hp: 45, atk: 11, def: 8, spd: 12 },
-    A: { hp: 58, atk: 15, def: 11, spd: 14 },
-    S: { hp: 72, atk: 19, def: 14, spd: 16 },
-  };
-
-  function hashStr(s) {
-    let h = 0;
-    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-    return h;
-  }
-
-  function buildStats(rarity, name) {
-    const base = RARITY_BASE[rarity] || RARITY_BASE.C;
-    const h = hashStr(name || "monster");
-    const variance = (shift) => 1 + (((h >> shift) % 21) - 10) / 100;
-    return {
-      hp: Math.round(base.hp * variance(0)),
-      atk: Math.round(base.atk * variance(3)),
-      def: Math.round(base.def * variance(6)),
-      spd: Math.round(base.spd * variance(9)),
-    };
-  }
 
   const STORAGE_KEY = "monobake_save_v2";
   const GEMINI_API_KEY_STORAGE = "yui_gemini_api_key";
-  const PROFILE_KEY = "yui_profile";
-  const CHAR_IMAGE_KEY = "yui_custom_char";
 
   function loadSharedApiKey() {
     try { return localStorage.getItem(GEMINI_API_KEY_STORAGE) || ""; } catch (e) { return ""; }
@@ -103,40 +67,11 @@
   function saveSharedApiKey(key) {
     try { localStorage.setItem(GEMINI_API_KEY_STORAGE, key); } catch (e) { /* 無視 */ }
   }
-  function loadSharedProfile() {
-    try {
-      const raw = localStorage.getItem(PROFILE_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch (e) { return null; }
-  }
-  function loadSharedCharImage() {
-    try { return localStorage.getItem(CHAR_IMAGE_KEY) || null; } catch (e) { return null; }
-  }
-  function getPartnerIdentity() {
-    const profile = loadSharedProfile();
-    return {
-      name: (profile && profile.ai_name) || "ナビモン",
-      photo: loadSharedCharImage(),
-    };
-  }
 
   function loadLocalData() {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
-    return {
-      partner: {
-        attribute: "風", level: 1, exp: 0,
-        stats: { hp: 55, atk: 13, def: 8, spd: 12 },
-        moves: {
-          normal: { cost: 1, name: "体当たり", flavor: "全力でぶつかる" },
-          strong: { cost: 3, name: "疾風連撃", flavor: "風を纏った大技" },
-          utility: { cost: 2, name: "応急手当", flavor: "HPを少し回復する" },
-        },
-      },
-      zukan: [],
-    };
+    return saved ? JSON.parse(saved) : { zukan: [] };
   }
-
   function saveLocalData(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
 
   function resizeImage(file) {
@@ -152,7 +87,7 @@
           else { if (h > max) { w = Math.round(w * (max / h)); h = max; } }
           canvas.width = w; canvas.height = h;
           canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-          resolve(canvas.toDataURL("image/jpeg", 0.7));
+          resolve(canvas.toDataURL("image/png", 0.9));
         };
         img.src = e.target.result;
       };
@@ -160,77 +95,55 @@
     });
   }
 
-  // キャンバスで元画像の上に目と口を描き足す（フォールバック用）
-  function addCartoonFace(dataUrl) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0);
+  // --- API処理 1: エラー内容を詳細に表示する画像生成 API ---
+  async function apiGenerateImage(apiKey) {
+    // 試すモデル（imagen-3.0-generate-002 または imagen-3.0-fast-generate-001）
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${apiKey}`;
+    const promptText = "16-bit pixel art sprite of a cute RPG monster, retro video game style, dark background, centered composition.";
 
-        const cx = canvas.width / 2;
-        const cy = canvas.height * 0.42;
-        const eyeOffsetX = canvas.width * 0.13;
-        const eyeR = Math.max(4, canvas.width * 0.045);
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: promptText,
+          config: { numberOfImages: 1, outputMimeType: "image/png", aspectRatio: "1:1" }
+        })
+      });
 
-        [-1, 1].forEach((dir) => {
-          ctx.beginPath();
-          ctx.fillStyle = "#ffffff";
-          ctx.ellipse(cx + dir * eyeOffsetX, cy, eyeR, eyeR * 1.15, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.lineWidth = Math.max(1, eyeR * 0.15);
-          ctx.strokeStyle = "#161616";
-          ctx.stroke();
+      const errJson = await res.json().catch(() => ({}));
 
-          ctx.beginPath();
-          ctx.fillStyle = "#161616";
-          ctx.ellipse(cx + dir * eyeOffsetX, cy + eyeR * 0.1, eyeR * 0.5, eyeR * 0.55, 0, 0, Math.PI * 2);
-          ctx.fill();
+      if (!res.ok) {
+        // APIから返ってきた生のJSONエラーをそのまま表示
+        throw new Error(`[HTTP ${res.status}]\n${JSON.stringify(errJson, null, 2)}`);
+      }
 
-          ctx.beginPath();
-          ctx.fillStyle = "#ffffff";
-          ctx.ellipse(cx + dir * eyeOffsetX - eyeR * 0.15, cy - eyeR * 0.15, eyeR * 0.15, eyeR * 0.15, 0, 0, Math.PI * 2);
-          ctx.fill();
-        });
+      const base64 = errJson.generatedImages?.[0]?.image?.imageBytes;
+      if (!base64) {
+        throw new Error(`[レスポンス構造エラー]\n返却データ: ${JSON.stringify(errJson, null, 2)}`);
+      }
+      
+      return `data:image/png;base64,${base64}`;
 
-        const mouthY = cy + eyeR * 2.2;
-        const mouthWidth = canvas.width * 0.16;
-        ctx.beginPath();
-        ctx.strokeStyle = "#161616";
-        ctx.lineWidth = Math.max(2, canvas.width * 0.012);
-        ctx.lineCap = "round";
-        ctx.arc(cx, mouthY - mouthWidth * 0.3, mouthWidth, 0.15 * Math.PI, 0.85 * Math.PI);
-        ctx.stroke();
-
-        resolve(canvas.toDataURL("image/jpeg", 0.82));
-      };
-      img.onerror = () => reject(new Error("顔の描画に失敗しました"));
-      img.src = dataUrl;
-    });
+    } catch (e) {
+      throw new Error(`【画像生成APIエラー詳細】\n${e.message}`);
+    }
   }
-
-  // ステップ1: 画像解析とステータス生成 (ドット絵風プロンプト指定)
-  async function analyzeImageWithGemini(dataUrl, apiKey) {
-    const base64Data = dataUrl.split(",")[1];
+  // --- API処理 2: 文章・パラメータ生成専用 API (画像解析) ---
+  async function apiAnalyzeMonster(base64ImageData, apiKey) {
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
+    const cleanBase64 = base64ImageData.split(",")[1];
 
-    const ENEMY_GEN_PROMPT = `
-画像の中心的物体を1つ選び、RPGの敵モンスターとして設定してください。
-また、その物体をモチーフにしたドット絵モンスターの英語プロンプトを image_prompt に記述してください。
-
-【image_prompt のルール】
-- モンスターの特徴を表現した英語記述にすること。
-- スタイル指定として必ず "16-bit pixel art style, retro RPG monster sprite, retro game, black background" を末尾に含めてください。
-    `;
+    const promptText = `
+このモンスター画像を見て、RPGモンスターの設定を作成してください。
+名称、属性(火/水/風)、レアリティ(C/B/A/S)、説明、および3つの技(通常・必殺・補助)とステータスを設定してください。
+`;
 
     const requestBody = {
       contents: [{
         parts: [
-          { text: ENEMY_GEN_PROMPT },
-          { inlineData: { mimeType: "image/jpeg", data: base64Data } }
+          { text: promptText },
+          { inlineData: { mimeType: "image/png", data: cleanBase64 } }
         ]
       }],
       generationConfig: {
@@ -238,11 +151,20 @@
         responseSchema: {
           type: "OBJECT",
           properties: {
-            name: { type: "STRING", description: "物体の特徴を活かした日本語モンスター名(12文字以内)" },
+            name: { type: "STRING" },
             attribute: { type: "STRING", enum: ["火", "水", "風"] },
             rarity: { type: "STRING", enum: ["C", "B", "A", "S"] },
-            description: { type: "STRING", description: "特徴を表す一言(30文字以内)" },
-            image_prompt: { type: "STRING", description: "ドット絵用の英語プロンプト(例: A flaming stapler monster, 16-bit pixel art style, retro RPG sprite)" },
+            description: { type: "STRING" },
+            stats: {
+              type: "OBJECT",
+              properties: {
+                hp: { type: "INTEGER" },
+                atk: { type: "INTEGER" },
+                def: { type: "INTEGER" },
+                spd: { type: "INTEGER" }
+              },
+              required: ["hp", "atk", "def", "spd"]
+            },
             moves: {
               type: "OBJECT",
               properties: {
@@ -253,7 +175,7 @@
               required: ["normal", "strong", "utility"]
             }
           },
-          required: ["name", "attribute", "rarity", "description", "image_prompt", "moves"]
+          required: ["name", "attribute", "rarity", "description", "stats", "moves"]
         }
       }
     };
@@ -265,500 +187,216 @@
     });
 
     if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      const detail = errJson.error?.message || `HTTPエラー ${res.status}`;
-      throw new Error(`[解析失敗] ${detail}`);
+      const err = await res.json().catch(() => ({}));
+      throw new Error(`[文章解析APIエラー ${res.status}]\n${err.error?.message || "不明なエラー"}`);
     }
 
-    const resData = await res.json();
-    const rawText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!rawText) throw new Error("[解析失敗] Geminiからの応答データが空でした");
-    
-    const json = JSON.parse(rawText);
-    json.stats = buildStats(json.rarity, json.name);
-    return json;
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error("[文章解析APIエラー] Geminiからのテキスト応答が空でした");
+
+    return JSON.parse(text);
   }
 
-  // ステップ2: ドット絵画像生成 & エラー詳細の返却
-  async function generateMonsterImageWithGemini(promptText, apiKey) {
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
-    
-    const fullPrompt = `16-bit pixel art sprite of a monster: ${promptText}. Video game pixel art, detailed retro graphics, solid dark background, centered composition.`;
-
-    const requestBody = {
-      contents: [{
-        parts: [{ text: fullPrompt }]
-      }]
-    };
-
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody)
-    });
-
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      const detail = errJson.error?.message || `HTTPエラー ${res.status}`;
-      throw new Error(`[画像生成失敗] ${detail}`);
-    }
-
-    const resData = await res.json();
-    const parts = resData.candidates?.[0]?.content?.parts || [];
-    for (const part of parts) {
-      if (part.inlineData && part.inlineData.data) {
-        const mime = part.inlineData.mimeType || "image/png";
-        return `data:${mime};base64,${part.inlineData.data}`;
-      }
-    }
-    throw new Error("[画像生成失敗] 生成画像データの取得に失敗しました");
-  }
-
-  function calcDamage(attacker, defender, moveMult) {
-    let typeMult = 1.0;
-    const chart = TYPE_CHART[attacker.attribute];
-    if (chart.strong === defender.attribute) typeMult = 1.5;
-    if (chart.weak === defender.attribute) typeMult = 0.5;
-
-    const rand = 0.9 + Math.random() * 0.2;
-    const rawDmg = (attacker.stats.atk * moveMult * typeMult * rand) - (defender.stats.def * 0.4);
-    return { dmg: Math.max(1, Math.round(rawDmg)), typeMult };
-  }
-
-  // バトル画面コンポーネント
-  function BattleScreen({ partner, enemy, onBattleEnd }) {
-    const [pMaxHp] = useState(partner.stats.hp);
-    const [pHp, setPHp] = useState(partner.stats.hp);
-    const [pCost, setPCost] = useState(3);
-
-    const [eMaxHp] = useState(enemy.stats.hp);
-    const [eHp, setEHp] = useState(enemy.stats.hp);
-
-    const [logs, setLogs] = useState([`野生の ${enemy.name} があらわれた！`]);
-    const [isBusy, setIsBusy] = useState(false);
-
-    const addLog = (text) => setLogs(prev => [...prev.slice(-15), text]);
-
-    const handlePlayerMove = (moveKey) => {
-      if (isBusy) return;
-      const pMove = partner.moves[moveKey];
-      if (pCost < pMove.cost) return alert("コスト（PP）が足りません！");
-
-      setIsBusy(true);
-      setPCost(prev => prev - pMove.cost);
-
-      const pFirst = partner.stats.spd >= enemy.stats.spd;
-
-      if (pFirst) {
-        executePlayerAttack(moveKey, () => {
-          if (eHp > 0) setTimeout(() => executeEnemyAttack(() => endTurn()), 800);
-          else endTurn();
-        });
-      } else {
-        addLog(`⚡ ${enemy.name} のほうが すばやい！`);
-        executeEnemyAttack(() => {
-          if (pHp > 0) setTimeout(() => executePlayerAttack(moveKey, () => endTurn()), 800);
-          else endTurn();
-        });
-      }
-    };
-
-    const executePlayerAttack = (moveKey, callback) => {
-      const move = partner.moves[moveKey];
-      addLog(`▶ ${partner.name} の ${move.name}！`);
-
-      if (moveKey === "utility") {
-        const heal = Math.round(pMaxHp * 0.3);
-        setPHp(prev => Math.min(pMaxHp, prev + heal));
-        addLog(`  ${partner.name} の HPが ${heal} 回復した！`);
-      } else {
-        const mult = moveKey === "strong" ? 1.6 : 1.0;
-        const { dmg, typeMult } = calcDamage(partner, enemy, mult);
-        setEHp(prev => {
-          const next = Math.max(0, prev - dmg);
-          if (next === 0) addLog(`💥 野生の ${enemy.name} を たおした！`);
-          return next;
-        });
-        let effText = typeMult > 1.0 ? " (こうかは ばつぐんだ！)" : typeMult < 1.0 ? " (いまひとつの ようだ...)" : "";
-        addLog(`  ${enemy.name} に ${dmg} のダメージ！${effText}`);
-      }
-      setTimeout(callback, 600);
-    };
-
-    const executeEnemyAttack = (callback) => {
-      const eMoveKeys = ["normal", "strong", "utility"];
-      const pickedKey = eMoveKeys[Math.floor(Math.random() * eMoveKeys.length)];
-      const move = enemy.moves[pickedKey] || enemy.moves.normal;
-
-      addLog(`▶ 野生の ${enemy.name} の ${move.name}！`);
-      const mult = pickedKey === "strong" ? 1.5 : 1.0;
-      const { dmg, typeMult } = calcDamage(enemy, partner, mult);
-
-      setPHp(prev => {
-        const next = Math.max(0, prev - dmg);
-        if (next === 0) addLog(`💀 ${partner.name} は たおれてしまった...`);
-        return next;
-      });
-      let effText = typeMult > 1.0 ? " (こうかは ばつぐんだ！)" : typeMult < 1.0 ? " (いまひとつの ようだ...)" : "";
-      addLog(`  ${partner.name} に ${dmg} のダメージ！${effText}`);
-      setTimeout(callback, 600);
-    };
-
-    const endTurn = () => {
-      if (eHp <= 0) setTimeout(() => onBattleEnd(true), 1200);
-      else if (pHp <= 0) setTimeout(() => onBattleEnd(false), 1200);
-      else {
-        setPCost(prev => Math.min(5, prev + 2));
-        setIsBusy(false);
-      }
-    };
-
-    return (
-      <div>
-        <div className="battle-stage">
-          <div style={{ marginBottom: "16px" }}>
-            <div className="status-box" style={{ width: "70%" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
-                <strong>{enemy.name}</strong>
-                <span className="tag" style={{ background: TYPE_CHART[enemy.attribute].color, color: "#000" }}>{enemy.attribute}</span>
-              </div>
-              <div className="hp-bar-outer">
-                <div className="hp-bar-inner" style={{ width: `${(eHp / eMaxHp) * 100}%`, background: "#FF5D73" }} />
-              </div>
-              <div style={{ fontSize: "10px", textAlign: "right", color: "#9A9CC0", marginTop: "2px" }}>HP: {eHp}/{eMaxHp}</div>
-            </div>
-            <div style={{ textAlign: "center", margin: "10px 0" }}>
-              <img src={enemy.photo} alt={enemy.name} style={{ width: "90px", height: "90px", objectFit: "cover", borderRadius: "8px", border: "3px solid #FF5D73", imageRendering: "pixelated" }} />
-            </div>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-            <div className="status-box" style={{ width: "75%" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
-                <strong>{partner.name} <span style={{ color: "#23E0C4" }}>Lv.{partner.level}</span></strong>
-                <span className="tag" style={{ background: TYPE_CHART[partner.attribute].color, color: "#000" }}>{partner.attribute}</span>
-              </div>
-              <div className="hp-bar-outer">
-                <div className="hp-bar-inner" style={{ width: `${(pHp / pMaxHp) * 100}%`, background: "#23E0C4" }} />
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#9A9CC0", marginTop: "2px" }}>
-                <span>PP: <strong style={{ color: "#F2B84B" }}>{"★".repeat(pCost)}</strong></span>
-                <span>HP: {pHp}/{pMaxHp}</span>
-              </div>
-            </div>
-            <div style={{ textAlign: "center", margin: "10px 0" }}>
-              {partner.photo ? (
-                <img src={partner.photo} alt={partner.name} style={{ width: "90px", height: "90px", objectFit: "cover", borderRadius: "50%", border: "3px solid #23E0C4" }} />
-              ) : (
-                <div style={{ width: "90px", height: "90px", borderRadius: "50%", border: "3px solid #23E0C4", background: "#1B1E3D", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "36px" }}>🤖</div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="battle-log">
-          {logs.map((l, i) => <div key={i}>{l}</div>)}
-        </div>
-
-        <div className="move-grid">
-          {Object.keys(partner.moves).map(k => {
-            const m = partner.moves[k];
-            return (
-              <button
-                key={k}
-                className="move-btn"
-                disabled={isBusy || pCost < m.cost}
-                onClick={() => handlePlayerMove(k)}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
-                  <strong style={{ fontSize: "12px" }}>{m.name}</strong>
-                  <span className="pp-badge">コスト{m.cost}</span>
-                </div>
-                <div style={{ fontSize: "10px", color: "#9A9CC0" }}>{m.flavor}</div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  // メインApp
   function App() {
-    const [gameData, setGameData] = useState(loadLocalData);
     const [apiKey, setApiKey] = useState(loadSharedApiKey);
-    const [identity, setIdentity] = useState(getPartnerIdentity);
-    const [tab, setTab] = useState("scan");
-    const [loading, setLoading] = useState(false);
-    const [loadingMsg, setLoadingMsg] = useState("");
-    const [useAiImageGen, setUseAiImageGen] = useState(true);
-    const [previewEnemy, setPreviewEnemy] = useState(null);
-    const [activeBattleEnemy, setActiveBattleEnemy] = useState(null);
-    const fileInputRef = useRef(null);
+    const [gameData, setGameData] = useState(loadLocalData);
 
-    React.useEffect(() => {
-      const onFocus = () => {
-        setIdentity(getPartnerIdentity());
-        setApiKey(loadSharedApiKey());
-      };
-      window.addEventListener("focus", onFocus);
-      return () => window.removeEventListener("focus", onFocus);
-    }, []);
+    // STEP1: 画像生成用ステート
+    const [genLoading, setGenLoading] = useState(false);
+    const [genImage, setGenImage] = useState(null);
+    const [genError, setGenError] = useState(null);
 
+    // STEP2: 文章生成・一括保存用ステート
+    const [uploadedImage, setUploadedImage] = useState(null);
+    const [analyzeLoading, setAnalyzeLoading] = useState(false);
+    const [parsedMonster, setParsedMonster] = useState(null);
+    const [analyzeError, setAnalyzeError] = useState(null);
+
+    const uploadRef = useRef(null);
+
+    // API Key 保存
     const handleApiKeyChange = (e) => {
-      const key = e.target.value;
-      setApiKey(key);
-      saveSharedApiKey(key);
+      setApiKey(e.target.value);
+      saveSharedApiKey(e.target.value);
     };
 
-    const handleFileChange = async (e) => {
+    // --- 【処理 1】 画像精製 ---
+    const handleGenerateImageOnly = async () => {
+      if (!apiKey) return alert("APIキーを入力してください");
+      setGenLoading(true);
+      setGenError(null);
+      try {
+        const imgUrl = await apiGenerateImage(apiKey);
+        setGenImage(imgUrl);
+      } catch (e) {
+        setGenError(e.message);
+      } finally {
+        setGenLoading(false);
+      }
+    };
+
+    const handleDownloadGenImage = () => {
+      if (!genImage) return;
+      const a = document.createElement("a");
+      a.href = genImage;
+      a.download = `monster_image_${Date.now()}.png`;
+      a.click();
+    };
+
+    // --- 【処理 2】 画像アップロード＆文章生成（解析） ---
+    const handleImageUpload = async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      if (!apiKey) return alert("Gemini APIキーを設定してください");
+      
+      const resized = await resizeImage(file);
+      setUploadedImage(resized);
+      setParsedMonster(null);
+      setAnalyzeError(null);
+    };
 
-      setLoading(true);
+    const handleAnalyzeTextOnly = async () => {
+      if (!apiKey) return alert("APIキーを入力してください");
+      if (!uploadedImage) return alert("解析する画像をアップロードしてください");
+
+      setAnalyzeLoading(true);
+      setAnalyzeError(null);
       try {
-        setLoadingMsg("画像を解析中...");
-        const dataUrl = await resizeImage(file);
-        
-        let enemyJson = null;
-        try {
-          enemyJson = await analyzeImageWithGemini(dataUrl, apiKey);
-        } catch (parseErr) {
-          alert(`⚠️ 画像解析エラーが発生しました:\n${parseErr.message}`);
-          throw parseErr;
-        }
-
-        let finalPhoto = "";
-
-        if (useAiImageGen) {
-          try {
-            setLoadingMsg("ドット絵モンスターを生成中...");
-            finalPhoto = await generateMonsterImageWithGemini(enemyJson.image_prompt, apiKey);
-          } catch (imgErr) {
-            console.error(imgErr);
-            alert(`⚠️ AI画像生成エラーが発生したため、簡易画像に切り替えます:\n${imgErr.message}`);
-            finalPhoto = await addCartoonFace(dataUrl);
-          }
-        } else {
-          finalPhoto = await addCartoonFace(dataUrl);
-        }
-
-        const newEnemy = {
-          ...enemyJson,
-          photo: finalPhoto,
-          id: `enemy_${Date.now()}`,
-          createdAt: new Date().toLocaleDateString()
-        };
-
-        setPreviewEnemy(newEnemy);
-
-        const updatedZukan = [newEnemy, ...gameData.zukan.filter(z => z.name !== newEnemy.name)];
-        const updatedData = { ...gameData, zukan: updatedZukan };
-        setGameData(updatedData);
-        saveLocalData(updatedData);
-
-      } catch (err) {
-        console.error("全体エラー:", err);
+        const result = await apiAnalyzeMonster(uploadedImage, apiKey);
+        setParsedMonster(result);
+      } catch (e) {
+        setAnalyzeError(e.message);
       } finally {
-        setLoading(false);
-        setLoadingMsg("");
-        e.target.value = "";
+        setAnalyzeLoading(false);
       }
     };
 
-    const startBattle = (enemy) => {
-      setActiveBattleEnemy(enemy);
-      setTab("battle");
+    // --- 【処理 3】 画像と文章情報をひとつにまとめて保存 ---
+    const handleSaveFullMonster = () => {
+      if (!uploadedImage || !parsedMonster) return;
+
+      const fullMonsterData = {
+        id: `mon_${Date.now()}`,
+        photo: uploadedImage, // 画像
+        name: parsedMonster.name, // 名称
+        attribute: parsedMonster.attribute,
+        rarity: parsedMonster.rarity,
+        description: parsedMonster.description,
+        stats: parsedMonster.stats, // ステータス
+        moves: parsedMonster.moves, // 技名・設定
+        createdAt: new Date().toLocaleString()
+      };
+
+      const newZukan = [fullMonsterData, ...gameData.zukan];
+      const newGameData = { ...gameData, zukan: newZukan };
+      setGameData(newGameData);
+      saveLocalData(newGameData);
+
+      alert(`「${parsedMonster.name}」の画像とデータを1つにまとめて保存しました！`);
+      
+      // クリア
+      setUploadedImage(null);
+      setParsedMonster(null);
     };
-
-    const handleBattleEnd = (won) => {
-      if (won) {
-        const nextExp = gameData.partner.exp + 50;
-        let nextLevel = gameData.partner.level;
-        let nextStats = { ...gameData.partner.stats };
-
-        if (nextExp >= 100) {
-          nextLevel += 1;
-          nextStats.hp += 8;
-          nextStats.atk += 3;
-          nextStats.def += 2;
-          nextStats.spd += 2;
-          alert(`🎉 勝利！ ${identity.name} は Lv.${nextLevel} にレベルアップ！`);
-        } else {
-          alert(`🎉 勝利！ 経験値を 50 獲得！`);
-        }
-
-        const updated = {
-          ...gameData,
-          partner: { ...gameData.partner, level: nextLevel, exp: nextExp % 100, stats: nextStats }
-        };
-        setGameData(updated);
-        saveLocalData(updated);
-      } else {
-        alert("💦 負けてしまった... レベルを上げて再挑戦しよう！");
-      }
-      setPreviewEnemy(null);
-      setActiveBattleEnemy(null);
-      setTab("scan");
-    };
-
-    const partner = { ...gameData.partner, name: identity.name, photo: identity.photo };
 
     return (
       <div className="main-container">
-        {tab !== "battle" && (
-          <div>
-            <div style={{ textAlign: "right", marginBottom: "8px" }}>
-              <a href="prot_zukan.html" style={{ fontSize: "11px", color: "#23E0C4", textDecoration: "none", border: "1px solid #23E0C4", borderRadius: "20px", padding: "4px 10px" }}>
-                🖼 カード図鑑を開く
-              </a>
+        <h2 style={{ fontSize: "16px", textAlign: "center", marginBottom: "16px" }}>🧪 API分離デバッグ & モンスター生成</h2>
+
+        {/* APIキー設定 */}
+        <div className="card">
+          <div style={{ fontSize: "11px", color: "#9A9CC0" }}>Gemini API Key</div>
+          <input type="password" className="api-key-input" placeholder="AIzaSy..." value={apiKey} onChange={handleApiKeyChange} />
+        </div>
+
+        {/* ================= STEP 1: 画像生成のみ ================= */}
+        <div className="card">
+          <div className="step-header">STEP 1: 画像精製 (Imagen 3 API)</div>
+          <p style={{ fontSize: "11px", color: "#9A9CC0" }}>画像生成専用のAPIをテスト呼び出しします。</p>
+          
+          <button className="btn-action" disabled={genLoading} onClick={handleGenerateImageOnly}>
+            {genLoading ? "画像生成API実行中..." : "🎨 画像のみ生成する"}
+          </button>
+
+          {genError && <div className="error-box">{genError}</div>}
+
+          {genImage && (
+            <div style={{ textAlign: "center", marginTop: "12px" }}>
+              <img src={genImage} style={{ width: "160px", height: "160px", borderRadius: "8px", border: "2px solid #23E0C4" }} />
+              <button className="btn-action btn-save" onClick={handleDownloadGenImage}>
+                💾 生成された画像を保存する
+              </button>
             </div>
-            <div className="nav-tabs">
-              <button className={`tab-btn ${tab === "scan" ? "active" : ""}`} onClick={() => setTab("scan")}>📸 スキャン</button>
-              <button className={`tab-btn ${tab === "zukan" ? "active" : ""}`} onClick={() => setTab("zukan")}>📖 図鑑 ({gameData.zukan.length})</button>
-              <button className={`tab-btn ${tab === "partner" ? "active" : ""}`} onClick={() => setTab("partner")}>🦖 相棒AI</button>
+          )}
+        </div>
+
+        {/* ================= STEP 2: アップロード & 文章生成 ================= */}
+        <div className="card">
+          <div className="step-header">STEP 2: アップロード & 文章生成 (Gemini API)</div>
+          <p style={{ fontSize: "11px", color: "#9A9CC0" }}>保存した画像をアップロードし、名称・技・ステータスを解析生成します。</p>
+
+          <input type="file" accept="image/*" ref={uploadRef} style={{ display: "none" }} onChange={handleImageUpload} />
+          
+          <button className="btn-action btn-secondary" onClick={() => uploadRef.current?.click()}>
+            📁 画像をアップロード選択
+          </button>
+
+          {uploadedImage && (
+            <div style={{ textAlign: "center", marginTop: "12px" }}>
+              <img src={uploadedImage} style={{ width: "120px", height: "120px", borderRadius: "8px", border: "1px dashed #23E0C4" }} />
+              
+              <button className="btn-action" disabled={analyzeLoading} onClick={handleAnalyzeTextOnly}>
+                {analyzeLoading ? "文章・技設定 生成中..." : "✨ この画像の名称・技名・設定を生成"}
+              </button>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* 1. スキャン画面 */}
-        {tab === "scan" && (
-          <div>
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              ref={fileInputRef}
-              style={{ display: "none" }}
-              onChange={handleFileChange}
-            />
+          {analyzeError && <div className="error-box">{analyzeError}</div>}
 
-            {!previewEnemy ? (
-              <div className="card" style={{ textAlign: "center", padding: "30px 16px" }}>
-                <div style={{ fontSize: "48px", marginBottom: "12px" }}>📸</div>
-                <h3>身の回りのものをスキャン</h3>
-                <p style={{ color: "#9A9CC0", fontSize: "12px", marginBottom: "16px" }}>
-                  カメラで撮影するとGeminiがドット絵モンスターに変換します。
-                </p>
-
-                <div style={{ marginBottom: "20px", fontSize: "12px", background: "#12142B", padding: "8px", borderRadius: "8px", display: "inline-block" }}>
-                  <label style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                    <input
-                      type="checkbox"
-                      checked={useAiImageGen}
-                      onChange={(e) => setUseAiImageGen(e.target.checked)}
-                    />
-                    Gemini AI画像生成（ドット絵）を使用する
-                  </label>
-                  <div style={{ fontSize: "10px", color: "#9A9CC0", marginTop: "2px" }}>
-                    {useAiImageGen ? "AIがレトロドット絵を新規作成" : "写真そのまま＋顔パーツ合成（高速・無制限）"}
-                  </div>
-                </div>
-
-                <button className="btn-action" disabled={loading} onClick={() => fileInputRef.current?.click()}>
-                  {loading ? loadingMsg : "📷 カメラを起動して撮影"}
-                </button>
+          {/* 解析結果プレビュー */}
+          {parsedMonster && (
+            <div style={{ background: "#12142B", padding: "10px", borderRadius: "8px", marginTop: "12px", fontSize: "12px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <strong>{parsedMonster.name}</strong>
+                <span className="tag" style={{ background: TYPE_CHART[parsedMonster.attribute]?.color || "#ccc", color: "#000" }}>{parsedMonster.attribute}</span>
               </div>
-            ) : (
-              <div className="card">
-                <h3 style={{ color: "#FF5D73", marginBottom: "8px" }}>⚠️ 敵出現！</h3>
-                <img src={previewEnemy.photo} alt={previewEnemy.name} style={{ width: "100%", height: "180px", objectFit: "cover", borderRadius: "8px", imageRendering: "pixelated" }} />
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
-                  <h4>{previewEnemy.name}</h4>
-                  <span className="tag" style={{ background: TYPE_CHART[previewEnemy.attribute].color, color: "#000" }}>{previewEnemy.attribute}</span>
-                </div>
-                <p style={{ fontSize: "12px", color: "#9A9CC0" }}>{previewEnemy.description}</p>
-                
-                <div className="stat-grid">
-                  <div className="stat-box"><div className="lbl">HP</div><div className="val">{previewEnemy.stats.hp}</div></div>
-                  <div className="stat-box"><div className="lbl">攻撃</div><div className="val">{previewEnemy.stats.atk}</div></div>
-                  <div className="stat-box"><div className="lbl">防御</div><div className="val">{previewEnemy.stats.def}</div></div>
-                  <div className="stat-box"><div className="lbl">SPD</div><div className="val">{previewEnemy.stats.spd}</div></div>
-                </div>
-
-                <button className="btn-action" style={{ background: "#FF5D73", color: "#fff", marginTop: "8px" }} onClick={() => startBattle(previewEnemy)}>
-                  ⚔️ 相棒（Lv.{partner.level}）でバトル開始
-                </button>
-                <button className="btn-action" style={{ background: "transparent", color: "#9A9CC0", border: "1px solid rgba(255,255,255,0.2)", marginTop: "6px" }} onClick={() => setPreviewEnemy(null)}>
-                  撮り直す
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 2. 図鑑画面 */}
-        {tab === "zukan" && (
-          <div>
-            {gameData.zukan.length === 0 ? (
-              <div className="card" style={{ textAlign: "center", color: "#9A9CC0" }}>まだスキャンした敵がいません。スキャン画面から登録しよう！</div>
-            ) : (
-              gameData.zukan.map(item => (
-                <div key={item.id} className="card" style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                  <img src={item.photo} alt={item.name} style={{ width: "65px", height: "65px", borderRadius: "8px", objectFit: "cover", imageRendering: "pixelated" }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <strong>{item.name}</strong>
-                      <span className="tag" style={{ background: TYPE_CHART[item.attribute]?.color || "#ccc", color: "#000" }}>{item.attribute}</span>
-                    </div>
-                    <div style={{ fontSize: "11px", color: "#9A9CC0", margin: "4px 0" }}>
-                      HP:{item.stats.hp} / ATK:{item.stats.atk} / SPD:{item.stats.spd}
-                    </div>
-                    <button className="btn-action" style={{ padding: "6px", fontSize: "11px", background: "#1B1E3D", color: "#23E0C4", border: "1px solid #23E0C4" }} onClick={() => startBattle(item)}>
-                      ⚔️ この敵と再戦
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {/* 3. 相棒ステータス＆設定画面 */}
-        {tab === "partner" && (
-          <div>
-            <div className="card">
-              <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "8px" }}>
-                {partner.photo ? (
-                  <img src={partner.photo} alt={partner.name} style={{ width: "56px", height: "56px", borderRadius: "50%", objectFit: "cover", border: "2px solid #23E0C4" }} />
-                ) : (
-                  <div style={{ width: "56px", height: "56px", borderRadius: "50%", background: "#12142B", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "26px" }}>🤖</div>
-                )}
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <h2 style={{ margin: 0 }}>{partner.name}</h2>
-                    <span className="tag" style={{ background: TYPE_CHART[partner.attribute].color, color: "#000" }}>{partner.attribute}属性</span>
-                  </div>
-                  <p style={{ color: "#23E0C4", fontWeight: "bold", margin: "4px 0 0" }}>Lv. {partner.level} (EXP: {partner.exp}/100)</p>
-                </div>
-              </div>
-
+              <p style={{ color: "#9A9CC0", fontSize: "10px", margin: "4px 0" }}>{parsedMonster.description}</p>
+              
               <div className="stat-grid">
-                <div className="stat-box"><div className="lbl">HP</div><div className="val">{partner.stats.hp}</div></div>
-                <div className="stat-box"><div className="lbl">攻撃</div><div className="val">{partner.stats.atk}</div></div>
-                <div className="stat-box"><div className="lbl">防御</div><div className="val">{partner.stats.def}</div></div>
-                <div className="stat-box"><div className="lbl">SPD</div><div className="val">{partner.stats.spd}</div></div>
+                <div className="stat-box"><div className="lbl">HP</div><div className="val">{parsedMonster.stats.hp}</div></div>
+                <div className="stat-box"><div className="lbl">ATK</div><div className="val">{parsedMonster.stats.atk}</div></div>
+                <div className="stat-box"><div className="lbl">DEF</div><div className="val">{parsedMonster.stats.def}</div></div>
+                <div className="stat-box"><div className="lbl">SPD</div><div className="val">{parsedMonster.stats.spd}</div></div>
+              </div>
+
+              <div style={{ fontSize: "10px", color: "#23E0C4", marginTop: "4px" }}>
+                <div>⚔️ 通常技: {parsedMonster.moves.normal.name}</div>
+                <div>🔥 必殺技: {parsedMonster.moves.strong.name}</div>
+                <div>✨ 補助技: {parsedMonster.moves.utility.name}</div>
+              </div>
+
+              {/* ================= STEP 3: 一括保存 ================= */}
+              <button className="btn-action btn-save" style={{ marginTop: "12px" }} onClick={handleSaveFullMonster}>
+                📦 画像＋名称＋技＋ステータスを1つにまとめて保存
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 図鑑（保存データの確認領域） */}
+        <div className="card">
+          <div className="step-header">📖 保存済みモンスター一覧 ({gameData.zukan.length})</div>
+          {gameData.zukan.map((mon) => (
+            <div key={mon.id} style={{ display: "flex", gap: "10px", alignItems: "center", background: "#12142B", padding: "8px", borderRadius: "6px", marginBottom: "6px" }}>
+              <img src={mon.photo} style={{ width: "48px", height: "48px", borderRadius: "6px", objectFit: "cover" }} />
+              <div style={{ flex: 1, fontSize: "11px" }}>
+                <div style={{ fontWeight: "bold" }}>{mon.name} <span style={{ color: "#23E0C4" }}>({mon.attribute})</span></div>
+                <div style={{ color: "#9A9CC0", fontSize: "9px" }}>技: {mon.moves?.normal?.name} / {mon.moves?.strong?.name}</div>
               </div>
             </div>
+          ))}
+        </div>
 
-            <div className="card" style={{ fontSize: "12px" }}>
-              <h4>設定: Gemini APIキー</h4>
-              <input
-                type="password"
-                className="api-key-input"
-                placeholder="AIzaSy..."
-                value={apiKey}
-                onChange={handleApiKeyChange}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* 4. バトル画面 */}
-        {tab === "battle" && activeBattleEnemy && (
-          <BattleScreen partner={partner} enemy={activeBattleEnemy} onBattleEnd={handleBattleEnd} />
-        )}
       </div>
     );
   }
