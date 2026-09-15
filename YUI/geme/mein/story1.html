@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>会話画面</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+
+    .layer {
+      position: absolute;
+      inset: 0;
+      display: flex;
+    }
+
+    /* 全体背景とレイアウト */
+    #vn_layer {
+      flex-direction: column;
+      justify-content: flex-end;
+      background-image: url('chars/初期設定背景.PNG');
+      background-size: cover;
+      background-position: center;
+    }
+
+    /* キャラクター表示エリア */
+    .vn_character_wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .character_stage {
+      width: min(72vw, 330px);
+      height: min(72vw, 330px);
+      border-radius: 50%;
+      overflow: hidden;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .vn_character_wrap img {
+      max-height: 96%;
+      max-width: 82%;
+      object-fit: contain;
+    }
+
+    /* 吹き出し（メッセージボックス） */
+    .vn_box {
+      background: #ffffff;
+      border-top: 1px solid #e6ddc8;
+      border-radius: 20px 20px 0 0;
+      padding: 20px 22px;
+    }
+
+    .vn_name {
+      font-weight: bold;
+      font-size: 13px;
+      color: #2fae90;
+      margin-bottom: 8px;
+    }
+
+    .vn_line {
+      font-size: 15px;
+      line-height: 1.8;
+      min-height: 3em;
+    }
+
+    /* 次へボタン */
+    .vn_next_row {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 10px;
+    }
+
+    .vn_next_btn {
+      background: rgba(47, 174, 144, 0.14);
+      color: #2fae90;
+      border: none;
+      border-radius: 14px;
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- RPG/ノベル風 会話画面 -->
+  <div id="vn_layer" class="layer">
+    <div class="vn_character_wrap">
+      <div class="character_stage">
+        <img id="vn_character_img" src="chars/初期AI.png" alt="キャラクター">
+      </div>
+    </div>
+    
+    <!-- メッセージボックス -->
+    <div class="vn_box">
+      <div class="vn_name" id="vn_name_label">YUI</div>
+      <div class="vn_line" id="vn_line_text"></div>
+      <div class="vn_next_row">
+        <button class="vn_next_btn" id="vn_next_btn">次へ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BGM -->
+  <audio id="setup_bgm" src="chars/BGM.mp3" loop preload="auto"></audio>
+
+  <script>
+    // ★ここにストーリーを順番に書いていきます！
+    const story = [
+      { name: "ナレーション", text: "20XX年世界はaiの発展によって高度な社会が構築されていた" },
+      { name: "ナレーション", text: "この世界では16歳からスマートフォンが渡される" },
+      { name: "ナレーション", text: "これから一緒に頑張ろうね！" },
+      { name: "ナレーション", text: "そこで自分の生活を助けるAiを選ぶことになるのだ" },
+      { name: "ナレーション", text: "今日は僕の誕生日、スマホはお父さんのおさがりだけど楽しみだな"  },
+      { name: "父、母", text: "お誕生日おめでとう"  },
+      { name: "父", text: "お父さんのおさがりだけど大切に使ってきたから壊れてはないはず、"  },
+      { name: "父", text: "お父さんのデータは新しいスマホに移したから、最初から始めることができると思うよ"  },
+    　{ name: "母", text: "この手帳は私から、これからいろんな人と出会って、いくことになると思うから、その記録に使ってちょうだい、"  },
+    　{ name: "主人公", text: "やったーありがとう"  },
+    　{ name: "父、母", text: "「主人公」は初めてだからAIの設定をするんだったね"  },
+    　{ name: "父", text: "最近の子はAIとの接し方って学校で習うんだっけ"  },
+    　{ name: "父", text: "すごい時代になったね、お父さんが子供のころはいきなり出てきたんだよ"  },
+    　{ name: "父",text: "最初のほうは間違うことも多かったんだけど、今では人間のほうが教えられることが多くなっちゃって、"  },
+    　{ name: "主人公", text: "ぐー"  },
+    　{ name: "母", text: "あら、あなた、「主人公」がおなかがすいたってよ"  },
+    　{ name: "母", text: "先に食べちゃいましょ"  },
+    　{ name: "父", text: "そうだね、いただきます"  },
+    　{ name: "全員", text: "いただきます"  },
+];
+
+    let currentStep = 0; // 現在何番目のセリフか
+
+    const nameLabel = document.getElementById('vn_name_label');
+    const lineText = document.getElementById('vn_line_text');
+    const nextBtn = document.getElementById('vn_next_btn');
+    const bgm = document.getElementById('setup_bgm');
+
+    // 最初のセリフを表示する関数
+    function showCurrentStory() {
+      if (currentStep < story.length) {
+        nameLabel.textContent = story[currentStep].name;
+        lineText.textContent = story[currentStep].text;
+      } else {
+        // ストーリーが最後まで行った時の処理
+        lineText.textContent = "（会話は終了しました）";
+        nextBtn.style.display = "none"; // ボタンを隠す
+      }
+    }
+
+    // 「次へ」ボタンを押した時の処理
+    nextBtn.addEventListener('click', () => {
+      currentStep++; // 次のセリフへ進める
+      showCurrentStory();
+    });
+
+    // BGMの自動再生処理
+    if (bgm) {
+      bgm.volume = 0.25;
+      bgm.play().catch(() => {
+        document.addEventListener('click', () => bgm.play(), { once: true });
+      });
+    }
+
+    // 最初に1回目のセリフを表示
+    showCurrentStory();
+  </script>
+</body>
+</html>
