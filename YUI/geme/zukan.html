@@ -42,6 +42,41 @@
   .detail-image { width: 100%; height: 130px; border-radius: 8px; border: 2px solid #23E0C4; object-fit: cover; }
   
   .back-btn { background: none; border: none; color: #23E0C4; font-size: 13px; cursor: pointer; padding: 0 0 10px 0; display: inline-block; font-weight: bold; }
+
+  /* --- 新詳細画面レイアウト（画像上部＋パラメータ／名前／属性＋技4枠） --- */
+  .profile-card { background:#1F2347; border-radius:14px; padding:14px; border:1px solid rgba(255,255,255,0.1); }
+
+  .profile-hero { width:100%; aspect-ratio: 1 / 1; border-radius:12px; overflow:hidden; border:2px solid rgba(255,255,255,0.15); background:#12142B; }
+  .profile-hero img { width:100%; height:100%; object-fit:cover; display:block; }
+
+  .profile-row { display:flex; gap:8px; align-items:stretch; margin-top:12px; }
+
+  .param-box { flex:1; background:#12142B; border-radius:10px; padding:8px 10px; border:1px solid rgba(255,255,255,0.08); }
+  .param-box .param-title { font-size:10px; color:#23E0C4; font-weight:bold; margin-bottom:6px; letter-spacing:0.05em; }
+
+  .name-attr-box { flex:1.1; display:flex; flex-direction:column; justify-content:space-between; gap:6px; }
+  .name-banner { background:linear-gradient(135deg,#2F5FE0,#1F2347); border-radius:10px; padding:10px 12px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .name-banner .mon-name { font-size:16px; font-weight:bold; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .attr-circle { width:44px; height:44px; min-width:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:bold; color:#08221E; box-shadow:0 0 0 3px rgba(0,0,0,0.15); }
+  .rarity-pill { font-size:10px; color:#F2B84B; font-weight:bold; background:rgba(242,184,75,0.12); border-radius:6px; padding:4px 8px; text-align:center; }
+
+  .desc-box { font-size:11px; color:#9A9CC0; line-height:1.5; margin-top:12px; }
+
+  .moves-section { margin-top:14px; }
+  .moves-title { font-size:12px; font-weight:bold; color:#23E0C4; margin-bottom:8px; }
+  .moves-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .move-tile { background:#12142B; border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:10px; text-align:left; cursor:pointer; transition:transform 0.15s, border-color 0.15s; }
+  .move-tile:active, .move-tile:hover { transform:translateY(-1px); border-color:#23E0C4; }
+  .move-tile .move-slot-label { font-size:9px; color:#9A9CC0; margin-bottom:4px; }
+  .move-tile .move-name { font-size:13px; font-weight:bold; color:#F3F1E7; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .move-tile .move-cost { font-size:10px; color:#F2B84B; margin-top:4px; }
+
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; padding:20px; z-index:100; }
+  .modal-box { background:#1F2347; border-radius:14px; padding:18px; max-width:360px; width:100%; border:1px solid rgba(255,255,255,0.15); }
+  .modal-box .modal-title { font-size:15px; font-weight:bold; color:#23E0C4; margin-bottom:4px; }
+  .modal-box .modal-cost { font-size:11px; color:#F2B84B; margin-bottom:10px; }
+  .modal-box .modal-flavor { font-size:12px; color:#F3F1E7; line-height:1.6; }
+  .modal-close-btn { margin-top:16px; }
 </style>
 </head>
 <body>
@@ -53,6 +88,13 @@ const { useState, useRef } = React;
 const TYPE_CHART = {
   火: { color:"#FF6B4A" }, 水: { color:"#3EC6E0" }, 風: { color:"#7ED957" },
 };
+
+const MOVE_SLOTS = [
+  { key: "normal",  label: "通常技", icon: "⚔️" },
+  { key: "strong",  label: "必殺技", icon: "🔥" },
+  { key: "utility", label: "補助技", icon: "✨" },
+  { key: "special", label: "奥義",   icon: "🌀" },
+];
 
 const STORAGE_KEY = "monobake_save_v2";
 const GEMINI_API_KEY_STORAGE = "yui_gemini_api_key";
@@ -97,7 +139,7 @@ async function apiAnalyzeMonster(base64ImageData, apiKey) {
 
   const promptText = `
 この画像を見て、RPGモンスターの設定を作成してください。
-名称、属性(火/水/風)、レアリティ(C/B/A/S)、説明、3つの技(通常・必殺・補助)、ステータスに加え、
+名称、属性(火/水/風)、レアリティ(C/B/A/S)、説明、4つの技(通常・必殺・補助・奥義)、ステータスに加え、
 このモンスターをドット絵/イラストとして描くための英語の画像生成プロンプト(imagePrompt)も作成してください。
 imagePromptは英語で、スタイル指定(16-bit pixel art, retro RPG game monster, full frame, dynamic pose, close-up, fill the canvas, edge-to-edge, solid pitch-black background, no border, no frame)を含めてください。
 `;
@@ -129,9 +171,10 @@ imagePromptは英語で、スタイル指定(16-bit pixel art, retro RPG game mo
             properties: {
               normal:{ type:"OBJECT", properties:{cost:{type:"INTEGER"},name:{type:"STRING"},flavor:{type:"STRING"}}, required:["cost","name","flavor"] },
               strong:{ type:"OBJECT", properties:{cost:{type:"INTEGER"},name:{type:"STRING"},flavor:{type:"STRING"}}, required:["cost","name","flavor"] },
-              utility:{ type:"OBJECT", properties:{cost:{type:"INTEGER"},name:{type:"STRING"},flavor:{type:"STRING"}}, required:["cost","name","flavor"] }
+              utility:{ type:"OBJECT", properties:{cost:{type:"INTEGER"},name:{type:"STRING"},flavor:{type:"STRING"}}, required:["cost","name","flavor"] },
+              special:{ type:"OBJECT", properties:{cost:{type:"INTEGER"},name:{type:"STRING"},flavor:{type:"STRING"}}, required:["cost","name","flavor"] }
             },
-            required:["normal","strong","utility"]
+            required:["normal","strong","utility","special"]
           }
         },
         required: ["name","attribute","rarity","description","imagePrompt","stats","moves"]
@@ -186,6 +229,7 @@ function App() {
   // 表示モード制御: 'list' (一覧/作成) | 'detail' (詳細画面)
   const [viewMode, setViewMode] = useState("list");
   const [selectedMonster, setSelectedMonster] = useState(null);
+  const [selectedMove, setSelectedMove] = useState(null);
 
   const uploadRef = useRef(null);
 
@@ -258,6 +302,7 @@ function App() {
   // カードタップで詳細画面へ遷移
   const openDetail = (monster) => {
     setSelectedMonster(monster);
+    setSelectedMove(null);
     setViewMode("detail");
   };
 
@@ -278,31 +323,18 @@ function App() {
           <button className="back-btn" onClick={() => setViewMode("list")}>
             ← 図鑑一覧に戻る
           </button>
-          
-          <div className="card">
-            <div className="step-header">モンスター詳細</div>
-            
-            <div className="detail-container">
-              {/* 左側：情報 */}
-              <div className="detail-info">
-                <div style={{ display:"flex", alignItems:"center", gap:"6px", marginBottom:"4px" }}>
-                  <span className="tag" style={{ background: TYPE_CHART[selectedMonster.attribute]?.color || "#ccc", color:"#000" }}>
-                    {selectedMonster.attribute}
-                  </span>
-                  <span style={{ fontSize:"11px", color:"#F2B84B", fontWeight:"bold" }}>
-                    レア: {selectedMonster.rarity}
-                  </span>
-                </div>
-                
-                <div style={{ fontSize:"16px", fontWeight:"bold", marginBottom:"6px" }}>
-                  {selectedMonster.name}
-                </div>
-                
-                <p style={{ color:"#9A9CC0", fontSize:"10px", margin:"0 0 10px 0", lineHeight:"1.4" }}>
-                  {selectedMonster.description}
-                </p>
 
-                <div className="stat-grid">
+          <div className="profile-card">
+            {/* 画像（上部・大きく表示） */}
+            <div className="profile-hero">
+              <img src={selectedMonster.photo} alt={selectedMonster.name} />
+            </div>
+
+            {/* パラメータ／名前・属性 */}
+            <div className="profile-row">
+              <div className="param-box">
+                <div className="param-title">パラメータ</div>
+                <div className="stat-grid" style={{ margin:0 }}>
                   <div className="stat-box"><div className="lbl">HP</div><div className="val">{selectedMonster.stats.hp}</div></div>
                   <div className="stat-box"><div className="lbl">ATK</div><div className="val">{selectedMonster.stats.atk}</div></div>
                   <div className="stat-box"><div className="lbl">DEF</div><div className="val">{selectedMonster.stats.def}</div></div>
@@ -310,17 +342,53 @@ function App() {
                 </div>
               </div>
 
-              {/* 右側：画像 */}
-              <div className="detail-image-box">
-                <img src={selectedMonster.photo} className="detail-image" alt={selectedMonster.name} />
+              <div className="name-attr-box">
+                <div className="name-banner">
+                  <span className="mon-name">{selectedMonster.name}</span>
+                  <div className="attr-circle" style={{ background: TYPE_CHART[selectedMonster.attribute]?.color || "#ccc" }}>
+                    {selectedMonster.attribute}
+                  </div>
+                </div>
+                <div className="rarity-pill">レア度: {selectedMonster.rarity}</div>
               </div>
             </div>
 
-            <div style={{ fontSize:"11px", color:"#23E0C4", marginTop:"12px", borderTop:"1px solid rgba(255,255,255,0.1)", paddingTop:"8px" }}>
-              <div style={{ marginBottom:"4px" }}>⚔️ <strong>通常技:</strong> {selectedMonster.moves?.normal?.name}</div>
-              <div style={{ marginBottom:"4px" }}>🔥 <strong>必殺技:</strong> {selectedMonster.moves?.strong?.name}</div>
-              <div>✨ <strong>補助技:</strong> {selectedMonster.moves?.utility?.name}</div>
+            {/* 説明文 */}
+            <p className="desc-box">{selectedMonster.description}</p>
+
+            {/* 技（4枠・タップで詳細） */}
+            <div className="moves-section">
+              <div className="moves-title">📖 技一覧（タップで詳細）</div>
+              <div className="moves-grid">
+                {MOVE_SLOTS.map((slot) => {
+                  const move = selectedMonster.moves?.[slot.key];
+                  return (
+                    <div
+                      key={slot.key}
+                      className="move-tile"
+                      onClick={() => move && setSelectedMove({ ...move, slotLabel: slot.label, icon: slot.icon })}
+                      style={{ opacity: move ? 1 : 0.4, cursor: move ? "pointer" : "default" }}
+                    >
+                      <div className="move-slot-label">{slot.icon} {slot.label}</div>
+                      <div className="move-name">{move?.name || "ー"}</div>
+                      {move && <div className="move-cost">コスト: {move.cost}</div>}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- 技詳細モーダル --- */}
+      {selectedMove && (
+        <div className="modal-overlay" onClick={() => setSelectedMove(null)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">{selectedMove.icon} {selectedMove.name}</div>
+            <div className="modal-cost">{selectedMove.slotLabel} ・ コスト: {selectedMove.cost}</div>
+            <div className="modal-flavor">{selectedMove.flavor}</div>
+            <button className="btn-action modal-close-btn" onClick={() => setSelectedMove(null)}>閉じる</button>
           </div>
         </div>
       )}
