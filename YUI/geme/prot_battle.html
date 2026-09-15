@@ -212,11 +212,10 @@
     });
   }
 
-  // ステップ1: 画像解析とステータス生成 (テキストモデル)
+  // ステップ1: 画像解析とステータス生成 (最新の gemini-3.5-flash-lite を使用)
   async function analyzeImageWithGemini(dataUrl, apiKey) {
     const base64Data = dataUrl.split(",")[1];
-    // 実在する最新軽量モデルを使用
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
 
     const ENEMY_GEN_PROMPT = "画像の中心的物体を1つ選び、RPGの敵モンスターとして設定してください。また、その物体をモチーフにしたかっこいい/かわいいモンスターの見た目（英語プロンプト）も image_prompt に記述してください。";
 
@@ -273,7 +272,7 @@
 
   // ステップ2: Geminiモデルによるモンスター画像生成
   async function generateMonsterImageWithGemini(promptText, apiKey) {
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
     const fullPrompt = `Create a game character illustration of a monster based on: ${promptText}. Video game monster style, clean background, high quality.`;
 
     const requestBody = {
@@ -481,7 +480,7 @@
     const [tab, setTab] = useState("scan");
     const [loading, setLoading] = useState(false);
     const [loadingMsg, setLoadingMsg] = useState("");
-    const [useAiImageGen, setUseAiImageGen] = useState(true); // AI画像生成モードのトグル
+    const [useAiImageGen, setUseAiImageGen] = useState(true);
     const [previewEnemy, setPreviewEnemy] = useState(null);
     const [activeBattleEnemy, setActiveBattleEnemy] = useState(null);
     const fileInputRef = useRef(null);
@@ -634,7 +633,7 @@
                     Gemini AI画像生成を使用する
                   </label>
                   <div style={{ fontSize: "10px", color: "#9A9CC0", marginTop: "2px" }}>
-                    {useAiImageGen ? "AIがイラストを新規作成（1日約500回まで制限あり）" : "写真そのまま＋顔パーツ合成（高速・無制限）"}
+                    {useAiImageGen ? "AIがイラストを新規作成" : "写真そのまま＋顔パーツ合成（高速・無制限）"}
                   </div>
                 </div>
 
