@@ -93,14 +93,9 @@
   }
 
   const STORAGE_KEY = "monobake_save_v2";
-
-  // ---- index.html(YUI本体)と共有するストレージ ----
-  // APIキー・相棒の見た目(画像)・相棒の名前は index.html 側の設定を正として読み込む。
-  // ここでは書き込み専用の複製を持たず、常に共有ストレージを参照することで
-  // index側で変更された内容がすぐこちらにも反映されるようにする。
-  const GEMINI_API_KEY_STORAGE = "yui_gemini_api_key"; // index.htmlと同じキー名
-  const PROFILE_KEY = "yui_profile";                   // index.htmlと同じキー名
-  const CHAR_IMAGE_KEY = "yui_custom_char";             // index.htmlと同じキー名
+  const GEMINI_API_KEY_STORAGE = "yui_gemini_api_key";
+  const PROFILE_KEY = "yui_profile";
+  const CHAR_IMAGE_KEY = "yui_custom_char";
 
   function loadSharedApiKey() {
     try { return localStorage.getItem(GEMINI_API_KEY_STORAGE) || ""; } catch (e) { return ""; }
@@ -117,12 +112,11 @@
   function loadSharedCharImage() {
     try { return localStorage.getItem(CHAR_IMAGE_KEY) || null; } catch (e) { return null; }
   }
-  // index.htmlで設定済みの「相棒AIの名前・見た目」を取得する。未設定ならフォールバック値を使う。
   function getPartnerIdentity() {
     const profile = loadSharedProfile();
     return {
       name: (profile && profile.ai_name) || "ナビモン",
-      photo: loadSharedCharImage(), // 未設定ならnull(絵文字表示にフォールバック)
+      photo: loadSharedCharImage(),
     };
   }
 
@@ -166,11 +160,7 @@
     });
   }
 
-  // ---- 顔パーツをこちら側で描き足す(Canvas処理・API呼び出し不要・無料) ----
-  // Gemini の画像生成モデル(gemini-3.1-flash-image)は従量課金が前提で、
-  // 無料枠だけのAPIキーだと quota exceeded (0クォータ) や 429 で弾かれることがある。
-  // そのため「顔を足す」処理はAIに頼らず、撮影した写真の上に
-  // プログラム側で目と口を描画する方式に変更した。
+  // キャンバスで元画像の上に目と口を描き足す（フォールバック用）
   function addCartoonFace(dataUrl) {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -187,7 +177,6 @@
         const eyeR = Math.max(4, canvas.width * 0.045);
 
         [-1, 1].forEach((dir) => {
-          // 白目
           ctx.beginPath();
           ctx.fillStyle = "#ffffff";
           ctx.ellipse(cx + dir * eyeOffsetX, cy, eyeR, eyeR * 1.15, 0, 0, Math.PI * 2);
@@ -195,19 +184,18 @@
           ctx.lineWidth = Math.max(1, eyeR * 0.15);
           ctx.strokeStyle = "#161616";
           ctx.stroke();
-          // 黒目
+
           ctx.beginPath();
           ctx.fillStyle = "#161616";
           ctx.ellipse(cx + dir * eyeOffsetX, cy + eyeR * 0.1, eyeR * 0.5, eyeR * 0.55, 0, 0, Math.PI * 2);
           ctx.fill();
-          // ハイライト
+
           ctx.beginPath();
           ctx.fillStyle = "#ffffff";
           ctx.ellipse(cx + dir * eyeOffsetX - eyeR * 0.15, cy - eyeR * 0.15, eyeR * 0.15, eyeR * 0.15, 0, 0, Math.PI * 2);
           ctx.fill();
         });
 
-        // 口(にっこりカーブ)
         const mouthY = cy + eyeR * 2.2;
         const mouthWidth = canvas.width * 0.16;
         ctx.beginPath();
@@ -224,14 +212,13 @@
     });
   }
 
-  // 敵モンスターの設定生成(JSON)。画像編集は行わず、テキストのみをAIに生成させる
-  // (無料枠の手厚い軽量モデルだけで完結させ、画像生成のクォータ問題を回避する)。
-  const ENEMY_GEN_PROMPT = "画像の中心的物体を1つ選び、RPGの敵モンスターとして設定してください。";
-
+  // ステップ1: 画像解析とステータス生成 (テキストモデル)
   async function analyzeImageWithGemini(dataUrl, apiKey) {
     const base64Data = dataUrl.split(",")[1];
-    // テキスト生成のみを行う軽量モデル。画像は生成しないので無料枠の対象になりやすい。
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`;
+    // 実在する最新軽量モデルを使用
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
+
+    const ENEMY_GEN_PROMPT = "画像の中心的物体を1つ選び、RPGの敵モンスターとして設定してください。また、その物体をモチーフにしたかっこいい/かわいいモンスターの見た目（英語プロンプト）も image_prompt に記述してください。";
 
     const requestBody = {
       contents: [{
@@ -249,6 +236,7 @@
             attribute: { type: "STRING", enum: ["火", "水", "風"] },
             rarity: { type: "STRING", enum: ["C", "B", "A", "S"] },
             description: { type: "STRING", description: "特徴を表す一言(30文字以内)" },
+            image_prompt: { type: "STRING", description: "モンスター生成用の英語テキスト説明(例: A cute plastic bottle monster, anime style)" },
             moves: {
               type: "OBJECT",
               properties: {
@@ -259,7 +247,7 @@
               required: ["normal", "strong", "utility"]
             }
           },
-          required: ["name", "attribute", "rarity", "description", "moves"]
+          required: ["name", "attribute", "rarity", "description", "image_prompt", "moves"]
         }
       }
     };
@@ -280,9 +268,40 @@
     if (!rawText) throw new Error("AIからの応答の取得に失敗しました");
     const json = JSON.parse(rawText);
     json.stats = buildStats(json.rarity, json.name);
-    // 写真そのものに、こちら側で目と口を描き足す(API呼び出しなし)
-    json.photo = await addCartoonFace(dataUrl);
     return json;
+  }
+
+  // ステップ2: Geminiモデルによるモンスター画像生成
+  async function generateMonsterImageWithGemini(promptText, apiKey) {
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
+    const fullPrompt = `Create a game character illustration of a monster based on: ${promptText}. Video game monster style, clean background, high quality.`;
+
+    const requestBody = {
+      contents: [{
+        parts: [{ text: fullPrompt }]
+      }]
+    };
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.error?.message || "画像生成に失敗しました（無料枠の上限に達した可能性があります）");
+    }
+
+    const resData = await res.json();
+    const parts = resData.candidates?.[0]?.content?.parts || [];
+    for (const part of parts) {
+      if (part.inlineData && part.inlineData.data) {
+        const mime = part.inlineData.mimeType || "image/png";
+        return `data:${mime};base64,${part.inlineData.data}`;
+      }
+    }
+    throw new Error("生成画像データが見つかりませんでした");
   }
 
   function calcDamage(attacker, defender, moveMult) {
@@ -296,9 +315,7 @@
     return { dmg: Math.max(1, Math.round(rawDmg)), typeMult };
   }
 
-  // ==========================================
-  // バトル画面
-  // ==========================================
+  // バトル画面コンポーネント
   function BattleScreen({ partner, enemy, onBattleEnd }) {
     const [pMaxHp] = useState(partner.stats.hp);
     const [pHp, setPHp] = useState(partner.stats.hp);
@@ -456,21 +473,19 @@
     );
   }
 
-  // ==========================================
   // メインApp
-  // ==========================================
   function App() {
     const [gameData, setGameData] = useState(loadLocalData);
-    const [apiKey, setApiKey] = useState(loadSharedApiKey);       // index.htmlと共通のキー
-    const [identity, setIdentity] = useState(getPartnerIdentity); // index.htmlと共通の名前・見た目
-    const [tab, setTab] = useState("scan"); // デフォルトをスキャンに設定
+    const [apiKey, setApiKey] = useState(loadSharedApiKey);
+    const [identity, setIdentity] = useState(getPartnerIdentity);
+    const [tab, setTab] = useState("scan");
     const [loading, setLoading] = useState(false);
+    const [loadingMsg, setLoadingMsg] = useState("");
+    const [useAiImageGen, setUseAiImageGen] = useState(true); // AI画像生成モードのトグル
     const [previewEnemy, setPreviewEnemy] = useState(null);
     const [activeBattleEnemy, setActiveBattleEnemy] = useState(null);
     const fileInputRef = useRef(null);
 
-    // index.html側で相棒の見た目や名前、APIキーが変更された場合に追従する
-    // (別タブ/別ウィンドウでindex.htmlを編集した場合の反映用)
     React.useEffect(() => {
       const onFocus = () => {
         setIdentity(getPartnerIdentity());
@@ -480,50 +495,46 @@
       return () => window.removeEventListener("focus", onFocus);
     }, []);
 
-    // 図鑑ページ(prot_zukan.html)で「この相手とバトルする」を押した場合、
-    // 一時キーで渡された相手IDを拾って自動でバトル開始する
-    React.useEffect(() => {
-      const PENDING_BATTLE_KEY = "monobake_pending_battle_id";
-      try {
-        const pendingId = localStorage.getItem(PENDING_BATTLE_KEY);
-        if (pendingId) {
-          localStorage.removeItem(PENDING_BATTLE_KEY);
-          const target = gameData.zukan.find((z) => z.id === pendingId);
-          if (target) {
-            setActiveBattleEnemy(target);
-            setTab("battle");
-          }
-        }
-      } catch (e) { /* 無視 */ }
-      // 初回マウント時のみ実行
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
     const handleApiKeyChange = (e) => {
       const key = e.target.value;
       setApiKey(key);
-      saveSharedApiKey(key); // index.htmlの初期設定と同じ場所に書き込む
+      saveSharedApiKey(key);
     };
 
     const handleFileChange = async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      if (!apiKey) return alert("Gemini APIキーを設定してください(index画面の初期設定と共通です)");
+      if (!apiKey) return alert("Gemini APIキーを設定してください");
 
       setLoading(true);
       try {
+        setLoadingMsg("画像を解析中...");
         const dataUrl = await resizeImage(file);
         const enemyJson = await analyzeImageWithGemini(dataUrl, apiKey);
 
+        let finalPhoto = "";
+
+        if (useAiImageGen) {
+          try {
+            setLoadingMsg("AIでモンスター画像を生成中...");
+            finalPhoto = await generateMonsterImageWithGemini(enemyJson.image_prompt, apiKey);
+          } catch (imgErr) {
+            console.warn("AI画像生成失敗。キャンバス顔描画にフォールバックします:", imgErr);
+            finalPhoto = await addCartoonFace(dataUrl);
+          }
+        } else {
+          finalPhoto = await addCartoonFace(dataUrl);
+        }
+
         const newEnemy = {
-          ...enemyJson, // enemyJson.photo は既に顔を描き足し済みの画像(Canvas処理・API不使用)
+          ...enemyJson,
+          photo: finalPhoto,
           id: `enemy_${Date.now()}`,
           createdAt: new Date().toLocaleDateString()
         };
 
         setPreviewEnemy(newEnemy);
 
-        // 図鑑に自動で登録保存
         const updatedZukan = [newEnemy, ...gameData.zukan.filter(z => z.name !== newEnemy.name)];
         const updatedData = { ...gameData, zukan: updatedZukan };
         setGameData(updatedData);
@@ -533,6 +544,7 @@
         alert("エラー: " + err.message);
       } finally {
         setLoading(false);
+        setLoadingMsg("");
         e.target.value = "";
       }
     };
@@ -573,12 +585,10 @@
       setTab("scan");
     };
 
-    // 戦績(レベル・技など)はこのゲーム側の保存データ、名前と見た目はindex.html側の設定を使う
     const partner = { ...gameData.partner, name: identity.name, photo: identity.photo };
 
     return (
       <div className="main-container">
-        {/* ナビゲーションタブ */}
         {tab !== "battle" && (
           <div>
             <div style={{ textAlign: "right", marginBottom: "8px" }}>
@@ -607,14 +617,29 @@
             />
 
             {!previewEnemy ? (
-              <div className="card" style={{ textAlign: "center", padding: "40px 16px" }}>
+              <div className="card" style={{ textAlign: "center", padding: "30px 16px" }}>
                 <div style={{ fontSize: "48px", marginBottom: "12px" }}>📸</div>
                 <h3>身の回りのものをスキャン</h3>
-                <p style={{ color: "#9A9CC0", fontSize: "12px", marginBottom: "20px" }}>
+                <p style={{ color: "#9A9CC0", fontSize: "12px", marginBottom: "16px" }}>
                   カメラで撮影するとGeminiが敵モンスターに変換します。
                 </p>
+
+                <div style={{ marginBottom: "20px", fontSize: "12px", background: "#12142B", padding: "8px", borderRadius: "8px", display: "inline-block" }}>
+                  <label style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <input
+                      type="checkbox"
+                      checked={useAiImageGen}
+                      onChange={(e) => setUseAiImageGen(e.target.checked)}
+                    />
+                    Gemini AI画像生成を使用する
+                  </label>
+                  <div style={{ fontSize: "10px", color: "#9A9CC0", marginTop: "2px" }}>
+                    {useAiImageGen ? "AIがイラストを新規作成（1日約500回まで制限あり）" : "写真そのまま＋顔パーツ合成（高速・無制限）"}
+                  </div>
+                </div>
+
                 <button className="btn-action" disabled={loading} onClick={() => fileInputRef.current?.click()}>
-                  {loading ? "Gemini解析中..." : "📷 カメラを起動して撮影"}
+                  {loading ? loadingMsg : "📷 カメラを起動して撮影"}
                 </button>
               </div>
             ) : (
@@ -645,7 +670,7 @@
           </div>
         )}
 
-        {/* 2. 図鑑画面（図鑑から再戦も可能） */}
+        {/* 2. 図鑑画面 */}
         {tab === "zukan" && (
           <div>
             {gameData.zukan.length === 0 ? (
@@ -690,9 +715,6 @@
                   <p style={{ color: "#23E0C4", fontWeight: "bold", margin: "4px 0 0" }}>Lv. {partner.level} (EXP: {partner.exp}/100)</p>
                 </div>
               </div>
-              <p style={{ color: "#9A9CC0", fontSize: "11px", margin: "0 0 10px" }}>
-                名前と見た目は index画面(YUI初期設定)の相棒設定と共通です。変更したい場合はそちらで編集してください。
-              </p>
 
               <div className="stat-grid">
                 <div className="stat-box"><div className="lbl">HP</div><div className="val">{partner.stats.hp}</div></div>
@@ -704,9 +726,6 @@
 
             <div className="card" style={{ fontSize: "12px" }}>
               <h4>設定: Gemini APIキー</h4>
-              <p style={{ color: "#9A9CC0", margin: "4px 0" }}>
-                index画面の初期設定で入力したものと共通のキーです。ここで変更すると index画面側にも反映されます。
-              </p>
               <input
                 type="password"
                 className="api-key-input"
