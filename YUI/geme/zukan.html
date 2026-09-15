@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>モノバケ - カード・詳細遷移版</title>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<style>
+  body { margin:0; padding:0; background:#0b0c1b; color:#F3F1E7; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; display:flex; justify-content:center; min-height:100vh; }
+  .main-container { width:100%; max-width:420px; background:#12142B; min-height:100vh; padding:16px; box-sizing:border-box; }
+  .card { background:#1F2347; border-radius:12px; padding:14px; margin-bottom:12px; border:1px solid rgba(255,255,255,0.1); }
+  .tag { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:bold; }
+  .btn-action { width:100%; padding:12px; background:#23E0C4; color:#08221E; border:none; border-radius:10px; font-weight:bold; font-size:14px; cursor:pointer; margin-top:8px; }
+  .btn-action:disabled { opacity:0.4; cursor:not-allowed; }
+  .btn-save { background:#F2B84B; color:#000; }
+  .btn-secondary { background:transparent; color:#9A9CC0; border:1px solid rgba(255,255,255,0.2); }
+  .stat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:6px; margin:10px 0; text-align:center; }
+  .stat-box { background:#12142B; padding:6px; border-radius:6px; }
+  .stat-box .lbl { font-size:10px; color:#9A9CC0; }
+  .stat-box .val { font-size:13px; font-weight:bold; }
+  .api-key-input { width:100%; padding:8px; margin-top:6px; border-radius:6px; border:1px solid #333; background:#000; color:#fff; box-sizing:border-box; }
+  .step-header { font-size:14px; font-weight:bold; color:#23E0C4; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:4px; }
+  .error-box { background:#421118; border:1px solid #FF5D73; color:#FFD1D7; padding:8px; border-radius:6px; font-size:11px; margin-top:8px; white-space:pre-wrap; word-break:break-all; }
+  .progress { font-size:11px; color:#9A9CC0; margin-top:6px; }
+
+  /* 新規追加スタイル */
+  .clickable-card { cursor: pointer; transition: transform 0.2s, border-color 0.2s; }
+  .clickable-card:hover { transform: translateY(-2px); border-color: #23E0C4; }
+  
+  /* カード一覧（2列グリッド） */
+  .zukan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .card-item { background: #1F2347; border-radius: 10px; padding: 10px; border: 1px solid rgba(255,255,255,0.1); text-align: center; }
+  
+  /* 詳細画面レイアウト（左情報 / 右画像） */
+  .detail-container { display: flex; gap: 12px; align-items: flex-start; }
+  .detail-info { flex: 1; }
+  .detail-image-box { width: 130px; flex-shrink: 0; text-align: center; }
+  .detail-image { width: 100%; height: 130px; border-radius: 8px; border: 2px solid #23E0C4; object-fit: cover; }
+  
+  .back-btn { background: none; border: none; color: #23E0C4; font-size: 13px; cursor: pointer; padding: 0 0 10px 0; display: inline-block; font-weight: bold; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useRef } = React;
+
+const TYPE_CHART = {
+  火: { color:"#FF6B4A" }, 水: { color:"#3EC6E0" }, 風: { color:"#7ED957" },
+};
+
+const STORAGE_KEY = "monobake_save_v2";
+const GEMINI_API_KEY_STORAGE = "yui_gemini_api_key";
+
+function loadSharedApiKey() {
+  try { return localStorage.getItem(GEMINI_API_KEY_STORAGE) || ""; } catch (e) { return ""; }
+}
+function saveSharedApiKey(key) {
+  try { localStorage.setItem(GEMINI_API_KEY_STORAGE, key); } catch (e) {}
+}
+function loadLocalData() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  return saved ? JSON.parse(saved) : { zukan: [] };
+}
+function saveLocalData(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+
+function resizeImage(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const max = 400;
+        let w = img.width, h = img.height;
+        if (w > h) { if (w > max) { h = Math.round(h*(max/w)); w = max; } }
+        else { if (h > max) { w = Math.round(w*(max/h)); h = max; } }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL("image/png",0.9));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// --- STEP A: 画像をGeminiに渡して解析 ---
+async function apiAnalyzeMonster(base64ImageData, apiKey) {
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
+  const cleanBase64 = base64ImageData.split(",")[1];
+
+  const promptText = `
+この画像を見て、RPGモンスターの設定を作成してください。
+名称、属性(火/水/風)、レアリティ(C/B/A/S)、説明、3つの技(通常・必殺・補助)、ステータスに加え、
+このモンスターをドット絵/イラストとして描くための英語の画像生成プロンプト(imagePrompt)も作成してください。
+imagePromptは英語で、スタイル指定(16-bit pixel art, retro RPG game monster, full frame, dynamic pose, close-up, fill the canvas, edge-to-edge, solid pitch-black background, no border, no frame)を含めてください。
+`;
+
+  const requestBody = {
+    contents: [{
+      parts: [
+        { text: promptText },
+        { inlineData: { mimeType: "image/png", data: cleanBase64 } }
+      ]
+    }],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          name: { type:"STRING" },
+          attribute: { type:"STRING", enum:["火","水","風"] },
+          rarity: { type:"STRING", enum:["C","B","A","S"] },
+          description: { type:"STRING" },
+          imagePrompt: { type:"STRING" },
+          stats: {
+            type:"OBJECT",
+            properties: { hp:{type:"INTEGER"}, atk:{type:"INTEGER"}, def:{type:"INTEGER"}, spd:{type:"INTEGER"} },
+            required: ["hp","atk","def","spd"]
+          },
+          moves: {
+            type:"OBJECT",
+            properties: {
+              normal:{ type:"OBJECT", properties:{cost:{type:"INTEGER"},name:{type:"STRING"},flavor:{type:"STRING"}}, required:["cost","name","flavor"] },
+              strong:{ type:"OBJECT", properties:{cost:{type:"INTEGER"},name:{type:"STRING"},flavor:{type:"STRING"}}, required:["cost","name","flavor"] },
+              utility:{ type:"OBJECT", properties:{cost:{type:"INTEGER"},name:{type:"STRING"},flavor:{type:"STRING"}}, required:["cost","name","flavor"] }
+            },
+            required:["normal","strong","utility"]
+          }
+        },
+        required: ["name","attribute","rarity","description","imagePrompt","stats","moves"]
+      }
+    }
+  };
+
+  const res = await fetch(endpoint, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify(requestBody)
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`[文章解析APIエラー ${res.status}]\n${err.error?.message || "不明なエラー"}`);
+  }
+
+  const data = await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("[文章解析APIエラー] Geminiからのテキスト応答が空でした");
+  return JSON.parse(text);
+}
+
+// --- STEP B: 画像生成 ---
+async function apiGenerateImageFromPrompt(imagePrompt) {
+  const encoded = encodeURIComponent(imagePrompt);
+  const seed = Math.floor(Math.random() * 1000000);
+  const url = `https://image.pollinations.ai/prompt/${encoded}?model=flux&width=512&height=512&seed=${seed}&nologo=true`;
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`[画像生成エラー] HTTP ${res.status}`);
+  const blob = await res.blob();
+  return await new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.readAsDataURL(blob);
+  });
+}
+
+function App() {
+  const [apiKey, setApiKey] = useState(loadSharedApiKey());
+  const [gameData, setGameData] = useState(loadLocalData());
+
+  const [sourceImage, setSourceImage] = useState(null);
+  const [parsedMonster, setParsedMonster] = useState(null);
+  const [generatedImage, setGeneratedImage] = useState(null);
+
+  const [step, setStep] = useState("idle");
+  const [errorMsg, setErrorMsg] = useState(null);
+
+  // 表示モード制御: 'list' (一覧/作成) | 'detail' (詳細画面)
+  const [viewMode, setViewMode] = useState("list");
+  const [selectedMonster, setSelectedMonster] = useState(null);
+
+  const uploadRef = useRef(null);
+
+  const handleApiKeyChange = (e) => {
+    setApiKey(e.target.value);
+    saveSharedApiKey(e.target.value);
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const resized = await resizeImage(file);
+    setSourceImage(resized);
+    setParsedMonster(null);
+    setGeneratedImage(null);
+    setErrorMsg(null);
+    setStep("idle");
+  };
+
+  const handleRunFlow = async () => {
+    if (!apiKey) return alert("Gemini APIキーを入力してください");
+    if (!sourceImage) return alert("画像をアップロードしてください");
+
+    setErrorMsg(null);
+    try {
+      setStep("analyzing");
+      const monster = await apiAnalyzeMonster(sourceImage, apiKey);
+      setParsedMonster(monster);
+
+      setStep("generating");
+      const img = await apiGenerateImageFromPrompt(monster.imagePrompt);
+      setGeneratedImage(img);
+
+      setStep("done");
+    } catch (e) {
+      setErrorMsg(e.message);
+      setStep("idle");
+    }
+  };
+
+  const handleSaveFullMonster = () => {
+    if (!generatedImage || !parsedMonster) return;
+    const fullMonsterData = {
+      id: `mon_${Date.now()}`,
+      photo: generatedImage,
+      name: parsedMonster.name,
+      attribute: parsedMonster.attribute,
+      rarity: parsedMonster.rarity,
+      description: parsedMonster.description,
+      stats: parsedMonster.stats,
+      moves: parsedMonster.moves,
+      createdAt: new Date().toLocaleString()
+    };
+    const newZukan = [fullMonsterData, ...gameData.zukan];
+    const newGameData = { ...gameData, zukan: newZukan };
+    setGameData(newGameData);
+    saveLocalData(newGameData);
+    
+    // 保存後に直接そのモンスターの詳細画面へ切り替え
+    setSelectedMonster(fullMonsterData);
+    setViewMode("detail");
+
+    // 入力フォームの初期化
+    setSourceImage(null);
+    setParsedMonster(null);
+    setGeneratedImage(null);
+    setStep("idle");
+  };
+
+  // カードタップで詳細画面へ遷移
+  const openDetail = (monster) => {
+    setSelectedMonster(monster);
+    setViewMode("detail");
+  };
+
+  const stepLabel = {
+    idle: "",
+    analyzing: "🔍 写真を解析中...(Gemini)",
+    generating: "🎨 モンスター画像を生成中...(Pollinations)",
+    done: "✅ 完了"
+  }[step];
+
+  return (
+    <div className="main-container">
+      <h2 style={{ fontSize:"16px", textAlign:"center", marginBottom:"16px" }}>🧪 モノバケ 統合フロー版</h2>
+
+      {/* --- 詳細画面ビュー --- */}
+      {viewMode === "detail" && selectedMonster && (
+        <div>
+          <button className="back-btn" onClick={() => setViewMode("list")}>
+            ← 図鑑一覧に戻る
+          </button>
+          
+          <div className="card">
+            <div className="step-header">モンスター詳細</div>
+            
+            <div className="detail-container">
+              {/* 左側：情報 */}
+              <div className="detail-info">
+                <div style={{ display:"flex", alignItems:"center", gap:"6px", marginBottom:"4px" }}>
+                  <span className="tag" style={{ background: TYPE_CHART[selectedMonster.attribute]?.color || "#ccc", color:"#000" }}>
+                    {selectedMonster.attribute}
+                  </span>
+                  <span style={{ fontSize:"11px", color:"#F2B84B", fontWeight:"bold" }}>
+                    レア: {selectedMonster.rarity}
+                  </span>
+                </div>
+                
+                <div style={{ fontSize:"16px", fontWeight:"bold", marginBottom:"6px" }}>
+                  {selectedMonster.name}
+                </div>
+                
+                <p style={{ color:"#9A9CC0", fontSize:"10px", margin:"0 0 10px 0", lineHeight:"1.4" }}>
+                  {selectedMonster.description}
+                </p>
+
+                <div className="stat-grid">
+                  <div className="stat-box"><div className="lbl">HP</div><div className="val">{selectedMonster.stats.hp}</div></div>
+                  <div className="stat-box"><div className="lbl">ATK</div><div className="val">{selectedMonster.stats.atk}</div></div>
+                  <div className="stat-box"><div className="lbl">DEF</div><div className="val">{selectedMonster.stats.def}</div></div>
+                  <div className="stat-box"><div className="lbl">SPD</div><div className="val">{selectedMonster.stats.spd}</div></div>
+                </div>
+              </div>
+
+              {/* 右側：画像 */}
+              <div className="detail-image-box">
+                <img src={selectedMonster.photo} className="detail-image" alt={selectedMonster.name} />
+              </div>
+            </div>
+
+            <div style={{ fontSize:"11px", color:"#23E0C4", marginTop:"12px", borderTop:"1px solid rgba(255,255,255,0.1)", paddingTop:"8px" }}>
+              <div style={{ marginBottom:"4px" }}>⚔️ <strong>通常技:</strong> {selectedMonster.moves?.normal?.name}</div>
+              <div style={{ marginBottom:"4px" }}>🔥 <strong>必殺技:</strong> {selectedMonster.moves?.strong?.name}</div>
+              <div>✨ <strong>補助技:</strong> {selectedMonster.moves?.utility?.name}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- 一覧・作成画面ビュー --- */}
+      {viewMode === "list" && (
+        <>
+          <div className="card">
+            <div style={{ fontSize:"11px", color:"#9A9CC0" }}>Gemini API Key</div>
+            <input type="password" className="api-key-input" placeholder="AIzaSy..." value={apiKey} onChange={handleApiKeyChange} />
+          </div>
+
+          <div className="card">
+            <div className="step-header">STEP 1: 写真からモンスター生成</div>
+            <input type="file" accept="image/*" ref={uploadRef} style={{ display:"none" }} onChange={handleImageUpload} />
+            <button className="btn-action btn-secondary" onClick={() => uploadRef.current?.click()}>
+              📁 写真を選択
+            </button>
+
+            {sourceImage && (
+              <div style={{ textAlign:"center", marginTop:"12px" }}>
+                <img src={sourceImage} style={{ width:"100px", height:"100px", borderRadius:"8px", border:"1px dashed #23E0C4", objectFit:"cover" }} />
+                <button className="btn-action" disabled={step==="analyzing"||step==="generating"} onClick={handleRunFlow}>
+                  ✨ 解析＋モンスター画像を生成する
+                </button>
+              </div>
+            )}
+
+            {stepLabel && <div className="progress">{stepLabel}</div>}
+            {errorMsg && <div className="error-box">{errorMsg}</div>}
+          </div>
+
+          {/* 生成完了時のカード（タップで詳細へ移行） */}
+          {parsedMonster && generatedImage && (
+            <div className="card clickable-card" onClick={() => openDetail({ ...parsedMonster, photo: generatedImage })} style={{ border:"2px solid #23E0C4" }}>
+              <div className="step-header" style={{ display:"flex", justifyContent:"space-between" }}>
+                <span>STEP 2: 生成完了（タップで詳細表示）</span>
+                <span style={{ fontSize:"10px", color:"#23E0C4" }}>🔍 タップ</span>
+              </div>
+
+              <div style={{ textAlign:"center", margin:"10px 0" }}>
+                <img src={generatedImage} style={{ width:"140px", height:"140px", borderRadius:"8px", border:"1px solid #23E0C4", objectFit:"cover" }} />
+              </div>
+
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <strong style={{ fontSize:"15px" }}>{parsedMonster.name}</strong>
+                <span className="tag" style={{ background: TYPE_CHART[parsedMonster.attribute]?.color || "#ccc", color:"#000" }}>
+                  {parsedMonster.attribute}
+                </span>
+              </div>
+
+              <button className="btn-action btn-save" style={{ marginTop:"12px" }} onClick={(e) => { e.stopPropagation(); handleSaveFullMonster(); }}>
+                📦 図鑑に保存する
+              </button>
+            </div>
+          )}
+
+          {/* 図鑑カード一覧（2列表示） */}
+          <div className="card">
+            <div className="step-header">📖 モンスター図鑑 ({gameData.zukan.length})</div>
+            {gameData.zukan.length === 0 ? (
+              <div style={{ color:"#9A9CC0", fontSize:"11px", textAlign:"center", padding:"10px 0" }}>
+                まだ保存されたモンスターはいません
+              </div>
+            ) : (
+              <div className="zukan-grid">
+                {gameData.zukan.map((mon) => (
+                  <div key={mon.id} className="card-item clickable-card" onClick={() => openDetail(mon)}>
+                    <img src={mon.photo} style={{ width:"100%", height:"90px", borderRadius:"6px", objectFit:"cover", marginBottom:"6px" }} />
+                    <div style={{ fontSize:"11px", fontWeight:"bold", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                      {mon.name}
+                    </div>
+                    <div style={{ marginTop:"4px" }}>
+                      <span className="tag" style={{ background: TYPE_CHART[mon.attribute]?.color || "#ccc", color:"#000", fontSize:"9px", padding:"1px 4px" }}>
+                        {mon.attribute}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
