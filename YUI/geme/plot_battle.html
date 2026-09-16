@@ -26,6 +26,16 @@
   .step-header { font-size:14px; font-weight:bold; color:#23E0C4; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:4px; }
   .error-box { background:#421118; border:1px solid #FF5D73; color:#FFD1D7; padding:8px; border-radius:6px; font-size:11px; margin-top:8px; white-space:pre-wrap; word-break:break-all; }
   .progress { font-size:11px; color:#9A9CC0; margin-top:6px; }
+  .checker-bg {
+    background-image:
+      linear-gradient(45deg,#444 25%,transparent 25%),
+      linear-gradient(-45deg,#444 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#444 75%),
+      linear-gradient(-45deg,transparent 75%,#444 75%);
+    background-size:12px 12px;
+    background-position:0 0,0 6px,6px -6px,-6px 0px;
+    background-color:#666;
+  }
 </style>
 </head>
 <body>
@@ -83,7 +93,11 @@ async function apiAnalyzeMonster(base64ImageData, apiKey) {
 この画像を見て、RPGモンスターの設定を作成してください。
 名称、属性(火/水/風)、レアリティ(C/B/A/S)、説明、3つの技(通常・必殺・補助)、ステータスに加え、
 このモンスターをドット絵/イラストとして描くための英語の画像生成プロンプト(imagePrompt)も作成してください。
-imagePromptは英語で、スタイル指定(16-bit pixel art / retro RPG game creature, dark background, centered)を含めてください。
+imagePromptは英語で、以下のスタイル指定を必ず含めてください:
+16-bit pixel art / retro RPG game creature, FULL BODY visible (head to feet/base, nothing cropped out),
+large and centered composition that fills almost the entire frame with minimal empty margin around the character,
+flat solid single-color background (no gradient, no texture, no scenery, no shadow on the ground),
+front-facing or 3/4 view suitable for a game asset.
 `;
 
   const requestBody = {
@@ -140,9 +154,20 @@ imagePromptは英語で、スタイル指定(16-bit pixel art / retro RPG game c
   return JSON.parse(text);
 }
 
+// --- 切り抜き用のクロマキー設定（背景色はここで一元管理） ---
+// 黒/グリーン/ブルーなど好みで変更可。モンスター自体の色と被りにくいグリーンを既定にしています。
+const CHROMA_KEY_COLOR = { r: 0, g: 255, b: 0, name: "green" }; // 例: {r:0,g:0,b:0,name:"black"} や {r:0,g:0,b:255,name:"blue"} でも可
+const CHROMA_KEY_TOLERANCE = 60; // 大きいほど広い範囲の近似色まで透過される（抜けすぎ/抜け残りのバランスを見て調整）
+
+function chromaKeySuffixPrompt() {
+  // Geminiが作ったimagePromptがどんな内容でも、背景色だけはここで必ず統一する
+  return `, flat solid ${CHROMA_KEY_COLOR.name} screen background (chroma key style, rgb(${CHROMA_KEY_COLOR.r},${CHROMA_KEY_COLOR.g},${CHROMA_KEY_COLOR.b})), full body character filling most of the frame, minimal empty margin, no shadow, no gradient, no other colors in the background`;
+}
+
 // --- STEP B: Geminiが作ったimagePromptをPollinations(Flux)に渡して画像生成 ---
 async function apiGenerateImageFromPrompt(imagePrompt) {
-  const encoded = encodeURIComponent(imagePrompt);
+  const finalPrompt = `${imagePrompt}${chromaKeySuffixPrompt()}`;
+  const encoded = encodeURIComponent(finalPrompt);
   const seed = Math.floor(Math.random() * 1000000);
   const url = `https://image.pollinations.ai/prompt/${encoded}?model=flux&width=512&height=512&seed=${seed}&nologo=true`;
 
@@ -156,13 +181,43 @@ async function apiGenerateImageFromPrompt(imagePrompt) {
   });
 }
 
+// --- STEP C: 生成された画像の背景色（クロマキー）を透過に変換 ---
+function chromaKeyToTransparent(dataUrl, keyColor = CHROMA_KEY_COLOR, tolerance = CHROMA_KEY_TOLERANCE) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        const dist = Math.sqrt(
+          (r - keyColor.r) ** 2 + (g - keyColor.g) ** 2 + (b - keyColor.b) ** 2
+        );
+        if (dist < tolerance) {
+          data[i + 3] = 0; // 背景色に近い画素を透過に
+        }
+      }
+      ctx.putImageData(imageData, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => reject(new Error("[切り抜き処理エラー] 画像の読み込みに失敗しました"));
+    img.src = dataUrl;
+  });
+}
+
 function App() {
   const [apiKey, setApiKey] = useState(loadSharedApiKey());
   const [gameData, setGameData] = useState(loadLocalData());
 
   const [sourceImage, setSourceImage] = useState(null); // アップロードした元写真
   const [parsedMonster, setParsedMonster] = useState(null); // Geminiの解析結果
-  const [generatedImage, setGeneratedImage] = useState(null); // Pollinationsで生成した画像
+  const [rawGeneratedImage, setRawGeneratedImage] = useState(null); // Pollinationsが返した加工前の画像（背景色つき）
+  const [generatedImage, setGeneratedImage] = useState(null); // 背景を透過処理した後の画像（保存・表示に使う）
 
   const [step, setStep] = useState("idle"); // idle -> analyzing -> generating -> done
   const [errorMsg, setErrorMsg] = useState(null);
@@ -180,6 +235,7 @@ function App() {
     const resized = await resizeImage(file);
     setSourceImage(resized);
     setParsedMonster(null);
+    setRawGeneratedImage(null);
     setGeneratedImage(null);
     setErrorMsg(null);
     setStep("idle");
@@ -198,7 +254,11 @@ function App() {
 
       setStep("generating");
       const img = await apiGenerateImageFromPrompt(monster.imagePrompt);
-      setGeneratedImage(img);
+      setRawGeneratedImage(img);
+
+      setStep("cutting");
+      const transparentImg = await chromaKeyToTransparent(img);
+      setGeneratedImage(transparentImg);
 
       setStep("done");
     } catch (e) {
@@ -228,6 +288,7 @@ function App() {
 
     setSourceImage(null);
     setParsedMonster(null);
+    setRawGeneratedImage(null);
     setGeneratedImage(null);
     setStep("idle");
   };
@@ -236,6 +297,7 @@ function App() {
     idle: "",
     analyzing: "🔍 写真を解析中...(Gemini)",
     generating: "🎨 モンスター画像を生成中...(Pollinations)",
+    cutting: `✂️ 背景(${CHROMA_KEY_COLOR.name})を切り抜き中...`,
     done: "✅ 完了"
   }[step];
 
@@ -258,7 +320,7 @@ function App() {
         {sourceImage && (
           <div style={{ textAlign:"center", marginTop:"12px" }}>
             <img src={sourceImage} style={{ width:"120px", height:"120px", borderRadius:"8px", border:"1px dashed #23E0C4", objectFit:"cover" }} />
-            <button className="btn-action" disabled={step==="analyzing"||step==="generating"} onClick={handleRunFlow}>
+            <button className="btn-action" disabled={step==="analyzing"||step==="generating"||step==="cutting"} onClick={handleRunFlow}>
               ✨ 解析＋モンスター画像を生成する
             </button>
           </div>
@@ -274,7 +336,12 @@ function App() {
 
           {generatedImage && (
             <div style={{ textAlign:"center", marginBottom:"10px" }}>
-              <img src={generatedImage} style={{ width:"160px", height:"160px", borderRadius:"8px", border:"2px solid #23E0C4" }} />
+              <div className="checker-bg" style={{ display:"inline-block", borderRadius:"8px", border:"2px solid #23E0C4" }}>
+                <img src={generatedImage} style={{ width:"160px", height:"160px", display:"block", objectFit:"contain" }} />
+              </div>
+              <div style={{ fontSize:"9px", color:"#9A9CC0", marginTop:"4px" }}>
+                ↑ 市松模様(グレー)部分が透過されています
+              </div>
             </div>
           )}
 
@@ -311,7 +378,9 @@ function App() {
         <div className="step-header">📖 保存済みモンスター一覧 ({gameData.zukan.length})</div>
         {gameData.zukan.map((mon) => (
           <div key={mon.id} style={{ display:"flex", gap:"10px", alignItems:"center", background:"#12142B", padding:"8px", borderRadius:"6px", marginBottom:"6px" }}>
-            <img src={mon.photo} style={{ width:"48px", height:"48px", borderRadius:"6px", objectFit:"cover" }} />
+            <div className="checker-bg" style={{ width:"48px", height:"48px", borderRadius:"6px", overflow:"hidden", flexShrink:0 }}>
+              <img src={mon.photo} style={{ width:"100%", height:"100%", objectFit:"contain" }} />
+            </div>
             <div style={{ flex:1, fontSize:"11px" }}>
               <div style={{ fontWeight:"bold" }}>{mon.name} <span style={{ color:"#23E0C4" }}>({mon.attribute})</span></div>
               <div style={{ color:"#9A9CC0", fontSize:"9px" }}>技: {mon.moves?.normal?.name} / {mon.moves?.strong?.name}</div>
