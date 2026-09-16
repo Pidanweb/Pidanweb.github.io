@@ -27,38 +27,115 @@
   .error-box { background:#421118; border:1px solid #FF5D73; color:#FFD1D7; padding:8px; border-radius:6px; font-size:11px; margin-top:8px; white-space:pre-wrap; word-break:break-all; }
   .progress { font-size:11px; color:#9A9CC0; margin-top:6px; }
 
-  /* 新規追加スタイル */
   .clickable-card { cursor: pointer; transition: transform 0.2s, border-color 0.2s; }
   .clickable-card:hover { transform: translateY(-2px); border-color: #23E0C4; }
   
-  /* カード一覧（2列グリッド） */
   .zukan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
   .card-item { background: #1F2347; border-radius: 10px; padding: 10px; border: 1px solid rgba(255,255,255,0.1); text-align: center; }
   
-  /* 詳細画面レイアウト（左情報 / 右画像） */
-  .detail-container { display: flex; gap: 12px; align-items: flex-start; }
-  .detail-info { flex: 1; }
-  .detail-image-box { width: 130px; flex-shrink: 0; text-align: center; }
-  .detail-image { width: 100%; height: 130px; border-radius: 8px; border: 2px solid #23E0C4; object-fit: cover; }
-  
   .back-btn { background: none; border: none; color: #23E0C4; font-size: 13px; cursor: pointer; padding: 0 0 10px 0; display: inline-block; font-weight: bold; }
 
-  /* --- 新詳細画面レイアウト（画像上部＋パラメータ／名前／属性＋技4枠） --- */
+  /* --- 新詳細画面レイアウト（3層立体レイヤー構造） --- */
   .profile-card { background:#1F2347; border-radius:14px; padding:14px; border:1px solid rgba(255,255,255,0.1); }
 
-  .profile-hero { width:100%; aspect-ratio: 1 / 1; border-radius:12px; overflow:hidden; border:2px solid rgba(255,255,255,0.15); background:#12142B; }
-  .profile-hero img { width:100%; height:100%; object-fit:cover; display:block; }
+  /* ヒーローフレーム（基準コンテナ） */
+  .profile-hero { 
+    position: relative;
+    width: 100%; 
+    aspect-ratio: 1 / 1; 
+    border-radius: 12px; 
+    overflow: hidden; 
+    border: 2px solid rgba(255,255,255,0.15); 
+    /* 【層1：最背面】背景色・グラデーション（背景画像を差し替える場合は background-image に変更可） */
+    background: radial-gradient(circle at center, #2f346b 0%, #0d0f22 100%);
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+  }
+
+  /* 背景の装飾エフェクト（網目模様パターン） */
+  .profile-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+    background-size: 16px 16px;
+    opacity: 0.5;
+    z-index: 1;
+  }
+
+  /* 【層2：中面】キャラクター画像 */
+  .profile-hero img { 
+    position: absolute;
+    inset: 0;
+    width: 100%; 
+    height: 100%; 
+    object-fit: contain; 
+    display: block; 
+    z-index: 2;
+    /* キャラを背景から浮き立たせる強力なドロップシャドウ */
+    filter: drop-shadow(0px 8px 16px rgba(0, 0, 0, 0.75));
+    transition: transform 0.3s ease;
+  }
+
+  /* 【層3：最前面】キャラの下部に被さるネームプレート（すりガラス・ガラスモルフィズム） */
+  .hero-name-overlay {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
+    z-index: 3;
+    background: rgba(18, 20, 43, 0.75);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(35, 224, 196, 0.3);
+    border-radius: 10px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+  }
+  .hero-name-overlay .mon-name {
+    font-size: 16px;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .hero-name-overlay .right-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .attr-circle { 
+    width:32px; 
+    height:32px; 
+    min-width:32px; 
+    border-radius:50%; 
+    display:flex; 
+    align-items:center; 
+    justify-content:center; 
+    font-size:13px; 
+    font-weight:bold; 
+    color:#08221E; 
+    box-shadow:0 0 8px rgba(0,0,0,0.4); 
+  }
+  .rarity-pill { 
+    font-size:10px; 
+    color:#F2B84B; 
+    font-weight:bold; 
+    background:rgba(242,184,75,0.15); 
+    border:1px solid rgba(242,184,75,0.3);
+    border-radius:6px; 
+    padding:3px 6px; 
+    text-align:center; 
+  }
 
   .profile-row { display:flex; gap:8px; align-items:stretch; margin-top:12px; }
-
   .param-box { flex:1; background:#12142B; border-radius:10px; padding:8px 10px; border:1px solid rgba(255,255,255,0.08); }
   .param-box .param-title { font-size:10px; color:#23E0C4; font-weight:bold; margin-bottom:6px; letter-spacing:0.05em; }
-
-  .name-attr-box { flex:1.1; display:flex; flex-direction:column; justify-content:space-between; gap:6px; }
-  .name-banner { background:linear-gradient(135deg,#2F5FE0,#1F2347); border-radius:10px; padding:10px 12px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
-  .name-banner .mon-name { font-size:16px; font-weight:bold; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .attr-circle { width:44px; height:44px; min-width:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:bold; color:#08221E; box-shadow:0 0 0 3px rgba(0,0,0,0.15); }
-  .rarity-pill { font-size:10px; color:#F2B84B; font-weight:bold; background:rgba(242,184,75,0.12); border-radius:6px; padding:4px 8px; text-align:center; }
 
   .desc-box { font-size:11px; color:#9A9CC0; line-height:1.5; margin-top:12px; }
 
@@ -226,7 +303,6 @@ function App() {
   const [step, setStep] = useState("idle");
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // 表示モード制御: 'list' (一覧/作成) | 'detail' (詳細画面)
   const [viewMode, setViewMode] = useState("list");
   const [selectedMonster, setSelectedMonster] = useState(null);
   const [selectedMove, setSelectedMove] = useState(null);
@@ -288,18 +364,15 @@ function App() {
     setGameData(newGameData);
     saveLocalData(newGameData);
     
-    // 保存後に直接そのモンスターの詳細画面へ切り替え
     setSelectedMonster(fullMonsterData);
     setViewMode("detail");
 
-    // 入力フォームの初期化
     setSourceImage(null);
     setParsedMonster(null);
     setGeneratedImage(null);
     setStep("idle");
   };
 
-  // カードタップで詳細画面へ遷移
   const openDetail = (monster) => {
     setSelectedMonster(monster);
     setSelectedMove(null);
@@ -325,31 +398,33 @@ function App() {
           </button>
 
           <div className="profile-card">
-            {/* 画像（上部・大きく表示） */}
+            {/* 3層重ね合わせ立体フレーム（背景 ➔ キャラ ➔ 名前プレート） */}
             <div className="profile-hero">
+              {/* 【層2】キャラクター画像 */}
               <img src={selectedMonster.photo} alt={selectedMonster.name} />
+
+              {/* 【層3】最前面オーバーレイ：名前と属性・レア度 */}
+              <div className="hero-name-overlay">
+                <span className="mon-name">{selectedMonster.name}</span>
+                <div className="right-badge">
+                  <span className="rarity-pill">{selectedMonster.rarity}</span>
+                  <div className="attr-circle" style={{ background: TYPE_CHART[selectedMonster.attribute]?.color || "#ccc" }}>
+                    {selectedMonster.attribute}
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* パラメータ／名前・属性 */}
+            {/* パラメータ表示 */}
             <div className="profile-row">
               <div className="param-box">
-                <div className="param-title">パラメータ</div>
+                <div className="param-title">STATS / ステータス</div>
                 <div className="stat-grid" style={{ margin:0 }}>
                   <div className="stat-box"><div className="lbl">HP</div><div className="val">{selectedMonster.stats.hp}</div></div>
                   <div className="stat-box"><div className="lbl">ATK</div><div className="val">{selectedMonster.stats.atk}</div></div>
                   <div className="stat-box"><div className="lbl">DEF</div><div className="val">{selectedMonster.stats.def}</div></div>
                   <div className="stat-box"><div className="lbl">SPD</div><div className="val">{selectedMonster.stats.spd}</div></div>
                 </div>
-              </div>
-
-              <div className="name-attr-box">
-                <div className="name-banner">
-                  <span className="mon-name">{selectedMonster.name}</span>
-                  <div className="attr-circle" style={{ background: TYPE_CHART[selectedMonster.attribute]?.color || "#ccc" }}>
-                    {selectedMonster.attribute}
-                  </div>
-                </div>
-                <div className="rarity-pill">レア度: {selectedMonster.rarity}</div>
               </div>
             </div>
 
