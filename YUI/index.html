@@ -1690,7 +1690,7 @@
   }
 
   async function testGeminiKey(apiKey, profile) {
-    const model = 'gemini-1.5-flash';
+    const model = 'gemini-flash-latest';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const promptText =
       `あなたは「${profile.ai_name}」という名前のナビゲーションAIです。次の性格・話し方を守ってユーザーに接してください:${profile.personality}\n` +
