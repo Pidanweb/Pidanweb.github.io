@@ -1690,16 +1690,20 @@
   }
 
   async function testGeminiKey(apiKey, profile) {
-    const model = 'gemini-flash-latest';
+    const model = 'gemini-1.5-flash';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const promptText =
       `あなたは「${profile.ai_name}」という名前のナビゲーションAIです。次の性格・話し方を守ってユーザーに接してください:${profile.personality}\n` +
       `ユーザーの名前は「${profile.user_name}」です。今はじめて出会った場面として、短い挨拶を1〜2文だけ返してください。`;
 
-    const res = await fetch(url, {
+    const res = await fetch(`${url}?key=${apiKey}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: promptText }]
+        }]
+      }),
     });
     if (!res.ok) throw new Error('request_failed');
     const data = await res.json();
