@@ -1690,27 +1690,53 @@
   }
 
   async function testGeminiKey(apiKey, profile) {
-    const model = 'gemini-flash-latest';
+    // 現在の安定版 Gemini Flash
+    const model = 'gemini-3.8-flash';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
     const promptText =
       `あなたは「${profile.ai_name}」という名前のナビゲーションAIです。次の性格・話し方を守ってユーザーに接してください:${profile.personality}\n` +
       `ユーザーの名前は「${profile.user_name}」です。今はじめて出会った場面として、短い挨拶を1〜2文だけ返してください。`;
 
-    const res = await fetch(`${url}?key=${apiKey}`, {
+    const res = await fetch(`${url}?key=${encodeURIComponent(apiKey)}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({
         contents: [{
-          parts: [{ text: promptText }]
+          parts: [{
+            text: promptText
+          }]
         }]
-      }),
+      })
     });
-    if (!res.ok) throw new Error('request_failed');
+
+    if (!res.ok) {
+      let errorMessage = '';
+
+      try {
+        const errorData = await res.json();
+        errorMessage =
+          errorData?.error?.message ||
+          `HTTP ${res.status}`;
+      } catch (e) {
+        errorMessage = `HTTP ${res.status}`;
+      }
+
+      console.error('Gemini API Error:', res.status, errorMessage);
+      throw new Error(`Gemini API ${res.status}: ${errorMessage}`);
+    }
+
     const data = await res.json();
-    const text = data && data.candidates && data.candidates[0] &&
-      data.candidates[0].content && data.candidates[0].content.parts &&
-      data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
-    if (!text) throw new Error('empty_response');
+    const text =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!text) {
+      console.error('Gemini API: 応答テキストがありません', data);
+      throw new Error('Gemini APIから有効な応答がありませんでした。');
+    }
+
     return text.trim();
   }
 
@@ -1720,24 +1746,57 @@
     const status = document.getElementById('gemini_status');
 
     if (!apiKey) {
-      if (status) { status.textContent = 'APIキーを入力してね。'; status.classList.add('error'); }
+      if (status) {
+        status.textContent = 'APIキーを入力してね。';
+        status.classList.add('error');
+      }
       return;
     }
 
     els.vnNextBtn.disabled = true;
-    if (status) { status.textContent = '確認中…'; status.classList.remove('error'); }
+
+    if (status) {
+      status.textContent = 'Geminiに接続中…';
+      status.classList.remove('error');
+    }
 
     try {
       const greeting = await testGeminiKey(apiKey, draftProfile);
+
+      // 接続成功
       draftProfile.gemini_api_key = apiKey;
       geminiConfirmed = true;
+
       els.vnExtra.innerHTML = '';
       els.vnLineText.textContent = greeting;
       speak(greeting);
+
       els.vnNextBtn.textContent = 'はじめる';
       els.vnNextBtn.disabled = false;
+
     } catch (err) {
-      if (status) { status.textContent = 'キーの確認に失敗しました。正しいAPIキーか確認してね。'; status.classList.add('error'); }
+      console.error('Gemini API接続失敗:', err);
+
+      let message = 'Gemini APIへの接続に失敗しました。';
+      const errorText = String(err?.message || '');
+
+      if (errorText.includes('401')) {
+        message = 'APIキーが認証されませんでした。AI Studioでキーの種類を確認してね。';
+      } else if (errorText.includes('403')) {
+        message = 'APIキーの権限がありません。Gemini APIが利用できるキーか確認してね。';
+      } else if (errorText.includes('404')) {
+        message = 'Geminiモデルが見つかりません。モデル設定を確認してね。';
+      } else if (errorText.includes('429')) {
+        message = 'Gemini APIの利用上限に達している可能性があります。';
+      } else if (errorText.includes('400')) {
+        message = 'Gemini APIへのリクエストが不正です。APIキーを確認してね。';
+      }
+
+      if (status) {
+        status.textContent = message;
+        status.classList.add('error');
+      }
+
       els.vnNextBtn.disabled = false;
     }
   }
