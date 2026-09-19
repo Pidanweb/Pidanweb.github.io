@@ -661,8 +661,8 @@
   }
 
   async function testGeminiKey(apiKey, profile) {
-    // 現在の安定版 Gemini Flash
-    const model = 'gemini-1.5-flash';
+    // 現在の安定版 Gemini Flash（2026年に gemini-1.5-flash は廃止されたため2.5系を使用）
+    const model = 'gemini-2.5-flash';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
     const promptText =
@@ -763,9 +763,15 @@
         message = 'Gemini APIへのリクエストが不正です。APIキーを確認してね。';
       }
 
+      // 詳細なエラー内容も併記する(原因調査用)
+      if (errorText) {
+        message += `\n[詳細] ${errorText}`;
+      }
+
       if (status) {
         status.textContent = message;
         status.classList.add('error');
+        status.style.whiteSpace = 'pre-line';
       }
 
       els.vnNextBtn.disabled = false;
