@@ -833,7 +833,7 @@ function renderCommentArea(a){
 }
 
 async function requestPhotoComment(apiKey, profile, animal){
-  const model = 'gemini-2.0-flash';
+  const model = 'gemini-3.6-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
   const aiName = (profile && profile.ai_name) || 'AI';
