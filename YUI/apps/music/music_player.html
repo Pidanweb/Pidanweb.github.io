@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Music Player</title>
+<style>
+  body {
+    margin: 0;
+    background: #121212;
+    color: #fff;
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+  .player {
+    width: 320px;
+    text-align: center;
+    user-select: none;
+  }
+  .cover {
+    width: 280px;
+    height: 280px;
+    border-radius: 16px;
+    object-fit: cover;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    touch-action: pan-y; /* 横スワイプを検知しやすくする */
+  }
+  .title {
+    margin-top: 16px;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  .controls {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 24px;
+  }
+  button {
+    background: #1db954;
+    border: none;
+    color: #fff;
+    font-size: 18px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    cursor: pointer;
+  }
+  button.play {
+    width: 64px;
+    height: 64px;
+    font-size: 22px;
+  }
+  audio {
+    width: 100%;
+    margin-top: 16px;
+  }
+  .hint {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #888;
+  }
+</style>
+</head>
+<body>
+
+<div class="player">
+  <!-- ジャケット画像。スワイプ操作もここで検知します -->
+  <img id="cover" class="cover" src="音楽1.png" alt="cover">
+  <div class="title" id="title"></div>
+
+  <div class="controls">
+    <button id="prevBtn">&#9664;&#9664;</button>
+    <button id="playBtn" class="play">&#9654;</button>
+    <button id="nextBtn">&#9654;&#9654;</button>
+  </div>
+
+  <audio id="audio"></audio>
+  <div class="hint">画像を左右にスワイプしても曲が変わります</div>
+</div>
+
+<script>
+  // ▼▼ ここに自分の曲を追加してください（GitHubにアップしたファイル名に合わせる） ▼▼
+  const playlist = [
+    { title: "曲1", src: "songs/song1.mp3" },
+    { title: "曲2", src: "songs/song2.mp3" },
+    { title: "曲3", src: "songs/song3.mp3" },
+  ];
+  // 画像は共通で 音楽1.png を使用。曲ごとに変えたい場合は各要素に cover: "xxx.png" を追加し、
+  // 下の loadSong 内で song.cover || "音楽1.png" のように参照してください。
+
+  let current = 0;
+  const audio = document.getElementById("audio");
+  const titleEl = document.getElementById("title");
+  const cover = document.getElementById("cover");
+  const playBtn = document.getElementById("playBtn");
+
+  function loadSong(index, autoplay) {
+    current = (index + playlist.length) % playlist.length;
+    const song = playlist[current];
+    audio.src = song.src;
+    titleEl.textContent = song.title;
+    if (autoplay) {
+      audio.play();
+      playBtn.innerHTML = "&#10074;&#10074;";
+    } else {
+      playBtn.innerHTML = "&#9654;";
+    }
+  }
+
+  function togglePlay() {
+    if (audio.paused) {
+      audio.play();
+      playBtn.innerHTML = "&#10074;&#10074;";
+    } else {
+      audio.pause();
+      playBtn.innerHTML = "&#9654;";
+    }
+  }
+
+  document.getElementById("prevBtn").addEventListener("click", () => loadSong(current - 1, true));
+  document.getElementById("nextBtn").addEventListener("click", () => loadSong(current + 1, true));
+  playBtn.addEventListener("click", togglePlay);
+  audio.addEventListener("ended", () => loadSong(current + 1, true));
+
+  // ▼ スワイプ検知（画像を左右にフリックすると曲が変わる） ▼
+  let touchStartX = 0;
+  cover.addEventListener("touchstart", (e) => {
+    touchStartX = e.changedTouches[0].screenX;
+  });
+  cover.addEventListener("touchend", (e) => {
+    const touchEndX = e.changedTouches[0].screenX;
+    const diff = touchEndX - touchStartX;
+    if (Math.abs(diff) > 50) { // 50px以上動いたらスワイプとみなす
+      if (diff < 0) {
+        loadSong(current + 1, true); // 左スワイプ → 次の曲
+      } else {
+        loadSong(current - 1, true); // 右スワイプ → 前の曲
+      }
+    }
+  });
+
+  // 初期表示
+  loadSong(0, false);
+</script>
+
+</body>
+</html>
