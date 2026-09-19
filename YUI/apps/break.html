@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>息抜き - YUI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f3e9;
+    --panel: #ffffff;
+    --panel-edge: #e6ddc8;
+    --ink: #2c2f36;
+    --ink-dim: #7c8288;
+    --scan: #2fae90;
+    --scan-soft: rgba(47, 174, 144, 0.14);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+  }
+  #app {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: max(20px, env(safe-area-inset-top)) 20px 40px;
+    text-align: center;
+  }
+  #back_btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ink-dim);
+    text-decoration: none;
+    font-size: 13px;
+    margin-bottom: 40px;
+  }
+  .icon { font-size: 46px; margin-bottom: 14px; }
+  h1 {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 20px;
+    margin: 0 0 10px;
+  }
+  p {
+    color: var(--ink-dim);
+    font-size: 14px;
+    line-height: 1.8;
+  }
+  .badge {
+    display: inline-block;
+    background: var(--scan-soft);
+    color: var(--scan);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 12.5px;
+    font-weight: 700;
+    margin-top: 18px;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <a id="back_btn" href="index.html">← ホームに戻る</a>
+  <div class="icon">🍃</div>
+  <h1>息抜きアプリ</h1>
+  <p>ここに、ちょっとした雑談ネタや<br>ミニゲームなど、息抜きできる機能を追加していく予定です。</p>
+  <span class="badge">準備中</span>
+</div>
+</body>
+</html>

@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>スケジュール - YUI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f3e9;
+    --panel: #ffffff;
+    --panel-edge: #e6ddc8;
+    --ink: #2c2f36;
+    --ink-dim: #7c8288;
+    --scan: #2fae90;
+    --scan-soft: rgba(47, 174, 144, 0.14);
+    --danger: #e2554a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+  }
+  #app {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: max(20px, env(safe-area-inset-top)) 18px 40px;
+  }
+  #back_btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ink-dim);
+    text-decoration: none;
+    font-size: 13px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 20px;
+    margin: 0 0 16px;
+  }
+
+  /* ---------- カレンダー ---------- */
+  #cal_header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  #cal_month_label {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+  }
+  .cal_nav_btn {
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+  #cal_weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    font-size: 11px;
+    color: var(--ink-dim);
+    margin-bottom: 4px;
+  }
+  #cal_grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+  .cal_cell {
+    aspect-ratio: 1 / 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    font-size: 13px;
+    position: relative;
+  }
+  .cal_cell.empty {
+    background: transparent;
+    border: none;
+  }
+  .cal_cell.today {
+    border: 2px solid var(--scan);
+    font-weight: 700;
+  }
+  .cal_cell .dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--scan);
+    margin-top: 3px;
+  }
+
+  /* ---------- 予定リスト ---------- */
+  #list_section {
+    margin-top: 24px;
+  }
+  #list_title {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    margin-bottom: 10px;
+  }
+  #add_btn {
+    width: 100%;
+    padding: 12px 0;
+    border-radius: 12px;
+    border: none;
+    background: var(--scan-soft);
+    color: var(--scan);
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+  .event_row {
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .event_row .event_main {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .event_row .event_time {
+    font-size: 12px;
+    color: var(--scan);
+    font-weight: 700;
+  }
+  .event_row .event_memo {
+    font-size: 12px;
+    color: var(--ink-dim);
+    margin-top: 3px;
+  }
+  .event_del_btn {
+    background: none;
+    border: none;
+    color: var(--danger);
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  #empty_msg {
+    color: var(--ink-dim);
+    font-size: 13px;
+    text-align: center;
+    padding: 20px 0;
+  }
+
+  /* ---------- 入力パネル ---------- */
+  #form_panel {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 20;
+  }
+  #form_panel.active { display: flex; }
+  #form_sheet {
+    width: 100%;
+    max-width: 480px;
+    background: var(--panel);
+    border-radius: 20px 20px 0 0;
+    padding: 22px 20px max(26px, env(safe-area-inset-bottom));
+  }
+  #form_date_label {
+    font-size: 13px;
+    color: var(--ink-dim);
+    margin-bottom: 14px;
+  }
+  #form_panel label {
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    display: block;
+    margin: 12px 0 4px;
+  }
+  #form_panel input[type="time"],
+  #form_panel input[type="text"],
+  #form_panel textarea {
+    width: 100%;
+    background: rgba(0,0,0,0.03);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  #form_panel textarea { height: 70px; resize: none; }
+  #form_buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 18px;
+  }
+  #form_buttons button {
+    flex: 1;
+    padding: 13px 0;
+    border-radius: 12px;
+    border: none;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  #form_save_btn { background: var(--scan); color: #fff; }
+  #form_cancel_btn { background: rgba(0,0,0,0.045); color: var(--ink); }
+</style>
+</head>
+<body>
+<div id="app">
+  <a id="back_btn" href="index.html">← ホームに戻る</a>
+  <h1>スケジュール</h1>
+
+  <div id="cal_header">
+    <button class="cal_nav_btn" id="prev_month_btn">←</button>
+    <div id="cal_month_label"></div>
+    <button class="cal_nav_btn" id="next_month_btn">→</button>
+  </div>
+  <div id="cal_weekdays">
+    <div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div>
+  </div>
+  <div id="cal_grid"></div>
+
+  <div id="list_section">
+    <div id="list_title">選択中の日の予定</div>
+    <button id="add_btn">＋ この日に予定を追加</button>
+    <div id="event_list"></div>
+  </div>
+
+  <div id="form_panel">
+    <div id="form_sheet">
+      <div id="form_date_label"></div>
+      <label>時間</label>
+      <input type="time" id="form_time">
+      <label>やること</label>
+      <input type="text" id="form_task" placeholder="例: 通院">
+      <label>メモ</label>
+      <textarea id="form_memo" placeholder="任意"></textarea>
+      <div id="form_buttons">
+        <button id="form_cancel_btn">閉じる</button>
+        <button id="form_save_btn">保存する</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const SCHEDULE_KEY = 'yui_schedule';
+
+  const els = {
+    calMonthLabel: document.getElementById('cal_month_label'),
+    calGrid: document.getElementById('cal_grid'),
+    prevMonthBtn: document.getElementById('prev_month_btn'),
+    nextMonthBtn: document.getElementById('next_month_btn'),
+    eventList: document.getElementById('event_list'),
+    listTitle: document.getElementById('list_title'),
+    addBtn: document.getElementById('add_btn'),
+    formPanel: document.getElementById('form_panel'),
+    formDateLabel: document.getElementById('form_date_label'),
+    formTime: document.getElementById('form_time'),
+    formTask: document.getElementById('form_task'),
+    formMemo: document.getElementById('form_memo'),
+    formSaveBtn: document.getElementById('form_save_btn'),
+    formCancelBtn: document.getElementById('form_cancel_btn'),
+  };
+
+  function loadSchedule() {
+    try {
+      const raw = localStorage.getItem(SCHEDULE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  function saveSchedule(list) {
+    localStorage.setItem(SCHEDULE_KEY, JSON.stringify(list));
+  }
+
+  function dateStr(y, m, d) {
+    return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+  function todayStr() {
+    const d = new Date();
+    return dateStr(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+
+  let viewYear = new Date().getFullYear();
+  let viewMonth = new Date().getMonth(); // 0-indexed
+  let selectedDate = todayStr();
+
+  function renderCalendar() {
+    els.calMonthLabel.textContent = `${viewYear}年 ${viewMonth + 1}月`;
+    els.calGrid.innerHTML = '';
+
+    const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const schedule = loadSchedule();
+    const datesWithEvents = new Set(schedule.map(ev => ev.date));
+
+    for (let i = 0; i < firstDay; i++) {
+      const empty = document.createElement('div');
+      empty.className = 'cal_cell empty';
+      els.calGrid.appendChild(empty);
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const ds = dateStr(viewYear, viewMonth, d);
+      const cell = document.createElement('div');
+      cell.className = 'cal_cell';
+      if (ds === todayStr()) cell.classList.add('today');
+      if (ds === selectedDate) cell.style.background = 'var(--scan-soft)';
+
+      const num = document.createElement('div');
+      num.textContent = d;
+      cell.appendChild(num);
+
+      if (datesWithEvents.has(ds)) {
+        const dot = document.createElement('div');
+        dot.className = 'dot';
+        cell.appendChild(dot);
+      }
+
+      cell.addEventListener('click', () => {
+        selectedDate = ds;
+        renderCalendar();
+        renderEventList();
+      });
+
+      els.calGrid.appendChild(cell);
+    }
+  }
+
+  function formatDateLabel(ds) {
+    const [y, m, d] = ds.split('-').map(Number);
+    const weekday = ['日','月','火','水','木','金','土'][new Date(y, m - 1, d).getDay()];
+    return `${m}月${d}日(${weekday})`;
+  }
+
+  function renderEventList() {
+    els.listTitle.textContent = `${formatDateLabel(selectedDate)}の予定`;
+    const schedule = loadSchedule();
+    const todays = schedule
+      .filter(ev => ev.date === selectedDate)
+      .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+
+    els.eventList.innerHTML = '';
+
+    if (todays.length === 0) {
+      const empty = document.createElement('div');
+      empty.id = 'empty_msg';
+      empty.textContent = 'この日の予定はまだありません。上のボタンか、カレンダーの日付をタップして追加してください。';
+      els.eventList.appendChild(empty);
+      return;
+    }
+
+    todays.forEach(ev => {
+      const row = document.createElement('div');
+      row.className = 'event_row';
+
+      const left = document.createElement('div');
+      if (ev.time) {
+        const time = document.createElement('div');
+        time.className = 'event_time';
+        time.textContent = ev.time;
+        left.appendChild(time);
+      }
+      const main = document.createElement('div');
+      main.className = 'event_main';
+      main.textContent = ev.task;
+      left.appendChild(main);
+
+      if (ev.memo) {
+        const memo = document.createElement('div');
+        memo.className = 'event_memo';
+        memo.textContent = ev.memo;
+        left.appendChild(memo);
+      }
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'event_del_btn';
+      delBtn.textContent = '削除';
+      delBtn.addEventListener('click', () => {
+        const all = loadSchedule().filter(e => e.id !== ev.id);
+        saveSchedule(all);
+        renderCalendar();
+        renderEventList();
+      });
+
+      row.appendChild(left);
+      row.appendChild(delBtn);
+      els.eventList.appendChild(row);
+    });
+  }
+
+  function openForm(ds) {
+    els.formDateLabel.textContent = formatDateLabel(ds);
+    els.formTime.value = '';
+    els.formTask.value = '';
+    els.formMemo.value = '';
+    els.formPanel.dataset.date = ds;
+    els.formPanel.classList.add('active');
+  }
+
+  els.addBtn.addEventListener('click', () => openForm(selectedDate));
+
+  els.formCancelBtn.addEventListener('click', () => {
+    els.formPanel.classList.remove('active');
+  });
+
+  els.formSaveBtn.addEventListener('click', () => {
+    const task = els.formTask.value.trim();
+    if (!task) {
+      els.formTask.focus();
+      return;
+    }
+    const all = loadSchedule();
+    all.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      date: els.formPanel.dataset.date,
+      time: els.formTime.value,
+      task,
+      memo: els.formMemo.value.trim(),
+    });
+    saveSchedule(all);
+    els.formPanel.classList.remove('active');
+    renderCalendar();
+    renderEventList();
+  });
+
+  els.prevMonthBtn.addEventListener('click', () => {
+    viewMonth--;
+    if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+    renderCalendar();
+  });
+  els.nextMonthBtn.addEventListener('click', () => {
+    viewMonth++;
+    if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+    renderCalendar();
+  });
+
+  renderCalendar();
+  renderEventList();
+})();
+</script>
+</body>
+</html>
