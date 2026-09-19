@@ -1606,6 +1606,7 @@
     geminiConfirmed = false;
     showLayer(els.vnLayer);
     els.vnCharacterImg.src = 'chars/初期AI.png';
+    playSetupBgm(); // BGM再生
     renderOnboardingStep();
   }
 
@@ -2108,18 +2109,12 @@
     speak(greeting);
   }
 
-  // ============ 起動時の分岐（テスト用：毎回初回設定から開始） ============
-  // テスト中はローカルストレージの保存状況を無視して、常にダイブ演出＆初期設定から開始します
-  playDive(startOnboarding);
+  // ============ 起動時の分岐 ============
+  // indexからボタンを押して遷移してきているため、ダイブ演出はスキップして直接開始
+  playSetupBgm();
+  startOnboarding();
 
-  /* 本番用の処理（一時的にコメントアウト中）
-  const profile = loadProfile();
-  if (profile && profile.onboarded) {
-    showHome();
-  } else {
-    playDive(startOnboarding);
-  }
-  */
+  
 
 })();
 </script>
