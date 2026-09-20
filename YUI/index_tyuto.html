@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>YUI - チュートリアル</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f3e9;
+    --panel: #ffffff;
+    --panel-edge: #e6ddc8;
+    --ink: #2c2f36;
+    --ink-dim: #7c8288;
+    --scan: #2fae90;
+    --scan-soft: rgba(47, 174, 144, 0.14);
+    --warn: #d98a33;
+    --danger: #e2554a;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #app {
+    position: relative;
+    height: 100dvh;
+    width: 100vw;
+    overflow: hidden;
+  }
+
+  .layer {
+    position: absolute;
+    inset: 0;
+    display: none;
+  }
+  .layer.active { display: flex; }
+
+  /* ---------- ホーム画面 ---------- */
+
+  #home_layer {
+    flex-direction: column;
+    justify-content: flex-start;
+    background-image: url('chars/bg_scene.jpg');
+    background-size: cover;
+    background-position: center;
+  }
+
+  #home_top {
+    padding: max(20px, env(safe-area-inset-top)) 22px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    z-index: 6;
+  }
+
+  #home_brand_wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  #home_brand {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 30px;
+    letter-spacing: 0.03em;
+    color: #2fae55;
+    text-shadow: 0 0 14px rgba(47,174,85,0.35);
+  }
+
+  /* 親密度表示ヘッダー */
+  #affinity_bar_wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 2px solid #1a1a1a;
+    border-radius: 12px;
+    padding: 3px 8px;
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  #affinity_lv_label { color: #e2554a; }
+  .affinity_gauge_bg {
+    width: 60px;
+    height: 8px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid #1a1a1a;
+  }
+  .affinity_gauge_fill {
+    height: 100%;
+    width: 25%;
+    background: linear-gradient(90deg, #ff7e5f, #feb47b);
+    transition: width 0.3s ease;
+  }
+
+  #home_menu_btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-radius: 20px;
+    padding: 7px 14px 7px 12px;
+    font-size: 12.5px;
+    font-family: inherit;
+    font-weight: 600;
+  }
+
+  /* ---------- キャラクター表示エリア ---------- */
+
+  #home_stage_row {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    position: relative;
+    padding: 10px 20px 0;
+  }
+
+  #home_bubble_wrap {
+    flex: 1;
+    min-width: 0;
+    padding-right: 10px;
+  }
+
+  #home_bubble {
+    position: relative;
+    background: #ffffff;
+    border: 4px solid #1a1a1a;
+    border-radius: 26px;
+    padding: 22px 24px;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.6;
+    color: #1a1a1a;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+  }
+
+  @media (max-width: 400px) {
+    #home_bubble {
+      border-width: 3px;
+      border-radius: 20px;
+      padding: 15px 16px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+  }
+
+  #home_bubble::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: -17px;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 14px solid transparent;
+    border-bottom: 14px solid transparent;
+    border-left: 17px solid #1a1a1a;
+  }
+  #home_bubble::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: -10px;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 10px solid transparent;
+    border-bottom: 10px solid transparent;
+    border-left: 12px solid #ffffff;
+  }
+
+  #home_char_area {
+    position: relative;
+    width: 46vw;
+    max-width: 230px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 52vh;
+  }
+
+  #home_character_wrap {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    cursor: pointer;
+  }
+
+  #home_character_wrap img {
+    max-height: 44vh;
+    max-width: 76%;
+    object-fit: contain;
+    filter: drop-shadow(0 8px 12px rgba(0,0,0,0.18));
+  }
+
+  @keyframes charTapBounce {
+    0%   { transform: translateY(0); }
+    30%  { transform: translateY(-14px); }
+    55%  { transform: translateY(2px); }
+    100% { transform: translateY(0); }
+  }
+
+  #home_character_wrap img.char_bounce {
+    animation: charTapBounce 0.5s ease-out;
+  }
+
+  #home_rug {
+    position: relative;
+    z-index: 1;
+    width: 78%;
+    height: 22px;
+    margin-top: -8px;
+    border-radius: 50%;
+    background: #c48a5a;
+    opacity: 0.8;
+    filter: blur(0.3px);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.12);
+  }
+
+  /* ---------- 下部ミッションカード＆操作領域 ---------- */
+
+  #home_buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 22px max(26px, env(safe-area-inset-bottom));
+    position: relative;
+    z-index: 2;
+  }
+
+  #mission_card {
+    background: #ffffff;
+    border: 3px solid #1a1a1a;
+    border-radius: 18px;
+    padding: 12px 16px;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .mission_info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .mission_badge {
+    font-size: 11px;
+    font-weight: 800;
+    color: #ffffff;
+    background: #2fae90;
+    padding: 2px 8px;
+    border-radius: 10px;
+    width: fit-content;
+  }
+
+  .mission_title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+
+  .mission_action_btn {
+    background: #2fae55;
+    color: #ffffff;
+    border: 2px solid #1a1a1a;
+    border-radius: 14px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    box-shadow: 0 4px 0 #1a1a1a;
+    white-space: nowrap;
+  }
+  .mission_action_btn:active {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 #1a1a1a;
+  }
+
+  /* ---------- アプリ一覧(ミニメニュー) ---------- */
+
+  #apps_layer {
+    background: var(--bg);
+    flex-direction: column;
+    align-items: center;
+    padding: max(20px, env(safe-area-inset-top)) 22px max(24px, env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+
+  #apps_inner {
+    width: 100%;
+    max-width: 420px;
+  }
+
+  #apps_top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 22px;
+  }
+
+  #apps_title {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 19px;
+  }
+
+  #apps_close_btn {
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-radius: 50%;
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+  }
+
+  #apps_grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    max-width: 340px;
+    margin: 0 auto;
+  }
+
+  .app_tile {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 20px;
+    background: #ffffff;
+    border: 3px solid #1a1a1a;
+    text-decoration: none;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+  }
+
+  .app_tile .app_icon { font-size: 30px; }
+  .app_tile .app_label { font-size: 12.5px; font-weight: 700; color: #1a1a1a; }
+
+  /* ロック状態のスタイル */
+  .app_tile.locked {
+    background: #e6e6e6;
+    border-color: #8a8a8a;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  .app_tile.locked .app_icon,
+  .app_tile.locked .app_label {
+    opacity: 0.35;
+  }
+  .app_tile.locked::after {
+    content: '🔒';
+    position: absolute;
+    font-size: 22px;
+  }
+
+  /* ---------- RPG風アドベンチャー会話モーダル ---------- */
+
+  #adv_modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    display: none;
+    flex-direction: column;
+    justify-content: flex-end;
+    z-index: 100;
+    padding: 16px;
+  }
+  #adv_modal.active { display: flex; }
+
+  #adv_char_wrap {
+    align-self: center;
+    margin-bottom: -20px;
+    z-index: 101;
+  }
+  #adv_char_img {
+    height: 38vh;
+    max-height: 300px;
+    object-fit: contain;
+    filter: drop-shadow(0 6px 12px rgba(0,0,0,0.4));
+  }
+
+  #adv_box {
+    background: #ffffff;
+    border: 4px solid #1a1a1a;
+    border-radius: 22px;
+    padding: 18px 20px;
+    z-index: 102;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    position: relative;
+  }
+
+  #adv_name {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 15px;
+    color: #2fae55;
+    margin-bottom: 6px;
+  }
+
+  #adv_text {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.6;
+    color: #1a1a1a;
+    min-height: 60px;
+  }
+
+  #adv_next_btn {
+    margin-top: 12px;
+    align-self: flex-end;
+    background: #1a1a1a;
+    color: #ffffff;
+    border: none;
+    border-radius: 12px;
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    display: block;
+    margin-left: auto;
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ホーム画面 -->
+  <div id="home_layer" class="layer active">
+    <div id="home_top">
+      <div id="home_brand_wrap">
+        <div id="home_brand">YUI</div>
+        <div id="affinity_bar_wrap">
+          <span id="affinity_lv_label">親密度 Lv.1</span>
+          <div class="affinity_gauge_bg">
+            <div id="affinity_gauge_fill" class="affinity_gauge_fill"></div>
+          </div>
+        </div>
+      </div>
+      <button id="home_menu_btn">
+        <span class="burger">☰</span>
+        <span>アプリ一覧</span>
+      </button>
+    </div>
+
+    <div id="home_stage_row">
+      <div id="home_bubble_wrap">
+        <div id="home_bubble">ステップに沿って操作してみてね！</div>
+      </div>
+      <div id="home_char_area">
+        <div id="home_character_wrap">
+          <img id="home_character_img" src="chars/char_normal.png" alt="YUI">
+        </div>
+        <div id="home_rug"></div>
+      </div>
+    </div>
+
+    <div id="home_buttons">
+      <div id="mission_card">
+        <div class="mission_info">
+          <span class="mission_badge" id="mission_step_badge">STEP 1 / 4</span>
+          <span class="mission_title" id="mission_title_text">YUIとお話ししてみよう</span>
+        </div>
+        <a id="mission_action_btn" class="mission_action_btn" href="apps/talk.html">移動する</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- アプリ一覧(ミニメニュー) -->
+  <div id="apps_layer" class="layer">
+    <div id="apps_inner">
+      <div id="apps_top">
+        <div id="apps_title">アプリ一覧</div>
+        <button id="apps_close_btn">✕</button>
+      </div>
+      <div id="apps_grid">
+        <!-- 💬 トーク -->
+        <a class="app_tile" id="app_talk" href="apps/talk.html" data-app="talk">
+          <span class="app_icon">💬</span>
+          <span class="app_label">お話し</span>
+        </a>
+        <!-- 📷 カメラ -->
+        <a class="app_tile locked" id="app_camera" href="apps/yui_scanner.html" data-app="camera">
+          <span class="app_icon">📷</span>
+          <span class="app_label">カメラ</span>
+        </a>
+        <!-- 🗓️ スケジュール -->
+        <a class="app_tile locked" id="app_schedule" href="apps/schedule.html" data-app="schedule">
+          <span class="app_icon">🗓️</span>
+          <span class="app_label">スケジュール</span>
+        </a>
+        <!-- 🎨 お絵描き当て -->
+        <a class="app_tile locked" id="app_draw" href="apps/draw_game.html" data-app="draw">
+          <span class="app_icon">🎨</span>
+          <span class="app_label">お絵描き当て</span>
+        </a>
+        <!-- 📚 勉強（後半開放） -->
+        <a class="app_tile locked" id="app_study" href="apps/study.html" data-app="study">
+          <span class="app_icon">📚</span>
+          <span class="app_label">勉強</span>
+        </a>
+        <!-- 🎶 音楽（後半開放） -->
+        <a class="app_tile locked" id="app_music" href="apps/music/music_player.html" data-app="music">
+          <span class="app_icon">🎶</span>
+          <span class="app_label">音楽</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- RPG風アドベンチャー会話モーダル -->
+  <div id="adv_modal">
+    <div id="adv_char_wrap">
+      <img id="adv_char_img" src="chars/char_normal.png" alt="YUI">
+    </div>
+    <div id="adv_box">
+      <div id="adv_name">YUI</div>
+      <div id="adv_text">会話テキストがここに入ります。</div>
+      <button id="adv_next_btn">次へ ▶</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const PROGRESS_KEY = 'yui_tutorial_progress';
+  const PROFILE_KEY = 'yui_profile';
+
+  // --- 定義: チュートリアルステップ ---
+  const STEPS = {
+    1: {
+      app: 'talk',
+      badge: 'STEP 1 / 4',
+      title: 'YUIとお話ししてみよう',
+      href: 'apps/talk.html',
+      unlocked: ['talk'],
+      gauge: '25%',
+      dialogs: [
+        { text: 'キツカさん、これからよろしくね！まずは私とたくさんお話ししてみてほしいな。', face: 'chars/char_normal.png' },
+        { text: '「移動する」ボタンかアプリ一覧から『お話し』を開いて、声や文字で話しかけてみてね！', face: 'chars/char_thinking.png' }
+      ]
+    },
+    2: {
+      app: 'camera',
+      badge: 'STEP 2 / 4',
+      title: 'カメラ機能を使ってみよう',
+      href: 'apps/yui_scanner.html',
+      unlocked: ['talk', 'camera'],
+      gauge: '50%',
+      dialogs: [
+        { text: 'お話ししてくれてありがとう！親密度のレベルが 2 に上がったよ！', face: 'chars/char_normal.png' },
+        { text: '新しい機能『カメラ』が使えるようになったよ！', face: 'chars/char_normal.png' },
+        { text: 'キツカさんの周りにあるものをカメラで見せてくれたら、それが何か私が当てるよ！試してみてね。', face: 'chars/char_thinking.png' }
+      ]
+    },
+    3: {
+      app: 'schedule',
+      badge: 'STEP 3 / 4',
+      title: 'スケジュールを登録してみよう',
+      href: 'apps/schedule.html',
+      unlocked: ['talk', 'camera', 'schedule'],
+      gauge: '75%',
+      dialogs: [
+        { text: 'カメラで見せてくれてありがとう！親密度が レベル 3 になったよ！', face: 'chars/char_normal.png' },
+        { text: '今度は『スケジュール』機能が解放されたよ。', face: 'chars/char_normal.png' },
+        { text: '大切な予定やメモを登録しておくと、ホーム画面でいつでも私が教えてあげるね！', face: 'chars/char_thinking.png' }
+      ]
+    },
+    4: {
+      app: 'draw',
+      badge: 'STEP 4 / 4',
+      title: 'お絵描き当てゲームで遊ぼう',
+      href: 'apps/draw_game.html',
+      unlocked: ['talk', 'camera', 'schedule', 'draw'],
+      gauge: '100%',
+      dialogs: [
+        { text: '予定の管理まで完璧だね！親密度が レベル 4 に到達したよ！', face: 'chars/char_normal.png' },
+        { text: '最後にちょっと息抜きしよう！『お絵描き当て』ゲームが解放されたよ。', face: 'chars/char_normal.png' },
+        { text: '私が描いた絵をキツカさんが当てるゲームだよ。ぜひ遊んでみてね！', face: 'chars/char_thinking.png' }
+      ]
+    },
+    5: { // 全チュートリアル完了
+      completed: true,
+      unlocked: ['talk', 'camera', 'schedule', 'draw', 'study', 'music'],
+      gauge: '100%',
+      dialogs: [
+        { text: 'すべてのチュートリアルをクリア！本当にお疲れさま！', face: 'chars/char_normal.png' },
+        { text: 'これですべての機能が使えるようになったよ。これからもたくさん頼ってね！', face: 'chars/char_normal.png' }
+      ]
+    }
+  };
+
+  const els = {
+    homeLayer: document.getElementById('home_layer'),
+    appsLayer: document.getElementById('apps_layer'),
+    homeMenuBtn: document.getElementById('home_menu_btn'),
+    appsCloseBtn: document.getElementById('apps_close_btn'),
+    affinityLvLabel: document.getElementById('affinity_lv_label'),
+    affinityGaugeFill: document.getElementById('affinity_gauge_fill'),
+    homeBubble: document.getElementById('home_bubble'),
+    homeCharacterWrap: document.getElementById('home_character_wrap'),
+    homeCharacterImg: document.getElementById('home_character_img'),
+    missionStepBadge: document.getElementById('mission_step_badge'),
+    missionTitleText: document.getElementById('mission_title_text'),
+    missionActionBtn: document.getElementById('mission_action_btn'),
+    advModal: document.getElementById('adv_modal'),
+    advCharImg: document.getElementById('adv_char_img'),
+    advName: document.getElementById('adv_name'),
+    advText: document.getElementById('adv_text'),
+    advNextBtn: document.getElementById('adv_next_btn')
+  };
+
+  function loadProgress() {
+    try {
+      const raw = localStorage.getItem(PROGRESS_KEY);
+      return raw ? JSON.parse(raw) : { level: 1, lastSeenLevel: 0 };
+    } catch (e) {
+      return { level: 1, lastSeenLevel: 0 };
+    }
+  }
+
+  function saveProgress(prog) {
+    try {
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify(prog));
+    } catch (e) {}
+  }
+
+  function loadUserName() {
+    try {
+      const raw = localStorage.getItem(PROFILE_KEY);
+      if (!raw) return 'キツカさん';
+      const p = JSON.parse(raw);
+      return p.user_name || 'キツカさん';
+    } catch (e) {
+      return 'キツカさん';
+    }
+  }
+
+  // UI表示の更新
+  function renderUI() {
+    const prog = loadProgress();
+    const currentLv = Math.min(prog.level, 5);
+    const stepData = STEPS[currentLv];
+
+    els.affinityLvLabel.textContent = `親密度 Lv.${Math.min(currentLv, 4)}`;
+    els.affinityGaugeFill.style.width = stepData.gauge;
+
+    if (stepData.completed) {
+      // 全完了状態
+      els.missionStepBadge.textContent = 'COMPLETE!';
+      els.missionTitleText.textContent = 'すべての機能が解放されました！';
+      els.missionActionBtn.textContent = 'メインホームへ';
+      els.missionActionBtn.href = 'index.html'; // 完成版ホームへ移動
+      els.homeBubble.textContent = '全機能が開放されたよ！これからもよろしくね。';
+    } else {
+      els.missionStepBadge.textContent = stepData.badge;
+      els.missionTitleText.textContent = stepData.title;
+      els.missionActionBtn.textContent = '移動する';
+      els.missionActionBtn.href = stepData.href;
+      els.homeBubble.textContent = `【${stepData.badge}】\n${stepData.title} に挑戦してみよう！`;
+    }
+
+    // アプリタイルロック状態の更新
+    document.querySelectorAll('.app_tile').forEach(tile => {
+      const appId = tile.dataset.app;
+      if (stepData.unlocked.includes(appId)) {
+        tile.classList.remove('locked');
+      } else {
+        tile.classList.add('locked');
+      }
+    });
+  }
+
+  // ロックされたアプリをタップした時の案内
+  document.querySelectorAll('.app_tile').forEach(tile => {
+    tile.addEventListener('click', (e) => {
+      if (tile.classList.contains('locked')) {
+        e.preventDefault();
+        alert('このアプリは親密度レベルを上げると解放されるよ！');
+      }
+    });
+  });
+
+  // RPG風アドベンチャー会話モーダル
+  let currentDialogIndex = 0;
+  let activeDialogs = [];
+
+  function startAdvConversation(dialogs, onComplete) {
+    activeDialogs = dialogs;
+    currentDialogIndex = 0;
+    const userName = loadUserName();
+
+    function showCurrent() {
+      if (currentDialogIndex >= activeDialogs.length) {
+        els.advModal.classList.remove('active');
+        if (onComplete) onComplete();
+        return;
+      }
+      const d = activeDialogs[currentDialogIndex];
+      els.advCharImg.src = d.face || 'chars/char_normal.png';
+      els.advText.textContent = d.text.replace(/キツカさん/g, userName);
+      els.advModal.classList.add('active');
+    }
+
+    els.advNextBtn.onclick = () => {
+      currentDialogIndex++;
+      showCurrent();
+    };
+
+    showCurrent();
+  }
+
+  // 会話チェック（新しいレベルに上がった時に初回表示）
+  function checkStoryEvent() {
+    const prog = loadProgress();
+    const currentLv = Math.min(prog.level, 5);
+
+    if (prog.lastSeenLevel < currentLv) {
+      const stepData = STEPS[currentLv];
+      startAdvConversation(stepData.dialogs, () => {
+        prog.lastSeenLevel = currentLv;
+        saveProgress(prog);
+        renderUI();
+      });
+    }
+  }
+
+  // レイヤー切り替え
+  els.homeMenuBtn.addEventListener('click', () => {
+    els.homeLayer.classList.remove('active');
+    els.appsLayer.classList.add('active');
+  });
+  els.appsCloseBtn.addEventListener('click', () => {
+    els.appsLayer.classList.remove('active');
+    els.homeLayer.classList.add('active');
+  });
+
+  // キャラタップのバウンス
+  els.homeCharacterWrap.addEventListener('click', () => {
+    els.homeCharacterImg.classList.remove('char_bounce');
+    void els.homeCharacterImg.offsetWidth;
+    els.homeCharacterImg.classList.add('char_bounce');
+  });
+
+  // 初期化実行
+  renderUI();
+  checkStoryEvent();
+
+  // 【デバッグ/テスト用】各アプリでミッションクリアしたと仮定してLvを進めるテスト処理
+  // 開発中、ブラウザのコンソールで `nextStep()` を実行すると次のステップへ進めます。
+  window.nextStep = () => {
+    const prog = loadProgress();
+    prog.level = Math.min((prog.level || 1) + 1, 5);
+    saveProgress(prog);
+    renderUI();
+    checkStoryEvent();
+  };
+})();
+</script>
+
+</body>
+</html>
