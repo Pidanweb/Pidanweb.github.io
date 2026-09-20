@@ -143,6 +143,27 @@
     z-index: 5;
   }
 
+  #top_bar_left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  #back_btn {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    font-size: 15px;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
   #brand {
     font-family: 'M PLUS Rounded 1c', sans-serif;
     font-weight: 800;
@@ -547,7 +568,10 @@
   </div>
 
   <div id="top_bar">
-    <div id="brand">YUI SCANNER</div>
+    <div id="top_bar_left">
+      <a id="back_btn" href="../index_tyuto.html">←</a>
+      <div id="brand">YUI SCANNER</div>
+    </div>
     <div id="top_bar_actions">
       <button id="reset_btn" title="最初から">🔄</button>
     </div>
@@ -596,16 +620,10 @@
 
 <script>
 (() => {
-  // ============ 状態 ============
-  // yui_gemini_api_key からキーを取得（入力UIは削除）
-  const getApiKey = () => localStorage.getItem('yui_gemini_api_key') || "";
-  let stream = null;
-  let currentTrack = null;
-  let capturedBase64 = null;
-  const MODEL = "gemini-3.6-flash";
-
-  // ============ 要素参照 ============
+  // ============ 1. 戻るボタンの初期設定と動的切替 ============
+  const PROGRESS_KEY = 'yui_tutorial_progress';
   const els = {
+    backBtn: document.getElementById('back_btn'),
     errorLayer: document.getElementById('error_layer'),
     errorDesc: document.getElementById('error_desc'),
     errorRetryBtn: document.getElementById('error_retry_btn'),
@@ -633,6 +651,29 @@
     chatStatus: document.getElementById('chat_status'),
     talkEndBtn: document.getElementById('talk_end_btn'),
   };
+
+  function setupBackButton() {
+    try {
+      const raw = localStorage.getItem(PROGRESS_KEY);
+      const prog = raw ? JSON.parse(raw) : null;
+      // チュートリアルが完了済み(completed: true)のときのみ index.html へ返し、それ以外は index_tyuto.html へ返す
+      if (prog && prog.completed) {
+        els.backBtn.href = '../index.html';
+      } else {
+        els.backBtn.href = '../index_tyuto.html';
+      }
+    } catch (e) {
+      els.backBtn.href = '../index_tyuto.html';
+    }
+  }
+  setupBackButton();
+
+  // ============ 状態 ============
+  const getApiKey = () => localStorage.getItem('yui_gemini_api_key') || "";
+  let stream = null;
+  let currentTrack = null;
+  let capturedBase64 = null;
+  const MODEL = "gemini-3.6-flash";
 
   let lastNarration = "";
   let conversationHistory = []; // Gemini に毎回送る会話履歴 [{role, parts}]
@@ -780,15 +821,54 @@
     img.src = URL.createObjectURL(file);
   });
 
-  const SYSTEM_PROMPT =
-    "あなたは音声で会話するアシスタントです。回答は必ずスピーカーで読み上げられます。次のルールを厳守してください。\n" +
-    "・アスタリスク(*)、シャープ(#)、箇条書きの記号、太字や見出しなどのMarkdown書式は絶対に使わない\n" +
-    "・数字の箇条書き(1. 2. のような形式)も使わない。文章として話す\n" +
-    "・回答は簡潔にする。特別な指示がない限り2〜3文、長くても4文までに収める\n" +
-    "・自然な話し言葉で、丁寧だがフレンドリーな口調にする";
+  // ============ 2. yui_profile から性格設定を構築する関数の修復 ============
+  function getSystemPrompt() {
+    const TONE_TEXT = {
+      polite:   "丁寧語(です・ます調)で話してください。",
+      friendly: "フレンドリーなタメ口で話してください。",
+      tsundere: "ややツンデレ気味に、素っ気なさの中に優しさが滲む話し方をしてください。",
+      cool:     "クールで無口気味に、必要なことだけ簡潔に話してください。",
+    };
+
+    const FEEDBACK_TEXT = {
+      gentle:  "指摘やアドバイスをするときは、優しく励ますような伝え方をしてください。",
+      direct:  "指摘やアドバイスをするときは、率直にはっきりと伝えてください。",
+      playful: "指摘やアドバイスをするときは、ちょっとユーモラスに茶化しながら伝えてください。",
+    };
+
+    let userName = 'あなた';
+    let personalityBlock = "あなたはナビゲーションAI「YUI」です。ユーザーの生活をサポートするパートナーとして振る舞ってください。\n" + TONE_TEXT.friendly + "\n" + FEEDBACK_TEXT.gentle;
+
+    try {
+      const raw = localStorage.getItem('yui_profile');
+      if (raw) {
+        const profile = JSON.parse(raw);
+        if (profile.user_name) userName = profile.user_name;
+        
+        const customPersonality = (profile.personality || profile.custom_personality || '').trim();
+        if (customPersonality) {
+          personalityBlock = "あなたは次のキャラクター設定になりきってください。設定に書かれた口調・話し方・言葉づかいを何よりも優先してください。\n----\n" + customPersonality + "\n----";
+        } else {
+          personalityBlock = "あなたはナビゲーションAI「YUI」です。\n" +
+            (TONE_TEXT[profile.tone_style] || TONE_TEXT.friendly) + "\n" +
+            (FEEDBACK_TEXT[profile.feedback_style] || FEEDBACK_TEXT.gentle);
+        }
+      }
+    } catch(e) {}
+
+    return (
+      personalityBlock + "\n" +
+      `ユーザーのことは「${userName}」と呼んでください。\n` +
+      "回答は必ずスピーカーで読み上げられます。次のルールを厳守してください。\n" +
+      "・アスタリスク(*)、シャープ(#)、箇条書きの記号、太字や見出しなどのMarkdown書式は絶対に使わない\n" +
+      "・数字の箇条書き(1. 2. のような形式)も使わない。文章として話す\n" +
+      "・回答は簡潔にする。特別な指示がない限り2〜3文、長くても4文までに収める\n" +
+      "・一貫して上記の性格・口調を完全に維持して回答してください。"
+    );
+  }
 
   // ============ Gemini API 呼び出し ============
-  async function callGemini(contents, { thinkingLevel = 'low', maxOutputTokens = 200 } = {}) {
+  async function callGemini(contents, { thinkingLevel = 'low', maxOutputTokens = 350 } = {}) {
     const apiKey = getApiKey();
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const res = await fetch(url, {
@@ -796,7 +876,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents,
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        systemInstruction: { parts: [{ text: getSystemPrompt() }] },
         generationConfig: {
           thinkingConfig: { thinkingLevel },
           maxOutputTokens,
@@ -821,16 +901,16 @@
 
   async function runRecognition(base64Image) {
     try {
-      setStatus('本のタイトルを判定中...');
+      setStatus('判定中...');
 
       const prompt =
         "この画像に写っている対象を判定してください。本・漫画、アニメやゲームのキャラクターグッズ(ぬいぐるみ・フィギュア・ポスターなど)、動物、有名な建物や観光地、食べ物など、何であっても構いません。" +
         "対象のカテゴリを明確にした上で、具体的な名称を判定してください(本なら書名・作者、キャラクターグッズなら作品名とキャラクター名、動物なら種類、建物なら名称など)。" +
-        "はっきり分からない場合でも、絵柄や特徴(髪型・色・服装・ロゴなど)から推測できる範囲で構わないので、最も近いと思われる候補を答えてください。確信が持てない場合は「〜だと思います」のように推測であることが伝わる言い方にしてください。本当に何の手がかりもない場合のみ、正直に分からないと答えてください。" +
-        "続けて、それを音声で紹介する短いナレーション文(2〜3文程度、話し言葉、記号や箇条書きなしの自然な文章)も作ってください。" +
+        "はっきり分からない場合でも、絵柄や特徴(髪型・色・服装・ロゴなど)から推測できる範囲で構わないので、最も近いと思われる候補を答えてください。" +
+        "続けて、それをあなたのキャラクター設定・口調に完全になりきって、音声で紹介する短いナレーション文(2〜3文程度、話し言葉、記号や箇条書きなしの自然な文章)を作ってください。" +
         "出力は必ず次の形式に従ってください(前置きや説明は不要):\n" +
         "TITLE: (カテゴリと名称を1〜2行で)\n" +
-        "NARRATION: (ナレーション文)";
+        "NARRATION: (指定した性格設定・口調を100%反映したナレーション文)";
 
       const userParts = [
         { inline_data: { mime_type: "image/jpeg", data: base64Image } },
