@@ -318,7 +318,7 @@
 <div id="app">
 
   <div id="top_bar">
-    <a id="back_btn" href="index.html">←</a>
+    <a id="back_btn" href="../index.html">←</a>
     <div id="top_avatar"><img id="top_avatar_img" src="chars/char_normal.png" alt="YUI"></div>
     <div>
       <div id="top_title">YUI</div>
@@ -360,11 +360,12 @@
 <script>
 (() => {
   const PROFILE_KEY = 'yui_profile';
-  // index.html(初期設定)が実際に保存しているキー名に合わせる
+  const PROGRESS_KEY = 'yui_tutorial_progress';
   const API_KEY_STORAGE = 'yui_gemini_api_key';
   const MODEL = "gemini-3.6-flash";
 
   const els = {
+    backBtn: document.getElementById('back_btn'),
     chatScroll: document.getElementById('chat_scroll'),
     micBtn: document.getElementById('mic_btn'),
     textInput: document.getElementById('text_input'),
@@ -383,6 +384,55 @@
     imagePreviewRemove: document.getElementById('image_preview_remove'),
   };
 
+  // ============ 1. 戻るボタンの動的切替 ============
+  function setupBackButton() {
+    try {
+      const raw = localStorage.getItem(PROGRESS_KEY);
+      const prog = raw ? JSON.parse(raw) : null;
+      // チュートリアル実行中(completedでない)の場合は index_tutorial.html へ戻す
+      if (prog && prog.level && !prog.completed) {
+        els.backBtn.href = '../index_tutorial.html';
+      } else {
+        els.backBtn.href = '../index.html';
+      }
+    } catch (e) {
+      els.backBtn.href = '../index.html';
+    }
+  }
+  setupBackButton();
+
+  // ============ 2. 好きなものを検出して記憶 ============
+  function checkAndSaveFavorite(text) {
+    if (!text) return;
+    const keywords = ['好き', 'お気に入り', '推し', 'ハマってる', 'はまってる'];
+    if (keywords.some(kw => text.includes(kw))) {
+      try {
+        const raw = localStorage.getItem(PROFILE_KEY);
+        const profile = raw ? JSON.parse(raw) : {};
+        profile.user_favorite = text;
+        localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+      } catch (e) {
+        console.error('Favorite save error:', e);
+      }
+    }
+  }
+
+  // ============ 3. チュートリアルクリア判定 ============
+  function checkTutorialClear() {
+    try {
+      const raw = localStorage.getItem(PROGRESS_KEY);
+      const prog = raw ? JSON.parse(raw) : null;
+      if (prog && prog.level === 1) {
+        prog.level = 2; // トーク完了でLevel 2に昇格
+        localStorage.setItem(PROGRESS_KEY, JSON.stringify(prog));
+        // クリア後に戻り先を再設定
+        setupBackButton();
+      }
+    } catch (e) {
+      console.error('Tutorial progress error:', e);
+    }
+  }
+
   // ============ 設定の読み込み ============
   function loadProfile() {
     try {
@@ -393,7 +443,6 @@
     }
   }
   const profile = loadProfile();
-  // 別画面(初期設定)で保存したキーが無い場合、プロフィール内のキーもフォールバックとして見る
   let apiKey = localStorage.getItem(API_KEY_STORAGE) || profile.gemini_api_key || "";
 
   const TONE_TEXT = {
@@ -410,11 +459,8 @@
   };
 
   const userName = profile.user_name || 'あなた';
-  // index.html(初期設定)側は profile.personality というキー名で保存しているので、それに合わせる
   const customPersonality = (profile.personality || profile.custom_personality || '').trim();
 
-  // 「AIの性格」に自由記述があれば、それを最優先のキャラクター設定として使う。
-  // 空欄なら、初期設定で選んだ口調(TONE_TEXT/FEEDBACK_TEXT)をこれまで通り使う。
   const personalityBlock = customPersonality
     ? "あなたは次のキャラクター設定になりきってください。設定に書かれた口調・話し方・言葉づかいを何よりも優先してください。\n" +
       "----\n" + customPersonality + "\n----\n"
@@ -480,7 +526,6 @@
   }
 
   if (customPersonality && apiKey) {
-    // 性格が設定されているときは、最初のひとこともその口調でAIに考えてもらう
     setAvatarState('thinking');
     callGemini([{ role: 'user', parts: [{ text: '(最初の挨拶をひとことだけ、設定した性格の口調でお願いします)' }] }])
       .then((line) => {
@@ -505,8 +550,6 @@
         contents,
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         generationConfig: {
-          // 内部思考(thinking)にトークンを使いすぎると、会話が続くほど
-          // 実際の返答用の枠が残らず空返答になってしまうため、思考は最小限にする
           thinkingConfig: { thinkingBudget: 0 },
           maxOutputTokens: 2048,
         },
@@ -520,22 +563,19 @@
     const candidate = data.candidates?.[0];
     const text = candidate?.content?.parts?.[0]?.text ?? "";
     if (!text) {
-      // MAX_TOKENSなどで本文が空になった場合、原因が分かるようにしておく
       const reason = candidate?.finishReason;
       throw new Error(reason ? `応答が空でした(${reason})` : '応答が空でした');
     }
     return text;
   }
 
-  // 会話履歴として保持する往復数(多すぎるとトークン消費が増えるため程よい長さに)
-  const MAX_HISTORY_TURNS = 20; // ユーザー発言+AI返答のペア数の目安
+  const MAX_HISTORY_TURNS = 20;
   function trimmedHistory() {
     const maxEntries = MAX_HISTORY_TURNS * 2;
     if (conversationHistory.length <= maxEntries) return conversationHistory;
     return conversationHistory.slice(-maxEntries);
   }
 
-  // ---- 時間帯に応じた背景写真 ----
   function timeOfDayBg() {
     const hour = new Date().getHours();
     if (hour >= 5 && hour < 11)  return 'chars/bg_morning.jpg';
@@ -569,9 +609,8 @@
   }
 
   // ============ 画像添付 ============
-  let pendingImage = null; // { mimeType, base64, dataUrl }
+  let pendingImage = null;
 
-  // 画像を縮小・再圧縮してからBase64化する(トーク履歴が重くなりすぎないように)
   function compressImageFile(file, maxSize = 1024, quality = 0.7) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -636,10 +675,15 @@
 
   els.imagePreviewRemove.addEventListener('click', clearImagePreview);
 
+  // ============ メッセージ送信 ============
   async function sendMessage(text) {
     const image = pendingImage;
     if (!text && !image) return;
     if (!apiKey) { els.settingsBtn.click(); return; }
+
+    // 発言があったので「好きなもの記憶」と「チュートリアル判定」を実行
+    checkAndSaveFavorite(text);
+    checkTutorialClear();
 
     const parts = [];
     if (image) parts.push({ inlineData: { mimeType: image.mimeType, data: image.base64 } });
@@ -685,7 +729,7 @@
     }
   });
 
-  // ============ 音声入力(タップで1回だけ聞き取り) ============
+  // ============ 音声入力 ============
   const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recognizer = null;
   if (SpeechRecognitionCtor) {
