@@ -62,7 +62,7 @@
     filter: saturate(0.85) brightness(0.75);
   }
 
-  /* スキャン枠(シグネチャー要素) */
+  /* スキャン枠 ---------- */
   #scan_frame {
     position: absolute;
     inset: 0;
@@ -151,16 +151,6 @@
     color: var(--scan);
   }
 
-  #settings_btn {
-    background: rgba(0,0,0,0.055);
-    border: 1px solid rgba(0,0,0,0.12);
-    color: var(--ink-dim);
-    border-radius: 20px;
-    padding: 6px 12px;
-    font-size: 12px;
-    font-family: inherit;
-  }
-
   #top_bar_actions {
     display: flex;
     align-items: center;
@@ -178,7 +168,7 @@
     line-height: 1;
   }
 
-  /* ---------- ズームコントロール(光学ズーム対応機種のみ表示) ---------- */
+  /* ---------- ズームコントロール ---------- */
 
   #zoom_control {
     position: absolute;
@@ -494,10 +484,10 @@
 
   /* ---------- 起動前オーバーレイ / エラー ---------- */
 
-  #start_layer, #error_layer {
+  #error_layer {
     position: absolute;
     inset: 0;
-    display: flex;
+    display: none;
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -507,8 +497,6 @@
     background: var(--bg);
     z-index: 20;
   }
-
-  #error_layer { display: none; }
 
   .layer_title {
     font-family: 'M PLUS Rounded 1c', sans-serif;
@@ -523,8 +511,8 @@
   }
 
   .primary_btn {
-    background: var(--scan);
-    color: #06231d;
+    background: rgba(0,0,0,0.07);
+    color: var(--ink);
     border: none;
     padding: 14px 30px;
     border-radius: 14px;
@@ -532,63 +520,6 @@
     font-weight: 700;
     font-size: 15px;
   }
-
-  #error_layer .primary_btn {
-    background: rgba(0,0,0,0.07);
-    color: var(--ink);
-  }
-
-  /* ---------- API キー設定パネル ---------- */
-
-  #key_panel {
-    position: absolute;
-    inset: 0;
-    background: var(--bg);
-    z-index: 30;
-    display: none;
-    flex-direction: column;
-    padding: max(24px, env(safe-area-inset-top)) 24px 24px;
-  }
-
-  #key_panel.active { display: flex; }
-
-  #key_panel textarea {
-    background: var(--panel);
-    border: 1px solid var(--panel-edge);
-    color: var(--ink);
-    border-radius: 12px;
-    padding: 14px;
-    font-size: 14px;
-    font-family: monospace;
-    resize: none;
-    height: 90px;
-    margin: 16px 0;
-  }
-
-  #key_panel label {
-    font-size: 13px;
-    color: var(--ink-dim);
-    line-height: 1.7;
-  }
-
-  #key_panel .row {
-    display: flex;
-    gap: 10px;
-    margin-top: 18px;
-  }
-
-  #key_panel .row button {
-    flex: 1;
-    padding: 13px 0;
-    border-radius: 14px;
-    border: none;
-    font-family: inherit;
-    font-size: 14px;
-    font-weight: 600;
-  }
-
-  #key_save { background: var(--scan); color: #06231d; }
-  #key_close { background: rgba(0,0,0,0.055); color: var(--ink); }
 </style>
 </head>
 <body>
@@ -619,7 +550,6 @@
     <div id="brand">YUI SCANNER</div>
     <div id="top_bar_actions">
       <button id="reset_btn" title="最初から">🔄</button>
-      <button id="settings_btn">APIキー設定</button>
     </div>
   </div>
 
@@ -662,25 +592,13 @@
     <button id="error_retry_btn" class="primary_btn">もう一度試す</button>
   </div>
 
-  <div id="key_panel">
-    <div class="layer_title">Gemini APIキー</div>
-    <label>
-      Google AI Studioで発行したAPIキーを貼り付けてください。<br>
-      このキーはGemini APIへのリクエストを認証するためだけに使われます。それ以外の送信先はなく、スマホ内(このページを開いている間だけ)に保持されます。
-    </label>
-    <textarea id="key_input" placeholder="AQ.xxxxxxxxxxxxxxxxxxxxxxxx"></textarea>
-    <div class="row">
-      <button id="key_close">閉じる</button>
-      <button id="key_save">保存する</button>
-    </div>
-  </div>
-
 </div>
 
 <script>
 (() => {
   // ============ 状態 ============
-  let apiKey = localStorage.getItem('yui_api_key') || "";
+  // yui_gemini_api_key からキーを取得（入力UIは削除）
+  const getApiKey = () => localStorage.getItem('yui_gemini_api_key') || "";
   let stream = null;
   let currentTrack = null;
   let capturedBase64 = null;
@@ -705,15 +623,10 @@
     resultNarration: document.getElementById('result_narration'),
     replayBtn: document.getElementById('replay_btn'),
     rescanBtn: document.getElementById('rescan_btn'),
-    settingsBtn: document.getElementById('settings_btn'),
     resetBtn: document.getElementById('reset_btn'),
     zoomControl: document.getElementById('zoom_control'),
     zoomSlider: document.getElementById('zoom_slider'),
     zoomLabel: document.getElementById('zoom_label'),
-    keyPanel: document.getElementById('key_panel'),
-    keyInput: document.getElementById('key_input'),
-    keySave: document.getElementById('key_save'),
-    keyClose: document.getElementById('key_close'),
     chatLog: document.getElementById('chat_log'),
     characterAvatar: document.getElementById('character_avatar'),
     characterFace: document.getElementById('character_face'),
@@ -724,12 +637,10 @@
   let lastNarration = "";
   let conversationHistory = []; // Gemini に毎回送る会話履歴 [{role, parts}]
   let talkModeActive = false;
-  let talkBusy = false; // Gemini応答待ち・読み上げ中はtrue(この間は聞き取りを再開しない)
+  let talkBusy = false; // Gemini応答待ち・読み上げ中はtrue
   let quickPending = false; // 短押しの「1問だけ」モードで聞き取り中かどうか
 
   // ---- キャラクターの表情差分 ----
-  // listening(聞いている)とthinking(考え中)は同じ絵(検索中)を使い回す
-  // speakingに対応する専用の絵がまだないため、現状はnormalの絵を代用する
   const CHARACTER_FACES = {
     normal:    'chars/char_normal.png',
     listening: 'chars/char_thinking.png',
@@ -773,7 +684,6 @@
       els.errorLayer.style.display = 'none';
       els.scanFrame.classList.add('scanning');
 
-      // 光学ズームに対応している機種かを確認する(非対応ならUIごと出さない)
       currentTrack = stream.getVideoTracks()[0];
       const caps = currentTrack.getCapabilities ? currentTrack.getCapabilities() : {};
       if (caps.zoom && caps.zoom.max > caps.zoom.min) {
@@ -797,7 +707,7 @@
   }
 
   els.errorRetryBtn.addEventListener('click', startCamera);
-  startCamera(); // ページを開いたら自動でカメラを起動する(確認ボタンなし)
+  startCamera();
 
   els.zoomSlider.addEventListener('input', async () => {
     const value = parseFloat(els.zoomSlider.value);
@@ -805,28 +715,11 @@
     if (currentTrack) {
       try {
         await currentTrack.applyConstraints({ advanced: [{ zoom: value }] });
-      } catch (e) {
-        // 一部端末はズーム値の反映に失敗することがあるが、UI表示はそのままにする
-      }
+      } catch (e) {}
     }
   });
 
-  // ============ APIキー設定 ============
-  els.settingsBtn.addEventListener('click', () => {
-    els.keyInput.value = apiKey;
-    els.keyPanel.classList.add('active');
-  });
-  els.keyClose.addEventListener('click', () => {
-    els.keyPanel.classList.remove('active');
-  });
-  els.keySave.addEventListener('click', () => {
-    apiKey = els.keyInput.value.trim();
-    localStorage.setItem('yui_api_key', apiKey);
-    els.keyPanel.classList.remove('active');
-  });
-
   // ============ 撮影 ============
-  // 画像ソース(video要素 or Image要素)を最大800pxにリサイズしてJPEGのdataURLにする
   function resizeToDataUrl(source, sourceWidth, sourceHeight) {
     const canvas = document.createElement('canvas');
     const maxDim = 800;
@@ -864,10 +757,6 @@
   }
 
   els.captureBtn.addEventListener('click', async () => {
-    if (!apiKey) {
-      els.settingsBtn.click();
-      return;
-    }
     const video = els.cameraFeed;
     const dataUrl = resizeToDataUrl(video, video.videoWidth, video.videoHeight);
     await processCapturedImage(dataUrl);
@@ -875,16 +764,12 @@
 
   // ============ アルバムから画像を選ぶ ============
   els.galleryBtn.addEventListener('click', () => {
-    if (!apiKey) {
-      els.settingsBtn.click();
-      return;
-    }
     els.galleryInput.click();
   });
 
   els.galleryInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
-    e.target.value = ''; // 同じ画像を連続で選んでもchangeイベントが発火するようにリセット
+    e.target.value = '';
     if (!file) return;
 
     const img = new Image();
@@ -895,7 +780,6 @@
     img.src = URL.createObjectURL(file);
   });
 
-  // すべてのやり取りに共通で適用する指示(記号読み上げ防止・回答の長さ制御)
   const SYSTEM_PROMPT =
     "あなたは音声で会話するアシスタントです。回答は必ずスピーカーで読み上げられます。次のルールを厳守してください。\n" +
     "・アスタリスク(*)、シャープ(#)、箇条書きの記号、太字や見出しなどのMarkdown書式は絶対に使わない\n" +
@@ -903,8 +787,9 @@
     "・回答は簡潔にする。特別な指示がない限り2〜3文、長くても4文までに収める\n" +
     "・自然な話し言葉で、丁寧だがフレンドリーな口調にする";
 
-  // ============ Gemini API 呼び出し(会話履歴つき) ============
+  // ============ Gemini API 呼び出し ============
   async function callGemini(contents, { thinkingLevel = 'low', maxOutputTokens = 200 } = {}) {
+    const apiKey = getApiKey();
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const res = await fetch(url, {
       method: 'POST',
@@ -957,7 +842,6 @@
         { thinkingLevel: 'low', maxOutputTokens: 500 }
       );
 
-      // この本についての会話履歴として、画像判定のやり取りを積んでおく
       conversationHistory = [
         { role: 'user', parts: userParts },
         { role: 'model', parts: [{ text }] },
@@ -1004,7 +888,7 @@
 
   els.replayBtn.addEventListener('click', () => speak(lastNarration));
 
-  // ============ リセット(最初から) ============
+  // ============ リセット ============
   function resetSession() {
     endTalkMode(false);
     window.speechSynthesis.cancel();
@@ -1041,7 +925,6 @@
     els.chatLog.scrollTop = els.chatLog.scrollHeight;
   }
 
-  // トークン節約のため、最初の画像判定(2件)+ 直近のやり取りだけを送る
   function trimmedHistory() {
     if (conversationHistory.length <= 6) return conversationHistory;
     return [
@@ -1085,16 +968,11 @@
     try {
       recognizer.start();
     } catch (e) {
-      // 直前の認識がまだ終了処理中の場合など、少し待って再試行
       setTimeout(() => { if (talkModeActive && !talkBusy) { try { recognizer.start(); } catch (e2) {} } }, 300);
     }
   }
 
   function startTalkMode() {
-    if (!apiKey) {
-      els.settingsBtn.click();
-      return;
-    }
     if (!recognizer) {
       setCharacterState('error');
       els.chatStatus.textContent = 'この端末は音声入力に対応していません';
@@ -1153,10 +1031,6 @@
   }
 
   function startQuickQuestion() {
-    if (!apiKey) {
-      els.settingsBtn.click();
-      return;
-    }
     if (!recognizer) {
       setCharacterState('error');
       els.chatStatus.textContent = 'この端末は音声入力に対応していません';
@@ -1197,7 +1071,6 @@
       clearTimeout(pressTimer);
       pressTimer = null;
     }
-    // 長押し判定が発火する前に指を離した = 短押し(1問だけモード)
     if (!longPressFired && !talkModeActive && !quickPending && !talkBusy) {
       startQuickQuestion();
     }
@@ -1231,12 +1104,10 @@
 
     recognizer.addEventListener('end', () => {
       if (quickPending) {
-        // 無音のまま終了(聞き取れなかった)場合はリセットする
         quickPending = false;
         setCharacterState('normal');
         return;
       }
-      // 無音のまま終了した場合(結果が得られなかった場合)は、聞き取りを続行する
       if (talkModeActive && !talkBusy) {
         setTimeout(() => startListeningLoop(), 300);
       }
