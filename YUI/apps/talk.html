@@ -365,7 +365,7 @@
   <div id="safety_panel">
     <div class="layer_title">セーフティ設定(検証用)</div>
     <div class="note">
-      Gemini APIのsafetySettingsをカテゴリごとに切り替えます。初期値は全カテゴリ「低以上をブロック」(最も厳しい設定)です。「デフォルト」は項目を送らず、モデル既定の閾値になります。
+      Gemini APIのsafetySettingsをカテゴリごとに切り替えます。初期値は「性的な内容」だけ「低以上をブロック」(最も厳しい)、ほかは「中以上をブロック」です。「デフォルト」は項目を送らず、モデル既定の閾値になります。
       児童の安全に関する保護など、調整できないフィルターは設定にかかわらず常に有効です。指定できる値はモデルごとに異なるため、エラーになる場合は公式ドキュメントを確認してください。
     </div>
     <div id="safety_rows"></div>
@@ -619,6 +619,13 @@
     ['BLOCK_MEDIUM_AND_ABOVE', '中以上をブロック'],
     ['BLOCK_LOW_AND_ABOVE', '低以上をブロック'],
   ];
+  // 初期値: 性的な内容は最も厳しく、それ以外は中程度(膝枕のような甘い会話の誤検知を避けるため)
+  const DEFAULT_LEVELS = {
+    HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_LOW_AND_ABOVE',
+    HARM_CATEGORY_HARASSMENT: 'BLOCK_MEDIUM_AND_ABOVE',
+    HARM_CATEGORY_HATE_SPEECH: 'BLOCK_MEDIUM_AND_ABOVE',
+    HARM_CATEGORY_DANGEROUS_CONTENT: 'BLOCK_MEDIUM_AND_ABOVE',
+  };
   let safetyConfig = { levels: {}, debug: false };
   try {
     const raw = localStorage.getItem(SAFETY_KEY);
@@ -627,7 +634,7 @@
 
   function buildSafetySettings() {
     return SAFETY_CATEGORIES
-      .map(([category]) => ({ category, threshold: safetyConfig.levels[category] || 'BLOCK_LOW_AND_ABOVE' }))
+      .map(([category]) => ({ category, threshold: safetyConfig.levels[category] || DEFAULT_LEVELS[category] }))
       .filter((s) => s.threshold !== 'DEFAULT');
   }
 
@@ -653,7 +660,7 @@
         const opt = document.createElement('option');
         opt.value = value;
         opt.textContent = text;
-        if ((safetyConfig.levels[category] || 'BLOCK_LOW_AND_ABOVE') === value) opt.selected = true;
+        if ((safetyConfig.levels[category] || DEFAULT_LEVELS[category]) === value) opt.selected = true;
         select.appendChild(opt);
       });
       row.appendChild(name);
@@ -975,14 +982,17 @@
     if (image) parts.push({ inlineData: { mimeType: image.mimeType, data: image.base64 } });
     if (text) parts.push({ text });
 
-    conversationHistory.push({ role: 'user', parts });
+    // 履歴への追加は、応答が成功してから行う(ブロックされた発言を履歴に残さない)
     addBubble('user', text, image ? image.dataUrl : null);
     clearImagePreview();
     setAvatarState('thinking');
     els.topStatus.textContent = '考え中...';
 
+    const requestContents = [...trimmedHistory(), { role: 'user', parts }];
+
     try {
-      const answer = await callGemini(trimmedHistory());
+      const answer = await callGemini(requestContents);
+      conversationHistory.push({ role: 'user', parts });
       conversationHistory.push({ role: 'model', parts: [{ text: answer }] });
       addBubble('assistant', answer);
       showDebug();
@@ -994,7 +1004,6 @@
       });
     } catch (err) {
       addBubble('assistant', err.isSafety ? '🚫 ' + err.message : 'エラー: ' + err.message);
-      conversationHistory.pop(); // 失敗した発言は履歴に残さない
       showDebug();
       setAvatarState('error');
       setTimeout(() => {
