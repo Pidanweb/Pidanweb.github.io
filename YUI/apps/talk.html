@@ -86,8 +86,8 @@
     color: var(--ink-dim);
   }
 
-  #settings_btn {
-    margin-left: auto;
+  #settings_btn { margin-left: auto; }
+  #settings_btn, #safety_btn {
     background: rgba(0,0,0,0.055);
     border: 1px solid rgba(0,0,0,0.12);
     color: var(--ink-dim);
@@ -311,6 +311,24 @@
   }
   #key_save { background: var(--scan); color: #06231d; }
   #key_close { background: rgba(0,0,0,0.055); color: var(--ink); }
+
+  /* ---------- セーフティ設定パネル(検証用) ---------- */
+  #safety_panel {
+    position: fixed; inset: 0; background: var(--bg); z-index: 30;
+    display: none; flex-direction: column; overflow-y: auto;
+    padding: max(24px, env(safe-area-inset-top)) 24px 24px;
+  }
+  #safety_panel.active { display: flex; }
+  #safety_panel .layer_title { font-family: 'M PLUS Rounded 1c', sans-serif; font-weight: 800; font-size: 20px; }
+  #safety_panel .note { font-size: 12.5px; color: var(--ink-dim); line-height: 1.7; margin: 10px 0 14px; }
+  .safety_row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--panel-edge); font-size: 14px; }
+  .safety_row select { background: var(--panel); border: 1px solid var(--panel-edge); color: var(--ink); border-radius: 10px; padding: 8px 10px; font-size: 13px; font-family: inherit; max-width: 55%; }
+  .safety_check { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 14px 0; }
+  #safety_panel .row { display: flex; gap: 10px; margin-top: auto; padding-top: 16px; }
+  #safety_panel .row button { flex: 1; padding: 13px 0; border-radius: 14px; border: none; font-family: inherit; font-size: 14px; font-weight: 600; }
+  #safety_save { background: var(--scan); color: #06231d; }
+  #safety_close { background: rgba(0,0,0,0.055); color: var(--ink); }
+  .chat_row.debug .chat_bubble { background: #f1efe6; border: 1px dashed var(--panel-edge); color: var(--ink-dim); font-size: 11.5px; font-family: monospace; white-space: pre-wrap; }
 </style>
 </head>
 <body>
@@ -325,6 +343,7 @@
       <div id="top_status">短押しで質問 / テキスト入力もできます</div>
     </div>
     <button id="settings_btn">APIキー設定</button>
+    <button id="safety_btn">安全</button>
   </div>
 
   <div id="chat_scroll"></div>
@@ -340,6 +359,20 @@
     <button id="mic_btn" aria-label="音声で質問">🎤</button>
     <input id="text_input" type="text" placeholder="メッセージを入力...">
     <button id="send_btn" aria-label="送信">➤</button>
+  </div>
+
+  <div id="safety_panel">
+    <div class="layer_title">セーフティ設定(検証用)</div>
+    <div class="note">
+      Gemini APIのsafetySettingsをカテゴリごとに切り替えます。「デフォルト」は項目を送らず、モデル既定の閾値になります。
+      児童の安全に関する保護など、調整できないフィルターは設定にかかわらず常に有効です。指定できる値はモデルごとに異なるため、エラーになる場合は公式ドキュメントを確認してください。
+    </div>
+    <div id="safety_rows"></div>
+    <label class="safety_check"><input type="checkbox" id="safety_debug"> 各応答の終了理由・safetyRatingsをデバッグ表示する</label>
+    <div class="row">
+      <button id="safety_close">閉じる</button>
+      <button id="safety_save">保存する</button>
+    </div>
   </div>
 
   <div id="key_panel">
@@ -475,9 +508,107 @@
     "・アスタリスク(*)、シャープ(#)、箇条書きの記号、太字や見出しなどのMarkdown書式は絶対に使わない\n" +
     "・数字の箇条書き(1. 2. のような形式)も使わない。文章として話す\n" +
     "・回答は簡潔にする。特別な指示がない限り2〜3文、長くても4文までに収める\n" +
+    "・性的な内容が含まれる場合は成人同士の想定に限る。未成年、または未成年と解釈しうる設定・年齢・描写が関わる場合は、性的な内容を一切扱わず、キャラクターとして自然に話題を変える\n" +
     "・一貫して上記の性格・口調を維持してください";
 
   let conversationHistory = [];
+
+  // ============ セーフティ設定(検証用) ============
+  const SAFETY_KEY = 'yui_safety_settings';
+  const SAFETY_CATEGORIES = [
+    ['HARM_CATEGORY_SEXUALLY_EXPLICIT', '性的な内容'],
+    ['HARM_CATEGORY_HARASSMENT', '嫌がらせ'],
+    ['HARM_CATEGORY_HATE_SPEECH', 'ヘイト'],
+    ['HARM_CATEGORY_DANGEROUS_CONTENT', '危険な内容'],
+  ];
+  const SAFETY_LEVELS = [
+    ['DEFAULT', 'デフォルト(未指定)'],
+    ['OFF', 'OFF'],
+    ['BLOCK_NONE', 'BLOCK_NONE'],
+    ['BLOCK_ONLY_HIGH', '高のみブロック'],
+    ['BLOCK_MEDIUM_AND_ABOVE', '中以上をブロック'],
+    ['BLOCK_LOW_AND_ABOVE', '低以上をブロック'],
+  ];
+  let safetyConfig = { levels: {}, debug: false };
+  try {
+    const raw = localStorage.getItem(SAFETY_KEY);
+    if (raw) safetyConfig = Object.assign(safetyConfig, JSON.parse(raw));
+  } catch (e) {}
+
+  function buildSafetySettings() {
+    return SAFETY_CATEGORIES
+      .map(([category]) => ({ category, threshold: safetyConfig.levels[category] || 'DEFAULT' }))
+      .filter((s) => s.threshold !== 'DEFAULT');
+  }
+
+  const safetyEls = {
+    btn: document.getElementById('safety_btn'),
+    panel: document.getElementById('safety_panel'),
+    rows: document.getElementById('safety_rows'),
+    debug: document.getElementById('safety_debug'),
+    save: document.getElementById('safety_save'),
+    close: document.getElementById('safety_close'),
+  };
+
+  function renderSafetyRows() {
+    safetyEls.rows.innerHTML = '';
+    SAFETY_CATEGORIES.forEach(([category, label]) => {
+      const row = document.createElement('div');
+      row.className = 'safety_row';
+      const name = document.createElement('span');
+      name.textContent = label;
+      const select = document.createElement('select');
+      select.dataset.category = category;
+      SAFETY_LEVELS.forEach(([value, text]) => {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = text;
+        if ((safetyConfig.levels[category] || 'DEFAULT') === value) opt.selected = true;
+        select.appendChild(opt);
+      });
+      row.appendChild(name);
+      row.appendChild(select);
+      safetyEls.rows.appendChild(row);
+    });
+    safetyEls.debug.checked = !!safetyConfig.debug;
+  }
+
+  safetyEls.btn.addEventListener('click', () => {
+    renderSafetyRows();
+    safetyEls.panel.classList.add('active');
+  });
+  safetyEls.close.addEventListener('click', () => safetyEls.panel.classList.remove('active'));
+  safetyEls.save.addEventListener('click', () => {
+    const levels = {};
+    safetyEls.rows.querySelectorAll('select').forEach((sel) => { levels[sel.dataset.category] = sel.value; });
+    safetyConfig = { levels, debug: safetyEls.debug.checked };
+    localStorage.setItem(SAFETY_KEY, JSON.stringify(safetyConfig));
+    safetyEls.panel.classList.remove('active');
+  });
+
+  // 直近の応答メタ情報(デバッグ表示用)
+  let lastMeta = null;
+  function showDebug() {
+    if (!safetyConfig.debug || !lastMeta) return;
+    const sent = buildSafetySettings().map((s) => `${s.category.replace('HARM_CATEGORY_', '')}=${s.threshold}`).join(', ') || '(未指定)';
+    const lines = [
+      '[debug] 送信した設定: ' + sent,
+      'finishReason: ' + (lastMeta.finishReason || '-'),
+      'blockReason: ' + (lastMeta.blockReason || '-'),
+    ];
+    const ratings = lastMeta.ratings || [];
+    if (ratings.length) {
+      lines.push('safetyRatings: ' + ratings.map((r) => `${r.category.replace('HARM_CATEGORY_', '')}:${r.probability}${r.blocked ? '(blocked)' : ''}`).join(', '));
+    }
+    const row = document.createElement('div');
+    row.className = 'chat_row assistant debug';
+    const bubble = document.createElement('div');
+    bubble.className = 'chat_bubble';
+    bubble.textContent = lines.join('\n');
+    row.appendChild(bubble);
+    els.chatScroll.appendChild(row);
+    els.chatScroll.scrollTop = els.chatScroll.scrollHeight;
+  }
 
   // ============ APIキー設定 ============
   els.settingsBtn.addEventListener('click', () => {
@@ -543,17 +674,21 @@
   // ============ Gemini呼び出し ============
   async function callGemini(contents) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const requestBody = {
+      contents,
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      generationConfig: {
+        thinkingConfig: { thinkingLevel: "minimal" },
+        maxOutputTokens: 2048,
+      },
+    };
+    const safetySettings = buildSafetySettings();
+    if (safetySettings.length) requestBody.safetySettings = safetySettings;
+    lastMeta = null;
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents,
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        generationConfig: {
-          thinkingConfig: { thinkingLevel: "minimal" },
-          maxOutputTokens: 2048,
-        },
-      }),
+      body: JSON.stringify(requestBody),
     });
     if (!res.ok) {
       const errBody = await res.json().catch(() => ({}));
@@ -561,6 +696,14 @@
     }
     const data = await res.json();
     const candidate = data.candidates?.[0];
+    lastMeta = {
+      finishReason: candidate?.finishReason,
+      blockReason: data.promptFeedback?.blockReason,
+      ratings: candidate?.safetyRatings || data.promptFeedback?.safetyRatings || [],
+    };
+    if (data.promptFeedback?.blockReason) {
+      throw new Error(`入力がブロックされました(${data.promptFeedback.blockReason})`);
+    }
     const text = candidate?.content?.parts?.[0]?.text ?? "";
     if (!text) {
       const reason = candidate?.finishReason;
@@ -699,6 +842,7 @@
       const answer = await callGemini(trimmedHistory());
       conversationHistory.push({ role: 'model', parts: [{ text: answer }] });
       addBubble('assistant', answer);
+      showDebug();
       setAvatarState('speaking');
       els.topStatus.textContent = '話しています...';
       speak(answer, () => {
@@ -707,6 +851,7 @@
       });
     } catch (err) {
       addBubble('assistant', 'エラー: ' + err.message);
+      showDebug();
       setAvatarState('error');
       setTimeout(() => {
         setAvatarState('normal');
