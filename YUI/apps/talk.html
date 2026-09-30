@@ -267,6 +267,7 @@
     padding: max(24px, env(safe-area-inset-top)) 24px 24px;
   }
   #key_panel.active { display: flex; }
+  #key_panel { overflow-y: auto; }
 
   #key_panel .layer_title {
     font-family: 'M PLUS Rounded 1c', sans-serif;
@@ -364,7 +365,7 @@
   <div id="safety_panel">
     <div class="layer_title">セーフティ設定(検証用)</div>
     <div class="note">
-      Gemini APIのsafetySettingsをカテゴリごとに切り替えます。「デフォルト」は項目を送らず、モデル既定の閾値になります。
+      Gemini APIのsafetySettingsをカテゴリごとに切り替えます。初期値は全カテゴリ「低以上をブロック」(最も厳しい設定)です。「デフォルト」は項目を送らず、モデル既定の閾値になります。
       児童の安全に関する保護など、調整できないフィルターは設定にかかわらず常に有効です。指定できる値はモデルごとに異なるため、エラーになる場合は公式ドキュメントを確認してください。
     </div>
     <div id="safety_rows"></div>
@@ -382,7 +383,31 @@
       このキーはGemini APIへのリクエストを認証するためだけに使われます。この端末内(localStorage)に保存され、次回からは入力不要になります。
     </label>
     <textarea id="key_input" placeholder="AQ.xxxxxxxxxxxxxxxxxxxxxxxx"></textarea>
-    <div class="row">
+    <!-- 音声の設定 -->
+    <hr style="border: 0; border-top: 1px solid var(--panel-edge); margin: 20px 0 15px;">
+    <div class="layer_title" style="font-size: 16px;">音声の設定</div>
+
+    <label for="voice_select" style="margin-top: 8px;">使用する音声（端末依存）</label>
+    <select id="voice_select" style="width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--panel-edge); background: var(--panel); color: var(--ink); font-size: 13.5px; margin-top: 4px; font-family: inherit;">
+      <option value="">（読み込み中...）</option>
+    </select>
+
+    <div style="display: flex; gap: 12px; margin-top: 12px;">
+      <div style="flex: 1;">
+        <label for="pitch_slider" style="margin-top: 0;">ピッチ (高さ): <span id="pitch_val">1.40</span></label>
+        <input type="range" id="pitch_slider" min="0.5" max="2.0" step="0.05" value="1.40" style="width: 100%; margin-top: 4px;">
+      </div>
+      <div style="flex: 1;">
+        <label for="rate_slider" style="margin-top: 0;">速度 (スピード): <span id="rate_val">1.15</span></label>
+        <input type="range" id="rate_slider" min="0.5" max="2.0" step="0.05" value="1.15" style="width: 100%; margin-top: 4px;">
+      </div>
+    </div>
+
+    <button id="test_voice_btn" type="button" style="margin-top: 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--panel-edge); background: rgba(0,0,0,0.05); color: var(--ink); font-size: 13px; cursor: pointer; font-family: inherit; font-weight: 600;">
+      🔊 現在の設定でテスト再生
+    </button>
+
+    <div class="row" style="margin-top: 24px;">
       <button id="key_close">閉じる</button>
       <button id="key_save">保存する</button>
     </div>
@@ -396,6 +421,7 @@
   const PROGRESS_KEY = 'yui_tutorial_progress';
   const API_KEY_STORAGE = 'yui_gemini_api_key';
   const MODEL = "gemini-3.5-flash-lite";
+  const VOICE_CONFIG_KEY = 'yui_voice_config';
 
   const els = {
     backBtn: document.getElementById('back_btn'),
@@ -415,7 +441,71 @@
     imagePreviewBar: document.getElementById('image_preview_bar'),
     imagePreviewThumb: document.getElementById('image_preview_thumb'),
     imagePreviewRemove: document.getElementById('image_preview_remove'),
+    voiceSelect: document.getElementById('voice_select'),
+    pitchSlider: document.getElementById('pitch_slider'),
+    rateSlider: document.getElementById('rate_slider'),
+    pitchVal: document.getElementById('pitch_val'),
+    rateVal: document.getElementById('rate_val'),
+    testVoiceBtn: document.getElementById('test_voice_btn'),
   };
+
+  // ============ 音声設定 ============
+  const DEFAULT_VOICE = { voiceURI: '', pitch: 1.40, rate: 1.15 };
+  function loadVoiceConfig() {
+    try {
+      const raw = localStorage.getItem(VOICE_CONFIG_KEY);
+      return raw ? Object.assign({}, DEFAULT_VOICE, JSON.parse(raw)) : { ...DEFAULT_VOICE };
+    } catch (e) {
+      return { ...DEFAULT_VOICE };
+    }
+  }
+  let voiceConfig = loadVoiceConfig();
+
+  function populateVoiceList() {
+    if (!('speechSynthesis' in window)) return;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices.length) return;
+
+    const jaVoices = voices.filter((v) => v.lang.includes('ja') || v.lang.includes('JP'));
+    const displayVoices = jaVoices.length > 0 ? jaVoices : voices;
+
+    els.voiceSelect.innerHTML = '';
+    displayVoices.forEach((v) => {
+      const option = document.createElement('option');
+      option.value = v.voiceURI || v.name;
+      option.textContent = `${v.name} (${v.lang})`;
+      els.voiceSelect.appendChild(option);
+    });
+
+    if (voiceConfig.voiceURI) {
+      els.voiceSelect.value = voiceConfig.voiceURI;
+    } else {
+      const defaultVoice = displayVoices.find((v) =>
+        v.name.includes('Nanami') || v.name.includes('Natural') || v.name.includes('Kyoko') || v.name.includes('Ayumi')
+      ) || displayVoices[0];
+      if (defaultVoice) els.voiceSelect.value = defaultVoice.voiceURI || defaultVoice.name;
+    }
+  }
+
+  if ('speechSynthesis' in window) {
+    populateVoiceList();
+    window.speechSynthesis.onvoiceschanged = populateVoiceList;
+  }
+
+  els.pitchSlider.value = voiceConfig.pitch;
+  els.rateSlider.value = voiceConfig.rate;
+  els.pitchVal.textContent = parseFloat(voiceConfig.pitch).toFixed(2);
+  els.rateVal.textContent = parseFloat(voiceConfig.rate).toFixed(2);
+  els.pitchSlider.addEventListener('input', (e) => { els.pitchVal.textContent = parseFloat(e.target.value).toFixed(2); });
+  els.rateSlider.addEventListener('input', (e) => { els.rateVal.textContent = parseFloat(e.target.value).toFixed(2); });
+
+  els.testVoiceBtn.addEventListener('click', () => {
+    speak('こんにちは！この声と高さで喋るよ。どうかな？', null, {
+      voiceURI: els.voiceSelect.value,
+      pitch: parseFloat(els.pitchSlider.value),
+      rate: parseFloat(els.rateSlider.value),
+    });
+  });
 
   // ============ 1. 戻るボタンの動的切替 ============
   function setupBackButton() {
@@ -537,7 +627,7 @@
 
   function buildSafetySettings() {
     return SAFETY_CATEGORIES
-      .map(([category]) => ({ category, threshold: safetyConfig.levels[category] || 'DEFAULT' }))
+      .map(([category]) => ({ category, threshold: safetyConfig.levels[category] || 'BLOCK_LOW_AND_ABOVE' }))
       .filter((s) => s.threshold !== 'DEFAULT');
   }
 
@@ -563,7 +653,7 @@
         const opt = document.createElement('option');
         opt.value = value;
         opt.textContent = text;
-        if ((safetyConfig.levels[category] || 'DEFAULT') === value) opt.selected = true;
+        if ((safetyConfig.levels[category] || 'BLOCK_LOW_AND_ABOVE') === value) opt.selected = true;
         select.appendChild(opt);
       });
       row.appendChild(name);
@@ -585,6 +675,45 @@
     localStorage.setItem(SAFETY_KEY, JSON.stringify(safetyConfig));
     safetyEls.panel.classList.remove('active');
   });
+
+  // ブロック理由の日本語表示
+  const CATEGORY_REASON = {
+    HARM_CATEGORY_SEXUALLY_EXPLICIT: '性的です',
+    HARM_CATEGORY_HARASSMENT: '嫌がらせ・攻撃的です',
+    HARM_CATEGORY_HATE_SPEECH: 'ヘイト(差別的)です',
+    HARM_CATEGORY_DANGEROUS_CONTENT: '危険な内容です',
+    HARM_CATEGORY_CIVIC_INTEGRITY: '選挙・政治に関して不適切です',
+  };
+  const CODE_REASON = {
+    SAFETY: 'セーフティフィルターに該当',
+    PROHIBITED_CONTENT: '調整できない保護(禁止コンテンツ)に該当',
+    BLOCKLIST: 'ブロックリストに該当',
+    SPII: '個人を特定できる機微な情報に該当',
+    IMAGE_SAFETY: '画像が安全基準に該当',
+    OTHER: '理由不明のブロック',
+  };
+  const PROB_RANK = { NEGLIGIBLE: 0, LOW: 1, MEDIUM: 2, HIGH: 3 };
+
+  function safetyBlockMessage(meta, where) {
+    const code = meta.blockReason || meta.finishReason;
+    if (!CODE_REASON[code]) return null;
+    const ratings = meta.ratings || [];
+    let hit = ratings.filter((r) => r.blocked);
+    if (!hit.length) {
+      // blockedが付いていない場合は、確率が最も高いカテゴリを候補にする
+      const top = [...ratings].sort((a, b) => (PROB_RANK[b.probability] || 0) - (PROB_RANK[a.probability] || 0))[0];
+      if (top && (PROB_RANK[top.probability] || 0) > 0) hit = [top];
+    }
+    const reasons = [...new Set(hit.map((r) => CATEGORY_REASON[r.category] || r.category))];
+    const detail = reasons.length ? reasons.join('、') : 'カテゴリは特定できませんでした';
+    return `${where}がブロックされました。理由: ${detail}(${CODE_REASON[code]})`;
+  }
+
+  function safetyError(message) {
+    const err = new Error(message);
+    err.isSafety = true;
+    return err;
+  }
 
   // 直近の応答メタ情報(デバッグ表示用)
   let lastMeta = null;
@@ -613,12 +742,19 @@
   // ============ APIキー設定 ============
   els.settingsBtn.addEventListener('click', () => {
     els.keyInput.value = apiKey;
+    populateVoiceList();
     els.keyPanel.classList.add('active');
   });
   els.keyClose.addEventListener('click', () => els.keyPanel.classList.remove('active'));
   els.keySave.addEventListener('click', () => {
     apiKey = els.keyInput.value.trim();
     localStorage.setItem(API_KEY_STORAGE, apiKey);
+    voiceConfig = {
+      voiceURI: els.voiceSelect.value,
+      pitch: parseFloat(els.pitchSlider.value),
+      rate: parseFloat(els.rateSlider.value),
+    };
+    localStorage.setItem(VOICE_CONFIG_KEY, JSON.stringify(voiceConfig));
     els.keyPanel.classList.remove('active');
   });
 
@@ -702,10 +838,12 @@
       ratings: candidate?.safetyRatings || data.promptFeedback?.safetyRatings || [],
     };
     if (data.promptFeedback?.blockReason) {
-      throw new Error(`入力がブロックされました(${data.promptFeedback.blockReason})`);
+      throw safetyError(safetyBlockMessage(lastMeta, '入力') || `入力がブロックされました(${data.promptFeedback.blockReason})`);
     }
     const text = candidate?.content?.parts?.[0]?.text ?? "";
     if (!text) {
+      const blockMsg = safetyBlockMessage(lastMeta, '応答');
+      if (blockMsg) throw safetyError(blockMsg);
       const reason = candidate?.finishReason;
       throw new Error(reason ? `応答が空でした(${reason})` : '応答が空でした');
     }
@@ -741,12 +879,17 @@
     els.micBtn.className = state === 'normal' ? '' : `state-${state}`;
   }
 
-  function speak(text, onEnd) {
+  function speak(text, onEnd, customConfig = null) {
     if (!('speechSynthesis' in window)) { if (onEnd) onEnd(); return; }
     window.speechSynthesis.cancel();
+    const cfg = customConfig || voiceConfig;
     const utterance = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const selectedVoice = voices.find((v) => (v.voiceURI || v.name) === cfg.voiceURI);
+    if (selectedVoice) utterance.voice = selectedVoice;
     utterance.lang = 'ja-JP';
-    utterance.rate = 1.15;
+    utterance.pitch = cfg.pitch ?? 1.40;
+    utterance.rate = cfg.rate ?? 1.15;
     if (onEnd) { utterance.onend = onEnd; utterance.onerror = onEnd; }
     window.speechSynthesis.speak(utterance);
   }
@@ -850,7 +993,8 @@
         els.topStatus.textContent = '短押しで質問 / テキスト入力もできます';
       });
     } catch (err) {
-      addBubble('assistant', 'エラー: ' + err.message);
+      addBubble('assistant', err.isSafety ? '🚫 ' + err.message : 'エラー: ' + err.message);
+      conversationHistory.pop(); // 失敗した発言は履歴に残さない
       showDebug();
       setAvatarState('error');
       setTimeout(() => {
