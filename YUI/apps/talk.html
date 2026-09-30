@@ -86,8 +86,8 @@
     color: var(--ink-dim);
   }
 
-  #settings_btn { margin-left: auto; }
-  #settings_btn, #safety_btn {
+  #settings_btn {
+    margin-left: auto;
     background: rgba(0,0,0,0.055);
     border: 1px solid rgba(0,0,0,0.12);
     color: var(--ink-dim);
@@ -312,24 +312,6 @@
   }
   #key_save { background: var(--scan); color: #06231d; }
   #key_close { background: rgba(0,0,0,0.055); color: var(--ink); }
-
-  /* ---------- セーフティ設定パネル(検証用) ---------- */
-  #safety_panel {
-    position: fixed; inset: 0; background: var(--bg); z-index: 30;
-    display: none; flex-direction: column; overflow-y: auto;
-    padding: max(24px, env(safe-area-inset-top)) 24px 24px;
-  }
-  #safety_panel.active { display: flex; }
-  #safety_panel .layer_title { font-family: 'M PLUS Rounded 1c', sans-serif; font-weight: 800; font-size: 20px; }
-  #safety_panel .note { font-size: 12.5px; color: var(--ink-dim); line-height: 1.7; margin: 10px 0 14px; }
-  .safety_row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--panel-edge); font-size: 14px; }
-  .safety_row select { background: var(--panel); border: 1px solid var(--panel-edge); color: var(--ink); border-radius: 10px; padding: 8px 10px; font-size: 13px; font-family: inherit; max-width: 55%; }
-  .safety_check { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 14px 0; }
-  #safety_panel .row { display: flex; gap: 10px; margin-top: auto; padding-top: 16px; }
-  #safety_panel .row button { flex: 1; padding: 13px 0; border-radius: 14px; border: none; font-family: inherit; font-size: 14px; font-weight: 600; }
-  #safety_save { background: var(--scan); color: #06231d; }
-  #safety_close { background: rgba(0,0,0,0.055); color: var(--ink); }
-  .chat_row.debug .chat_bubble { background: #f1efe6; border: 1px dashed var(--panel-edge); color: var(--ink-dim); font-size: 11.5px; font-family: monospace; white-space: pre-wrap; }
 </style>
 </head>
 <body>
@@ -344,7 +326,6 @@
       <div id="top_status">短押しで質問 / テキスト入力もできます</div>
     </div>
     <button id="settings_btn">APIキー設定</button>
-    <button id="safety_btn">安全</button>
   </div>
 
   <div id="chat_scroll"></div>
@@ -360,20 +341,6 @@
     <button id="mic_btn" aria-label="音声で質問">🎤</button>
     <input id="text_input" type="text" placeholder="メッセージを入力...">
     <button id="send_btn" aria-label="送信">➤</button>
-  </div>
-
-  <div id="safety_panel">
-    <div class="layer_title">セーフティ設定(検証用)</div>
-    <div class="note">
-      Gemini APIのsafetySettingsをカテゴリごとに切り替えます。初期値は「性的な内容」だけ「低以上をブロック」(最も厳しい)、ほかは「中以上をブロック」です。「デフォルト」は項目を送らず、モデル既定の閾値になります。
-      児童の安全に関する保護など、調整できないフィルターは設定にかかわらず常に有効です。指定できる値はモデルごとに異なるため、エラーになる場合は公式ドキュメントを確認してください。
-    </div>
-    <div id="safety_rows"></div>
-    <label class="safety_check"><input type="checkbox" id="safety_debug"> 各応答の終了理由・safetyRatingsをデバッグ表示する</label>
-    <div class="row">
-      <button id="safety_close">閉じる</button>
-      <button id="safety_save">保存する</button>
-    </div>
   </div>
 
   <div id="key_panel">
@@ -603,85 +570,16 @@
 
   let conversationHistory = [];
 
-  // ============ セーフティ設定(検証用) ============
-  const SAFETY_KEY = 'yui_safety_settings';
-  const SAFETY_CATEGORIES = [
-    ['HARM_CATEGORY_SEXUALLY_EXPLICIT', '性的な内容'],
-    ['HARM_CATEGORY_HARASSMENT', '嫌がらせ'],
-    ['HARM_CATEGORY_HATE_SPEECH', 'ヘイト'],
-    ['HARM_CATEGORY_DANGEROUS_CONTENT', '危険な内容'],
+  // ============ セーフティ設定(固定) ============
+  // 性的な内容・嫌がらせは「高のみブロック」(膝枕など甘い会話の誤検知を避ける)、
+  // ヘイト・危険な内容は最も厳しい「低以上をブロック」
+  const SAFETY_SETTINGS = [
+    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
+    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_LOW_AND_ABOVE' },
+    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_LOW_AND_ABOVE' },
   ];
-  const SAFETY_LEVELS = [
-    ['DEFAULT', 'デフォルト(未指定)'],
-    ['OFF', 'OFF'],
-    ['BLOCK_NONE', 'BLOCK_NONE'],
-    ['BLOCK_ONLY_HIGH', '高のみブロック'],
-    ['BLOCK_MEDIUM_AND_ABOVE', '中以上をブロック'],
-    ['BLOCK_LOW_AND_ABOVE', '低以上をブロック'],
-  ];
-  // 初期値: 性的な内容は最も厳しく、それ以外は中程度(膝枕のような甘い会話の誤検知を避けるため)
-  const DEFAULT_LEVELS = {
-    HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_LOW_AND_ABOVE',
-    HARM_CATEGORY_HARASSMENT: 'BLOCK_MEDIUM_AND_ABOVE',
-    HARM_CATEGORY_HATE_SPEECH: 'BLOCK_MEDIUM_AND_ABOVE',
-    HARM_CATEGORY_DANGEROUS_CONTENT: 'BLOCK_MEDIUM_AND_ABOVE',
-  };
-  let safetyConfig = { levels: {}, debug: false };
-  try {
-    const raw = localStorage.getItem(SAFETY_KEY);
-    if (raw) safetyConfig = Object.assign(safetyConfig, JSON.parse(raw));
-  } catch (e) {}
-
-  function buildSafetySettings() {
-    return SAFETY_CATEGORIES
-      .map(([category]) => ({ category, threshold: safetyConfig.levels[category] || DEFAULT_LEVELS[category] }))
-      .filter((s) => s.threshold !== 'DEFAULT');
-  }
-
-  const safetyEls = {
-    btn: document.getElementById('safety_btn'),
-    panel: document.getElementById('safety_panel'),
-    rows: document.getElementById('safety_rows'),
-    debug: document.getElementById('safety_debug'),
-    save: document.getElementById('safety_save'),
-    close: document.getElementById('safety_close'),
-  };
-
-  function renderSafetyRows() {
-    safetyEls.rows.innerHTML = '';
-    SAFETY_CATEGORIES.forEach(([category, label]) => {
-      const row = document.createElement('div');
-      row.className = 'safety_row';
-      const name = document.createElement('span');
-      name.textContent = label;
-      const select = document.createElement('select');
-      select.dataset.category = category;
-      SAFETY_LEVELS.forEach(([value, text]) => {
-        const opt = document.createElement('option');
-        opt.value = value;
-        opt.textContent = text;
-        if ((safetyConfig.levels[category] || DEFAULT_LEVELS[category]) === value) opt.selected = true;
-        select.appendChild(opt);
-      });
-      row.appendChild(name);
-      row.appendChild(select);
-      safetyEls.rows.appendChild(row);
-    });
-    safetyEls.debug.checked = !!safetyConfig.debug;
-  }
-
-  safetyEls.btn.addEventListener('click', () => {
-    renderSafetyRows();
-    safetyEls.panel.classList.add('active');
-  });
-  safetyEls.close.addEventListener('click', () => safetyEls.panel.classList.remove('active'));
-  safetyEls.save.addEventListener('click', () => {
-    const levels = {};
-    safetyEls.rows.querySelectorAll('select').forEach((sel) => { levels[sel.dataset.category] = sel.value; });
-    safetyConfig = { levels, debug: safetyEls.debug.checked };
-    localStorage.setItem(SAFETY_KEY, JSON.stringify(safetyConfig));
-    safetyEls.panel.classList.remove('active');
-  });
+  function buildSafetySettings() { return SAFETY_SETTINGS; }
 
   // ブロック理由の日本語表示
   const CATEGORY_REASON = {
@@ -722,29 +620,8 @@
     return err;
   }
 
-  // 直近の応答メタ情報(デバッグ表示用)
+  // 直近の応答メタ情報(ブロック理由の判定用)
   let lastMeta = null;
-  function showDebug() {
-    if (!safetyConfig.debug || !lastMeta) return;
-    const sent = buildSafetySettings().map((s) => `${s.category.replace('HARM_CATEGORY_', '')}=${s.threshold}`).join(', ') || '(未指定)';
-    const lines = [
-      '[debug] 送信した設定: ' + sent,
-      'finishReason: ' + (lastMeta.finishReason || '-'),
-      'blockReason: ' + (lastMeta.blockReason || '-'),
-    ];
-    const ratings = lastMeta.ratings || [];
-    if (ratings.length) {
-      lines.push('safetyRatings: ' + ratings.map((r) => `${r.category.replace('HARM_CATEGORY_', '')}:${r.probability}${r.blocked ? '(blocked)' : ''}`).join(', '));
-    }
-    const row = document.createElement('div');
-    row.className = 'chat_row assistant debug';
-    const bubble = document.createElement('div');
-    bubble.className = 'chat_bubble';
-    bubble.textContent = lines.join('\n');
-    row.appendChild(bubble);
-    els.chatScroll.appendChild(row);
-    els.chatScroll.scrollTop = els.chatScroll.scrollHeight;
-  }
 
   // ============ APIキー設定 ============
   els.settingsBtn.addEventListener('click', () => {
@@ -995,7 +872,6 @@
       conversationHistory.push({ role: 'user', parts });
       conversationHistory.push({ role: 'model', parts: [{ text: answer }] });
       addBubble('assistant', answer);
-      showDebug();
       setAvatarState('speaking');
       els.topStatus.textContent = '話しています...';
       speak(answer, () => {
@@ -1004,7 +880,6 @@
       });
     } catch (err) {
       addBubble('assistant', err.isSafety ? '🚫 ' + err.message : 'エラー: ' + err.message);
-      showDebug();
       setAvatarState('error');
       setTimeout(() => {
         setAvatarState('normal');
