@@ -425,7 +425,8 @@
   const PROFILE_KEY = 'yui_profile';
   const PROGRESS_KEY = 'yui_tutorial_progress';
   const API_KEY_STORAGE = 'yui_gemini_api_key';
-  const MODEL = "gemini-3.5-flash-lite";
+  const MODEL = "gemini-3.5-flash-lite";          // 通常の雑談用
+  const SEARCH_MODEL = "gemini-3.1-flash-lite";   // 検索(googleSearch)を使う質問だけ、このモデルに切り替え
   const VOICE_CONFIG_KEY = 'yui_voice_config';
 
   const els = {
@@ -785,7 +786,8 @@
 
   // ============ Gemini呼び出し ============
   async function callGemini(contents, { useSearch = false } = {}) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const model = useSearch ? SEARCH_MODEL : MODEL;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const requestBody = {
       contents,
       systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
