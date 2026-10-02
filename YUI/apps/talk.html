@@ -426,7 +426,9 @@
   const PROGRESS_KEY = 'yui_tutorial_progress';
   const API_KEY_STORAGE = 'yui_gemini_api_key';
   const MODEL = "gemini-3.5-flash-lite";          // 通常の雑談用
-  const SEARCH_MODEL = "gemini-3.1-flash-lite";   // 検索(googleSearch)を使う質問だけ、このモデルに切り替え
+  // 検索(googleSearch)を使う質問だけ、このモデルに切り替える。
+  // 無料枠では Gemini 3.x の検索グラウンディング枠が 0 のため、枠のある 2.5 系を使う
+  const SEARCH_MODEL = "gemini-2.5-flash-lite";
   const VOICE_CONFIG_KEY = 'yui_voice_config';
 
   const els = {
@@ -696,6 +698,7 @@
   let searchMode = localStorage.getItem(SEARCH_MODE_KEY);
   if (!SEARCH_MODES.includes(searchMode)) searchMode = 'auto';
   let lastUsedSearch = false;
+  let searchFellBack = false; // 検索枠エラーで検索なしに切り替えたか
 
   // 最新情報が必要そうな話題。雑談語(お腹すいた・励まして等)は含めない
   const SEARCH_TRIGGERS = new RegExp([
@@ -792,7 +795,10 @@
       contents,
       systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
       generationConfig: {
-        thinkingConfig: { thinkingLevel: "minimal" },
+        // 3.x は thinkingLevel、2.5系は thinkingBudget(0 = 思考オフ)で指定する
+        thinkingConfig: model.startsWith('gemini-2.5')
+          ? { thinkingBudget: 0 }
+          : { thinkingLevel: "minimal" },
         maxOutputTokens: 2048,
       },
     };
@@ -813,6 +819,12 @@
     });
     if (!res.ok) {
       const errBody = await res.json().catch(() => ({}));
+      console.warn('[Gemini API error]', res.status, model, JSON.stringify(errBody));
+      // 検索の枠が無い/使い切った場合は、検索なしの通常モデルで答え直す
+      if (res.status === 429 && useSearch) {
+        searchFellBack = true;
+        return callGemini(contents, { useSearch: false });
+      }
       throw new Error(errBody?.error?.message || `APIエラー (${res.status})`);
     }
     const data = await res.json();
@@ -971,10 +983,14 @@
     if (useSearch) els.topStatus.textContent = '🔍 検索して考え中...';
 
     try {
+      searchFellBack = false;
       const answer = await callGemini(requestContents, { useSearch });
       conversationHistory.push({ role: 'user', parts });
       conversationHistory.push({ role: 'model', parts: [{ text: answer }] });
-      addBubble('assistant', answer, null, useSearch);
+      addBubble('assistant', answer, null, lastUsedSearch);
+      if (searchFellBack) {
+        addBubble('assistant', '⚠️ 検索の利用枠エラー(429)のため、検索なしで答えました。');
+      }
       setAvatarState('speaking');
       els.topStatus.textContent = '話しています...';
       speak(answer, () => {
