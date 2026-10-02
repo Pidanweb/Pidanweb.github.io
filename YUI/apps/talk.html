@@ -392,7 +392,14 @@
     <hr style="border: 0; border-top: 1px solid var(--panel-edge); margin: 20px 0 15px;">
     <div class="layer_title" style="font-size: 16px;">音声の設定</div>
 
-    <label for="voice_select" style="margin-top: 8px;">使用する音声（端末依存）</label>
+    <label style="margin-top: 8px; display:flex; align-items:center; gap:8px; color: var(--ink);">
+      <input type="checkbox" id="vv_toggle" checked> VOICEVOX(九州そら)で読み上げる
+    </label>
+    <label for="vv_speed_slider" style="margin-top: 6px;">VOICEVOX 話速: <span id="vv_speed_val">1.50</span></label>
+    <input type="range" id="vv_speed_slider" min="0.8" max="2.0" step="0.05" value="1.5" style="width: 100%; margin-top: 4px;">
+    <div style="font-size: 11.5px; color: var(--ink-dim); margin-top: 4px;">音声クレジット: VOICEVOX:九州そら</div>
+
+    <label for="voice_select" style="margin-top: 14px;">ブラウザ音声(VOICEVOXがOFF/失敗時に使用・端末依存)</label>
     <select id="voice_select" style="width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--panel-edge); background: var(--panel); color: var(--ink); font-size: 13.5px; margin-top: 4px; font-family: inherit;">
       <option value="">（読み込み中...）</option>
     </select>
@@ -456,10 +463,13 @@
     pitchVal: document.getElementById('pitch_val'),
     rateVal: document.getElementById('rate_val'),
     testVoiceBtn: document.getElementById('test_voice_btn'),
+    vvToggle: document.getElementById('vv_toggle'),
+    vvSpeedSlider: document.getElementById('vv_speed_slider'),
+    vvSpeedVal: document.getElementById('vv_speed_val'),
   };
 
   // ============ 音声設定 ============
-  const DEFAULT_VOICE = { voiceURI: '', pitch: 1.40, rate: 1.15 };
+  const DEFAULT_VOICE = { voiceURI: '', pitch: 1.40, rate: 1.15, useVoicevox: true, vvSpeed: 1.5 };
   function loadVoiceConfig() {
     try {
       const raw = localStorage.getItem(VOICE_CONFIG_KEY);
@@ -505,6 +515,10 @@
   els.rateSlider.value = voiceConfig.rate;
   els.pitchVal.textContent = parseFloat(voiceConfig.pitch).toFixed(2);
   els.rateVal.textContent = parseFloat(voiceConfig.rate).toFixed(2);
+  els.vvToggle.checked = voiceConfig.useVoicevox !== false;
+  els.vvSpeedSlider.value = voiceConfig.vvSpeed;
+  els.vvSpeedVal.textContent = parseFloat(voiceConfig.vvSpeed).toFixed(2);
+  els.vvSpeedSlider.addEventListener('input', (e) => { els.vvSpeedVal.textContent = parseFloat(e.target.value).toFixed(2); });
   els.pitchSlider.addEventListener('input', (e) => { els.pitchVal.textContent = parseFloat(e.target.value).toFixed(2); });
   els.rateSlider.addEventListener('input', (e) => { els.rateVal.textContent = parseFloat(e.target.value).toFixed(2); });
 
@@ -513,6 +527,8 @@
       voiceURI: els.voiceSelect.value,
       pitch: parseFloat(els.pitchSlider.value),
       rate: parseFloat(els.rateSlider.value),
+      useVoicevox: els.vvToggle.checked,
+      vvSpeed: parseFloat(els.vvSpeedSlider.value),
     });
   });
 
@@ -679,6 +695,8 @@
       voiceURI: els.voiceSelect.value,
       pitch: parseFloat(els.pitchSlider.value),
       rate: parseFloat(els.rateSlider.value),
+      useVoicevox: els.vvToggle.checked,
+      vvSpeed: parseFloat(els.vvSpeedSlider.value),
     };
     localStorage.setItem(VOICE_CONFIG_KEY, JSON.stringify(voiceConfig));
     els.keyPanel.classList.remove('active');
@@ -876,10 +894,87 @@
     els.micBtn.className = state === 'normal' ? '' : `state-${state}`;
   }
 
-  function speak(text, onEnd, customConfig = null) {
+  // ============ VOICEVOX 読み上げ (WEB版VOICEVOX API 低速版 / apiKey不要) ============
+  // ※ v3 API が受け付けるのは text と speaker のみ。話速は再生側の playbackRate で調整する
+  const VOICEVOX_CONFIG = {
+    speaker: 16,   // 九州そら (ノーマル)
+    api: 'https://api.tts.quest/v3/voicevox/synthesis',
+  };
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+
+  // 使い回す1つのAudio要素(iOS等では、ユーザー操作で一度"解禁"した要素でないと非同期後に再生できない)
+  const ttsAudio = new Audio();
+  let speakToken = 0;
+  function unlockAudio() {
+    ttsAudio.src = SILENT_WAV;
+    ttsAudio.play().then(() => ttsAudio.pause()).catch(() => {});
+  }
+  document.addEventListener('pointerdown', unlockAudio, { once: true });
+
+  function stopSpeaking() {
+    ttsAudio.pause();
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  }
+
+  // 音声合成リクエスト(429のときは retryAfter 秒待って再送)
+  async function requestVoicevox(text, token) {
+    const params = new URLSearchParams({ text, speaker: String(VOICEVOX_CONFIG.speaker) });
+    for (let i = 0; i < 3; i++) {
+      const res = await fetch(`${VOICEVOX_CONFIG.api}?${params}`);
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 429) {
+        await sleep(((data.retryAfter || 2) + 0.3) * 1000);
+        if (token !== speakToken) return null;
+        continue;
+      }
+      if (!res.ok || !data.success) throw new Error(data.errorMessage || `VOICEVOX APIエラー (${res.status})`);
+      return data;
+    }
+    throw new Error('VOICEVOX: リクエスト制限により合成できませんでした');
+  }
+
+  // 合成完了待ち(mp3は完成するまで404のため)
+  async function waitVoicevoxReady(statusUrl, token, timeoutMs = 30000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      if (token !== speakToken) return false;
+      const res = await fetch(statusUrl, { cache: 'no-store' });
+      const st = await res.json().catch(() => ({}));
+      if (st.isAudioError) throw new Error('VOICEVOX: 音声合成に失敗しました');
+      if (st.isAudioReady) return true;
+      await sleep(400);
+    }
+    throw new Error('VOICEVOX: 合成がタイムアウトしました');
+  }
+
+  async function speakVoicevox(text, cfg, token, onEnd) {
+    const data = await requestVoicevox(text, token);
+    if (!data || token !== speakToken) return;
+    const ready = await waitVoicevoxReady(data.audioStatusUrl, token);
+    if (!ready || token !== speakToken) return;
+
+    const speed = cfg.vvSpeed ?? 1.5;
+    let finished = false;
+    const finish = () => { if (finished) return; finished = true; if (onEnd) onEnd(); };
+    ttsAudio.onended = finish;
+    ttsAudio.onerror = () => {
+      console.warn('[VOICEVOX Audio error]');
+      if (finished) return;
+      finished = true;
+      speakBrowser(text, onEnd, cfg); // 再生できなければブラウザ音声に切替
+    };
+    ttsAudio.defaultPlaybackRate = speed;
+    ttsAudio.src = data.mp3DownloadUrl;
+    ttsAudio.playbackRate = speed;
+    await ttsAudio.play();
+  }
+
+  // ブラウザ内蔵の音声(従来方式。VOICEVOXがOFFのとき/失敗時のフォールバック)
+  function speakBrowser(text, onEnd, cfg) {
     if (!('speechSynthesis' in window)) { if (onEnd) onEnd(); return; }
     window.speechSynthesis.cancel();
-    const cfg = customConfig || voiceConfig;
     const utterance = new SpeechSynthesisUtterance(text);
     const voices = window.speechSynthesis.getVoices();
     const selectedVoice = voices.find((v) => (v.voiceURI || v.name) === cfg.voiceURI);
@@ -889,6 +984,18 @@
     utterance.rate = cfg.rate ?? 1.15;
     if (onEnd) { utterance.onend = onEnd; utterance.onerror = onEnd; }
     window.speechSynthesis.speak(utterance);
+  }
+
+  function speak(text, onEnd, customConfig = null) {
+    const cfg = customConfig || voiceConfig;
+    const token = ++speakToken;
+    stopSpeaking();
+    if (!text) { if (onEnd) onEnd(); return; }
+    if (cfg.useVoicevox === false) { speakBrowser(text, onEnd, cfg); return; }
+    speakVoicevox(text, cfg, token, onEnd).catch((err) => {
+      console.warn('[VOICEVOX]', err);
+      if (token === speakToken) speakBrowser(text, onEnd, cfg);
+    });
   }
 
   // ============ 画像添付 ============
