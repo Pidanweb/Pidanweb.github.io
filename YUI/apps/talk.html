@@ -214,6 +214,43 @@
     font-size: 17px;
   }
 
+  /* ---------- 検索モード切替ボタン ---------- */
+  #search_btn {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    background: rgba(0,0,0,0.055);
+    color: var(--ink);
+    font-size: 17px;
+    position: relative;
+  }
+  #search_btn::after {
+    content: attr(data-label);
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 8px;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+  }
+  #search_btn.mode-on  { background: var(--scan); border-color: var(--scan); color: #06231d; }
+  #search_btn.mode-off { opacity: 0.45; }
+  #search_btn.mode-off::before {
+    content: "";
+    position: absolute;
+    left: 8px; right: 8px; top: 50%;
+    height: 2px;
+    background: currentColor;
+    transform: rotate(-45deg);
+  }
+  .search_tag { font-size: 11px; opacity: 0.65; margin-top: 4px; }
+
   /* ---------- 画像プレビュー(送信前) ---------- */
 
   #image_preview_bar {
@@ -338,6 +375,7 @@
   <div id="input_bar">
     <button id="image_btn" aria-label="画像を送る">🖼️</button>
     <input id="image_input" type="file" accept="image/*" style="display:none">
+    <button id="search_btn" aria-label="Google検索モード切替" data-label="自動">🔍</button>
     <button id="mic_btn" aria-label="音声で質問">🎤</button>
     <input id="text_input" type="text" placeholder="メッセージを入力...">
     <button id="send_btn" aria-label="送信">➤</button>
@@ -403,6 +441,7 @@
     keyClose: document.getElementById('key_close'),
     topAvatarImg: document.getElementById('top_avatar_img'),
     topStatus: document.getElementById('top_status'),
+    searchBtn: document.getElementById('search_btn'),
     imageBtn: document.getElementById('image_btn'),
     imageInput: document.getElementById('image_input'),
     imagePreviewBar: document.getElementById('image_preview_bar'),
@@ -642,8 +681,55 @@
     els.keyPanel.classList.remove('active');
   });
 
+  // ============ 検索モード(自動 / ON / OFF) ============
+  // auto: 天気・ニュースなど「最新情報が要りそうな質問」だけ検索を付ける
+  // on  : 毎回検索を付ける   off: 一切付けない
+  const SEARCH_MODE_KEY = 'yui_search_mode';
+  const SEARCH_MODES = ['auto', 'on', 'off'];
+  const SEARCH_LABEL = { auto: '自動', on: 'ON', off: 'OFF' };
+  const SEARCH_HINT = {
+    auto: '検索: 自動(天気・ニュースなどの時だけ)',
+    on: '検索: 常にON',
+    off: '検索: OFF(雑談のみ)',
+  };
+  let searchMode = localStorage.getItem(SEARCH_MODE_KEY);
+  if (!SEARCH_MODES.includes(searchMode)) searchMode = 'auto';
+  let lastUsedSearch = false;
+
+  // 最新情報が必要そうな話題。雑談語(お腹すいた・励まして等)は含めない
+  const SEARCH_TRIGGERS = new RegExp([
+    '天気|天候|気温|降水確率|予報|台風|警報|注意報|花粉|紫外線',
+    'ニュース|速報|最新の|現在の|今週の(?:予定|イベント|試合)',
+    '株価|為替|円相場|レート|日経平均|ビットコイン|相場',
+    '試合|スコア|結果|優勝|順位|選挙|当選',
+    '営業時間|開店|閉店|混雑|運行|遅延|運休|渋滞',
+    '発売日|発売|リリース|新作|公開日|配信日|アップデート',
+    '検索して|調べて|ググ|ネットで|ウェブで',
+  ].join('|'));
+
+  function shouldUseSearch(text) {
+    if (searchMode === 'on') return true;
+    if (searchMode === 'off') return false;
+    return !!text && SEARCH_TRIGGERS.test(text);
+  }
+
+  function renderSearchBtn() {
+    els.searchBtn.className = 'mode-' + searchMode;
+    els.searchBtn.dataset.label = SEARCH_LABEL[searchMode];
+    els.searchBtn.title = SEARCH_HINT[searchMode];
+  }
+  renderSearchBtn();
+
+  els.searchBtn.addEventListener('click', () => {
+    searchMode = SEARCH_MODES[(SEARCH_MODES.indexOf(searchMode) + 1) % SEARCH_MODES.length];
+    localStorage.setItem(SEARCH_MODE_KEY, searchMode);
+    renderSearchBtn();
+    els.topStatus.textContent = SEARCH_HINT[searchMode];
+    setTimeout(() => { els.topStatus.textContent = '短押しで質問 / テキスト入力もできます'; }, 1800);
+  });
+
   // ============ チャット表示 ============
-  function addBubble(role, text, imageDataUrl) {
+  function addBubble(role, text, imageDataUrl, searched) {
     const row = document.createElement('div');
     row.className = `chat_row ${role}`;
 
@@ -669,6 +755,12 @@
       textEl.textContent = text;
       bubble.appendChild(textEl);
     }
+    if (searched) {
+      const tag = document.createElement('div');
+      tag.className = 'search_tag';
+      tag.textContent = '🔍 Google検索を使用';
+      bubble.appendChild(tag);
+    }
 
     if (role === 'assistant') row.appendChild(avatar);
     row.appendChild(bubble);
@@ -692,7 +784,7 @@
   }
 
   // ============ Gemini呼び出し ============
-  async function callGemini(contents) {
+  async function callGemini(contents, { useSearch = false } = {}) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const requestBody = {
       contents,
@@ -702,6 +794,13 @@
         maxOutputTokens: 2048,
       },
     };
+    if (useSearch) {
+      requestBody.tools = [{ googleSearch: {} }];
+      // 検索結果を読み上げ向けに短くまとめさせる
+      requestBody.systemInstruction = { parts: [{ text: SYSTEM_PROMPT +
+        "\n検索で得た情報は、URLや出典名を読み上げず、要点だけを口調を保ったまま2〜3文で伝えてください。" }] };
+    }
+    lastUsedSearch = useSearch;
     const safetySettings = buildSafetySettings();
     if (safetySettings.length) requestBody.safetySettings = safetySettings;
     lastMeta = null;
@@ -724,7 +823,7 @@
     if (data.promptFeedback?.blockReason) {
       throw safetyError(safetyBlockMessage(lastMeta, '入力') || `入力がブロックされました(${data.promptFeedback.blockReason})`);
     }
-    const text = candidate?.content?.parts?.[0]?.text ?? "";
+    const text = (candidate?.content?.parts || []).map(p => p.text || '').join('').trim();
     if (!text) {
       const blockMsg = safetyBlockMessage(lastMeta, '応答');
       if (blockMsg) throw safetyError(blockMsg);
@@ -866,12 +965,14 @@
     els.topStatus.textContent = '考え中...';
 
     const requestContents = [...trimmedHistory(), { role: 'user', parts }];
+    const useSearch = shouldUseSearch(text);
+    if (useSearch) els.topStatus.textContent = '🔍 検索して考え中...';
 
     try {
-      const answer = await callGemini(requestContents);
+      const answer = await callGemini(requestContents, { useSearch });
       conversationHistory.push({ role: 'user', parts });
       conversationHistory.push({ role: 'model', parts: [{ text: answer }] });
-      addBubble('assistant', answer);
+      addBubble('assistant', answer, null, useSearch);
       setAvatarState('speaking');
       els.topStatus.textContent = '話しています...';
       speak(answer, () => {
