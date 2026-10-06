@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>YUI Book Scanner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f3e9;
+    --panel: #ffffff;
+    --panel-edge: #e6ddc8;
+    --ink: #2c2f36;
+    --ink-dim: #7c8288;
+    --scan: #2fae90;
+    --scan-soft: rgba(47, 174, 144, 0.14);
+    --warn: #d98a33;
+    --danger: #e2554a;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #app {
+    position: relative;
+    height: 100dvh;
+    width: 100vw;
+    overflow: hidden;
+  }
+
+  /* ---------- カメラビューファインダー ---------- */
+
+  #camera_layer {
+    position: absolute;
+    inset: 0;
+    background: #000;
+  }
+
+  #camera_feed {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  #captured_preview {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: none;
+    filter: saturate(0.85) brightness(0.75);
+  }
+
+  /* スキャン枠 ---------- */
+  #scan_frame {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .corner {
+    position: absolute;
+    width: 34px;
+    height: 34px;
+    border: 3px solid var(--scan);
+    opacity: 0.85;
+    transition: opacity 0.3s ease, border-color 0.3s ease;
+  }
+  .corner.tl { top: 14%; left: 8%; border-right: none; border-bottom: none; border-radius: 8px 0 0 0; }
+  .corner.tr { top: 14%; right: 8%; border-left: none; border-bottom: none; border-radius: 0 8px 0 0; }
+  .corner.bl { bottom: 26%; left: 8%; border-right: none; border-top: none; border-radius: 0 0 0 8px; }
+  .corner.br { bottom: 26%; right: 8%; border-left: none; border-top: none; border-radius: 0 0 8px 0; }
+
+  #scan_line {
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--scan), transparent);
+    top: 14%;
+    opacity: 0;
+  }
+
+  #scan_frame.scanning .scan-line-anim {
+    animation: scanmove 1.6s ease-in-out infinite;
+  }
+
+  @keyframes scanmove {
+    0%   { top: 14%; opacity: 0; }
+    10%  { opacity: 1; }
+    90%  { opacity: 1; }
+    100% { top: 72%; opacity: 0; }
+  }
+
+  #scan_frame.scanning .corner {
+    border-color: #fff;
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+
+  #hint_text {
+    position: absolute;
+    top: 8%;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: var(--ink-dim);
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    padding: 0 20px;
+  }
+
+  /* ---------- 上部バー ---------- */
+
+  #top_bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: max(16px, env(safe-area-inset-top)) 20px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.55), transparent);
+    z-index: 5;
+  }
+
+  #top_bar_left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  #back_btn {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    font-size: 15px;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  #brand {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    color: var(--scan);
+  }
+
+  #top_bar_actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #reset_btn {
+    background: rgba(0,0,0,0.055);
+    border: 1px solid rgba(0,0,0,0.12);
+    color: var(--ink);
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  /* ---------- ズームコントロール ---------- */
+
+  #zoom_control {
+    position: absolute;
+    right: 18px;
+    bottom: 130px;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    z-index: 5;
+  }
+
+  #zoom_control.visible { display: flex; }
+
+  #zoom_slider {
+    writing-mode: vertical-lr;
+    direction: rtl;
+    width: 32px;
+    height: 130px;
+    accent-color: var(--scan);
+  }
+
+  #zoom_label {
+    font-size: 11px;
+    color: var(--ink-dim);
+    background: rgba(0,0,0,0.4);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+
+  /* ---------- 下部コントロール ---------- */
+
+  #bottom_bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 0 28px max(30px, env(safe-area-inset-bottom));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 5;
+  }
+
+  #bottom_bar_spacer {
+    width: 46px;
+  }
+
+  #gallery_btn {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0,0,0,0.35);
+    color: #fff;
+    font-size: 19px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #capture_btn {
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    background: transparent;
+    border: 4px solid var(--ink);
+    position: relative;
+  }
+
+  #capture_btn::after {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border-radius: 50%;
+    background: var(--ink);
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+
+  #capture_btn:active::after {
+    transform: scale(0.85);
+    background: var(--scan);
+  }
+
+  #capture_btn:disabled {
+    opacity: 0.35;
+  }
+
+  /* ---------- 結果パネル ---------- */
+
+  #result_panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 68%;
+    background: var(--panel);
+    border-top: 1px solid var(--panel-edge);
+    border-radius: 22px 22px 0 0;
+    padding: 20px 22px max(24px, env(safe-area-inset-bottom));
+    transform: translateY(100%);
+    transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    z-index: 10;
+    overflow-y: auto;
+  }
+
+  #result_panel.open {
+    transform: translateY(0);
+  }
+
+  #panel_grip {
+    width: 40px;
+    height: 4px;
+    background: var(--panel-edge);
+    border-radius: 4px;
+    margin: 0 auto 16px;
+  }
+
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--scan);
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  #result_title {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 700;
+    font-size: 19px;
+    line-height: 1.5;
+    margin: 0 0 4px;
+    white-space: pre-line;
+  }
+
+  #result_narration {
+    color: var(--ink-dim);
+    font-size: 14.5px;
+    line-height: 1.9;
+    margin: 16px 0 20px;
+  }
+
+  .panel_controls {
+    display: flex;
+    gap: 10px;
+  }
+
+  .panel_controls button {
+    flex: 1;
+    padding: 13px 0;
+    border-radius: 14px;
+    border: none;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  #replay_btn {
+    background: var(--scan-soft);
+    color: var(--scan);
+  }
+
+  #rescan_btn {
+    background: rgba(0,0,0,0.055);
+    color: var(--ink);
+  }
+
+  /* ---------- 会話(チャット)エリア ---------- */
+
+  #chat_log {
+    margin-top: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .chat_msg {
+    max-width: 86%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    font-size: 13.5px;
+    line-height: 1.7;
+  }
+
+  .chat_msg.user {
+    align-self: flex-end;
+    background: var(--scan-soft);
+    color: var(--ink);
+    border-bottom-right-radius: 4px;
+  }
+
+  .chat_msg.assistant {
+    align-self: flex-start;
+    background: rgba(0,0,0,0.045);
+    color: var(--ink-dim);
+    border-bottom-left-radius: 4px;
+  }
+
+  #chat_controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--panel-edge);
+  }
+
+  #character_avatar {
+    flex-shrink: 0;
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    border: none;
+    background-color: rgba(0,0,0,0.055);
+    background-size: cover;
+    background-position: center;
+    overflow: hidden;
+    position: relative;
+    transition: background 0.2s ease, transform 0.15s ease;
+    padding: 0;
+  }
+
+  #character_face {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top center;
+    display: block;
+  }
+
+  #character_avatar:active {
+    transform: scale(0.94);
+  }
+
+  #character_avatar.state-listening {
+    background: var(--scan);
+    animation: micpulse 1s ease-in-out infinite;
+  }
+
+  #character_avatar.state-thinking {
+    background: var(--warn);
+  }
+
+  #character_avatar.state-speaking {
+    background: var(--scan-soft);
+  }
+
+  #character_avatar.state-error {
+    background: var(--danger);
+  }
+
+  @keyframes micpulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(47,174,144,0.45); }
+    50% { box-shadow: 0 0 0 12px rgba(47,174,144,0); }
+  }
+
+  #chat_status {
+    font-size: 13px;
+    color: var(--ink-dim);
+  }
+
+  #talk_end_btn {
+    margin-left: auto;
+    flex-shrink: 0;
+    display: none;
+    align-items: center;
+    gap: 6px;
+    background: var(--danger);
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 600;
+  }
+
+  #talk_end_btn.visible {
+    display: flex;
+  }
+
+  /* ---------- ステータス表示 ---------- */
+
+  #status_layer {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 14px;
+    background: rgba(10,13,18,0.6);
+    z-index: 8;
+  }
+
+  #status_layer.active { display: flex; }
+
+  .spinner {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 3px solid rgba(47,174,144,0.22);
+    border-top-color: var(--scan);
+    animation: spin 0.9s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #status_text {
+    color: var(--ink-dim);
+    font-size: 13px;
+  }
+
+  /* ---------- 起動前オーバーレイ / エラー ---------- */
+
+  #error_layer {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 40px;
+    text-align: center;
+    background: var(--bg);
+    z-index: 20;
+  }
+
+  .layer_title {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 22px;
+  }
+
+  .layer_desc {
+    color: var(--ink-dim);
+    font-size: 14px;
+    line-height: 1.8;
+  }
+
+  .primary_btn {
+    background: rgba(0,0,0,0.07);
+    color: var(--ink);
+    border: none;
+    padding: 14px 30px;
+    border-radius: 14px;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 15px;
+  }
+
+  /* ---------- 設定ボタン(右上) ---------- */
+
+  #settings_btn {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    font-size: 15px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ---------- 声のクレジット(結果パネル内) ---------- */
+
+  #result_credit {
+    display: none;
+    font-size: 11.5px;
+    color: var(--ink-dim);
+    margin: -12px 0 18px;
+  }
+
+  /* ---------- 設定パネル ---------- */
+
+  #settings_panel {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 30;
+    display: none;
+    flex-direction: column;
+    padding: max(24px, env(safe-area-inset-top)) 24px 24px;
+    overflow-y: auto;
+  }
+  #settings_panel.active { display: flex; }
+  #settings_panel > * { flex-shrink: 0; }
+
+  #settings_panel label {
+    font-size: 13px;
+    color: var(--ink-dim);
+    line-height: 1.7;
+    margin-top: 10px;
+    display: block;
+  }
+
+  #settings_panel .row {
+    display: flex;
+    gap: 10px;
+  }
+  #settings_panel .row button {
+    flex: 1;
+    padding: 13px 0;
+    border-radius: 14px;
+    border: none;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  #settings_save { background: var(--scan); color: #06231d; }
+  #settings_close { background: rgba(0,0,0,0.055); color: var(--ink); }
+
+  #vv_chars { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x proximity; padding: 6px 2px 8px; margin-top: 6px; -webkit-overflow-scrolling: touch; }
+  .vv_char { flex: 0 0 auto; scroll-snap-align: center; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--panel-edge); background: var(--panel); color: var(--ink); font-size: 13.5px; font-family: inherit; cursor: pointer; }
+  .vv_char.sel { border-color: #5A9E1E; background: rgba(90,158,30,0.16); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <div id="camera_layer">
+    <video id="camera_feed" autoplay playsinline muted></video>
+    <img id="captured_preview" alt="撮影した画像">
+  </div>
+
+  <div id="scan_frame">
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+    <div id="scan_line" class="scan-line-anim"></div>
+  </div>
+
+  <div id="hint_text">対象を枠の中に収めてください</div>
+
+  <div id="zoom_control">
+    <input type="range" id="zoom_slider" min="1" max="1" step="0.1" value="1">
+    <div id="zoom_label">1.0x</div>
+  </div>
+
+  <div id="top_bar">
+    <div id="top_bar_left">
+      <a id="back_btn" href="../index_tyuto.html">←</a>
+      <div id="brand">YUI SCANNER</div>
+    </div>
+    <div id="top_bar_actions">
+      <button id="reset_btn" title="最初から">🔄</button>
+      <button id="settings_btn" aria-label="設定" title="設定">⚙️</button>
+    </div>
+  </div>
+
+  <div id="bottom_bar">
+    <button id="gallery_btn" aria-label="アルバムから選ぶ">🖼️</button>
+    <button id="capture_btn" aria-label="撮影"></button>
+    <div id="bottom_bar_spacer"></div>
+    <input type="file" id="gallery_input" accept="image/*" style="display:none">
+  </div>
+
+  <div id="status_layer">
+    <div class="spinner"></div>
+    <div id="status_text">解析中...</div>
+  </div>
+
+  <div id="result_panel">
+    <div id="panel_grip"></div>
+    <div class="eyebrow">判定結果</div>
+    <div id="result_title">-</div>
+    <div id="result_narration"></div>
+    <div id="result_credit"></div>
+    <div class="panel_controls">
+      <button id="replay_btn">🔊 もう一度読み上げる</button>
+      <button id="rescan_btn">再スキャン</button>
+    </div>
+
+    <div id="chat_log"></div>
+
+    <div id="chat_controls">
+      <button id="character_avatar" aria-label="長押しでお話しモード">
+        <img id="character_face" src="chars/char_normal.png" alt="YUI">
+      </button>
+      <div id="chat_status">短押しで1問だけ / 長押しで会話モード</div>
+      <button id="talk_end_btn">⏹ 終了</button>
+    </div>
+  </div>
+
+  <div id="settings_panel">
+    <div class="layer_title" style="font-size: 20px;">音声の設定</div>
+
+    <label style="margin-top: 12px; display:flex; align-items:center; gap:8px; color: var(--ink);">
+      <input type="checkbox" id="vv_toggle" checked> VOICEVOXで読み上げる
+    </label>
+    <label for="vv_speed_slider" style="margin-top: 6px;">VOICEVOX 話速: <span id="vv_speed_val">1.50</span></label>
+    <input type="range" id="vv_speed_slider" min="0.8" max="2.0" step="0.05" value="1.5" style="width: 100%; margin-top: 4px;">
+    <label style="margin-top: 10px;">声のキャラクター(横にスクロール / タップで選択)</label>
+    <div id="vv_chars"></div>
+    <div style="font-size: 11.5px; color: var(--ink-dim); margin-top: 2px;">音声クレジット: <span id="vv_credit_settings"></span></div>
+    <div style="font-size: 11px; color: var(--ink-dim); margin-top: 2px;">※ すべて東北ずん子・ずんだもんプロジェクトの音源利用規約(クレジット表記が必要)の対象キャラです</div>
+
+    <label for="voice_select" style="margin-top: 14px;">ブラウザ音声(VOICEVOXがOFF/失敗時に使用・端末依存)</label>
+    <select id="voice_select" style="width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--panel-edge); background: var(--panel); color: var(--ink); font-size: 13.5px; margin-top: 4px; font-family: inherit;">
+      <option value="">(読み込み中...)</option>
+    </select>
+
+    <div style="display: flex; gap: 12px; margin-top: 12px;">
+      <div style="flex: 1;">
+        <label for="pitch_slider" style="margin-top: 0;">ピッチ (高さ): <span id="pitch_val">1.40</span></label>
+        <input type="range" id="pitch_slider" min="0.5" max="2.0" step="0.05" value="1.40" style="width: 100%; margin-top: 4px;">
+      </div>
+      <div style="flex: 1;">
+        <label for="rate_slider" style="margin-top: 0;">速度 (スピード): <span id="rate_val">1.15</span></label>
+        <input type="range" id="rate_slider" min="0.5" max="2.0" step="0.05" value="1.15" style="width: 100%; margin-top: 4px;">
+      </div>
+    </div>
+
+    <button id="test_voice_btn" type="button" style="margin-top: 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--panel-edge); background: rgba(0,0,0,0.05); color: var(--ink); font-size: 13px; cursor: pointer; font-family: inherit; font-weight: 600;">
+      🔊 現在の設定でテスト再生
+    </button>
+
+    <div class="row" style="margin-top: 24px;">
+      <button id="settings_close">閉じる</button>
+      <button id="settings_save">保存する</button>
+    </div>
+  </div>
+
+  <div id="error_layer">
+    <div class="layer_title">うまく起動できませんでした</div>
+    <div class="layer_desc" id="error_desc"></div>
+    <button id="error_retry_btn" class="primary_btn">もう一度試す</button>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  // ============ 1. 戻るボタンの初期設定と動的切替 ============
+  const PROGRESS_KEY = 'yui_tutorial_progress';
+  const els = {
+    backBtn: document.getElementById('back_btn'),
+    errorLayer: document.getElementById('error_layer'),
+    errorDesc: document.getElementById('error_desc'),
+    errorRetryBtn: document.getElementById('error_retry_btn'),
+    cameraFeed: document.getElementById('camera_feed'),
+    capturedPreview: document.getElementById('captured_preview'),
+    scanFrame: document.getElementById('scan_frame'),
+    hintText: document.getElementById('hint_text'),
+    captureBtn: document.getElementById('capture_btn'),
+    galleryBtn: document.getElementById('gallery_btn'),
+    galleryInput: document.getElementById('gallery_input'),
+    statusLayer: document.getElementById('status_layer'),
+    statusText: document.getElementById('status_text'),
+    resultPanel: document.getElementById('result_panel'),
+    resultTitle: document.getElementById('result_title'),
+    resultNarration: document.getElementById('result_narration'),
+    replayBtn: document.getElementById('replay_btn'),
+    rescanBtn: document.getElementById('rescan_btn'),
+    resetBtn: document.getElementById('reset_btn'),
+    zoomControl: document.getElementById('zoom_control'),
+    zoomSlider: document.getElementById('zoom_slider'),
+    zoomLabel: document.getElementById('zoom_label'),
+    chatLog: document.getElementById('chat_log'),
+    characterAvatar: document.getElementById('character_avatar'),
+    characterFace: document.getElementById('character_face'),
+    chatStatus: document.getElementById('chat_status'),
+    talkEndBtn: document.getElementById('talk_end_btn'),
+    resultCredit: document.getElementById('result_credit'),
+    settingsBtn: document.getElementById('settings_btn'),
+    settingsPanel: document.getElementById('settings_panel'),
+    settingsClose: document.getElementById('settings_close'),
+    settingsSave: document.getElementById('settings_save'),
+    voiceSelect: document.getElementById('voice_select'),
+    pitchSlider: document.getElementById('pitch_slider'),
+    rateSlider: document.getElementById('rate_slider'),
+    pitchVal: document.getElementById('pitch_val'),
+    rateVal: document.getElementById('rate_val'),
+    testVoiceBtn: document.getElementById('test_voice_btn'),
+    vvToggle: document.getElementById('vv_toggle'),
+    vvSpeedSlider: document.getElementById('vv_speed_slider'),
+    vvSpeedVal: document.getElementById('vv_speed_val'),
+    vvChars: document.getElementById('vv_chars'),
+    vvCreditSettings: document.getElementById('vv_credit_settings'),
+  };
+
+  function setupBackButton() {
+    try {
+      const raw = localStorage.getItem(PROGRESS_KEY);
+      const prog = raw ? JSON.parse(raw) : null;
+      // チュートリアルが完了済み(completed: true)のときのみ index.html へ返し、それ以外は index_tyuto.html へ返す
+      if (prog && prog.completed) {
+        els.backBtn.href = '../index.html';
+      } else {
+        els.backBtn.href = '../index_tyuto.html';
+      }
+    } catch (e) {
+      els.backBtn.href = '../index_tyuto.html';
+    }
+  }
+  setupBackButton();
+
+  // ============ 状態 ============
+  const getApiKey = () => localStorage.getItem('yui_gemini_api_key') || "";
+  let stream = null;
+  let currentTrack = null;
+  let capturedBase64 = null;
+  const MODEL = "gemini-3.6-flash";
+
+  let lastNarration = "";
+  let conversationHistory = []; // Gemini に毎回送る会話履歴 [{role, parts}]
+  let talkModeActive = false;
+  let talkBusy = false; // Gemini応答待ち・読み上げ中はtrue
+  let quickPending = false; // 短押しの「1問だけ」モードで聞き取り中かどうか
+
+  // ---- キャラクターの表情差分 ----
+  const CHARACTER_FACES = {
+    normal:    'chars/char_normal.png',
+    listening: 'chars/char_thinking.png',
+    thinking:  'chars/char_thinking.png',
+    speaking:  'chars/char_normal.png',
+    error:     'chars/char_error.png',
+  };
+
+  const CHAT_STATUS_TEXT = {
+    normal:    '短押しで1問だけ / 長押しで会話モード',
+    listening: '聞いています...',
+    thinking:  '考え中...',
+    speaking:  '話しています...',
+    error:     'うまく聞き取れませんでした',
+  };
+
+  function setCharacterState(state) {
+    els.characterFace.src = CHARACTER_FACES[state] || CHARACTER_FACES.normal;
+    els.chatStatus.textContent = CHAT_STATUS_TEXT[state] || CHAT_STATUS_TEXT.normal;
+    els.characterAvatar.className = state === 'normal' ? '' : `state-${state}`;
+  }
+
+  // ---- 時間帯に応じた背景写真をアバターに設定 ----
+  function timeOfDayBg() {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 11)  return 'chars/bg_morning.jpg';
+    if (hour >= 17 && hour < 20) return 'chars/bg_evening.jpg';
+    if (hour >= 20 || hour < 5)  return 'chars/bg_evening.jpg';
+    return 'chars/bg_day.jpg';
+  }
+  els.characterAvatar.style.backgroundImage = `url('${timeOfDayBg()}')`;
+
+  // ============ 音声設定(talk.html と同じ localStorage キーなので設定は共通) ============
+  const VOICE_CONFIG_KEY = 'yui_voice_config';
+  // 東北ずん子・ずんだもんプロジェクト音源利用規約(共通)の対象キャラ / speaker = ノーマルのID
+  const VV_CHARS = [
+    { name: '九州そら', speaker: 16 }, { name: 'ずんだもん', speaker: 3 }, { name: '四国めたん', speaker: 2 },
+    { name: '東北ずん子', speaker: 107 }, { name: '東北きりたん', speaker: 108 }, { name: '東北イタコ', speaker: 109 },
+    { name: '中国うさぎ', speaker: 61 }, { name: '中部つるぎ', speaker: 94 }, { name: 'あんこもん', speaker: 113 },
+  ];
+  const vvCharOf = (sp) => VV_CHARS.find((c) => c.speaker === sp) || VV_CHARS[0];
+  const DEFAULT_VOICE = { voiceURI: '', pitch: 1.40, rate: 1.15, useVoicevox: true, vvSpeed: 1.5, vvSpeaker: 16 };
+  function loadVoiceConfig() {
+    try {
+      const raw = localStorage.getItem(VOICE_CONFIG_KEY);
+      return raw ? Object.assign({}, DEFAULT_VOICE, JSON.parse(raw)) : { ...DEFAULT_VOICE };
+    } catch (e) {
+      return { ...DEFAULT_VOICE };
+    }
+  }
+  let voiceConfig = loadVoiceConfig();
+  let vvSelected = vvCharOf(voiceConfig.vvSpeaker).speaker; // 設定パネル内で選択中のキャラ(未保存の候補)
+
+  function populateVoiceList() {
+    if (!('speechSynthesis' in window)) return;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices.length) return;
+
+    const jaVoices = voices.filter((v) => v.lang.includes('ja') || v.lang.includes('JP'));
+    const displayVoices = jaVoices.length > 0 ? jaVoices : voices;
+
+    els.voiceSelect.innerHTML = '';
+    displayVoices.forEach((v) => {
+      const option = document.createElement('option');
+      option.value = v.voiceURI || v.name;
+      option.textContent = `${v.name} (${v.lang})`;
+      els.voiceSelect.appendChild(option);
+    });
+
+    if (voiceConfig.voiceURI) {
+      els.voiceSelect.value = voiceConfig.voiceURI;
+    } else {
+      const defaultVoice = displayVoices.find((v) =>
+        v.name.includes('Nanami') || v.name.includes('Natural') || v.name.includes('Kyoko') || v.name.includes('Ayumi')
+      ) || displayVoices[0];
+      if (defaultVoice) els.voiceSelect.value = defaultVoice.voiceURI || defaultVoice.name;
+    }
+  }
+  if ('speechSynthesis' in window) {
+    populateVoiceList();
+    window.speechSynthesis.onvoiceschanged = populateVoiceList;
+  }
+
+  // --- 結果パネルの声クレジット(保存済みの設定を表示。VOICEVOXがOFFなら非表示) ---
+  let resultCreditVisible = false;
+  function renderResultCredit() {
+    const show = resultCreditVisible && voiceConfig.useVoicevox !== false;
+    els.resultCredit.textContent = '声:VOICEVOX:' + vvCharOf(voiceConfig.vvSpeaker).name;
+    els.resultCredit.style.display = show ? 'block' : 'none';
+  }
+  renderResultCredit();
+
+  // --- 声キャラのカルーセル ---
+  function selectVvChar(speaker) {
+    vvSelected = speaker;
+    els.vvChars.querySelectorAll('.vv_char').forEach((b) => b.classList.toggle('sel', Number(b.dataset.sp) === speaker));
+    els.vvCreditSettings.textContent = 'VOICEVOX:' + vvCharOf(speaker).name;
+  }
+  VV_CHARS.forEach((ch) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'vv_char'; b.textContent = ch.name; b.dataset.sp = ch.speaker;
+    b.addEventListener('click', () => {
+      selectVvChar(ch.speaker);
+      b.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+    });
+    els.vvChars.appendChild(b);
+  });
+
+  els.vvSpeedSlider.addEventListener('input', (e) => { els.vvSpeedVal.textContent = parseFloat(e.target.value).toFixed(2); });
+  els.pitchSlider.addEventListener('input', (e) => { els.pitchVal.textContent = parseFloat(e.target.value).toFixed(2); });
+  els.rateSlider.addEventListener('input', (e) => { els.rateVal.textContent = parseFloat(e.target.value).toFixed(2); });
+
+  // 保存済みの設定をパネルに反映(保存せずに閉じた変更は破棄される)
+  function fillSettingsPanel() {
+    els.pitchSlider.value = voiceConfig.pitch;
+    els.rateSlider.value = voiceConfig.rate;
+    els.pitchVal.textContent = parseFloat(voiceConfig.pitch).toFixed(2);
+    els.rateVal.textContent = parseFloat(voiceConfig.rate).toFixed(2);
+    els.vvToggle.checked = voiceConfig.useVoicevox !== false;
+    els.vvSpeedSlider.value = voiceConfig.vvSpeed;
+    els.vvSpeedVal.textContent = parseFloat(voiceConfig.vvSpeed).toFixed(2);
+    selectVvChar(vvCharOf(voiceConfig.vvSpeaker).speaker);
+    populateVoiceList();
+  }
+
+  function currentPanelVoiceConfig() {
+    return {
+      voiceURI: els.voiceSelect.value,
+      pitch: parseFloat(els.pitchSlider.value),
+      rate: parseFloat(els.rateSlider.value),
+      useVoicevox: els.vvToggle.checked,
+      vvSpeed: parseFloat(els.vvSpeedSlider.value),
+      vvSpeaker: vvSelected,
+    };
+  }
+
+  els.settingsBtn.addEventListener('click', () => {
+    fillSettingsPanel();
+    els.settingsPanel.classList.add('active');
+    const sel = els.vvChars.querySelector('.vv_char.sel');
+    if (sel) sel.scrollIntoView({ inline: 'center', block: 'nearest' });
+  });
+  els.settingsClose.addEventListener('click', () => {
+    cancelSpeech(); // テスト再生を止める
+    els.settingsPanel.classList.remove('active');
+  });
+  els.settingsSave.addEventListener('click', () => {
+    voiceConfig = currentPanelVoiceConfig();
+    try { localStorage.setItem(VOICE_CONFIG_KEY, JSON.stringify(voiceConfig)); } catch (e) {}
+    renderResultCredit();
+    cancelSpeech();
+    els.settingsPanel.classList.remove('active');
+  });
+  els.testVoiceBtn.addEventListener('click', () => {
+    speak('こんにちは!この声と高さで喋るよ。どうかな?', null, currentPanelVoiceConfig());
+  });
+
+  // ============ カメラ起動 ============
+  async function startCamera() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+      els.cameraFeed.srcObject = stream;
+      els.errorLayer.style.display = 'none';
+      els.scanFrame.classList.add('scanning');
+
+      currentTrack = stream.getVideoTracks()[0];
+      const caps = currentTrack.getCapabilities ? currentTrack.getCapabilities() : {};
+      if (caps.zoom && caps.zoom.max > caps.zoom.min) {
+        els.zoomSlider.min = caps.zoom.min;
+        els.zoomSlider.max = caps.zoom.max;
+        els.zoomSlider.step = caps.zoom.step || 0.1;
+        els.zoomSlider.value = caps.zoom.min;
+        els.zoomLabel.textContent = `${Number(caps.zoom.min).toFixed(1)}x`;
+        els.zoomControl.classList.add('visible');
+      } else {
+        els.zoomControl.classList.remove('visible');
+      }
+    } catch (err) {
+      els.errorLayer.style.display = 'flex';
+      if (err.name === 'NotAllowedError') {
+        els.errorDesc.textContent = 'カメラへのアクセスが許可されていません。ブラウザの設定からカメラ権限を許可してください。';
+      } else {
+        els.errorDesc.textContent = 'カメラを起動できませんでした: ' + err.message;
+      }
+    }
+  }
+
+  els.errorRetryBtn.addEventListener('click', startCamera);
+  startCamera();
+
+  els.zoomSlider.addEventListener('input', async () => {
+    const value = parseFloat(els.zoomSlider.value);
+    els.zoomLabel.textContent = `${value.toFixed(1)}x`;
+    if (currentTrack) {
+      try {
+        await currentTrack.applyConstraints({ advanced: [{ zoom: value }] });
+      } catch (e) {}
+    }
+  });
+
+  // ============ 撮影 ============
+  function resizeToDataUrl(source, sourceWidth, sourceHeight) {
+    const canvas = document.createElement('canvas');
+    const maxDim = 800;
+    let width = sourceWidth;
+    let height = sourceHeight;
+    if (width > maxDim || height > maxDim) {
+      if (width > height) {
+        height = Math.round((height * maxDim) / width);
+        width = maxDim;
+      } else {
+        width = Math.round((width * maxDim) / height);
+        height = maxDim;
+      }
+    }
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext('2d').drawImage(source, 0, 0, width, height);
+    return canvas.toDataURL('image/jpeg', 0.6);
+  }
+
+  async function processCapturedImage(dataUrl) {
+    capturedBase64 = dataUrl.split(',')[1];
+
+    els.capturedPreview.src = dataUrl;
+    els.capturedPreview.style.display = 'block';
+    els.cameraFeed.style.display = 'none';
+    els.scanFrame.classList.remove('scanning');
+    els.hintText.style.display = 'none';
+    els.captureBtn.disabled = true;
+    els.galleryBtn.disabled = true;
+
+    await runRecognition(capturedBase64);
+    els.captureBtn.disabled = false;
+    els.galleryBtn.disabled = false;
+  }
+
+  els.captureBtn.addEventListener('click', async () => {
+    const video = els.cameraFeed;
+    const dataUrl = resizeToDataUrl(video, video.videoWidth, video.videoHeight);
+    await processCapturedImage(dataUrl);
+  });
+
+  // ============ アルバムから画像を選ぶ ============
+  els.galleryBtn.addEventListener('click', () => {
+    els.galleryInput.click();
+  });
+
+  els.galleryInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+
+    const img = new Image();
+    img.onload = async () => {
+      const dataUrl = resizeToDataUrl(img, img.naturalWidth, img.naturalHeight);
+      await processCapturedImage(dataUrl);
+    };
+    img.src = URL.createObjectURL(file);
+  });
+
+  // ============ 2. yui_profile から性格設定を構築する関数の修復 ============
+  function getSystemPrompt() {
+    const TONE_TEXT = {
+      polite:   "丁寧語(です・ます調)で話してください。",
+      friendly: "フレンドリーなタメ口で話してください。",
+      tsundere: "ややツンデレ気味に、素っ気なさの中に優しさが滲む話し方をしてください。",
+      cool:     "クールで無口気味に、必要なことだけ簡潔に話してください。",
+    };
+
+    const FEEDBACK_TEXT = {
+      gentle:  "指摘やアドバイスをするときは、優しく励ますような伝え方をしてください。",
+      direct:  "指摘やアドバイスをするときは、率直にはっきりと伝えてください。",
+      playful: "指摘やアドバイスをするときは、ちょっとユーモラスに茶化しながら伝えてください。",
+    };
+
+    let userName = 'あなた';
+    let personalityBlock = "あなたはナビゲーションAI「YUI」です。ユーザーの生活をサポートするパートナーとして振る舞ってください。\n" + TONE_TEXT.friendly + "\n" + FEEDBACK_TEXT.gentle;
+
+    try {
+      const raw = localStorage.getItem('yui_profile');
+      if (raw) {
+        const profile = JSON.parse(raw);
+        if (profile.user_name) userName = profile.user_name;
+        
+        const customPersonality = (profile.personality || profile.custom_personality || '').trim();
+        if (customPersonality) {
+          personalityBlock = "あなたは次のキャラクター設定になりきってください。設定に書かれた口調・話し方・言葉づかいを何よりも優先してください。\n----\n" + customPersonality + "\n----";
+        } else {
+          personalityBlock = "あなたはナビゲーションAI「YUI」です。\n" +
+            (TONE_TEXT[profile.tone_style] || TONE_TEXT.friendly) + "\n" +
+            (FEEDBACK_TEXT[profile.feedback_style] || FEEDBACK_TEXT.gentle);
+        }
+      }
+    } catch(e) {}
+
+    return (
+      personalityBlock + "\n" +
+      `ユーザーのことは「${userName}」と呼んでください。\n` +
+      "回答は必ずスピーカーで読み上げられます。次のルールを厳守してください。\n" +
+      "・アスタリスク(*)、シャープ(#)、箇条書きの記号、太字や見出しなどのMarkdown書式は絶対に使わない\n" +
+      "・数字の箇条書き(1. 2. のような形式)も使わない。文章として話す\n" +
+      "・回答は簡潔にする。特別な指示がない限り2〜3文、長くても4文までに収める\n" +
+      "・一貫して上記の性格・口調を完全に維持して回答してください。"
+    );
+  }
+
+  // ============ Gemini API 呼び出し ============
+  async function callGemini(contents, { thinkingLevel = 'low', maxOutputTokens = 350 } = {}) {
+    const apiKey = getApiKey();
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents,
+        systemInstruction: { parts: [{ text: getSystemPrompt() }] },
+        generationConfig: {
+          thinkingConfig: { thinkingLevel },
+          maxOutputTokens,
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody?.error?.message || `APIエラー (${res.status})`);
+    }
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  }
+
+  function setStatus(text) {
+    els.statusText.textContent = text;
+    els.statusLayer.classList.add('active');
+  }
+  function hideStatus() {
+    els.statusLayer.classList.remove('active');
+  }
+
+  async function runRecognition(base64Image) {
+    try {
+      setStatus('判定中...');
+
+      const prompt =
+        "この画像に写っている対象を判定してください。本・漫画、アニメやゲームのキャラクターグッズ(ぬいぐるみ・フィギュア・ポスターなど)、動物、有名な建物や観光地、食べ物など、何であっても構いません。" +
+        "対象のカテゴリを明確にした上で、具体的な名称を判定してください(本なら書名・作者、キャラクターグッズなら作品名とキャラクター名、動物なら種類、建物なら名称など)。" +
+        "はっきり分からない場合でも、絵柄や特徴(髪型・色・服装・ロゴなど)から推測できる範囲で構わないので、最も近いと思われる候補を答えてください。" +
+        "続けて、それをあなたのキャラクター設定・口調に完全になりきって、音声で紹介する短いナレーション文(2〜3文程度、話し言葉、記号や箇条書きなしの自然な文章)を作ってください。" +
+        "出力は必ず次の形式に従ってください(前置きや説明は不要):\n" +
+        "TITLE: (カテゴリと名称を1〜2行で)\n" +
+        "NARRATION: (指定した性格設定・口調を100%反映したナレーション文)";
+
+      const userParts = [
+        { inline_data: { mime_type: "image/jpeg", data: base64Image } },
+        { text: prompt },
+      ];
+
+      const text = await callGemini(
+        [{ role: 'user', parts: userParts }],
+        { thinkingLevel: 'low', maxOutputTokens: 500 }
+      );
+
+      conversationHistory = [
+        { role: 'user', parts: userParts },
+        { role: 'model', parts: [{ text }] },
+      ];
+
+      const titleMatch = text.match(/TITLE:\s*([\s\S]*?)\nNARRATION:/);
+      const narrationMatch = text.match(/NARRATION:\s*([\s\S]*)/);
+
+      const title = titleMatch ? titleMatch[1].trim() : "判定できませんでした";
+      const narration = narrationMatch ? narrationMatch[1].trim() : text.trim();
+
+      els.resultTitle.textContent = title;
+      els.resultNarration.textContent = narration;
+      lastNarration = narration;
+
+      hideStatus();
+      resultCreditVisible = true;
+      renderResultCredit();
+      els.resultPanel.classList.add('open');
+      speak(narration);
+
+    } catch (err) {
+      hideStatus();
+      resultCreditVisible = false; // エラー時は読み上げないのでクレジットも出さない
+      renderResultCredit();
+      els.resultTitle.textContent = "エラーが発生しました";
+      els.resultNarration.textContent = err.message;
+      els.resultPanel.classList.add('open');
+    }
+  }
+
+  // ============ VOICEVOX 読み上げ (WEB版VOICEVOX API 低速版 / apiKey不要) ============
+  // ※ v3 API が受け付けるのは text と speaker のみ。話速は再生側の playbackRate で調整する
+  const VOICEVOX_CONFIG = {
+    api: 'https://api.tts.quest/v3/voicevox/synthesis',
+  };
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+
+  // 使い回す1つのAudio要素(iOS等では、ユーザー操作で一度"解禁"した要素でないと非同期後に再生できない)
+  const ttsAudio = new Audio();
+  let speakToken = 0;
+  function unlockAudio() {
+    ttsAudio.src = SILENT_WAV;
+    ttsAudio.play().then(() => ttsAudio.pause()).catch(() => {});
+  }
+  document.addEventListener('pointerdown', unlockAudio, { once: true });
+
+  function stopSpeaking() {
+    ttsAudio.pause();
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  }
+
+  // 読み上げ中・合成待ちのものをすべて中止する(合成待ちの途中で再生されないようトークンも進める)
+  function cancelSpeech() {
+    speakToken++;
+    stopSpeaking();
+  }
+
+  // 音声合成リクエスト(429のときは retryAfter 秒待って再送)
+  async function requestVoicevox(text, token, speaker) {
+    const params = new URLSearchParams({ text, speaker: String(speaker) });
+    for (let i = 0; i < 3; i++) {
+      const res = await fetch(`${VOICEVOX_CONFIG.api}?${params}`);
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 429) {
+        await sleep(((data.retryAfter || 2) + 0.3) * 1000);
+        if (token !== speakToken) return null;
+        continue;
+      }
+      if (!res.ok || !data.success) throw new Error(data.errorMessage || `VOICEVOX APIエラー (${res.status})`);
+      return data;
+    }
+    throw new Error('VOICEVOX: リクエスト制限により合成できませんでした');
+  }
+
+  // 合成完了待ち(mp3は完成するまで404のため)
+  async function waitVoicevoxReady(statusUrl, token, timeoutMs = 30000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      if (token !== speakToken) return false;
+      const res = await fetch(statusUrl, { cache: 'no-store' });
+      const st = await res.json().catch(() => ({}));
+      if (st.isAudioError) throw new Error('VOICEVOX: 音声合成に失敗しました');
+      if (st.isAudioReady) return true;
+      await sleep(400);
+    }
+    throw new Error('VOICEVOX: 合成がタイムアウトしました');
+  }
+
+  async function speakVoicevox(text, cfg, token, onEnd) {
+    const data = await requestVoicevox(text, token, vvCharOf(cfg.vvSpeaker).speaker);
+    if (!data || token !== speakToken) return;
+    const ready = await waitVoicevoxReady(data.audioStatusUrl, token);
+    if (!ready || token !== speakToken) return;
+
+    const speed = cfg.vvSpeed ?? 1.5;
+    let finished = false;
+    const finish = () => { if (finished) return; finished = true; if (onEnd) onEnd(); };
+    ttsAudio.onended = finish;
+    ttsAudio.onerror = () => {
+      console.warn('[VOICEVOX Audio error]');
+      if (finished) return;
+      finished = true;
+      speakBrowser(text, onEnd, cfg); // 再生できなければブラウザ音声に切替
+    };
+    ttsAudio.defaultPlaybackRate = speed;
+    ttsAudio.src = data.mp3DownloadUrl;
+    ttsAudio.playbackRate = speed;
+    await ttsAudio.play();
+  }
+
+  // ブラウザ内蔵の音声(VOICEVOXがOFFのとき/失敗時のフォールバック)
+  function speakBrowser(text, onEnd, cfg) {
+    if (!('speechSynthesis' in window)) { if (onEnd) onEnd(); return; }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const selectedVoice = voices.find((v) => (v.voiceURI || v.name) === cfg.voiceURI);
+    if (selectedVoice) utterance.voice = selectedVoice;
+    utterance.lang = 'ja-JP';
+    utterance.pitch = cfg.pitch ?? 1.40;
+    utterance.rate = cfg.rate ?? 1.15;
+    if (onEnd) { utterance.onend = onEnd; utterance.onerror = onEnd; }
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function speak(text, onEnd, customConfig = null) {
+    const cfg = customConfig || voiceConfig;
+    const token = ++speakToken;
+    stopSpeaking();
+    if (!text) { if (onEnd) onEnd(); return; }
+    if (cfg.useVoicevox === false) { speakBrowser(text, onEnd, cfg); return; }
+    speakVoicevox(text, cfg, token, onEnd).catch((err) => {
+      console.warn('[VOICEVOX]', err);
+      if (token === speakToken) speakBrowser(text, onEnd, cfg);
+    });
+  }
+
+  els.replayBtn.addEventListener('click', () => speak(lastNarration));
+
+  // ============ リセット ============
+  function resetSession() {
+    endTalkMode(false);
+    cancelSpeech();
+    resultCreditVisible = false;
+    renderResultCredit();
+    els.resultPanel.classList.remove('open');
+    els.capturedPreview.style.display = 'none';
+    els.cameraFeed.style.display = 'block';
+    els.hintText.style.display = 'block';
+    els.scanFrame.classList.add('scanning');
+    conversationHistory = [];
+    els.chatLog.innerHTML = '';
+    setCharacterState('normal');
+  }
+
+  els.rescanBtn.addEventListener('click', resetSession);
+  els.resetBtn.addEventListener('click', resetSession);
+
+  // ============ 音声での会話(お話しモード) ============
+  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognizer = null;
+  if (SpeechRecognitionCtor) {
+    recognizer = new SpeechRecognitionCtor();
+    recognizer.lang = 'ja-JP';
+    recognizer.interimResults = false;
+    recognizer.maxAlternatives = 1;
+  }
+
+  const EXIT_KEYWORDS = ['終わり', 'おわり', 'バイバイ', 'ばいばい', '終了', 'さようなら'];
+
+  function addChatMessage(role, text) {
+    const bubble = document.createElement('div');
+    bubble.className = `chat_msg ${role === 'user' ? 'user' : 'assistant'}`;
+    bubble.textContent = text;
+    els.chatLog.appendChild(bubble);
+    els.chatLog.scrollTop = els.chatLog.scrollHeight;
+  }
+
+  function trimmedHistory() {
+    if (conversationHistory.length <= 6) return conversationHistory;
+    return [
+      conversationHistory[0],
+      conversationHistory[1],
+      ...conversationHistory.slice(-4),
+    ];
+  }
+
+  async function handleTalkModeQuestion(questionText) {
+    conversationHistory.push({ role: 'user', parts: [{ text: questionText }] });
+    addChatMessage('user', questionText);
+    setCharacterState('thinking');
+
+    try {
+      const answer = await callGemini(
+        trimmedHistory(),
+        { thinkingLevel: 'low', maxOutputTokens: 350 }
+      );
+      conversationHistory.push({ role: 'model', parts: [{ text: answer }] });
+      addChatMessage('assistant', answer);
+
+      setCharacterState('speaking');
+      speak(answer, () => {
+        talkBusy = false;
+        if (talkModeActive) startListeningLoop();
+      });
+    } catch (err) {
+      addChatMessage('assistant', 'エラー: ' + err.message);
+      setCharacterState('error');
+      talkBusy = false;
+      if (talkModeActive) {
+        setTimeout(() => { if (talkModeActive) startListeningLoop(); }, 1200);
+      }
+    }
+  }
+
+  function startListeningLoop() {
+    if (!talkModeActive || talkBusy) return;
+    setCharacterState('listening');
+    try {
+      recognizer.start();
+    } catch (e) {
+      setTimeout(() => { if (talkModeActive && !talkBusy) { try { recognizer.start(); } catch (e2) {} } }, 300);
+    }
+  }
+
+  function startTalkMode() {
+    if (!recognizer) {
+      setCharacterState('error');
+      els.chatStatus.textContent = 'この端末は音声入力に対応していません';
+      return;
+    }
+    if (talkModeActive) return;
+
+    talkModeActive = true;
+    talkBusy = true;
+    els.talkEndBtn.classList.add('visible');
+    setCharacterState('speaking');
+    speak('はい、なんでしょう？', () => {
+      talkBusy = false;
+      if (talkModeActive) startListeningLoop();
+    });
+  }
+
+  function endTalkMode(sayGoodbye) {
+    if (!talkModeActive) return;
+    talkModeActive = false;
+    talkBusy = false;
+    els.talkEndBtn.classList.remove('visible');
+    if (recognizer) {
+      try { recognizer.stop(); } catch (e) {}
+    }
+    if (sayGoodbye) {
+      setCharacterState('speaking');
+      speak('またね。', () => setCharacterState('normal'));
+    } else {
+      cancelSpeech();
+      setCharacterState('normal');
+    }
+  }
+
+  els.talkEndBtn.addEventListener('click', () => endTalkMode(true));
+
+  async function handleQuickQuestion(questionText) {
+    conversationHistory.push({ role: 'user', parts: [{ text: questionText }] });
+    addChatMessage('user', questionText);
+    setCharacterState('thinking');
+
+    try {
+      const answer = await callGemini(
+        trimmedHistory(),
+        { thinkingLevel: 'low', maxOutputTokens: 250 }
+      );
+      conversationHistory.push({ role: 'model', parts: [{ text: answer }] });
+      addChatMessage('assistant', answer);
+      setCharacterState('speaking');
+      speak(answer, () => setCharacterState('normal'));
+    } catch (err) {
+      addChatMessage('assistant', 'エラー: ' + err.message);
+      setCharacterState('error');
+      setTimeout(() => setCharacterState('normal'), 1500);
+    }
+  }
+
+  function startQuickQuestion() {
+    if (!recognizer) {
+      setCharacterState('error');
+      els.chatStatus.textContent = 'この端末は音声入力に対応していません';
+      return;
+    }
+    quickPending = true;
+    setCharacterState('listening');
+    els.chatStatus.textContent = '質問をどうぞ(1問だけ)';
+    try {
+      recognizer.start();
+    } catch (e) {
+      quickPending = false;
+      setCharacterState('normal');
+    }
+  }
+
+  // ---- 短押し=1問だけ即答 / 長押し=会話モード ----
+  let pressTimer = null;
+  let longPressFired = false;
+  const LONG_PRESS_MS = 550;
+
+  function onPressStart(e) {
+    e.preventDefault();
+    longPressFired = false;
+    pressTimer = setTimeout(() => {
+      longPressFired = true;
+      pressTimer = null;
+      if (talkModeActive) {
+        endTalkMode(true);
+      } else {
+        startTalkMode();
+      }
+    }, LONG_PRESS_MS);
+  }
+
+  function onPressEnd() {
+    if (pressTimer) {
+      clearTimeout(pressTimer);
+      pressTimer = null;
+    }
+    if (!longPressFired && !talkModeActive && !quickPending && !talkBusy) {
+      startQuickQuestion();
+    }
+  }
+
+  els.characterAvatar.addEventListener('touchstart', onPressStart, { passive: false });
+  els.characterAvatar.addEventListener('touchend', onPressEnd);
+  els.characterAvatar.addEventListener('touchcancel', onPressEnd);
+  els.characterAvatar.addEventListener('mousedown', onPressStart);
+  els.characterAvatar.addEventListener('mouseup', onPressEnd);
+  els.characterAvatar.addEventListener('mouseleave', onPressEnd);
+
+  if (recognizer) {
+    recognizer.addEventListener('result', (event) => {
+      const transcript = event.results[0][0].transcript;
+
+      if (quickPending) {
+        quickPending = false;
+        handleQuickQuestion(transcript);
+        return;
+      }
+
+      if (EXIT_KEYWORDS.some(k => transcript.includes(k))) {
+        endTalkMode(true);
+        return;
+      }
+
+      talkBusy = true;
+      handleTalkModeQuestion(transcript);
+    });
+
+    recognizer.addEventListener('end', () => {
+      if (quickPending) {
+        quickPending = false;
+        setCharacterState('normal');
+        return;
+      }
+      if (talkModeActive && !talkBusy) {
+        setTimeout(() => startListeningLoop(), 300);
+      }
+    });
+
+    recognizer.addEventListener('error', () => {
+      if (quickPending) {
+        quickPending = false;
+        setCharacterState('normal');
+        return;
+      }
+      if (talkModeActive && !talkBusy) {
+        setTimeout(() => { if (talkModeActive) startListeningLoop(); }, 500);
+      }
+    });
+  }
+
+})();
+</script>
+
+</body>
+</html>
