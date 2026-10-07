@@ -30,6 +30,7 @@
   .clickable-card { cursor: pointer; transition: transform 0.2s, border-color 0.2s; }
   .clickable-card:hover { transform: translateY(-2px); border-color: #23E0C4; }
   
+  img { image-rendering: pixelated; }
   .zukan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
   .card-item { background: #1F2347; border-radius: 10px; padding: 10px; border: 1px solid rgba(255,255,255,0.1); text-align: center; }
   
@@ -47,8 +48,8 @@
     overflow: hidden; 
     border: 2px solid rgba(255,255,255,0.15); 
     /* 【層1：最背面】背景色・グラデーション（背景画像を差し替える場合は background-image に変更可） */
-    background: radial-gradient(circle at center, #2f346b 0%, #0d0f22 100%);
-    box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+    background: #000;
+    
   }
 
   /* 背景の装飾エフェクト（網目模様パターン） */
@@ -58,7 +59,7 @@
     inset: 0;
     background-image: radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px);
     background-size: 16px 16px;
-    opacity: 0.5;
+    opacity: 0;
     z-index: 1;
   }
 
@@ -72,7 +73,7 @@
     display: block; 
     z-index: 2;
     /* キャラを背景から浮き立たせる強力なドロップシャドウ */
-    filter: drop-shadow(0px 8px 16px rgba(0, 0, 0, 0.75));
+    image-rendering: pixelated;
     transition: transform 0.3s ease;
   }
 
@@ -210,16 +211,33 @@ function resizeImage(file) {
 }
 
 // --- STEP A: 画像をGeminiに渡して解析 ---
+// ポイント: 「写真の被写体そのもの」を具体的に英語で描写させ、抽象化・別物化を禁止する
+const SUBJECT_TYPES = ["人物","動物","植物","食べ物","乗り物","道具・物体","建物・風景","その他"];
+
 async function apiAnalyzeMonster(base64ImageData, apiKey) {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
   const cleanBase64 = base64ImageData.split(",")[1];
 
   const promptText = `
-この画像を見て、RPGモンスターの設定を作成してください。
-名称、属性(火/水/風)、レアリティ(C/B/A/S)、説明、4つの技(通常・必殺・補助・奥義)、ステータスに加え、
-このモンスターをドット絵/イラストとして描くための英語の画像生成プロンプト(imagePrompt)も作成してください。
-imagePromptは英語で、スタイル指定(16-bit pixel art, retro RPG game monster, full frame, dynamic pose, close-up, fill the canvas, edge-to-edge, solid pitch-black background, no border, no frame)を含めてください。
+あなたはレトロRPGのキャラクターデザイナーです。添付写真の被写体をもとに、モンスター(キャラクター)の設定を作ってください。
+
+【最重要ルール：元の被写体から離れない】
+- 写真に写っている「主役の被写体」をそのまま見た目の元にすること。抽象化したり、別のものに置き換えてはいけない。
+- 人物 → 人間の姿のまま。ロボット・メカ・サイボーグ・獣人・怪物には絶対にしない。
+- 動物 → 同じ種類の動物。 物体 → 同じ形の物体。 食べ物 → 同じ食べ物。
+- 髪型・髪色・服装・色・持ち物・ポーズ・特徴的な形を忠実に残すこと。
+- 属性やゲーム性は「名前・説明・技・ステータス」で表現し、見た目は写真のまま。
+
+【出力項目】
+- subjectType: 被写体の種類
+- subjectDescription: 被写体の見た目を「具体的な英語」で描写した文章(40〜70語)。
+  何であるか(a young man / a cat / a red teapot など)、色、髪型、服装、持ち物、ポーズ、特徴的な部分を、
+  写真から見えるとおりに書く。比喩・誇張・ファンタジー装飾は入れない。
+- name, attribute(火/水/風), rarity(C/B/A/S), description(日本語の説明)
+- 4つの技(通常・必殺・補助・奥義)とステータス
 `;
+
+  const moveSchema = { type:"OBJECT", properties:{cost:{type:"INTEGER"},name:{type:"STRING"},flavor:{type:"STRING"}}, required:["cost","name","flavor"] };
 
   const requestBody = {
     contents: [{
@@ -233,11 +251,12 @@ imagePromptは英語で、スタイル指定(16-bit pixel art, retro RPG game mo
       responseSchema: {
         type: "OBJECT",
         properties: {
+          subjectType: { type:"STRING", enum: SUBJECT_TYPES },
+          subjectDescription: { type:"STRING" },
           name: { type:"STRING" },
           attribute: { type:"STRING", enum:["火","水","風"] },
           rarity: { type:"STRING", enum:["C","B","A","S"] },
           description: { type:"STRING" },
-          imagePrompt: { type:"STRING" },
           stats: {
             type:"OBJECT",
             properties: { hp:{type:"INTEGER"}, atk:{type:"INTEGER"}, def:{type:"INTEGER"}, spd:{type:"INTEGER"} },
@@ -245,16 +264,11 @@ imagePromptは英語で、スタイル指定(16-bit pixel art, retro RPG game mo
           },
           moves: {
             type:"OBJECT",
-            properties: {
-              normal:{ type:"OBJECT", properties:{cost:{type:"INTEGER"},name:{type:"STRING"},flavor:{type:"STRING"}}, required:["cost","name","flavor"] },
-              strong:{ type:"OBJECT", properties:{cost:{type:"INTEGER"},name:{type:"STRING"},flavor:{type:"STRING"}}, required:["cost","name","flavor"] },
-              utility:{ type:"OBJECT", properties:{cost:{type:"INTEGER"},name:{type:"STRING"},flavor:{type:"STRING"}}, required:["cost","name","flavor"] },
-              special:{ type:"OBJECT", properties:{cost:{type:"INTEGER"},name:{type:"STRING"},flavor:{type:"STRING"}}, required:["cost","name","flavor"] }
-            },
+            properties: { normal:moveSchema, strong:moveSchema, utility:moveSchema, special:moveSchema },
             required:["normal","strong","utility","special"]
           }
         },
-        required: ["name","attribute","rarity","description","imagePrompt","stats","moves"]
+        required: ["subjectType","subjectDescription","name","attribute","rarity","description","stats","moves"]
       }
     }
   };
@@ -274,6 +288,30 @@ imagePromptは英語で、スタイル指定(16-bit pixel art, retro RPG game mo
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error("[文章解析APIエラー] Geminiからのテキスト応答が空でした");
   return JSON.parse(text);
+}
+
+// --- 画像生成プロンプトを組み立てる（背景抜きはしない。黒背景のピクセル絵） ---
+const GUARD_BY_TYPE = {
+  "人物": "a real human being with a normal human body, NOT a robot, NOT a mecha, NOT a cyborg, NOT an android, NOT a monster, NOT an animal",
+  "動物": "a real animal of the same species, realistic anatomy, NOT a robot, NOT a mecha",
+  "植物": "a real plant, NOT a robot, NOT a creature",
+  "食べ物": "a real food item, NOT a robot, NOT a creature",
+  "乗り物": "a real vehicle of the same shape",
+  "道具・物体": "the same real object with the same shape, NOT a robot, NOT a creature",
+  "建物・風景": "the same building or scene, NOT a robot",
+  "その他": "same subject as described, NOT a robot"
+};
+
+function buildImagePrompt(monster) {
+  const guard = GUARD_BY_TYPE[monster.subjectType] || GUARD_BY_TYPE["その他"];
+  return [
+    `16-bit pixel art sprite of ${monster.subjectDescription}`,
+    guard,
+    "faithful to the original subject, keep the same colors, clothes, hairstyle and features, do not redesign, do not abstract",
+    "retro RPG game character sprite, full body, centered, large in frame",
+    "limited color palette, crisp square pixels, clean dark outline",
+    "solid pure black background (#000000), no scenery, no border, no frame, no text"
+  ].join(", ");
 }
 
 // --- STEP B: 画像生成 ---
@@ -336,7 +374,7 @@ function App() {
       setParsedMonster(monster);
 
       setStep("generating");
-      const img = await apiGenerateImageFromPrompt(monster.imagePrompt);
+      const img = await apiGenerateImageFromPrompt(buildImagePrompt(monster));
       setGeneratedImage(img);
 
       setStep("done");
@@ -354,6 +392,7 @@ function App() {
       name: parsedMonster.name,
       attribute: parsedMonster.attribute,
       rarity: parsedMonster.rarity,
+      subjectType: parsedMonster.subjectType,
       description: parsedMonster.description,
       stats: parsedMonster.stats,
       moves: parsedMonster.moves,
@@ -388,7 +427,8 @@ function App() {
 
   return (
     <div className="main-container">
-      <h2 style={{ fontSize:"16px", textAlign:"center", marginBottom:"16px" }}>🧪 モノバケ 統合フロー版</h2>
+      <h2 style={{ fontSize:"16px", textAlign:"center", marginBottom:"8px" }}>🧪 モノバケ 図鑑</h2>
+      <a href="battle.html" style={{ display:"block", textAlign:"center", color:"#F2B84B", fontSize:"13px", fontWeight:"bold", marginBottom:"14px", textDecoration:"none" }}>⚔️ バトルへ</a>
 
       {/* --- 詳細画面ビュー --- */}
       {viewMode === "detail" && selectedMonster && (
