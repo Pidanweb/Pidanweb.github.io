@@ -230,7 +230,7 @@ async function apiAnalyzeMonster(base64ImageData, apiKey) {
 
 【出力項目】
 - subjectType: 被写体の種類
-- subjectDescription: 被写体の見た目を「具体的な英語」で描写した文章(40〜70語)。
+- subjectDescription: 被写体の見た目を「具体的な英語」で描写した短い文章(20〜40語)。細かい質感や肌・皺などは書かず、色・髪型・服装・持ち物・ポーズなど大づかみな特徴だけ。
   何であるか(a young man / a cat / a red teapot など)、色、髪型、服装、持ち物、ポーズ、特徴的な部分を、
   写真から見えるとおりに書く。比喩・誇張・ファンタジー装飾は入れない。
 - name, attribute(火/水/風), rarity(C/B/A/S), description(日本語の説明)
@@ -292,24 +292,26 @@ async function apiAnalyzeMonster(base64ImageData, apiKey) {
 
 // --- 画像生成プロンプトを組み立てる（背景抜きはしない。黒背景のピクセル絵） ---
 const GUARD_BY_TYPE = {
-  "人物": "a real human being with a normal human body, NOT a robot, NOT a mecha, NOT a cyborg, NOT an android, NOT a monster, NOT an animal",
-  "動物": "a real animal of the same species, realistic anatomy, NOT a robot, NOT a mecha",
-  "植物": "a real plant, NOT a robot, NOT a creature",
-  "食べ物": "a real food item, NOT a robot, NOT a creature",
-  "乗り物": "a real vehicle of the same shape",
-  "道具・物体": "the same real object with the same shape, NOT a robot, NOT a creature",
-  "建物・風景": "the same building or scene, NOT a robot",
-  "その他": "same subject as described, NOT a robot"
+  "人物": "a cute chibi human character, NOT a robot, NOT a mecha, NOT a cyborg, NOT a monster",
+  "動物": "a cute chibi version of the same animal, NOT a robot",
+  "植物": "a cute simple version of the same plant",
+  "食べ物": "a cute simple version of the same food item",
+  "乗り物": "a cute simple version of the same vehicle",
+  "道具・物体": "a cute simple version of the same object, same shape",
+  "建物・風景": "a cute simple version of the same building",
+  "その他": "a cute simple version of the same subject"
 };
 
 function buildImagePrompt(monster) {
   const guard = GUARD_BY_TYPE[monster.subjectType] || GUARD_BY_TYPE["その他"];
   return [
-    `16-bit pixel art sprite of ${monster.subjectDescription}`,
+    `low-resolution 32x32 pixel art sprite, chibi deformed style, ${monster.subjectDescription}`,
     guard,
-    "faithful to the original subject, keep the same colors, clothes, hairstyle and features, do not redesign, do not abstract",
-    "retro RPG game character sprite, full body, centered, large in frame",
-    "limited color palette, crisp square pixels, clean dark outline",
+    "same colors, hairstyle, clothes and key features as the original, but simplified and cute",
+    "big chunky square pixels, very limited color palette (8 to 12 colors), thick dark outline, flat shading, no gradients",
+    "classic 8-bit 16-bit retro RPG sprite like Dragon Quest or Pokemon, 2 to 3 heads tall proportions, big head, simple dot eyes",
+    "full body, centered, large in frame",
+    "NOT realistic, NOT photo, NOT 3d render, NOT detailed skin, NOT painting, NOT anime illustration",
     "solid pure black background (#000000), no scenery, no border, no frame, no text"
   ].join(", ");
 }

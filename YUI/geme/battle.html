@@ -148,7 +148,6 @@ function makeFighter(src) {
     maxHp, hp: maxHp,
     atk: num(st.atk, 50), def: num(st.def, 50), spd: num(st.spd, 50),
     atkSt: 0, defSt: 0,
-    en: 4, maxEn: 10,
     moves: []
   };
   SLOT_ORDER.forEach(slot => {
@@ -156,13 +155,11 @@ function makeFighter(src) {
     if (!m) return;
     const rule = MOVE_RULE[slot];
     const mv = { slot, name: m.name || "???", flavor: m.flavor || "",
-                 cost: clamp(parseInt(m.cost, 10) || 0, 0, 9), power: rule.power, acc: rule.acc };
+                 power: rule.power, acc: rule.acc };
     if (slot === "utility") mv.effect = UTIL_EFFECTS[hash(mv.name) % UTIL_EFFECTS.length];
     f.moves.push(mv);
   });
-  if (!f.moves.length) f.moves.push({ slot:"normal", name:"たいあたり", flavor:"", cost:0, power:40, acc:100 });
-  // 通常技は誰でも必ず出せるようにする
-  f.moves.forEach(m => { if (m.slot === "normal") m.cost = Math.min(m.cost, 1); });
+  if (!f.moves.length) f.moves.push({ slot:"normal", name:"たいあたり", flavor:"", power:40, acc:100 });
   return f;
 }
 
@@ -255,12 +252,10 @@ function buildBattleDom() {
     o.name = el("span", { class:"nm" }, f.name);
     o.bar  = el("i");
     o.num  = el("div", { class:"hpnum" });
-    o.en   = el("i");
     o.box = el("div", { class:`hpbox ${cls}` },
       el("div", { class:"row1" }, o.name, attrTag(f.attr)),
       el("div", { class:"bar-wrap" }, el("span", { class:"bar-lbl" }, "HP"), el("div", { class:"bar" }, o.bar)),
-      cls === "player" ? o.num : null,
-      cls === "player" ? el("div", { class:"bar-wrap" }, el("span", { class:"bar-lbl", style:"color:#1c7ed6" }, "EN"), el("div", { class:"bar en" }, o.en)) : null
+      cls === "player" ? o.num : null
     );
     return o;
   };
@@ -286,7 +281,6 @@ function updateBars() {
     u.bar.className = r <= 0.2 ? "low" : r <= 0.5 ? "mid" : "";
   });
   ui.pBox.num.textContent = `${Math.max(0, B.player.hp)} / ${B.player.maxHp}`;
-  ui.pBox.en.style.width = (B.player.en / B.player.maxEn * 100) + "%";
 }
 
 /* ---------- メッセージ ---------- */
@@ -331,9 +325,8 @@ function showMainMenu() {
   B.busy = false;
   setMsgStatic(`${B.player.name} は どうする？`);
   ui.menu.innerHTML = "";
-  ui.menu.append(el("div", { class:"menu-main" },
+  ui.menu.append(el("div", { class:"menu-main", style:"grid-template-columns:1fr 1fr" },
     el("button", { class:"mbtn", onclick: showMoveMenu }, "⚔️ たたかう"),
-    el("button", { class:"mbtn", onclick: () => playerAction({ type:"charge" }) }, "💫 きあい"),
     el("button", { class:"mbtn", onclick: runAway }, "🏃 にげる")
   ));
 }
@@ -345,16 +338,14 @@ function showMoveMenu() {
   ui.menu.innerHTML = "";
   const grid = el("div", { class:"moves" });
   B.player.moves.forEach(m => {
-    const ok = B.player.en >= m.cost;
-    grid.append(el("button", { class:"mv", disabled: ok ? null : "disabled", onclick: () => playerAction({ type:"move", move:m }) },
+    grid.append(el("button", { class:"mv", onclick: () => playerAction({ type:"move", move:m }) },
       el("div", { class:"t" }, SLOT_LABEL[m.slot]),
       el("div", { class:"n" }, m.name),
-      el("div", { class:"c" }, `EN ${m.cost}`),
       el("div", { class:"e" }, effText(m))
     ));
   });
   ui.menu.append(grid, el("button", { class:"back", onclick: showMainMenu }, "← もどる"));
-  setMsgStatic(`EN ${B.player.en} / ${B.player.maxEn}  わざを えらんでね`);
+  setMsgStatic("わざを えらんでね");
 }
 async function runAway() {
   if (B.busy) return;
@@ -366,13 +357,13 @@ async function runAway() {
 /* ---------- ターン処理 ---------- */
 function enemyChoose() {
   const e = B.enemy;
-  const usable = e.moves.filter(m => e.en >= m.cost);
-  if (!usable.length || (e.en < 2 && Math.random() < 0.3)) return { type:"charge" };
-  // 高コスト技ほど出やすい（使えるときは積極的に使う）
-  const weights = usable.map(m => 1 + m.cost * 0.6 + (m.slot === "utility" ? (e.hp / e.maxHp < 0.5 ? 1 : -0.5) : 0));
+  const weights = e.moves.map(m => {
+    if (m.slot === "utility") return e.hp / e.maxHp < 0.5 ? 1.5 : 0.5;
+    return m.slot === "strong" ? 1.3 : 1;
+  });
   let r = Math.random() * weights.reduce((a, b) => a + b, 0);
-  for (let i = 0; i < usable.length; i++) { r -= Math.max(0.2, weights[i]); if (r <= 0) return { type:"move", move:usable[i] }; }
-  return { type:"move", move:usable[0] };
+  for (let i = 0; i < e.moves.length; i++) { r -= weights[i]; if (r <= 0) return { type:"move", move:e.moves[i] }; }
+  return { type:"move", move:e.moves[0] };
 }
 
 async function playerAction(act) {
@@ -380,9 +371,8 @@ async function playerAction(act) {
   B.busy = true; ui.menu.innerHTML = "";
   const eAct = enemyChoose();
   const queue = [{ who:B.player, act }, { who:B.enemy, act:eAct }];
-  // きあいは最優先、それ以外は素早さ順
-  const pri = a => a.act.type === "charge" ? 1 : 0;
-  queue.sort((a, b) => pri(b) - pri(a) || (b.who.spd - a.who.spd) || (Math.random() - 0.5));
+  // 素早さが高い方が先攻（同値ならランダム）
+  queue.sort((a, b) => (b.who.spd - a.who.spd) || (Math.random() - 0.5));
 
   for (const q of queue) {
     if (q.who.hp <= 0) continue;
@@ -391,22 +381,12 @@ async function playerAction(act) {
   }
   if (await checkEnd()) return;
 
-  [B.player, B.enemy].forEach(f => { f.en = Math.min(f.maxEn, f.en + 2); });
-  updateBars();
   showMainMenu();
 }
 
 async function perform(me, foe, act) {
   const isP = me === B.player;
-  if (act.type === "charge") {
-    me.en = Math.min(me.maxEn, me.en + 4);
-    updateBars();
-    anim(spriteOf(me), "buffed", 600);
-    await say(`${me.name} は きあいを ためた！ (EN+4)`);
-    return;
-  }
   const m = act.move;
-  me.en -= m.cost; updateBars();
   await say(`${me.name} の ${m.name}！`, 300);
 
   if (m.slot === "utility") {
