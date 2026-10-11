@@ -64,9 +64,9 @@
   }
 
   #top_avatar {
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
     overflow: hidden;
     flex-shrink: 0;
     background-color: rgba(0,0,0,0.055);
@@ -87,8 +87,8 @@
   }
 
   #vv_credit { font-size: 11px; color: var(--ink-dim); text-align: center; padding: 3px 12px; }
-  #vv_chars { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x proximity; padding: 6px 2px 8px; margin-top: 6px; -webkit-overflow-scrolling: touch; }
-  .vv_char { flex: 0 0 auto; scroll-snap-align: center; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--panel-edge); background: var(--panel); color: var(--ink); font-size: 13.5px; font-family: inherit; cursor: pointer; }
+  #vv_chars { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 2px 8px; margin-top: 6px; }
+  .vv_char { flex: 0 0 auto; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--panel-edge); background: var(--panel); color: var(--ink); font-size: 13.5px; font-family: inherit; cursor: pointer; }
   .vv_char.sel { border-color: #5A9E1E; background: rgba(90,158,30,0.16); font-weight: 700; }
   #settings_btn {
     margin-left: auto;
@@ -121,9 +121,9 @@
   .chat_row.assistant { align-self: flex-start; }
 
   .chat_avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
     overflow: hidden;
     flex-shrink: 0;
     background-color: rgba(0,0,0,0.055);
@@ -150,11 +150,22 @@
     border-bottom-left-radius: 4px;
   }
 
+  .chat_text_after { white-space: pre-wrap; word-break: break-word; }
+
+  /* ---------- 表情アイコン設定 ---------- */
+  .emo_grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 8px; }
+  .emo_slot { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); }
+  .emo_thumb { width: 100%; aspect-ratio: 1 / 1; border-radius: 10px; border: 1px dashed var(--panel-edge); background: rgba(0,0,0,0.045); cursor: pointer; padding: 0; overflow: hidden; }
+  .emo_thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+  .emo_thumb.unset img { opacity: 0.35; }
+  .emo_clear { font-size: 11px; padding: 3px 8px; border-radius: 8px; border: 1px solid var(--panel-edge); background: transparent; color: var(--ink-dim); cursor: pointer; font-family: inherit; }
+  .emo_clear:disabled { opacity: 0.3; cursor: default; }
+
   /* ---------- 下部入力エリア ---------- */
 
   #input_bar {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     gap: 8px;
     padding: 10px 12px max(12px, env(safe-area-inset-bottom));
     border-top: 1px solid var(--panel-edge);
@@ -193,7 +204,13 @@
     border-radius: 20px;
     padding: 11px 16px;
     font-size: 14px;
+    line-height: 20px;
     font-family: inherit;
+    resize: none;
+    min-height: 44px;
+    max-height: 120px;
+    box-sizing: border-box;
+    min-width: 0;
   }
 
   #send_btn {
@@ -366,7 +383,7 @@
       <div id="top_title">YUI</div>
       <div id="top_status">短押しで質問 / テキスト入力もできます</div>
     </div>
-    <button id="settings_btn">APIキー設定</button>
+    <button id="settings_btn">設定</button>
   </div>
 
   <div id="vv_credit"></div>
@@ -383,7 +400,7 @@
     <input id="image_input" type="file" accept="image/*" style="display:none">
     <button id="search_btn" aria-label="検索モード(有料)切替" data-label="OFF">🔍</button>
     <button id="mic_btn" aria-label="音声で質問">🎤</button>
-    <input id="text_input" type="text" placeholder="メッセージを入力...">
+    <textarea id="text_input" rows="1" placeholder="メッセージを入力..."></textarea>
     <button id="send_btn" aria-label="送信">➤</button>
   </div>
 
@@ -407,6 +424,11 @@
       <option value="gemini-2.5-flash"></option>
       <option value="gemini-2.5-pro"></option>
     </datalist>
+    <!-- 表情アイコンの設定 -->
+    <hr style="border: 0; border-top: 1px solid var(--panel-edge); margin: 20px 0 15px;">
+    <div class="layer_title" style="font-size: 16px;">表情アイコンの設定</div>
+    <label style="margin-top: 8px;">AIの返信の感情(喜・怒・哀・楽)に合わせて、上部のアイコンが切り替わります。タップして画像を選んでください。未設定の感情は、プロフィールの画像(なければ標準画像)を表示します。</label>
+    <div class="emo_grid" id="emo_grid"></div>
     <!-- 音声の設定 -->
     <hr style="border: 0; border-top: 1px solid var(--panel-edge); margin: 20px 0 15px;">
     <div class="layer_title" style="font-size: 16px;">音声の設定</div>
@@ -416,10 +438,10 @@
     </label>
     <label for="vv_speed_slider" style="margin-top: 6px;">VOICEVOX 話速: <span id="vv_speed_val">1.50</span></label>
     <input type="range" id="vv_speed_slider" min="0.8" max="2.0" step="0.05" value="1.5" style="width: 100%; margin-top: 4px;">
-    <label style="margin-top: 10px;">声のキャラクター(横にスクロール / タップで選択)</label>
+    <label style="margin-top: 10px;">声のキャラクター(タップで選択)</label>
     <div id="vv_chars"></div>
     <div style="font-size: 11.5px; color: var(--ink-dim); margin-top: 2px;">音声クレジット: <span id="vv_credit_settings"></span></div>
-    <div style="font-size: 11px; color: var(--ink-dim); margin-top: 2px;">※ すべて東北ずん子・ずんだもんプロジェクトの音源利用規約(クレジット表記が必要)の対象キャラです</div>
+    <div style="font-size: 11px; color: var(--ink-dim); margin-top: 2px;">※ 波音リツ以外は東北ずん子・ずんだもんプロジェクトの音源利用規約、波音リツは波音リツの利用規約が適用されます(いずれもクレジット表記が必要)</div>
 
     <label for="voice_select" style="margin-top: 14px;">ブラウザ音声(VOICEVOXがOFF/失敗時に使用・端末依存)</label>
     <select id="voice_select" style="width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--panel-edge); background: var(--panel); color: var(--ink); font-size: 13.5px; margin-top: 4px; font-family: inherit;">
@@ -461,6 +483,11 @@
   let MODEL = localStorage.getItem(MODEL_KEY) || DEFAULT_MODEL;
   let SEARCH_MODEL = localStorage.getItem(SEARCH_MODEL_KEY) || DEFAULT_SEARCH_MODEL;
   const VOICE_CONFIG_KEY = 'yui_voice_config';
+  // --- 表情アイコン関連 ---
+  const EMOTION_KEY = 'yui_emotion_images';          // 喜怒哀楽4枚の保存先(別キー)
+  const FALLBACK_IMAGE = 'chars/char_normal.png';    // プロフィール画像が見つからない時の画像
+  // yui_profile 内のプロフィール画像フィールド名(上から順に探す)。名前が違う場合はここを書き換える
+  const PROFILE_IMAGE_FIELDS = ['avatar_image', 'avatar', 'image', 'icon', 'profile_image', 'ai_image', 'yui_image'];
 
   const els = {
     backBtn: document.getElementById('back_btn'),
@@ -495,11 +522,12 @@
   };
 
   // ============ 音声設定 ============
-  // 東北ずん子・ずんだもんプロジェクト音源利用規約(共通)の対象キャラ / speaker = ノーマルのID
+  // 声キャラ一覧 / speaker = ノーマルのID(波音リツのみ別規約)
   const VV_CHARS = [
     { name: '九州そら', speaker: 16 }, { name: 'ずんだもん', speaker: 3 }, { name: '四国めたん', speaker: 2 },
     { name: '東北ずん子', speaker: 107 }, { name: '東北きりたん', speaker: 108 }, { name: '東北イタコ', speaker: 109 },
     { name: '中国うさぎ', speaker: 61 }, { name: '中部つるぎ', speaker: 94 }, { name: 'あんこもん', speaker: 113 },
+    { name: '波音リツ', speaker: 9 },
   ];
   const vvCharOf = (sp) => VV_CHARS.find((c) => c.speaker === sp) || VV_CHARS[0];
   const DEFAULT_VOICE = { voiceURI: '', pitch: 1.40, rate: 1.15, useVoicevox: true, vvSpeed: 1.5, vvSpeaker: 16 };
@@ -568,7 +596,6 @@
     b.addEventListener('click', () => {
       vvSelected = ch.speaker;
       vvCharsEl.querySelectorAll('.vv_char').forEach((x) => x.classList.toggle('sel', x === b));
-      b.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
       document.getElementById('vv_credit_settings').textContent = 'VOICEVOX:' + ch.name;
     });
     vvCharsEl.appendChild(b);
@@ -681,6 +708,7 @@
     "・数字の箇条書き(1. 2. のような形式)も使わない。文章として話す\n" +
     "・回答は簡潔にする。特別な指示がない限り2〜3文、長くても4文までに収める\n" +
     "・性的な内容が含まれる場合は成人同士の想定に限る。未成年、または未成年と解釈しうる設定・年齢・描写が関わる場合は、性的な内容を一切扱わず、キャラクターとして自然に話題を変える\n" +
+    "・返信の一番最初に、その返事の感情に最も近い感情タグを必ず1つだけ付ける。使えるのは [喜] [怒] [哀] [楽] の4つだけ。喜=うれしい・感激、怒=怒り・不満・ムッとした、哀=悲しい・残念・しょんぼり、楽=楽しい・わくわく・ふだんの機嫌のよい会話。タグの直後に本文を続ける。例: [楽]それ、いいね！\n" +
     "・一貫して上記の性格・口調を維持してください";
 
   let conversationHistory = [];
@@ -738,12 +766,127 @@
   // 直近の応答メタ情報(ブロック理由の判定用)
   let lastMeta = null;
 
+  // ============ 表情アイコン(喜怒哀楽) ============
+  const EMOTIONS = [
+    { key: 'joy', label: '喜' }, { key: 'angry', label: '怒' },
+    { key: 'sad', label: '哀' }, { key: 'fun', label: '楽' },
+  ];
+  const EMO_BY_LABEL = Object.fromEntries(EMOTIONS.map((e) => [e.label, e.key]));
+  function loadEmotionImages() {
+    try {
+      const o = JSON.parse(localStorage.getItem(EMOTION_KEY) || '{}');
+      return o && typeof o === 'object' ? o : {};
+    } catch (e) { return {}; }
+  }
+  let emotionImages = loadEmotionImages();
+  let currentEmotion = null;
+
+  function getProfileImage() {
+    const pr = loadProfile();
+    for (const f of PROFILE_IMAGE_FIELDS) {
+      const v = pr[f];
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+    return FALLBACK_IMAGE;
+  }
+  function emotionImageFor(emotion) {
+    return (emotion && emotionImages[emotion]) || getProfileImage();
+  }
+  function bindImgFallback(img) {
+    img.onerror = () => { if (!img.src.endsWith(FALLBACK_IMAGE)) img.src = FALLBACK_IMAGE; };
+  }
+  function setEmotion(emotion) {
+    currentEmotion = emotion || null;
+    els.topAvatarImg.src = emotionImageFor(currentEmotion);
+  }
+  bindImgFallback(els.topAvatarImg);
+  setEmotion(null);
+
+  // 返信の先頭にある [喜] などの感情タグを取り出して、本文から取り除く
+  function parseEmotion(raw) {
+    let text = String(raw || '');
+    let emotion = null;
+    const m = text.match(/^\s*[\[［【]\s*([喜怒哀楽])\s*[\]］】]\s*/);
+    if (m) { emotion = EMO_BY_LABEL[m[1]]; text = text.slice(m[0].length); }
+    text = text.replace(/[\[［【]\s*[喜怒哀楽]\s*[\]］】]/g, '').trim();
+    if (!text) text = String(raw || '').trim();
+    return { text, emotion };
+  }
+
+  // 画像を縮小して data URL にする(localStorageの容量対策)
+  function fileToEmotionData(file, maxSize = 360) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('読み込み失敗'));
+      reader.onload = () => {
+        const image = new Image();
+        image.onerror = () => reject(new Error('画像を開けません'));
+        image.onload = () => {
+          const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+          const w = Math.max(1, Math.round(image.width * scale));
+          const h = Math.max(1, Math.round(image.height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(image, 0, 0, w, h);
+          let url = canvas.toDataURL('image/webp', 0.85);
+          if (!url.startsWith('data:image/webp')) url = canvas.toDataURL('image/png');
+          resolve(url);
+        };
+        image.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  const emoGridEl = document.getElementById('emo_grid');
+  let emotionDraft = {};
+  function renderEmotionSlots() {
+    emoGridEl.innerHTML = '';
+    EMOTIONS.forEach(({ key, label }) => {
+      const isSet = !!emotionDraft[key];
+      const slot = document.createElement('div');
+      slot.className = 'emo_slot';
+
+      const thumb = document.createElement('button');
+      thumb.type = 'button';
+      thumb.className = 'emo_thumb' + (isSet ? '' : ' unset');
+      const img = document.createElement('img');
+      img.src = emotionDraft[key] || getProfileImage();
+      bindImgFallback(img);
+      thumb.appendChild(img);
+
+      const input = document.createElement('input');
+      input.type = 'file'; input.accept = 'image/*'; input.style.display = 'none';
+      thumb.addEventListener('click', () => input.click());
+      input.addEventListener('change', async () => {
+        const f = input.files && input.files[0];
+        if (!f) return;
+        try { emotionDraft[key] = await fileToEmotionData(f); }
+        catch (e) { alert('画像を読み込めませんでした'); }
+        renderEmotionSlots();
+      });
+
+      const cap = document.createElement('div');
+      cap.textContent = label + (isSet ? '' : '(標準)');
+
+      const clear = document.createElement('button');
+      clear.type = 'button'; clear.className = 'emo_clear'; clear.textContent = '解除';
+      clear.disabled = !isSet;
+      clear.addEventListener('click', () => { delete emotionDraft[key]; renderEmotionSlots(); });
+
+      slot.append(thumb, input, cap, clear);
+      emoGridEl.appendChild(slot);
+    });
+  }
+
   // ============ APIキー設定 ============
   els.settingsBtn.addEventListener('click', () => {
     els.keyInput.value = apiKey;
     els.modelInput.value = MODEL;
     els.searchModelInput.value = SEARCH_MODEL;
     populateVoiceList();
+    emotionDraft = { ...emotionImages };
+    renderEmotionSlots();
     els.keyPanel.classList.add('active');
   });
   els.keyClose.addEventListener('click', () => els.keyPanel.classList.remove('active'));
@@ -764,6 +907,14 @@
     };
     renderVvCredit();
     localStorage.setItem(VOICE_CONFIG_KEY, JSON.stringify(voiceConfig));
+    try {
+      localStorage.setItem(EMOTION_KEY, JSON.stringify(emotionDraft));
+      emotionImages = { ...emotionDraft };
+      setEmotion(currentEmotion);
+    } catch (e) {
+      alert('表情画像が大きすぎて保存できませんでした。画像を減らすか、小さい画像にしてください。');
+      return;
+    }
     els.keyPanel.classList.remove('active');
   });
 
@@ -797,16 +948,18 @@
   });
 
   // ============ チャット表示 ============
-  function addBubble(role, text, imageDataUrl, searched) {
+  function addBubble(role, text, imageDataUrl, searched, emotion) {
     const row = document.createElement('div');
     row.className = `chat_row ${role}`;
 
     const avatar = document.createElement('div');
     avatar.className = 'chat_avatar';
-    if (role === 'assistant') avatar.style.backgroundImage = `url('${timeOfDayBg()}')`;
-    const img = document.createElement('img');
-    img.src = role === 'assistant' ? 'chars/char_normal.png' : '';
-    if (role === 'assistant') avatar.appendChild(img);
+    if (role === 'assistant') {
+      const img = document.createElement('img');
+      img.src = emotionImageFor(emotion);
+      bindImgFallback(img);
+      avatar.appendChild(img);
+    }
 
     const bubble = document.createElement('div');
     bubble.className = 'chat_bubble';
@@ -840,7 +993,9 @@
     setAvatarState('thinking');
     callGemini([{ role: 'user', parts: [{ text: '(最初の挨拶をひとことだけ、設定した性格の口調でお願いします)' }] }])
       .then((line) => {
-        addBubble('assistant', line || `${userName}、お話ししよう。何か聞きたいことある？`);
+        const g = parseEmotion(line);
+        addBubble('assistant', g.text || `${userName}、お話ししよう。何か聞きたいことある？`, null, false, g.emotion);
+        setEmotion(g.emotion);
         setAvatarState('normal');
       })
       .catch(() => {
@@ -962,25 +1117,8 @@
     return list.map((e, i) => (i < cut ? stripImages(e) : e));
   }
 
-  function timeOfDayBg() {
-    const hour = new Date().getHours();
-    if (hour >= 5 && hour < 11)  return 'chars/bg_morning.jpg';
-    if (hour >= 17 && hour < 20) return 'chars/bg_evening.jpg';
-    if (hour >= 20 || hour < 5)  return 'chars/bg_evening.jpg';
-    return 'chars/bg_day.jpg';
-  }
-  const currentBg = timeOfDayBg();
-  document.getElementById('top_avatar').style.backgroundImage = `url('${currentBg}')`;
-
+  // 状態(考え中・聞き取り中など)ではアイコンを変えない。マイクボタンの色だけ切り替える
   function setAvatarState(state) {
-    const map = {
-      normal: 'chars/char_normal.png',
-      listening: 'chars/char_thinking.png',
-      thinking: 'chars/char_thinking.png',
-      speaking: 'chars/char_normal.png',
-      error: 'chars/char_error.png',
-    };
-    els.topAvatarImg.src = map[state] || map.normal;
     els.micBtn.className = state === 'normal' ? '' : `state-${state}`;
   }
 
@@ -1180,10 +1318,13 @@
 
     try {
       searchFellBack = '';
-      const answer = await callGemini(requestContents, { useSearch });
+      const rawAnswer = await callGemini(requestContents, { useSearch });
+      const { text: answer, emotion } = parseEmotion(rawAnswer);
       conversationHistory.push({ role: 'user', parts });
-      conversationHistory.push({ role: 'model', parts: [{ text: answer }] });
-      addBubble('assistant', answer, null, lastUsedSearch);
+      // 履歴にはタグ付きのまま残す(以降の返信でもタグを付け続けさせるため)
+      conversationHistory.push({ role: 'model', parts: [{ text: rawAnswer }] });
+      addBubble('assistant', answer, null, lastUsedSearch, emotion);
+      setEmotion(emotion);
       if (searchFellBack) {
         addBubble('assistant', `⚠️ ${searchFellBack}、検索なしで答えました。`);
       }
@@ -1204,17 +1345,17 @@
   }
 
   // ============ テキスト入力 ============
+  // Enterは改行、送信は➤ボタンのみ。入力に合わせて高さを自動で伸ばす
+  function autoGrowInput() {
+    els.textInput.style.height = 'auto';
+    els.textInput.style.height = Math.min(els.textInput.scrollHeight + 2, 120) + 'px';
+  }
+  els.textInput.addEventListener('input', autoGrowInput);
   els.sendBtn.addEventListener('click', () => {
     const text = els.textInput.value.trim();
     els.textInput.value = '';
+    autoGrowInput();
     sendMessage(text);
-  });
-  els.textInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      const text = els.textInput.value.trim();
-      els.textInput.value = '';
-      sendMessage(text);
-    }
   });
 
   // ============ 音声入力 ============
