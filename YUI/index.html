@@ -182,90 +182,44 @@
 
   #home_stage_row {
     flex: 1;
+    min-height: 0;
     display: flex;
-    align-items: center;
+    align-items: stretch;
+    justify-content: center;
     position: relative;
-    padding: 10px 20px 0;
+    padding: 0 12px;
   }
 
-  #home_bubble_wrap {
-    flex: 1;
-    min-width: 0;
-    padding-right: 10px;
-  }
-
+  /* フレンドのひとこと用の小さな表示(普段は非表示) */
   #home_bubble {
-    position: relative;
+    position: absolute;
+    top: 54px;
+    left: 16px;
+    right: 16px;
+    z-index: 7;
+    display: none;
     background: #ffffff;
-    border: 4px solid #1a1a1a;
-    border-radius: 26px;
-    padding: 22px 24px;
-    font-size: 21px;
+    border: 3px solid #1a1a1a;
+    border-radius: 18px;
+    padding: 12px 16px;
+    font-size: 15px;
     font-weight: 600;
-    line-height: 1.7;
+    line-height: 1.6;
+    text-align: center;
     color: #1a1a1a;
     box-shadow: 0 8px 20px rgba(0,0,0,0.12);
   }
-
-  /* スマホの狭い画面幅では、文章量を保ったまま文字と余白を少し小さくする */
-  @media (max-width: 400px) {
-    #home_bubble {
-      border-width: 3px;
-      border-radius: 20px;
-      padding: 15px 16px;
-      font-size: 15px;
-      line-height: 1.6;
-    }
-    #home_bubble::before {
-      right: -13px;
-      border-top-width: 11px;
-      border-bottom-width: 11px;
-      border-left-width: 13px;
-    }
-    #home_bubble::after {
-      right: -8px;
-      border-top-width: 8px;
-      border-bottom-width: 8px;
-      border-left-width: 9px;
-    }
-  }
-
-  /* 吹き出しのしっぽ(右のキャラ側を指す・黒縁+白中身の二重構造) */
-  #home_bubble::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    right: -17px;
-    transform: translateY(-50%);
-    width: 0;
-    height: 0;
-    border-top: 14px solid transparent;
-    border-bottom: 14px solid transparent;
-    border-left: 17px solid #1a1a1a;
-  }
-  #home_bubble::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    right: -10px;
-    transform: translateY(-50%);
-    width: 0;
-    height: 0;
-    border-top: 10px solid transparent;
-    border-bottom: 10px solid transparent;
-    border-left: 12px solid #ffffff;
-  }
+  #home_bubble.show { display: block; }
 
   #home_char_area {
     position: relative;
-    width: 46vw;
-    max-width: 230px;
-    flex-shrink: 0;
+    width: 100%;
+    max-width: 480px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-end;
-    height: 52vh;
+    padding-bottom: 8px;
   }
 
   #home_character_wrap {
@@ -277,61 +231,10 @@
   }
 
   #home_character_wrap img {
-    max-height: 44vh;
-    max-width: 76%;
+    max-height: max(220px, calc(100dvh - 300px));
+    max-width: 96%;
     object-fit: contain;
     filter: drop-shadow(0 8px 12px rgba(0,0,0,0.18));
-  }
-
-  /* 足元の楕円カーペット(台座) */
-  #home_rug {
-    position: relative;
-    z-index: 1;
-    width: 78%;
-    height: 22px;
-    margin-top: -8px;
-    border-radius: 50%;
-    background: #c48a5a;
-    opacity: 0.8;
-    filter: blur(0.3px);
-    box-shadow: 0 6px 14px rgba(0,0,0,0.12);
-  }
-
-  /* ---------- キャラ横の装飾小物(左右2つ・見た目だけ) ---------- */
-
-  #home_props_row {
-    position: absolute;
-    left: -6px;
-    right: -6px;
-    bottom: 12%;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    z-index: 0;
-  }
-
-  .prop_btn {
-    width: 54px;
-    height: 54px;
-    padding: 0;
-    border: none;
-    background: none;
-    display: block;
-    cursor: pointer;
-    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15));
-    opacity: 0.92;
-  }
-
-  .prop_btn img,
-  .prop_btn svg.prop_item {
-    width: 100%;
-    height: 100%;
-    display: block;
-    object-fit: contain;
-  }
-
-  .prop_btn img {
-    border-radius: 10px;
   }
 
   /* ---------- 遊びに来たフレンドAI(キャラ上部に表示) ---------- */
@@ -410,7 +313,7 @@
     cursor: pointer;
   }
 
-  /* ---------- 現在の感情表示(YUIロゴの下) ---------- */
+  /* ---------- 現在の感情表示(YUIロゴの下・白い四角) ---------- */
 
   #home_brand_wrap {
     display: flex;
@@ -419,16 +322,30 @@
   }
 
   #home_emotion {
-    font-size: 11.5px;
-    font-weight: 600;
-    color: var(--ink-dim);
+    margin-top: 6px;
+    width: fit-content;
+    background: #ffffff;
+    border: 2px solid #1a1a1a;
+    border-radius: 10px;
+    padding: 8px 10px 10px;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #1a1a1a;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.12);
   }
-
-  #home_emotion .emotion_face {
-    font-size: 13px;
+  #home_emotion_text { font-size: 15px; color: var(--scan); }
+  #home_emotion_img {
+    width: 72px;
+    height: 72px;
+    border-radius: 6px;
+    object-fit: cover;
+    object-position: top center;
+    background: #f0ece0;
+    display: block;
   }
 
   #home_buttons {
@@ -601,6 +518,39 @@
     padding: 6px;
   }
 
+  /* ---------- 表情画像(喜怒哀楽)の設定モーダル ---------- */
+  #emo_modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 22, 26, 0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 51;
+    padding: 20px;
+  }
+  #emo_modal.active { display: flex; }
+  #emo_modal_card {
+    width: min(90vw, 340px);
+    background: var(--panel);
+    border-radius: 20px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.25);
+  }
+  #emo_modal_title { font-family: 'M PLUS Rounded 1c', sans-serif; font-weight: 800; font-size: 16px; }
+  #emo_modal_desc { font-size: 12px; color: var(--ink-dim); line-height: 1.6; }
+  #emo_grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .emo_slot { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
+  .emo_thumb { width: 100%; aspect-ratio: 1 / 1; border-radius: 10px; border: 2px dashed var(--panel-edge); background: rgba(0,0,0,0.045); cursor: pointer; padding: 0; overflow: hidden; }
+  .emo_thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+  .emo_thumb.unset img { opacity: 0.35; }
+  .emo_clear { font-size: 11px; padding: 3px 10px; border-radius: 8px; border: 1px solid var(--panel-edge); background: transparent; color: var(--ink-dim); cursor: pointer; font-family: inherit; }
+  .emo_clear:disabled { opacity: 0.3; cursor: default; }
+  #emo_modal_close { background: none; border: none; color: var(--ink-dim); font-family: inherit; font-size: 13px; padding: 6px; }
+
   /* ---------- ホーム画面:長押し→上下ドラッグでカメラ/トークモード切替 ---------- */
   #mode_gesture_guide {
     position: absolute;
@@ -644,7 +594,10 @@
     <div id="home_top">
       <div id="home_brand_wrap">
         <div id="home_brand">YUI</div>
-        <div id="home_emotion">現在の感情：<span class="emotion_face" id="home_emotion_face">😊</span><span id="home_emotion_text">笑顔</span></div>
+        <div id="home_emotion">
+          <div>現在の感情：<span id="home_emotion_text">喜</span></div>
+          <img id="home_emotion_img" src="chars/char_normal.png" alt="現在の感情の画像">
+        </div>
       </div>
       <button id="home_menu_btn">
         <span class="burger">☰</span>
@@ -664,39 +617,16 @@
     </div>
 
     <div id="home_stage_row">
-      <div id="home_bubble_wrap">
-        <div id="home_bubble">こんにちは。</div>
-      </div>
+      <div id="home_bubble"></div>
       <div id="home_char_area">
         <div id="visiting_friends_row"></div>
-        <div id="home_props_row">
-          <!-- 左:観葉植物 -->
-          <button class="prop_btn" data-prop-index="0" aria-label="左の小物を変更(観葉植物)">
-            <svg class="prop_item" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M14 44h20l-2-14H16l-2 14Z" fill="#c48a5a" stroke="#1a1a1a" stroke-width="2"/>
-              <path d="M24 30c0-10-8-12-8-20 6 0 8 6 8 10 0-8 4-14 10-14 0 10-6 14-6 20" stroke="#1a1a1a" stroke-width="2" fill="#8bc98f"/>
-              <path d="M24 30c2-8-2-16-10-18" stroke="#1a1a1a" stroke-width="2" fill="none"/>
-            </svg>
-          </button>
-          <!-- 右:マグカップ -->
-          <button class="prop_btn" data-prop-index="1" aria-label="右の小物を変更(マグカップ)">
-            <svg class="prop_item" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 18h20v14a6 6 0 0 1-6 6h-8a6 6 0 0 1-6-6V18Z" fill="#ffffff" stroke="#1a1a1a" stroke-width="2"/>
-              <path d="M32 22h3a4 4 0 0 1 0 8h-3" stroke="#1a1a1a" stroke-width="2" fill="none"/>
-              <path d="M17 12c0 2 2 2 2 4" stroke="#1a1a1a" stroke-width="1.6" fill="none"/>
-              <path d="M23 12c0 2 2 2 2 4" stroke="#1a1a1a" stroke-width="1.6" fill="none"/>
-            </svg>
-          </button>
-        </div>
         <div id="home_character_wrap">
           <img id="home_character_img" src="chars/char_normal.png" alt="YUI">
         </div>
         <button id="char_edit_btn" aria-label="画像を変更">🖼️</button>
-        <div id="home_rug"></div>
       </div>
     </div>
     <input type="file" id="char_file_input" accept="image/*" style="display:none">
-    <input type="file" id="prop_file_input" accept="image/*" style="display:none">
     <input type="file" id="friend_zip_input" accept=".zip" style="display:none">
     <audio id="decide_se" src="chars/決定音.mp3" preload="auto"></audio>
 
@@ -707,13 +637,20 @@
         <button class="upload_option_btn" id="upload_char_btn">
           <span class="upload_option_icon">🧑</span>キャラクターの画像を変更
         </button>
-        <button class="upload_option_btn" id="upload_prop_left_btn">
-          <span class="upload_option_icon">⬅️</span>左の小物を変更
-        </button>
-        <button class="upload_option_btn" id="upload_prop_right_btn">
-          <span class="upload_option_icon">➡️</span>右の小物を変更
+        <button class="upload_option_btn" id="upload_emo_btn">
+          <span class="upload_option_icon">😀</span>表情画像(喜怒哀楽)を設定
         </button>
         <button id="upload_modal_close">閉じる</button>
+      </div>
+    </div>
+
+    <!-- 表情画像(喜怒哀楽)の設定 -->
+    <div id="emo_modal">
+      <div id="emo_modal_card">
+        <div id="emo_modal_title">表情画像(喜怒哀楽)</div>
+        <div id="emo_modal_desc">タップして画像を選んでください。未設定の感情は立ち絵を表示します。トークの返信ごとに、この画像が切り替わります。</div>
+        <div id="emo_grid"></div>
+        <button id="emo_modal_close">閉じる</button>
       </div>
     </div>
 
@@ -793,15 +730,16 @@
     scheduleList: document.getElementById('schedule_list'),
     charEditBtn: document.getElementById('char_edit_btn'),
     charFileInput: document.getElementById('char_file_input'),
-    propFileInput: document.getElementById('prop_file_input'),
     homeCharacterWrap: document.getElementById('home_character_wrap'),
-    homeEmotionFace: document.getElementById('home_emotion_face'),
+    homeEmotionImg: document.getElementById('home_emotion_img'),
     homeEmotionText: document.getElementById('home_emotion_text'),
     uploadModal: document.getElementById('upload_modal'),
     uploadModalClose: document.getElementById('upload_modal_close'),
     uploadCharBtn: document.getElementById('upload_char_btn'),
-    uploadPropLeftBtn: document.getElementById('upload_prop_left_btn'),
-    uploadPropRightBtn: document.getElementById('upload_prop_right_btn'),
+    uploadEmoBtn: document.getElementById('upload_emo_btn'),
+    emoModal: document.getElementById('emo_modal'),
+    emoModalClose: document.getElementById('emo_modal_close'),
+    emoGrid: document.getElementById('emo_grid'),
     friendZipInput: document.getElementById('friend_zip_input'),
     visitingFriendsRow: document.getElementById('visiting_friends_row'),
     decideSe: document.getElementById('decide_se'),
@@ -910,7 +848,10 @@
 
   // ============ 画像アップロード(キャラ・小物を好きな画像に差し替え) ============
   const CHAR_IMAGE_KEY = 'yui_custom_char';
-  const PROPS_IMAGE_KEY = 'yui_custom_props';
+  const EMOTION_KEY = 'yui_emotion_images';   // 喜怒哀楽4枚(talk.htmlと共通)
+  const DEFAULT_CHAR = 'chars/char_normal.png';
+  // 小物機能は廃止したので、保存済みの小物画像は消しておく
+  try { localStorage.removeItem('yui_custom_props'); } catch (e) {}
 
   function loadCustomChar() {
     try { return localStorage.getItem(CHAR_IMAGE_KEY) || null; } catch (e) { return null; }
@@ -918,15 +859,17 @@
   function saveCustomChar(dataUrl) {
     try { localStorage.setItem(CHAR_IMAGE_KEY, dataUrl); } catch (e) { alert('画像の保存に失敗しました(サイズが大きすぎるかもしれません)。'); }
   }
+  function standImage() { return loadCustomChar() || DEFAULT_CHAR; }
 
-  function loadCustomProps() {
+  function loadEmotionImages() {
     try {
-      const raw = localStorage.getItem(PROPS_IMAGE_KEY);
-      return raw ? JSON.parse(raw) : [null, null];
-    } catch (e) { return [null, null]; }
+      const o = JSON.parse(localStorage.getItem(EMOTION_KEY) || '{}');
+      return o && typeof o === 'object' ? o : {};
+    } catch (e) { return {}; }
   }
-  function saveCustomProps(list) {
-    try { localStorage.setItem(PROPS_IMAGE_KEY, JSON.stringify(list)); } catch (e) { alert('画像の保存に失敗しました(サイズが大きすぎるかもしれません)。'); }
+  function saveEmotionImages(obj) {
+    try { localStorage.setItem(EMOTION_KEY, JSON.stringify(obj)); return true; }
+    catch (e) { alert('画像の保存に失敗しました(サイズが大きすぎるかもしれません)。'); return false; }
   }
 
   // ============ フレンドAI(他の人が送ってきたAI)の受け入れ・表示 ============
@@ -973,11 +916,10 @@
   function showFriendMessage(f) {
     clearTimeout(friendBubbleTimeout);
     els.homeBubble.textContent = `${f.name}「${f.message}」`;
+    els.homeBubble.classList.add('show');
     speak(`${f.name}より、${f.message}`);
     friendBubbleTimeout = setTimeout(() => {
-      const profile = loadProfile();
-      const name = (profile && profile.user_name) || 'あなた';
-      els.homeBubble.textContent = timeGreeting(name);
+      els.homeBubble.classList.remove('show');
     }, 5000);
   }
 
@@ -1077,49 +1019,92 @@
     fileToDataUrl(file, (dataUrl) => {
       saveCustomChar(dataUrl);
       els.homeCharacterImg.src = dataUrl;
+      renderCurrentEmotion();
     });
   });
 
-  // ---- 小物画像の差し替え(左右2スロット) ----
-  function renderCustomProps() {
-    const props = loadCustomProps();
-    document.querySelectorAll('.prop_btn').forEach((btn) => {
-      const idx = Number(btn.dataset.propIndex);
-      const custom = props[idx];
-      if (custom) {
-        btn.innerHTML = '';
-        const img = document.createElement('img');
-        img.src = custom;
-        img.alt = '小物';
-        btn.appendChild(img);
-      }
+  // ---- 表情画像(喜怒哀楽)の設定 ----
+  // 画像を縮小して data URL にする(localStorageの容量対策)
+  function fileToEmotionData(file, maxSize = 360) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('読み込み失敗'));
+      reader.onload = () => {
+        const image = new Image();
+        image.onerror = () => reject(new Error('画像を開けません'));
+        image.onload = () => {
+          const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+          const w = Math.max(1, Math.round(image.width * scale));
+          const h = Math.max(1, Math.round(image.height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(image, 0, 0, w, h);
+          let url = canvas.toDataURL('image/webp', 0.85);
+          if (!url.startsWith('data:image/webp')) url = canvas.toDataURL('image/png');
+          resolve(url);
+        };
+        image.src = reader.result;
+      };
+      reader.readAsDataURL(file);
     });
   }
 
-  let activePropIndex = null;
-  function openPropPicker(index) {
+  function renderEmoSlots() {
+    const imgs = loadEmotionImages();
+    els.emoGrid.innerHTML = '';
+    EMOTIONS.forEach(({ key, label }) => {
+      const isSet = !!imgs[key];
+      const slot = document.createElement('div');
+      slot.className = 'emo_slot';
+
+      const thumb = document.createElement('button');
+      thumb.type = 'button';
+      thumb.className = 'emo_thumb' + (isSet ? '' : ' unset');
+      const img = document.createElement('img');
+      img.src = imgs[key] || standImage();
+      thumb.appendChild(img);
+
+      const input = document.createElement('input');
+      input.type = 'file'; input.accept = 'image/*'; input.style.display = 'none';
+      thumb.addEventListener('click', () => { input.value = ''; input.click(); });
+      input.addEventListener('change', async () => {
+        const f = input.files && input.files[0];
+        if (!f) return;
+        try {
+          const cur = loadEmotionImages();
+          cur[key] = await fileToEmotionData(f);
+          if (!saveEmotionImages(cur)) return;
+        } catch (e) { alert('画像を読み込めませんでした'); return; }
+        renderEmoSlots();
+        renderCurrentEmotion();
+      });
+
+      const cap = document.createElement('div');
+      cap.textContent = label + (isSet ? '' : '(未設定)');
+
+      const clear = document.createElement('button');
+      clear.type = 'button'; clear.className = 'emo_clear'; clear.textContent = '解除';
+      clear.disabled = !isSet;
+      clear.addEventListener('click', () => {
+        const cur = loadEmotionImages();
+        delete cur[key];
+        saveEmotionImages(cur);
+        renderEmoSlots();
+        renderCurrentEmotion();
+      });
+
+      slot.append(thumb, input, cap, clear);
+      els.emoGrid.appendChild(slot);
+    });
+  }
+  els.uploadEmoBtn.addEventListener('click', () => {
     closeUploadModal();
-    activePropIndex = index;
-    els.propFileInput.value = '';
-    els.propFileInput.click();
-  }
-  els.uploadPropLeftBtn.addEventListener('click', () => openPropPicker(0));
-  els.uploadPropRightBtn.addEventListener('click', () => openPropPicker(1));
-  // 小物を直接タップした場合もそれぞれの画像アップロードを開けるようにしておく
-  document.querySelectorAll('.prop_btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      openPropPicker(Number(btn.dataset.propIndex));
-    });
+    renderEmoSlots();
+    els.emoModal.classList.add('active');
   });
-  els.propFileInput.addEventListener('change', (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (activePropIndex === null || !file) return;
-    fileToDataUrl(file, (dataUrl) => {
-      const props = loadCustomProps();
-      props[activePropIndex] = dataUrl;
-      saveCustomProps(props);
-      renderCustomProps();
-    });
+  els.emoModalClose.addEventListener('click', () => els.emoModal.classList.remove('active'));
+  els.emoModal.addEventListener('click', (e) => {
+    if (e.target === els.emoModal) els.emoModal.classList.remove('active');
   });
 
   // ---- キャラをタップした時の共通リアクション(上下バウンス) ----
@@ -1153,7 +1138,7 @@
 
     function isExcluded(t) {
       return !!(t && t.closest && t.closest(
-        '#home_menu_btn, #home_character_wrap, #char_edit_btn, .prop_btn, .home_nav_btn, #schedule_card, .visiting_friend_btn, #upload_modal'
+        '#home_menu_btn, #home_character_wrap, #char_edit_btn, .home_nav_btn, #schedule_card, .visiting_friend_btn, #upload_modal, #emo_modal'
       ));
     }
 
@@ -1228,15 +1213,21 @@
     return `${name}、お疲れさま。何か手伝えることある？`;
   }
 
-  // 待機中はランダムに表情(=感情)を選ぶ(気分屋な感じを出す)
-  const IDLE_FACES = [
-    { src: 'chars/char_normal.png',   emoji: '😊', label: '笑顔' },
-    { src: 'chars/char_thinking.png', emoji: '🤔', label: '考え中' },
-    { src: 'chars/char_error.png',    emoji: '😥', label: '困り顔' },
-    { src: 'chars/char_angry.png',    emoji: '😠', label: 'ぷんすか' },
+  // 現在の感情: ホームを開くたびに 喜怒哀楽 からランダムで1つ選ぶ
+  const EMOTIONS = [
+    { key: 'joy',   label: '喜' },
+    { key: 'angry', label: '怒' },
+    { key: 'sad',   label: '哀' },
+    { key: 'fun',   label: '楽' },
   ];
-  function pickRandomFace() {
-    return IDLE_FACES[Math.floor(Math.random() * IDLE_FACES.length)];
+  let currentEmotion = EMOTIONS[0];
+  function pickRandomEmotion() {
+    return EMOTIONS[Math.floor(Math.random() * EMOTIONS.length)];
+  }
+  // 感情ボックス(文字+対応する画像。画像が未設定なら立ち絵)を描き直す
+  function renderCurrentEmotion() {
+    els.homeEmotionText.textContent = currentEmotion.label;
+    els.homeEmotionImg.src = loadEmotionImages()[currentEmotion.key] || standImage();
   }
 
   function showHome() {
@@ -1245,16 +1236,12 @@
     const aiName = (profile && profile.ai_name) || 'YUI';
     if (els.homeBrand) els.homeBrand.textContent = aiName;
     const greeting = timeGreeting(name);
-    els.homeBubble.textContent = greeting;
 
-    const emotion = pickRandomFace();
-    const customChar = loadCustomChar();
-    // 画像をアップロード済みならその画像を、未設定ならデフォルトの表情画像を使う
-    els.homeCharacterImg.src = customChar || emotion.src;
-    els.homeEmotionFace.textContent = emotion.emoji;
-    els.homeEmotionText.textContent = emotion.label;
+    // 立ち絵は常にデフォルト(アップロード済みならその画像)。感情では変えない
+    els.homeCharacterImg.src = standImage();
+    currentEmotion = pickRandomEmotion();
+    renderCurrentEmotion();
 
-    renderCustomProps();
     renderTodaySchedule();
     renderVisitingFriends();
     showLayer(els.homeLayer);
