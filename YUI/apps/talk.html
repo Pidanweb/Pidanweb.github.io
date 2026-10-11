@@ -92,6 +92,8 @@
   .vv_char.sel { border-color: #5A9E1E; background: rgba(90,158,30,0.16); font-weight: 700; }
   #settings_btn {
     margin-left: auto;
+    white-space: nowrap;
+    flex-shrink: 0;
     background: rgba(0,0,0,0.055);
     border: 1px solid rgba(0,0,0,0.12);
     color: var(--ink-dim);
@@ -151,15 +153,6 @@
   }
 
   .chat_text_after { white-space: pre-wrap; word-break: break-word; }
-
-  /* ---------- 表情アイコン設定 ---------- */
-  .emo_grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 8px; }
-  .emo_slot { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); }
-  .emo_thumb { width: 100%; aspect-ratio: 1 / 1; border-radius: 10px; border: 1px dashed var(--panel-edge); background: rgba(0,0,0,0.045); cursor: pointer; padding: 0; overflow: hidden; }
-  .emo_thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
-  .emo_thumb.unset img { opacity: 0.35; }
-  .emo_clear { font-size: 11px; padding: 3px 8px; border-radius: 8px; border: 1px solid var(--panel-edge); background: transparent; color: var(--ink-dim); cursor: pointer; font-family: inherit; }
-  .emo_clear:disabled { opacity: 0.3; cursor: default; }
 
   /* ---------- 下部入力エリア ---------- */
 
@@ -424,11 +417,6 @@
       <option value="gemini-2.5-flash"></option>
       <option value="gemini-2.5-pro"></option>
     </datalist>
-    <!-- 表情アイコンの設定 -->
-    <hr style="border: 0; border-top: 1px solid var(--panel-edge); margin: 20px 0 15px;">
-    <div class="layer_title" style="font-size: 16px;">表情アイコンの設定</div>
-    <label style="margin-top: 8px;">AIの返信の感情(喜・怒・哀・楽)に合わせて、上部のアイコンが切り替わります。タップして画像を選んでください。未設定の感情は、プロフィールの画像(なければ標準画像)を表示します。</label>
-    <div class="emo_grid" id="emo_grid"></div>
     <!-- 音声の設定 -->
     <hr style="border: 0; border-top: 1px solid var(--panel-edge); margin: 20px 0 15px;">
     <div class="layer_title" style="font-size: 16px;">音声の設定</div>
@@ -475,7 +463,8 @@
 (() => {
   const PROFILE_KEY = 'yui_profile';
   const PROGRESS_KEY = 'yui_tutorial_progress';
-  const API_KEY_STORAGE = 'yui_gemini_api_key';
+  const API_KEY_STORAGE = 'yui_api_key';           // settings.html と共通
+  const LEGACY_API_KEY_STORAGE = 'yui_gemini_api_key'; // 旧キー(あれば引き継ぐ)
   const DEFAULT_MODEL = "gemini-3.5-flash-lite";        // 通常の会話用
   const DEFAULT_SEARCH_MODEL = "gemini-2.5-flash-lite"; // 検索モード(有料)用
   const MODEL_KEY = 'yui_chat_model';
@@ -484,10 +473,9 @@
   let SEARCH_MODEL = localStorage.getItem(SEARCH_MODEL_KEY) || DEFAULT_SEARCH_MODEL;
   const VOICE_CONFIG_KEY = 'yui_voice_config';
   // --- 表情アイコン関連 ---
-  const EMOTION_KEY = 'yui_emotion_images';          // 喜怒哀楽4枚の保存先(別キー)
-  const FALLBACK_IMAGE = 'chars/char_normal.png';    // プロフィール画像が見つからない時の画像
-  // yui_profile 内のプロフィール画像フィールド名(上から順に探す)。名前が違う場合はここを書き換える
-  const PROFILE_IMAGE_FIELDS = ['avatar_image', 'avatar', 'image', 'icon', 'profile_image', 'ai_image', 'yui_image'];
+  const EMOTION_KEY = 'yui_emotion_images';          // 喜怒哀楽4枚(index.htmlで設定)
+  const STAND_KEY = 'yui_custom_char';               // 立ち絵(index.htmlで設定)
+  const FALLBACK_IMAGE = 'chars/char_normal.png';    // 立ち絵が未設定の時の画像
 
   const els = {
     backBtn: document.getElementById('back_btn'),
@@ -675,7 +663,7 @@
     }
   }
   const profile = loadProfile();
-  let apiKey = localStorage.getItem(API_KEY_STORAGE) || profile.gemini_api_key || "";
+  let apiKey = localStorage.getItem(API_KEY_STORAGE) || localStorage.getItem(LEGACY_API_KEY_STORAGE) || profile.gemini_api_key || "";
 
   const TONE_TEXT = {
     polite:   "丁寧語(です・ます調)で話してください。",
@@ -691,12 +679,17 @@
   };
 
   const userName = profile.user_name || 'あなた';
-  const customPersonality = (profile.personality || profile.custom_personality || '').trim();
+  const aiName = profile.ai_name || 'YUI';
+  // settings.html の「AIの性格」(custom_personality)が保存されていれば常にそれを使う(空=リセットも反映)。
+  // 一度も保存されていないときだけ、初期設定の personality を使う
+  const customPersonality = String(
+    typeof profile.custom_personality === 'string' ? profile.custom_personality : (profile.personality || '')
+  ).trim();
 
   const personalityBlock = customPersonality
     ? "あなたは次のキャラクター設定になりきってください。設定に書かれた口調・話し方・言葉づかいを何よりも優先してください。\n" +
       "----\n" + customPersonality + "\n----\n"
-    : "あなたはナビゲーションAI「YUI」です。ユーザーの生活をサポートするパートナーとして振る舞ってください。\n" +
+    : "あなたはナビゲーションAI「" + aiName + "」です。ユーザーの生活をサポートするパートナーとして振る舞ってください。\n" +
       (TONE_TEXT[profile.tone_style] || TONE_TEXT.friendly) + "\n" +
       (FEEDBACK_TEXT[profile.feedback_style] || FEEDBACK_TEXT.gentle) + "\n";
 
@@ -767,6 +760,8 @@
   let lastMeta = null;
 
   // ============ 表情アイコン(喜怒哀楽) ============
+  // 上部アイコン = 立ち絵(index.htmlで設定した yui_custom_char)で固定。
+  // 吹き出し横のアイコンだけ、返信ごとの感情に合わせて変わる(画像は index.html で設定・yui_emotion_images)
   const EMOTIONS = [
     { key: 'joy', label: '喜' }, { key: 'angry', label: '怒' },
     { key: 'sad', label: '哀' }, { key: 'fun', label: '楽' },
@@ -778,29 +773,27 @@
       return o && typeof o === 'object' ? o : {};
     } catch (e) { return {}; }
   }
-  let emotionImages = loadEmotionImages();
-  let currentEmotion = null;
+  const emotionImages = loadEmotionImages();
 
-  function getProfileImage() {
-    const pr = loadProfile();
-    for (const f of PROFILE_IMAGE_FIELDS) {
-      const v = pr[f];
-      if (typeof v === 'string' && v.trim()) return v.trim();
-    }
+  function getStandImage() {
+    try { const v = localStorage.getItem(STAND_KEY); if (v) return v; } catch (e) {}
     return FALLBACK_IMAGE;
   }
   function emotionImageFor(emotion) {
-    return (emotion && emotionImages[emotion]) || getProfileImage();
+    return (emotion && emotionImages[emotion]) || getStandImage();
   }
+  // 画像が読めない時は標準画像 → 1つ上のフォルダの標準画像の順に試す
   function bindImgFallback(img) {
-    img.onerror = () => { if (!img.src.endsWith(FALLBACK_IMAGE)) img.src = FALLBACK_IMAGE; };
-  }
-  function setEmotion(emotion) {
-    currentEmotion = emotion || null;
-    els.topAvatarImg.src = emotionImageFor(currentEmotion);
+    img.onerror = () => {
+      const alts = [FALLBACK_IMAGE, '../' + FALLBACK_IMAGE];
+      const n = Number(img.dataset.fb || 0);
+      if (n < alts.length) { img.dataset.fb = String(n + 1); img.src = alts[n]; }
+    };
   }
   bindImgFallback(els.topAvatarImg);
-  setEmotion(null);
+  els.topAvatarImg.src = getStandImage();
+  els.topAvatarImg.alt = aiName;
+  document.getElementById('top_title').textContent = aiName;
 
   // 返信の先頭にある [喜] などの感情タグを取り出して、本文から取り除く
   function parseEmotion(raw) {
@@ -813,80 +806,12 @@
     return { text, emotion };
   }
 
-  // 画像を縮小して data URL にする(localStorageの容量対策)
-  function fileToEmotionData(file, maxSize = 360) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () => reject(new Error('読み込み失敗'));
-      reader.onload = () => {
-        const image = new Image();
-        image.onerror = () => reject(new Error('画像を開けません'));
-        image.onload = () => {
-          const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
-          const w = Math.max(1, Math.round(image.width * scale));
-          const h = Math.max(1, Math.round(image.height * scale));
-          const canvas = document.createElement('canvas');
-          canvas.width = w; canvas.height = h;
-          canvas.getContext('2d').drawImage(image, 0, 0, w, h);
-          let url = canvas.toDataURL('image/webp', 0.85);
-          if (!url.startsWith('data:image/webp')) url = canvas.toDataURL('image/png');
-          resolve(url);
-        };
-        image.src = reader.result;
-      };
-      reader.readAsDataURL(file);
-    });
-  }
-
-  const emoGridEl = document.getElementById('emo_grid');
-  let emotionDraft = {};
-  function renderEmotionSlots() {
-    emoGridEl.innerHTML = '';
-    EMOTIONS.forEach(({ key, label }) => {
-      const isSet = !!emotionDraft[key];
-      const slot = document.createElement('div');
-      slot.className = 'emo_slot';
-
-      const thumb = document.createElement('button');
-      thumb.type = 'button';
-      thumb.className = 'emo_thumb' + (isSet ? '' : ' unset');
-      const img = document.createElement('img');
-      img.src = emotionDraft[key] || getProfileImage();
-      bindImgFallback(img);
-      thumb.appendChild(img);
-
-      const input = document.createElement('input');
-      input.type = 'file'; input.accept = 'image/*'; input.style.display = 'none';
-      thumb.addEventListener('click', () => input.click());
-      input.addEventListener('change', async () => {
-        const f = input.files && input.files[0];
-        if (!f) return;
-        try { emotionDraft[key] = await fileToEmotionData(f); }
-        catch (e) { alert('画像を読み込めませんでした'); }
-        renderEmotionSlots();
-      });
-
-      const cap = document.createElement('div');
-      cap.textContent = label + (isSet ? '' : '(標準)');
-
-      const clear = document.createElement('button');
-      clear.type = 'button'; clear.className = 'emo_clear'; clear.textContent = '解除';
-      clear.disabled = !isSet;
-      clear.addEventListener('click', () => { delete emotionDraft[key]; renderEmotionSlots(); });
-
-      slot.append(thumb, input, cap, clear);
-      emoGridEl.appendChild(slot);
-    });
-  }
-
   // ============ APIキー設定 ============
   els.settingsBtn.addEventListener('click', () => {
     els.keyInput.value = apiKey;
     els.modelInput.value = MODEL;
     els.searchModelInput.value = SEARCH_MODEL;
     populateVoiceList();
-    emotionDraft = { ...emotionImages };
-    renderEmotionSlots();
     els.keyPanel.classList.add('active');
   });
   els.keyClose.addEventListener('click', () => els.keyPanel.classList.remove('active'));
@@ -907,14 +832,6 @@
     };
     renderVvCredit();
     localStorage.setItem(VOICE_CONFIG_KEY, JSON.stringify(voiceConfig));
-    try {
-      localStorage.setItem(EMOTION_KEY, JSON.stringify(emotionDraft));
-      emotionImages = { ...emotionDraft };
-      setEmotion(currentEmotion);
-    } catch (e) {
-      alert('表情画像が大きすぎて保存できませんでした。画像を減らすか、小さい画像にしてください。');
-      return;
-    }
     els.keyPanel.classList.remove('active');
   });
 
@@ -995,7 +912,6 @@
       .then((line) => {
         const g = parseEmotion(line);
         addBubble('assistant', g.text || `${userName}、お話ししよう。何か聞きたいことある？`, null, false, g.emotion);
-        setEmotion(g.emotion);
         setAvatarState('normal');
       })
       .catch(() => {
@@ -1324,7 +1240,7 @@
       // 履歴にはタグ付きのまま残す(以降の返信でもタグを付け続けさせるため)
       conversationHistory.push({ role: 'model', parts: [{ text: rawAnswer }] });
       addBubble('assistant', answer, null, lastUsedSearch, emotion);
-      setEmotion(emotion);
+
       if (searchFellBack) {
         addBubble('assistant', `⚠️ ${searchFellBack}、検索なしで答えました。`);
       }
