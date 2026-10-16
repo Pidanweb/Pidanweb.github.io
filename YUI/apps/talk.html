@@ -87,9 +87,6 @@
   }
 
   #vv_credit { font-size: 11px; color: var(--ink-dim); text-align: center; padding: 3px 12px; }
-  #vv_chars { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 2px 8px; margin-top: 6px; }
-  .vv_char { flex: 0 0 auto; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--panel-edge); background: var(--panel); color: var(--ink); font-size: 13.5px; font-family: inherit; cursor: pointer; }
-  .vv_char.sel { border-color: #5A9E1E; background: rgba(90,158,30,0.16); font-weight: 700; }
   #settings_btn {
     margin-left: auto;
     white-space: nowrap;
@@ -101,6 +98,7 @@
     padding: 6px 12px;
     font-size: 12px;
     font-family: inherit;
+    text-decoration: none;
   }
 
   /* ---------- チャットタイムライン ---------- */
@@ -306,63 +304,6 @@
   }
   .chat_bubble .chat_image + .chat_text_after { margin-top: 6px; }
 
-  /* ---------- APIキー設定パネル ---------- */
-
-  #key_panel {
-    position: fixed;
-    inset: 0;
-    background: var(--bg);
-    z-index: 30;
-    display: none;
-    flex-direction: column;
-    padding: max(24px, env(safe-area-inset-top)) 24px 24px;
-  }
-  #key_panel.active { display: flex; }
-  #key_panel { overflow-y: auto; }
-
-  #key_panel .layer_title {
-    font-family: 'M PLUS Rounded 1c', sans-serif;
-    font-weight: 800;
-    font-size: 20px;
-  }
-
-  #key_panel label {
-    font-size: 13px;
-    color: var(--ink-dim);
-    line-height: 1.7;
-    margin-top: 10px;
-    display: block;
-  }
-
-  #key_panel textarea {
-    width: 100%;
-    background: var(--panel);
-    border: 1px solid var(--panel-edge);
-    color: var(--ink);
-    border-radius: 12px;
-    padding: 14px;
-    font-size: 14px;
-    font-family: monospace;
-    resize: none;
-    height: 90px;
-    margin: 16px 0;
-  }
-
-  #key_panel .row {
-    display: flex;
-    gap: 10px;
-  }
-  #key_panel .row button {
-    flex: 1;
-    padding: 13px 0;
-    border-radius: 14px;
-    border: none;
-    font-family: inherit;
-    font-size: 14px;
-    font-weight: 600;
-  }
-  #key_save { background: var(--scan); color: #06231d; }
-  #key_close { background: rgba(0,0,0,0.055); color: var(--ink); }
 </style>
 </head>
 <body>
@@ -376,7 +317,7 @@
       <div id="top_title">YUI</div>
       <div id="top_status">短押しで質問 / テキスト入力もできます</div>
     </div>
-    <button id="settings_btn">設定</button>
+    <a id="settings_btn" href="settings.html">設定</a>
   </div>
 
   <div id="vv_credit"></div>
@@ -397,73 +338,13 @@
     <button id="send_btn" aria-label="送信">➤</button>
   </div>
 
-  <div id="key_panel">
-    <div class="layer_title">Gemini APIキー</div>
-    <label>
-      Google AI Studioで発行したAPIキーを貼り付けてください。<br>
-      このキーはGemini APIへのリクエストを認証するためだけに使われます。この端末内(localStorage)に保存され、次回からは入力不要になります。
-    </label>
-    <textarea id="key_input" placeholder="AQ.xxxxxxxxxxxxxxxxxxxxxxxx"></textarea>
-    <!-- モデルの設定 -->
-    <hr style="border: 0; border-top: 1px solid var(--panel-edge); margin: 20px 0 15px;">
-    <div class="layer_title" style="font-size: 16px;">モデルの設定</div>
-    <label for="model_input" style="margin-top: 8px;">通常の会話に使うモデル</label>
-    <input id="model_input" type="text" list="model_list" autocomplete="off" style="width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--panel-edge); background: var(--panel); color: var(--ink); font-size: 13.5px; margin-top: 4px; font-family: monospace;">
-    <label for="search_model_input" style="margin-top: 12px;">検索モード(🔍 ON)で使うモデル<br>※検索は有料枠を使う場合があります。無料キーでは枠がなく、通常の会話に切り替わることがあります。</label>
-    <input id="search_model_input" type="text" list="model_list" autocomplete="off" style="width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--panel-edge); background: var(--panel); color: var(--ink); font-size: 13.5px; margin-top: 4px; font-family: monospace;">
-    <datalist id="model_list">
-      <option value="gemini-3.5-flash-lite"></option>
-      <option value="gemini-2.5-flash-lite"></option>
-      <option value="gemini-2.5-flash"></option>
-      <option value="gemini-2.5-pro"></option>
-    </datalist>
-    <!-- 音声の設定 -->
-    <hr style="border: 0; border-top: 1px solid var(--panel-edge); margin: 20px 0 15px;">
-    <div class="layer_title" style="font-size: 16px;">音声の設定</div>
-
-    <label style="margin-top: 8px; display:flex; align-items:center; gap:8px; color: var(--ink);">
-      <input type="checkbox" id="vv_toggle" checked> VOICEVOXで読み上げる
-    </label>
-    <label for="vv_speed_slider" style="margin-top: 6px;">VOICEVOX 話速: <span id="vv_speed_val">1.50</span></label>
-    <input type="range" id="vv_speed_slider" min="0.8" max="2.0" step="0.05" value="1.5" style="width: 100%; margin-top: 4px;">
-    <label style="margin-top: 10px;">声のキャラクター(タップで選択)</label>
-    <div id="vv_chars"></div>
-    <div style="font-size: 11.5px; color: var(--ink-dim); margin-top: 2px;">音声クレジット: <span id="vv_credit_settings"></span></div>
-    <div style="font-size: 11px; color: var(--ink-dim); margin-top: 2px;">※ 波音リツ以外は東北ずん子・ずんだもんプロジェクトの音源利用規約、波音リツは波音リツの利用規約が適用されます(いずれもクレジット表記が必要)</div>
-
-    <label for="voice_select" style="margin-top: 14px;">ブラウザ音声(VOICEVOXがOFF/失敗時に使用・端末依存)</label>
-    <select id="voice_select" style="width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--panel-edge); background: var(--panel); color: var(--ink); font-size: 13.5px; margin-top: 4px; font-family: inherit;">
-      <option value="">（読み込み中...）</option>
-    </select>
-
-    <div style="display: flex; gap: 12px; margin-top: 12px;">
-      <div style="flex: 1;">
-        <label for="pitch_slider" style="margin-top: 0;">ピッチ (高さ): <span id="pitch_val">1.40</span></label>
-        <input type="range" id="pitch_slider" min="0.5" max="2.0" step="0.05" value="1.40" style="width: 100%; margin-top: 4px;">
-      </div>
-      <div style="flex: 1;">
-        <label for="rate_slider" style="margin-top: 0;">速度 (スピード): <span id="rate_val">1.15</span></label>
-        <input type="range" id="rate_slider" min="0.5" max="2.0" step="0.05" value="1.15" style="width: 100%; margin-top: 4px;">
-      </div>
-    </div>
-
-    <button id="test_voice_btn" type="button" style="margin-top: 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--panel-edge); background: rgba(0,0,0,0.05); color: var(--ink); font-size: 13px; cursor: pointer; font-family: inherit; font-weight: 600;">
-      🔊 現在の設定でテスト再生
-    </button>
-
-    <div class="row" style="margin-top: 24px;">
-      <button id="key_close">閉じる</button>
-      <button id="key_save">保存する</button>
-    </div>
-  </div>
-
 </div>
 
 <script>
 (() => {
   const PROFILE_KEY = 'yui_profile';
   const PROGRESS_KEY = 'yui_tutorial_progress';
-  const API_KEY_STORAGE = 'yui_api_key';           // settings.html と共通
+  const API_KEY_STORAGE = 'yui_api_key';           // settings.html で設定
   const LEGACY_API_KEY_STORAGE = 'yui_gemini_api_key'; // 旧キー(あれば引き継ぐ)
   const DEFAULT_MODEL = "gemini-3.5-flash-lite";        // 通常の会話用
   const DEFAULT_SEARCH_MODEL = "gemini-2.5-flash-lite"; // 検索モード(有料)用
@@ -473,8 +354,8 @@
   let SEARCH_MODEL = localStorage.getItem(SEARCH_MODEL_KEY) || DEFAULT_SEARCH_MODEL;
   const VOICE_CONFIG_KEY = 'yui_voice_config';
   // --- 表情アイコン関連 ---
-  const EMOTION_KEY = 'yui_emotion_images';          // 喜怒哀楽4枚(index.htmlで設定)
-  const STAND_KEY = 'yui_custom_char';               // 立ち絵(index.htmlで設定)
+  const EMOTION_KEY = 'yui_emotion_images';          // 喜怒哀楽4枚(settings.htmlで設定)
+  const STAND_KEY = 'yui_custom_char';               // 立ち絵(settings.htmlで設定)
   const FALLBACK_IMAGE = 'chars/char_normal.png';    // 立ち絵が未設定の時の画像
 
   const els = {
@@ -484,12 +365,6 @@
     textInput: document.getElementById('text_input'),
     sendBtn: document.getElementById('send_btn'),
     settingsBtn: document.getElementById('settings_btn'),
-    keyPanel: document.getElementById('key_panel'),
-    keyInput: document.getElementById('key_input'),
-    modelInput: document.getElementById('model_input'),
-    searchModelInput: document.getElementById('search_model_input'),
-    keySave: document.getElementById('key_save'),
-    keyClose: document.getElementById('key_close'),
     topAvatarImg: document.getElementById('top_avatar_img'),
     topStatus: document.getElementById('top_status'),
     searchBtn: document.getElementById('search_btn'),
@@ -498,15 +373,6 @@
     imagePreviewBar: document.getElementById('image_preview_bar'),
     imagePreviewThumb: document.getElementById('image_preview_thumb'),
     imagePreviewRemove: document.getElementById('image_preview_remove'),
-    voiceSelect: document.getElementById('voice_select'),
-    pitchSlider: document.getElementById('pitch_slider'),
-    rateSlider: document.getElementById('rate_slider'),
-    pitchVal: document.getElementById('pitch_val'),
-    rateVal: document.getElementById('rate_val'),
-    testVoiceBtn: document.getElementById('test_voice_btn'),
-    vvToggle: document.getElementById('vv_toggle'),
-    vvSpeedSlider: document.getElementById('vv_speed_slider'),
-    vvSpeedVal: document.getElementById('vv_speed_val'),
   };
 
   // ============ 音声設定 ============
@@ -529,80 +395,14 @@
   }
   let voiceConfig = loadVoiceConfig();
 
-  function populateVoiceList() {
-    if (!('speechSynthesis' in window)) return;
-    const voices = window.speechSynthesis.getVoices();
-    if (!voices.length) return;
-
-    const jaVoices = voices.filter((v) => v.lang.includes('ja') || v.lang.includes('JP'));
-    const displayVoices = jaVoices.length > 0 ? jaVoices : voices;
-
-    els.voiceSelect.innerHTML = '';
-    displayVoices.forEach((v) => {
-      const option = document.createElement('option');
-      option.value = v.voiceURI || v.name;
-      option.textContent = `${v.name} (${v.lang})`;
-      els.voiceSelect.appendChild(option);
-    });
-
-    if (voiceConfig.voiceURI) {
-      els.voiceSelect.value = voiceConfig.voiceURI;
-    } else {
-      const defaultVoice = displayVoices.find((v) =>
-        v.name.includes('Nanami') || v.name.includes('Natural') || v.name.includes('Kyoko') || v.name.includes('Ayumi')
-      ) || displayVoices[0];
-      if (defaultVoice) els.voiceSelect.value = defaultVoice.voiceURI || defaultVoice.name;
-    }
-  }
-
-  if ('speechSynthesis' in window) {
-    populateVoiceList();
-    window.speechSynthesis.onvoiceschanged = populateVoiceList;
-  }
-
-  els.pitchSlider.value = voiceConfig.pitch;
-  els.rateSlider.value = voiceConfig.rate;
-  els.pitchVal.textContent = parseFloat(voiceConfig.pitch).toFixed(2);
-  els.rateVal.textContent = parseFloat(voiceConfig.rate).toFixed(2);
-  els.vvToggle.checked = voiceConfig.useVoicevox !== false;
-  els.vvSpeedSlider.value = voiceConfig.vvSpeed;
-  els.vvSpeedVal.textContent = parseFloat(voiceConfig.vvSpeed).toFixed(2);
-  els.vvSpeedSlider.addEventListener('input', (e) => { els.vvSpeedVal.textContent = parseFloat(e.target.value).toFixed(2); });
-  // --- 声キャラのカルーセル ---
-  let vvSelected = vvCharOf(voiceConfig.vvSpeaker).speaker;
-  const vvCharsEl = document.getElementById('vv_chars');
+  // 声キャラ・音声設定は settings.html で変更する(ここでは読み込みだけ)
+  const vvSelected = vvCharOf(voiceConfig.vvSpeaker).speaker;
   function renderVvCredit() {
-    const t = 'VOICEVOX:' + vvCharOf(vvSelected).name;
-    document.getElementById('vv_credit_settings').textContent = t;
     const c = document.getElementById('vv_credit');
-    c.textContent = '声:' + t;
+    c.textContent = '声:VOICEVOX:' + vvCharOf(vvSelected).name;
     c.style.display = voiceConfig.useVoicevox === false ? 'none' : '';
   }
-  VV_CHARS.forEach((ch) => {
-    const b = document.createElement('button');
-    b.type = 'button'; b.className = 'vv_char'; b.textContent = ch.name; b.dataset.sp = ch.speaker;
-    b.addEventListener('click', () => {
-      vvSelected = ch.speaker;
-      vvCharsEl.querySelectorAll('.vv_char').forEach((x) => x.classList.toggle('sel', x === b));
-      document.getElementById('vv_credit_settings').textContent = 'VOICEVOX:' + ch.name;
-    });
-    vvCharsEl.appendChild(b);
-  });
-  vvCharsEl.querySelectorAll('.vv_char').forEach((x) => x.classList.toggle('sel', Number(x.dataset.sp) === vvSelected));
   renderVvCredit();
-  els.pitchSlider.addEventListener('input', (e) => { els.pitchVal.textContent = parseFloat(e.target.value).toFixed(2); });
-  els.rateSlider.addEventListener('input', (e) => { els.rateVal.textContent = parseFloat(e.target.value).toFixed(2); });
-
-  els.testVoiceBtn.addEventListener('click', () => {
-    speak('こんにちは！この声と高さで喋るよ。どうかな？', null, {
-      voiceURI: els.voiceSelect.value,
-      pitch: parseFloat(els.pitchSlider.value),
-      rate: parseFloat(els.rateSlider.value),
-      useVoicevox: els.vvToggle.checked,
-      vvSpeed: parseFloat(els.vvSpeedSlider.value),
-      vvSpeaker: vvSelected,
-    });
-  });
 
   // ============ 1. 戻るボタンの動的切替 ============
   function setupBackButton() {
@@ -706,6 +506,9 @@
 
   let conversationHistory = [];
 
+  // 設定ページから戻ってきたときは、最新の設定を反映するため再読み込みする
+  window.addEventListener('pageshow', (e) => { if (e.persisted) location.reload(); });
+
   // ============ セーフティ設定(固定) ============
   // 性的な内容・嫌がらせは「高のみブロック」(膝枕など甘い会話の誤検知を避ける)、
   // ヘイト・危険な内容は最も厳しい「低以上をブロック」
@@ -760,8 +563,8 @@
   let lastMeta = null;
 
   // ============ 表情アイコン(喜怒哀楽) ============
-  // 上部アイコン = 立ち絵(index.htmlで設定した yui_custom_char)で固定。
-  // 吹き出し横のアイコンだけ、返信ごとの感情に合わせて変わる(画像は index.html で設定・yui_emotion_images)
+  // 上部アイコン = 立ち絵(settings.htmlで設定した yui_custom_char)で固定。
+  // 吹き出し横のアイコンだけ、返信ごとの感情に合わせて変わる(画像は settings.html で設定・yui_emotion_images)
   const EMOTIONS = [
     { key: 'joy', label: '喜' }, { key: 'angry', label: '怒' },
     { key: 'sad', label: '哀' }, { key: 'fun', label: '楽' },
@@ -805,35 +608,6 @@
     if (!text) text = String(raw || '').trim();
     return { text, emotion };
   }
-
-  // ============ APIキー設定 ============
-  els.settingsBtn.addEventListener('click', () => {
-    els.keyInput.value = apiKey;
-    els.modelInput.value = MODEL;
-    els.searchModelInput.value = SEARCH_MODEL;
-    populateVoiceList();
-    els.keyPanel.classList.add('active');
-  });
-  els.keyClose.addEventListener('click', () => els.keyPanel.classList.remove('active'));
-  els.keySave.addEventListener('click', () => {
-    apiKey = els.keyInput.value.trim();
-    localStorage.setItem(API_KEY_STORAGE, apiKey);
-    MODEL = els.modelInput.value.trim() || DEFAULT_MODEL;
-    SEARCH_MODEL = els.searchModelInput.value.trim() || DEFAULT_SEARCH_MODEL;
-    localStorage.setItem(MODEL_KEY, MODEL);
-    localStorage.setItem(SEARCH_MODEL_KEY, SEARCH_MODEL);
-    voiceConfig = {
-      voiceURI: els.voiceSelect.value,
-      pitch: parseFloat(els.pitchSlider.value),
-      rate: parseFloat(els.rateSlider.value),
-      useVoicevox: els.vvToggle.checked,
-      vvSpeed: parseFloat(els.vvSpeedSlider.value),
-      vvSpeaker: vvSelected,
-    };
-    renderVvCredit();
-    localStorage.setItem(VOICE_CONFIG_KEY, JSON.stringify(voiceConfig));
-    els.keyPanel.classList.remove('active');
-  });
 
   // ============ 検索モード(有料キー向け ON / OFF) ============
   // ON : 毎回 Google検索つき(SEARCH_MODEL)で答える。検索は有料枠を使うため手動で切り替える

@@ -16,6 +16,7 @@
     --ink-dim: #7c8288;
     --scan: #2fae90;
     --scan-soft: rgba(47, 174, 144, 0.14);
+    --danger: #e2554a;
   }
   * { box-sizing: border-box; }
   html, body {
@@ -28,7 +29,7 @@
   #app {
     max-width: 480px;
     margin: 0 auto;
-    padding: max(20px, env(safe-area-inset-top)) 20px 40px;
+    padding: max(20px, env(safe-area-inset-top)) 20px calc(110px + env(safe-area-inset-bottom));
   }
   #back_btn {
     display: inline-flex;
@@ -45,73 +46,57 @@
     font-size: 20px;
     margin: 0 0 6px;
   }
-  p.desc {
-    color: var(--ink-dim);
-    font-size: 13.5px;
-    line-height: 1.8;
-    margin: 0 0 20px;
-  }
-  a.link {
-    color: var(--scan);
-  }
-  textarea {
-    width: 100%;
-    background: var(--panel);
-    border: 1px solid var(--panel-edge);
-    color: var(--ink);
-    border-radius: 14px;
-    padding: 14px;
-    font-size: 14px;
-    font-family: monospace;
-    resize: none;
-    height: 100px;
-  }
-  textarea#personality_input {
-    font-family: 'Zen Kaku Gothic New', sans-serif;
-    height: 160px;
-    line-height: 1.7;
-  }
-  section.settings_section {
-    margin-bottom: 30px;
-  }
+  section.settings_section { margin-bottom: 6px; }
   section.settings_section h2 {
     font-family: 'M PLUS Rounded 1c', sans-serif;
     font-weight: 800;
     font-size: 16px;
     margin: 0 0 6px;
   }
+  p.desc {
+    color: var(--ink-dim);
+    font-size: 13px;
+    line-height: 1.8;
+    margin: 0 0 14px;
+  }
+  a.link { color: var(--scan); }
   hr.section_divider {
     border: none;
     border-top: 1px solid var(--panel-edge);
     margin: 26px 0;
   }
-  #status_msg {
+  label.field_label {
+    display: block;
     font-size: 13px;
-    color: var(--scan);
-    height: 18px;
-    margin-top: 8px;
-  }
-  button.primary {
-    width: 100%;
-    background: var(--scan);
-    color: #ffffff;
-    border: none;
-    border-radius: 14px;
-    padding: 15px 0;
-    font-family: inherit;
     font-weight: 700;
-    font-size: 15px;
-    margin-top: 14px;
+    margin: 14px 0 6px;
   }
+  label.field_label small { font-weight: 400; color: var(--ink-dim); }
+
+  input[type="text"], select, textarea {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  textarea { resize: none; line-height: 1.7; }
+  textarea.mono, input.mono { font-family: monospace; }
+  textarea#key_input { height: 90px; }
+  textarea#personality_input { height: 150px; }
+
   button.secondary {
     width: 100%;
     background: rgba(0,0,0,0.045);
     color: var(--ink);
     border: none;
-    border-radius: 14px;
-    padding: 13px 0;
+    border-radius: 12px;
+    padding: 12px 0;
     font-family: inherit;
-    font-size: 14px;
+    font-size: 13.5px;
     margin-top: 10px;
   }
   .note_box {
@@ -122,51 +107,201 @@
     font-size: 13px;
     color: var(--ink-dim);
     line-height: 1.8;
-    margin-top: 22px;
+    margin-top: 16px;
+  }
+
+  /* ---- 画像 ---- */
+  .img_slot { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
+  .img_thumb {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 12px;
+    border: 2px dashed var(--panel-edge);
+    background: rgba(0,0,0,0.045);
+    cursor: pointer;
+    padding: 0;
+    overflow: hidden;
+  }
+  .img_thumb img { width: 100%; height: 100%; display: block; object-fit: cover; object-position: top center; }
+  .img_thumb.stand img { object-fit: contain; object-position: center; }
+  .img_thumb.unset img { opacity: 0.35; }
+  .img_clear {
+    font-size: 11px; padding: 4px 12px; border-radius: 8px;
+    border: 1px solid var(--panel-edge); background: transparent;
+    color: var(--ink-dim); cursor: pointer; font-family: inherit;
+  }
+  .img_clear:disabled { opacity: 0.3; cursor: default; }
+  #stand_slot { max-width: 180px; margin: 0 auto 6px; }
+  #emo_grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+
+  /* ---- 声キャラ ---- */
+  #vv_chars { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 0 6px; }
+  .vv_char {
+    padding: 10px 14px; border-radius: 12px; border: 1px solid var(--panel-edge);
+    background: var(--panel); color: var(--ink); font-size: 13.5px; font-family: inherit; cursor: pointer;
+  }
+  .vv_char.sel { border-color: #5A9E1E; background: rgba(90,158,30,0.16); font-weight: 700; }
+  .check_row { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-top: 6px; }
+  input[type="range"] { width: 100%; margin-top: 4px; }
+  .two_col { display: flex; gap: 12px; }
+  .two_col > div { flex: 1; min-width: 0; }
+
+  /* ---- 固定の保存バー ---- */
+  #save_bar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    background: rgba(247, 243, 233, 0.96);
+    border-top: 1px solid var(--panel-edge);
+    padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+    z-index: 10;
+  }
+  #save_bar_inner { max-width: 480px; margin: 0 auto; position: relative; }
+  #save_btn {
+    width: 100%;
+    background: var(--scan);
+    color: #ffffff;
+    border: none;
+    border-radius: 14px;
+    padding: 15px 0;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 15px;
+  }
+  #status_msg {
+    position: absolute;
+    left: 0; right: 0; top: -34px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--scan);
+    pointer-events: none;
   }
 </style>
 </head>
 <body>
 <div id="app">
-  <a id="back_btn" href="index.html">← ホームに戻る</a>
+  <a id="back_btn" href="../index.html">← ホームに戻る</a>
 
-  <section class="settings_section">
-    <h1>設定</h1>
+  <section class="settings_section"><h1>設定</h1>
+    <p class="desc">アプリの設定はすべてこのページで変更します。画像は選んだ時点で保存され、それ以外の項目は下の「設定を保存する」で保存されます。</p>
   </section>
+
+  <!-- ========== プロフィール ========== -->
+  <section class="settings_section">
+    <h2>名前</h2>
+    <label class="field_label" for="user_name_input">あなたの名前(呼ばれ方)</label>
+    <input type="text" id="user_name_input" maxlength="20" placeholder="例: キツカ">
+    <label class="field_label" for="ai_name_input">AIの名前</label>
+    <input type="text" id="ai_name_input" maxlength="20" placeholder="例: YUI">
+  </section>
+
+  <hr class="section_divider">
+
+  <!-- ========== 口調・性格 ========== -->
+  <section class="settings_section">
+    <h2>口調</h2>
+    <label class="field_label" for="tone_select">話し方</label>
+    <select id="tone_select">
+      <option value="polite">丁寧語(です・ます調)</option>
+      <option value="friendly">フレンドリーなタメ口</option>
+      <option value="tsundere">ややツンデレ</option>
+      <option value="cool">クール・無口気味</option>
+    </select>
+    <label class="field_label" for="feedback_select">アドバイスの伝え方</label>
+    <select id="feedback_select">
+      <option value="gentle">優しく励ます</option>
+      <option value="direct">率直にはっきり</option>
+      <option value="playful">ユーモラスに茶化す</option>
+    </select>
+  </section>
+
+  <hr class="section_divider">
 
   <section class="settings_section">
     <h2>AIの性格</h2>
     <p class="desc">
-      YUIの喋り方・キャラクター設定を自由に書けます。空欄のままなら、はじめに選んだ口調のままです。<br>
+      YUIの喋り方・キャラクター設定を自由に書けます。空欄のままなら、上の「口調」の設定が使われます。<br>
       書き方の例:<br>
       「あなたはペプシマンです。ペプシマンの文字しか使えません。それ以外の文字は使わないでください」<br>
       「あなたは犬です。ワンワンしか言えません」<br>
       「あなたは長い封印から目覚めたキツネの幼女です。言葉は江戸時代周辺のもので『〜のじゃ』などを使います。年上なので優しい話し方です」
     </p>
     <textarea id="personality_input" placeholder="例: あなたは○○です。△△という口調・話し方しかできません。"></textarea>
-    <div id="personality_status"></div>
-    <button class="primary" id="personality_save_btn">性格を保存する</button>
-    <button class="secondary" id="personality_clear_btn">性格をリセットする(はじめの口調に戻す)</button>
+    <button class="secondary" id="personality_clear_btn">性格をリセットする(上の口調に戻す)</button>
   </section>
 
   <hr class="section_divider">
 
+  <!-- ========== 画像 ========== -->
+  <section class="settings_section">
+    <h2>キャラクター画像</h2>
+    <p class="desc">タップして画像を選んでください。ホーム画面の立ち絵とトーク画面の上部アイコンに使われます。未設定のときは標準の画像です。</p>
+    <div id="stand_slot" class="img_slot"></div>
+  </section>
+
+  <section class="settings_section" style="margin-top:26px;">
+    <h2>表情画像(喜怒哀楽)</h2>
+    <p class="desc">トークの返信ごとに、感情に合わせてこの画像が切り替わります。未設定の感情は、キャラクター画像が表示されます。</p>
+    <div id="emo_grid"></div>
+  </section>
+
+  <hr class="section_divider">
+
+  <!-- ========== Gemini ========== -->
   <section class="settings_section">
     <h2>Gemini APIキー</h2>
     <p class="desc">
       <a class="link" href="https://aistudio.google.com/" target="_blank" rel="noopener">Google AI Studio</a>で発行したAPIキーを貼り付けてください。<br>
       このキーはGemini APIへのリクエストを認証するためだけに使われます。それ以外の送信先はなく、この端末内(localStorage)に保存されます。
     </p>
+    <textarea id="key_input" class="mono" placeholder="AQ.xxxxxxxxxxxxxxxxxxxxxxxx"></textarea>
+    <button class="secondary" id="clear_key_btn">キーを削除する</button>
+    <div class="note_box">保存したキーは、「お話しする」画面・「カメラで質問する」画面でも共通して使われます。</div>
+  </section>
 
-    <textarea id="key_input" placeholder="AQ.xxxxxxxxxxxxxxxxxxxxxxxx"></textarea>
-    <div id="status_msg"></div>
+  <hr class="section_divider">
 
-    <button class="primary" id="save_btn">保存する</button>
-    <button class="secondary" id="clear_btn">キーを削除する</button>
+  <section class="settings_section">
+    <h2>モデル</h2>
+    <label class="field_label" for="model_input">通常の会話に使うモデル</label>
+    <input type="text" id="model_input" class="mono" list="model_list" autocomplete="off">
+    <label class="field_label" for="search_model_input">検索モード(🔍 ON)で使うモデル<br>
+      <small>※検索は有料枠を使う場合があります。無料キーでは枠がなく、通常の会話に切り替わることがあります。</small></label>
+    <input type="text" id="search_model_input" class="mono" list="model_list" autocomplete="off">
+    <datalist id="model_list">
+      <option value="gemini-3.5-flash-lite"></option>
+      <option value="gemini-2.5-flash-lite"></option>
+      <option value="gemini-2.5-flash"></option>
+      <option value="gemini-2.5-pro"></option>
+    </datalist>
+  </section>
 
-    <div class="note_box">
-      保存したキーは、この「設定」ページ・「お話しする」画面・「カメラで質問する」画面すべてで共通して使われます。
+  <hr class="section_divider">
+
+  <!-- ========== 音声 ========== -->
+  <section class="settings_section">
+    <h2>音声</h2>
+    <label class="check_row"><input type="checkbox" id="vv_toggle"> VOICEVOXで読み上げる</label>
+    <label class="field_label" for="vv_speed_slider">VOICEVOX 話速: <span id="vv_speed_val">1.50</span></label>
+    <input type="range" id="vv_speed_slider" min="0.8" max="2.0" step="0.05">
+    <label class="field_label">声のキャラクター(タップで選択)</label>
+    <div id="vv_chars"></div>
+    <p class="desc" style="margin:4px 0 0;">音声クレジット: <span id="vv_credit_settings"></span></p>
+    <p class="desc" style="font-size:11px;margin:2px 0 0;">※ 波音リツ以外は東北ずん子・ずんだもんプロジェクトの音源利用規約、波音リツは波音リツの利用規約が適用されます(いずれもクレジット表記が必要)</p>
+
+    <label class="field_label" for="voice_select">ブラウザ音声 <small>(VOICEVOXがOFF/失敗時に使用・端末依存)</small></label>
+    <select id="voice_select"><option value="">(読み込み中...)</option></select>
+    <div class="two_col">
+      <div>
+        <label class="field_label" for="pitch_slider">ピッチ: <span id="pitch_val">1.40</span></label>
+        <input type="range" id="pitch_slider" min="0.5" max="2.0" step="0.05">
+      </div>
+      <div>
+        <label class="field_label" for="rate_slider">速度: <span id="rate_val">1.15</span></label>
+        <input type="range" id="rate_slider" min="0.5" max="2.0" step="0.05">
+      </div>
     </div>
+    <button class="secondary" id="test_voice_btn" type="button">🔊 現在の設定でテスト再生</button>
   </section>
 
   <div class="note_box">
@@ -174,60 +309,384 @@
   </div>
 </div>
 
+<div id="save_bar">
+  <div id="save_bar_inner">
+    <div id="status_msg"></div>
+    <button id="save_btn">設定を保存する</button>
+  </div>
+</div>
+
 <script>
 (() => {
+  // ============ 保存キー(talk.html / index.html と共通) ============
   const API_KEY_STORAGE = 'yui_api_key';
+  const LEGACY_API_KEY_STORAGE = 'yui_gemini_api_key';
   const PROFILE_KEY = 'yui_profile';
-  const keyInput = document.getElementById('key_input');
-  const statusMsg = document.getElementById('status_msg');
-  const personalityInput = document.getElementById('personality_input');
-  const personalityStatus = document.getElementById('personality_status');
+  const PROGRESS_KEY = 'yui_tutorial_progress';
+  const MODEL_KEY = 'yui_chat_model';
+  const SEARCH_MODEL_KEY = 'yui_search_model';
+  const VOICE_CONFIG_KEY = 'yui_voice_config';
+  const CHAR_KEY = 'yui_custom_char';
+  const EMOTION_KEY = 'yui_emotion_images';
+  const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
+  const DEFAULT_SEARCH_MODEL = 'gemini-2.5-flash-lite';
+  const FALLBACK_IMAGE = 'chars/char_normal.png';
+  const $ = (id) => document.getElementById(id);
 
-  keyInput.value = localStorage.getItem(API_KEY_STORAGE) || '';
+  const statusMsg = $('status_msg');
+  function flash(msg) {
+    statusMsg.textContent = msg;
+    clearTimeout(flash.t);
+    flash.t = setTimeout(() => { statusMsg.textContent = ''; }, 2000);
+  }
 
-  document.getElementById('save_btn').addEventListener('click', () => {
-    localStorage.setItem(API_KEY_STORAGE, keyInput.value.trim());
-    statusMsg.textContent = '保存しました';
-    setTimeout(() => { statusMsg.textContent = ''; }, 2000);
-  });
-
-  document.getElementById('clear_btn').addEventListener('click', () => {
-    localStorage.removeItem(API_KEY_STORAGE);
-    keyInput.value = '';
-    statusMsg.textContent = '削除しました';
-    setTimeout(() => { statusMsg.textContent = ''; }, 2000);
-  });
-
-  // ============ AIの性格(yui_profileに保存、初期設定の口調・呼び方はそのまま残す) ============
-  function loadProfile() {
+  // ============ 戻るボタン(直前のページ / チュートリアル中はそちらへ) ============
+  (function setupBack() {
+    const back = $('back_btn');
+    let href = '../index.html';
     try {
-      const raw = localStorage.getItem(PROFILE_KEY);
-      return raw ? JSON.parse(raw) : {};
-    } catch (e) {
-      return {};
+      const prog = JSON.parse(localStorage.getItem(PROGRESS_KEY) || 'null');
+      if (prog && prog.level && !prog.completed) href = '../index_tutorial.html';
+    } catch (e) {}
+    if (/\/talk\.html(\?|#|$)/.test(document.referrer)) {
+      href = 'talk.html';
+      back.textContent = '← お話しに戻る';
+    }
+    back.href = href;
+  })();
+
+  // ============ プロフィール ============
+  function loadProfile() {
+    try { return JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}') || {}; }
+    catch (e) { return {}; }
+  }
+  function saveProfile(p) { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); }
+
+  const profile = loadProfile();
+  $('user_name_input').value = profile.user_name || '';
+  $('ai_name_input').value = profile.ai_name || '';
+  $('tone_select').value = profile.tone_style || 'friendly';
+  $('feedback_select').value = profile.feedback_style || 'gentle';
+  // 保存済みの性格が無ければ、初期設定時の性格を引き継いで表示する
+  $('personality_input').value = typeof profile.custom_personality === 'string'
+    ? profile.custom_personality : (profile.personality || '');
+
+  $('personality_clear_btn').addEventListener('click', () => {
+    $('personality_input').value = '';
+    const p = loadProfile();
+    p.custom_personality = '';
+    saveProfile(p);
+    flash('性格をリセットしました');
+  });
+
+  // ============ APIキー / モデル ============
+  $('key_input').value = localStorage.getItem(API_KEY_STORAGE)
+    || localStorage.getItem(LEGACY_API_KEY_STORAGE) || profile.gemini_api_key || '';
+  $('model_input').value = localStorage.getItem(MODEL_KEY) || DEFAULT_MODEL;
+  $('search_model_input').value = localStorage.getItem(SEARCH_MODEL_KEY) || DEFAULT_SEARCH_MODEL;
+
+  $('clear_key_btn').addEventListener('click', () => {
+    localStorage.removeItem(API_KEY_STORAGE);
+    localStorage.removeItem(LEGACY_API_KEY_STORAGE);
+    const p = loadProfile();
+    delete p.gemini_api_key;
+    saveProfile(p);
+    $('key_input').value = '';
+    flash('キーを削除しました');
+  });
+
+  // ============ 画像(キャラクター・表情) ============
+  const EMOTIONS = [
+    { key: 'joy', label: '喜' }, { key: 'angry', label: '怒' },
+    { key: 'sad', label: '哀' }, { key: 'fun', label: '楽' },
+  ];
+
+  function loadEmotionImages() {
+    try {
+      const o = JSON.parse(localStorage.getItem(EMOTION_KEY) || '{}');
+      return o && typeof o === 'object' ? o : {};
+    } catch (e) { return {}; }
+  }
+  function loadStand() {
+    try { return localStorage.getItem(CHAR_KEY) || ''; } catch (e) { return ''; }
+  }
+  function trySet(key, value) {
+    try { localStorage.setItem(key, value); return true; }
+    catch (e) { alert('画像の保存に失敗しました(サイズが大きすぎるかもしれません)。'); return false; }
+  }
+
+  // 画像を縮小して data URL にする(localStorageの容量対策)
+  function fileToImageData(file, maxSize) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('読み込み失敗'));
+      reader.onload = () => {
+        const image = new Image();
+        image.onerror = () => reject(new Error('画像を開けません'));
+        image.onload = () => {
+          const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+          const w = Math.max(1, Math.round(image.width * scale));
+          const h = Math.max(1, Math.round(image.height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(image, 0, 0, w, h);
+          let url = canvas.toDataURL('image/webp', 0.88);
+          if (!url.startsWith('data:image/webp')) url = canvas.toDataURL('image/png');
+          resolve(url);
+        };
+        image.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // 標準画像が読めない時は1つ上のフォルダも試す
+  function bindFallback(img) {
+    img.onerror = () => {
+      const alts = [FALLBACK_IMAGE, '../' + FALLBACK_IMAGE];
+      const n = Number(img.dataset.fb || 0);
+      if (n < alts.length) { img.dataset.fb = String(n + 1); img.src = alts[n]; }
+    };
+  }
+
+  // 1枠分(サムネ+キャプション+解除ボタン)を作る
+  function buildSlot({ src, isSet, caption, standStyle, maxSize, onPick, onClear, clearLabel }) {
+    const slot = document.createElement('div');
+    slot.className = 'img_slot';
+    const thumb = document.createElement('button');
+    thumb.type = 'button';
+    thumb.className = 'img_thumb' + (standStyle ? ' stand' : '') + (isSet ? '' : ' unset');
+    const img = document.createElement('img');
+    bindFallback(img);
+    img.src = src;
+    thumb.appendChild(img);
+
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*'; input.style.display = 'none';
+    thumb.addEventListener('click', () => { input.value = ''; input.click(); });
+    input.addEventListener('change', async () => {
+      const f = input.files && input.files[0];
+      if (!f) return;
+      try { onPick(await fileToImageData(f, maxSize)); }
+      catch (e) { alert('画像を読み込めませんでした'); }
+    });
+
+    const cap = document.createElement('div');
+    cap.textContent = caption + (isSet ? '' : '(未設定)');
+    const clear = document.createElement('button');
+    clear.type = 'button'; clear.className = 'img_clear'; clear.textContent = clearLabel;
+    clear.disabled = !isSet;
+    clear.addEventListener('click', onClear);
+
+    slot.append(thumb, input, cap, clear);
+    return slot;
+  }
+
+  function renderImages() {
+    const stand = loadStand();
+    const standSlot = $('stand_slot');
+    standSlot.innerHTML = '';
+    standSlot.appendChild(buildSlot({
+      src: stand || FALLBACK_IMAGE, isSet: !!stand, caption: 'キャラクター',
+      standStyle: true, maxSize: 900, clearLabel: '標準に戻す',
+      onPick: (url) => { if (trySet(CHAR_KEY, url)) { renderImages(); flash('キャラクター画像を保存しました'); } },
+      onClear: () => { localStorage.removeItem(CHAR_KEY); renderImages(); flash('標準の画像に戻しました'); },
+    }));
+
+    const imgs = loadEmotionImages();
+    const grid = $('emo_grid');
+    grid.innerHTML = '';
+    EMOTIONS.forEach(({ key, label }) => {
+      grid.appendChild(buildSlot({
+        src: imgs[key] || stand || FALLBACK_IMAGE, isSet: !!imgs[key], caption: label,
+        standStyle: false, maxSize: 360, clearLabel: '解除',
+        onPick: (url) => {
+          const cur = loadEmotionImages();
+          cur[key] = url;
+          if (trySet(EMOTION_KEY, JSON.stringify(cur))) { renderImages(); flash(`「${label}」の画像を保存しました`); }
+        },
+        onClear: () => {
+          const cur = loadEmotionImages();
+          delete cur[key];
+          trySet(EMOTION_KEY, JSON.stringify(cur));
+          renderImages();
+        },
+      }));
+    });
+  }
+  renderImages();
+
+  // ============ 音声 ============
+  const VV_CHARS = [
+    { name: '九州そら', speaker: 16 }, { name: 'ずんだもん', speaker: 3 }, { name: '四国めたん', speaker: 2 },
+    { name: '東北ずん子', speaker: 107 }, { name: '東北きりたん', speaker: 108 }, { name: '東北イタコ', speaker: 109 },
+    { name: '中国うさぎ', speaker: 61 }, { name: '中部つるぎ', speaker: 94 }, { name: 'あんこもん', speaker: 113 },
+    { name: '波音リツ', speaker: 9 },
+  ];
+  const vvCharOf = (sp) => VV_CHARS.find((c) => c.speaker === sp) || VV_CHARS[0];
+  const DEFAULT_VOICE = { voiceURI: '', pitch: 1.40, rate: 1.15, useVoicevox: true, vvSpeed: 1.5, vvSpeaker: 16 };
+  function loadVoiceConfig() {
+    try {
+      const raw = localStorage.getItem(VOICE_CONFIG_KEY);
+      return raw ? Object.assign({}, DEFAULT_VOICE, JSON.parse(raw)) : { ...DEFAULT_VOICE };
+    } catch (e) { return { ...DEFAULT_VOICE }; }
+  }
+  const voiceConfig = loadVoiceConfig();
+
+  const els = {
+    voiceSelect: $('voice_select'), pitch: $('pitch_slider'), rate: $('rate_slider'),
+    pitchVal: $('pitch_val'), rateVal: $('rate_val'),
+    vvToggle: $('vv_toggle'), vvSpeed: $('vv_speed_slider'), vvSpeedVal: $('vv_speed_val'),
+  };
+
+  function populateVoiceList() {
+    if (!('speechSynthesis' in window)) return;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices.length) return;
+    const ja = voices.filter((v) => v.lang.includes('ja') || v.lang.includes('JP'));
+    const list = ja.length > 0 ? ja : voices;
+    els.voiceSelect.innerHTML = '';
+    list.forEach((v) => {
+      const o = document.createElement('option');
+      o.value = v.voiceURI || v.name;
+      o.textContent = `${v.name} (${v.lang})`;
+      els.voiceSelect.appendChild(o);
+    });
+    if (voiceConfig.voiceURI) {
+      els.voiceSelect.value = voiceConfig.voiceURI;
+    } else {
+      const d = list.find((v) => /Nanami|Natural|Kyoko|Ayumi/.test(v.name)) || list[0];
+      if (d) els.voiceSelect.value = d.voiceURI || d.name;
     }
   }
-  function saveProfile(profile) {
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  if ('speechSynthesis' in window) {
+    populateVoiceList();
+    window.speechSynthesis.onvoiceschanged = populateVoiceList;
   }
 
-  personalityInput.value = loadProfile().custom_personality || '';
+  els.pitch.value = voiceConfig.pitch;
+  els.rate.value = voiceConfig.rate;
+  els.pitchVal.textContent = parseFloat(voiceConfig.pitch).toFixed(2);
+  els.rateVal.textContent = parseFloat(voiceConfig.rate).toFixed(2);
+  els.vvToggle.checked = voiceConfig.useVoicevox !== false;
+  els.vvSpeed.value = voiceConfig.vvSpeed;
+  els.vvSpeedVal.textContent = parseFloat(voiceConfig.vvSpeed).toFixed(2);
+  els.vvSpeed.addEventListener('input', (e) => { els.vvSpeedVal.textContent = parseFloat(e.target.value).toFixed(2); });
+  els.pitch.addEventListener('input', (e) => { els.pitchVal.textContent = parseFloat(e.target.value).toFixed(2); });
+  els.rate.addEventListener('input', (e) => { els.rateVal.textContent = parseFloat(e.target.value).toFixed(2); });
 
-  document.getElementById('personality_save_btn').addEventListener('click', () => {
-    const profile = loadProfile();
-    profile.custom_personality = personalityInput.value.trim();
-    saveProfile(profile);
-    personalityStatus.textContent = '保存しました';
-    setTimeout(() => { personalityStatus.textContent = ''; }, 2000);
+  let vvSelected = vvCharOf(voiceConfig.vvSpeaker).speaker;
+  const vvCharsEl = $('vv_chars');
+  const setCredit = () => { $('vv_credit_settings').textContent = 'VOICEVOX:' + vvCharOf(vvSelected).name; };
+  VV_CHARS.forEach((ch) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'vv_char'; b.textContent = ch.name; b.dataset.sp = ch.speaker;
+    b.addEventListener('click', () => {
+      vvSelected = ch.speaker;
+      vvCharsEl.querySelectorAll('.vv_char').forEach((x) => x.classList.toggle('sel', x === b));
+      setCredit();
+    });
+    vvCharsEl.appendChild(b);
+  });
+  vvCharsEl.querySelectorAll('.vv_char').forEach((x) => x.classList.toggle('sel', Number(x.dataset.sp) === vvSelected));
+  setCredit();
+
+  // ---- テスト再生(talk.html と同じ方式) ----
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const ttsAudio = new Audio();
+  let speakToken = 0;
+
+  function speakBrowser(text, cfg) {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    const sel = window.speechSynthesis.getVoices().find((v) => (v.voiceURI || v.name) === cfg.voiceURI);
+    if (sel) u.voice = sel;
+    u.lang = 'ja-JP';
+    u.pitch = cfg.pitch;
+    u.rate = cfg.rate;
+    window.speechSynthesis.speak(u);
+  }
+
+  async function requestVoicevox(text, token, speaker) {
+    const params = new URLSearchParams({ text, speaker: String(speaker) });
+    for (let i = 0; i < 3; i++) {
+      const res = await fetch(`https://api.tts.quest/v3/voicevox/synthesis?${params}`);
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 429) {
+        await sleep(((data.retryAfter || 2) + 0.3) * 1000);
+        if (token !== speakToken) return null;
+        continue;
+      }
+      if (!res.ok || !data.success) throw new Error(data.errorMessage || `VOICEVOX APIエラー (${res.status})`);
+      return data;
+    }
+    throw new Error('VOICEVOX: リクエスト制限により合成できませんでした');
+  }
+
+  async function waitReady(statusUrl, token) {
+    const start = Date.now();
+    while (Date.now() - start < 30000) {
+      if (token !== speakToken) return false;
+      const st = await (await fetch(statusUrl, { cache: 'no-store' })).json().catch(() => ({}));
+      if (st.isAudioError) throw new Error('VOICEVOX: 音声合成に失敗しました');
+      if (st.isAudioReady) return true;
+      await sleep(400);
+    }
+    throw new Error('VOICEVOX: 合成がタイムアウトしました');
+  }
+
+  async function speakVoicevox(text, cfg, token) {
+    const data = await requestVoicevox(text, token, vvCharOf(cfg.vvSpeaker).speaker);
+    if (!data || token !== speakToken) return;
+    if (!(await waitReady(data.audioStatusUrl, token)) || token !== speakToken) return;
+    ttsAudio.onerror = () => speakBrowser(text, cfg);
+    ttsAudio.defaultPlaybackRate = cfg.vvSpeed;
+    ttsAudio.src = data.mp3DownloadUrl;
+    ttsAudio.playbackRate = cfg.vvSpeed;
+    await ttsAudio.play();
+  }
+
+  function currentVoiceConfig() {
+    return {
+      voiceURI: els.voiceSelect.value,
+      pitch: parseFloat(els.pitch.value),
+      rate: parseFloat(els.rate.value),
+      useVoicevox: els.vvToggle.checked,
+      vvSpeed: parseFloat(els.vvSpeed.value),
+      vvSpeaker: vvSelected,
+    };
+  }
+
+  $('test_voice_btn').addEventListener('click', () => {
+    const cfg = currentVoiceConfig();
+    const text = 'こんにちは！この声と高さで喋るよ。どうかな？';
+    const token = ++speakToken;
+    ttsAudio.pause();
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    if (!cfg.useVoicevox) { speakBrowser(text, cfg); return; }
+    speakVoicevox(text, cfg, token).catch(() => { if (token === speakToken) speakBrowser(text, cfg); });
   });
 
-  document.getElementById('personality_clear_btn').addEventListener('click', () => {
-    const profile = loadProfile();
-    profile.custom_personality = '';
-    saveProfile(profile);
-    personalityInput.value = '';
-    personalityStatus.textContent = 'リセットしました';
-    setTimeout(() => { personalityStatus.textContent = ''; }, 2000);
+  // ============ まとめて保存 ============
+  $('save_btn').addEventListener('click', () => {
+    try {
+      const p = loadProfile();
+      p.user_name = $('user_name_input').value.trim();
+      p.ai_name = $('ai_name_input').value.trim();
+      p.tone_style = $('tone_select').value;
+      p.feedback_style = $('feedback_select').value;
+      p.custom_personality = $('personality_input').value.trim();
+      saveProfile(p);
+
+      localStorage.setItem(API_KEY_STORAGE, $('key_input').value.trim());
+      localStorage.setItem(MODEL_KEY, $('model_input').value.trim() || DEFAULT_MODEL);
+      localStorage.setItem(SEARCH_MODEL_KEY, $('search_model_input').value.trim() || DEFAULT_SEARCH_MODEL);
+      localStorage.setItem(VOICE_CONFIG_KEY, JSON.stringify(currentVoiceConfig()));
+      flash('保存しました');
+    } catch (e) {
+      flash('保存に失敗しました');
+    }
   });
 })();
 </script>
