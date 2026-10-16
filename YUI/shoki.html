@@ -398,8 +398,8 @@
   els.vnStage.style.backgroundImage = `url('${timeOfDayBg()}')`;
 
   const PROFILE_KEY = 'yui_profile';
-  const GEMINI_API_KEY_STORAGE = 'yui_gemini_api_key';
-  const CHAR_IMAGE_KEY = 'yui_custom_char'; // ホーム画面のキャラ画像アップロードと保存先を共有
+  const GEMINI_API_KEY_STORAGE = 'yui_api_key'; // settings.html / talk.html と共通
+  const CHAR_IMAGE_KEY = 'yui_custom_char'; // settings.html のキャラクター画像と共通
 
   function loadProfile() {
     try {
@@ -440,9 +440,24 @@
     layer.classList.add('active');
   }
 
-  function fileToDataUrl(file, callback) {
+  // 画像を縮小して data URL にする(localStorageの容量対策。settings.html と同じ方式)
+  function fileToDataUrl(file, callback, maxSize = 900) {
     const reader = new FileReader();
-    reader.onload = () => callback(reader.result);
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => callback(reader.result);
+      image.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+        let url = canvas.toDataURL('image/webp', 0.88);
+        if (!url.startsWith('data:image/webp')) url = canvas.toDataURL('image/png');
+        callback(url);
+      };
+      image.src = reader.result;
+    };
     reader.readAsDataURL(file);
   }
 
@@ -779,10 +794,26 @@
   }
 
   function finishOnboarding() {
-    if (draftProfile.appearance) saveCustomChar(draftProfile.appearance); // ホーム画面のキャラ画像アップロードと保存先を共有
+    // 保存先は settings.html と共通
+    //   立ち絵    → yui_custom_char
+    //   APIキー   → yui_api_key
+    //   その他    → yui_profile(user_name / ai_name / custom_personality)
+    if (draftProfile.appearance) saveCustomChar(draftProfile.appearance);
     try { localStorage.setItem(GEMINI_API_KEY_STORAGE, draftProfile.gemini_api_key); } catch (e) {}
-    draftProfile.onboarded = true;
-    saveProfile(draftProfile);
+    try { localStorage.removeItem('yui_gemini_api_key'); } catch (e) {} // 旧キーは残さない
+
+    const profile = Object.assign({}, loadProfile() || {}, {
+      user_name: draftProfile.user_name,
+      ai_name: draftProfile.ai_name,
+      personality: draftProfile.personality,
+      custom_personality: draftProfile.personality, // settings.html の「AIの性格」と同じ項目
+      onboarded: true,
+    });
+    // 大きな画像データやAPIキーはプロフィールに重複して持たせない
+    delete profile.appearance;
+    delete profile.gemini_api_key;
+    saveProfile(profile);
+
     stopSetupBgm();
     // 初期設定が終わったらメインメニュー(index.html)へ
     window.location.href = 'index.html';
