@@ -541,6 +541,35 @@
     font-weight: 700;
     font-size: 15px;
   }
+
+  /* ---------- 設定ボタン(右上) ---------- */
+
+  #settings_btn {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    font-size: 15px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+  }
+
+  /* ---------- 声のクレジット(結果パネル内) ---------- */
+
+  #result_credit {
+    display: none;
+    font-size: 11.5px;
+    color: var(--ink-dim);
+    margin: -12px 0 18px;
+  }
+
+
 </style>
 </head>
 <body>
@@ -574,6 +603,7 @@
     </div>
     <div id="top_bar_actions">
       <button id="reset_btn" title="最初から">🔄</button>
+      <a id="settings_btn" href="settings.html" aria-label="設定" title="設定">⚙️</a>
     </div>
   </div>
 
@@ -594,6 +624,7 @@
     <div class="eyebrow">判定結果</div>
     <div id="result_title">-</div>
     <div id="result_narration"></div>
+    <div id="result_credit"></div>
     <div class="panel_controls">
       <button id="replay_btn">🔊 もう一度読み上げる</button>
       <button id="rescan_btn">再スキャン</button>
@@ -650,14 +681,15 @@
     characterFace: document.getElementById('character_face'),
     chatStatus: document.getElementById('chat_status'),
     talkEndBtn: document.getElementById('talk_end_btn'),
+    resultCredit: document.getElementById('result_credit'),
   };
 
   function setupBackButton() {
     try {
       const raw = localStorage.getItem(PROGRESS_KEY);
       const prog = raw ? JSON.parse(raw) : null;
-      // チュートリアルが完了済み(completed: true)のときのみ index.html へ返し、それ以外は index_tyuto.html へ返す
-      if (prog && prog.completed) {
+      // チュートリアルが完了済み(level 5 以上)のときのみ index.html へ返し、それ以外は index_tyuto.html へ返す
+      if (prog && prog.level >= 5) {
         els.backBtn.href = '../index.html';
       } else {
         els.backBtn.href = '../index_tyuto.html';
@@ -668,8 +700,34 @@
   }
   setupBackButton();
 
+  // スキャン成功でチュートリアルを進める(カメラ手順 Lv.2 → Lv.3)。talk.html の checkTutorialClear と同じ方式
+  function checkTutorialClear() {
+    try {
+      const raw = localStorage.getItem(PROGRESS_KEY);
+      const prog = raw ? JSON.parse(raw) : null;
+      if (prog && prog.level === 2) {
+        prog.level = 3;
+        localStorage.setItem(PROGRESS_KEY, JSON.stringify(prog));
+        setupBackButton();
+      }
+    } catch (e) {
+      console.error('Tutorial progress error:', e);
+    }
+  }
+
   // ============ 状態 ============
-  const getApiKey = () => localStorage.getItem('yui_gemini_api_key') || "";
+  // shoki.html / settings.html / talk.html と同じ保存先(yui_api_key)。旧キー・プロフィール内のキーも引き継ぐ
+  const getApiKey = () => {
+    try {
+      const profile = JSON.parse(localStorage.getItem('yui_profile') || '{}') || {};
+      return localStorage.getItem('yui_api_key')
+        || localStorage.getItem('yui_gemini_api_key')
+        || profile.gemini_api_key
+        || "";
+    } catch (e) {
+      return localStorage.getItem('yui_api_key') || localStorage.getItem('yui_gemini_api_key') || "";
+    }
+  };
   let stream = null;
   let currentTrack = null;
   let capturedBase64 = null;
@@ -682,13 +740,11 @@
   let quickPending = false; // 短押しの「1問だけ」モードで聞き取り中かどうか
 
   // ---- キャラクターの表情差分 ----
-  const CHARACTER_FACES = {
-    normal:    'chars/char_normal.png',
-    listening: 'chars/char_thinking.png',
-    thinking:  'chars/char_thinking.png',
-    speaking:  'chars/char_normal.png',
-    error:     'chars/char_error.png',
-  };
+  // 立ち絵は settings.html / shoki.html で設定した yui_custom_char を使う(未設定ならデフォルト画像)。
+  // 画像は1枚しか設定できないので、状態が変わっても同じ画像のまま(枠のアニメーションで状態を表現)
+  function standImage() {
+    try { return localStorage.getItem('yui_custom_char') || 'chars/char_normal.png'; } catch (e) { return 'chars/char_normal.png'; }
+  }
 
   const CHAT_STATUS_TEXT = {
     normal:    '短押しで1問だけ / 長押しで会話モード',
@@ -699,7 +755,7 @@
   };
 
   function setCharacterState(state) {
-    els.characterFace.src = CHARACTER_FACES[state] || CHARACTER_FACES.normal;
+    els.characterFace.src = standImage();
     els.chatStatus.textContent = CHAT_STATUS_TEXT[state] || CHAT_STATUS_TEXT.normal;
     els.characterAvatar.className = state === 'normal' ? '' : `state-${state}`;
   }
@@ -713,6 +769,36 @@
     return 'chars/bg_day.jpg';
   }
   els.characterAvatar.style.backgroundImage = `url('${timeOfDayBg()}')`;
+  els.characterFace.src = standImage();
+
+  // ============ 音声設定(settings.html で変更。ここでは読み込むだけ) ============
+  const VOICE_CONFIG_KEY = 'yui_voice_config';
+  // 東北ずん子・ずんだもんプロジェクト音源利用規約(共通)の対象キャラ / speaker = ノーマルのID
+  const VV_CHARS = [
+    { name: '九州そら', speaker: 16 }, { name: 'ずんだもん', speaker: 3 }, { name: '四国めたん', speaker: 2 },
+    { name: '東北ずん子', speaker: 107 }, { name: '東北きりたん', speaker: 108 }, { name: '東北イタコ', speaker: 109 },
+    { name: '中国うさぎ', speaker: 61 }, { name: '中部つるぎ', speaker: 94 }, { name: 'あんこもん', speaker: 113 },
+  ];
+  const vvCharOf = (sp) => VV_CHARS.find((c) => c.speaker === sp) || VV_CHARS[0];
+  const DEFAULT_VOICE = { voiceURI: '', pitch: 1.40, rate: 1.15, useVoicevox: true, vvSpeed: 1.5, vvSpeaker: 16 };
+  function loadVoiceConfig() {
+    try {
+      const raw = localStorage.getItem(VOICE_CONFIG_KEY);
+      return raw ? Object.assign({}, DEFAULT_VOICE, JSON.parse(raw)) : { ...DEFAULT_VOICE };
+    } catch (e) {
+      return { ...DEFAULT_VOICE };
+    }
+  }
+  let voiceConfig = loadVoiceConfig();
+
+  // --- 結果パネルの声クレジット(保存済みの設定を表示。VOICEVOXがOFFなら非表示) ---
+  let resultCreditVisible = false;
+  function renderResultCredit() {
+    const show = resultCreditVisible && voiceConfig.useVoicevox !== false;
+    els.resultCredit.textContent = '声:VOICEVOX:' + vvCharOf(voiceConfig.vvSpeaker).name;
+    els.resultCredit.style.display = show ? 'block' : 'none';
+  }
+  renderResultCredit();
 
   // ============ カメラ起動 ============
   async function startCamera() {
@@ -938,32 +1024,140 @@
       lastNarration = narration;
 
       hideStatus();
+      resultCreditVisible = true;
+      renderResultCredit();
       els.resultPanel.classList.add('open');
       speak(narration);
+      checkTutorialClear(); // 判定に成功したらチュートリアルを進める
 
     } catch (err) {
       hideStatus();
+      resultCreditVisible = false; // エラー時は読み上げないのでクレジットも出さない
+      renderResultCredit();
       els.resultTitle.textContent = "エラーが発生しました";
       els.resultNarration.textContent = err.message;
       els.resultPanel.classList.add('open');
     }
   }
 
-  // ============ 読み上げ ============
-  function speak(text, onEnd) {
-    if (!('speechSynthesis' in window)) {
-      if (onEnd) onEnd();
-      return;
+  // ============ VOICEVOX 読み上げ (WEB版VOICEVOX API 低速版 / apiKey不要) ============
+  // ※ v3 API が受け付けるのは text と speaker のみ。話速は再生側の playbackRate で調整する
+  const VOICEVOX_CONFIG = {
+    api: 'https://api.tts.quest/v3/voicevox/synthesis',
+  };
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+
+  // 使い回す1つのAudio要素(iOS等では、ユーザー操作で一度"解禁"した要素でないと非同期後に再生できない)
+  const ttsAudio = new Audio();
+  let speakToken = 0;
+  function unlockAudio() {
+    ttsAudio.src = SILENT_WAV;
+    ttsAudio.play().then(() => {
+      // すでに本物の音声に切り替わっていたら止めない
+      if (ttsAudio.src === SILENT_WAV) ttsAudio.pause();
+    }).catch(() => {});
+  }
+  document.addEventListener('pointerdown', unlockAudio, { once: true });
+
+  function stopSpeaking() {
+    ttsAudio.pause();
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  }
+
+  // 読み上げ中・合成待ちのものをすべて中止する(合成待ちの途中で再生されないようトークンも進める)
+  function cancelSpeech() {
+    speakToken++;
+    stopSpeaking();
+  }
+
+  // 音声合成リクエスト(429のときは retryAfter 秒待って再送)
+  async function requestVoicevox(text, token, speaker) {
+    const params = new URLSearchParams({ text, speaker: String(speaker) });
+    for (let i = 0; i < 3; i++) {
+      const res = await fetch(`${VOICEVOX_CONFIG.api}?${params}`);
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 429) {
+        await sleep(((data.retryAfter || 2) + 0.3) * 1000);
+        if (token !== speakToken) return null;
+        continue;
+      }
+      if (!res.ok || !data.success) throw new Error(data.errorMessage || `VOICEVOX APIエラー (${res.status})`);
+      return data;
     }
+    throw new Error('VOICEVOX: リクエスト制限により合成できませんでした');
+  }
+
+  // 合成完了待ち(mp3は完成するまで404のため)
+  async function waitVoicevoxReady(statusUrl, token, timeoutMs = 30000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      if (token !== speakToken) return false;
+      const res = await fetch(statusUrl, { cache: 'no-store' });
+      const st = await res.json().catch(() => ({}));
+      if (st.isAudioError) throw new Error('VOICEVOX: 音声合成に失敗しました');
+      if (st.isAudioReady) return true;
+      await sleep(400);
+    }
+    throw new Error('VOICEVOX: 合成がタイムアウトしました');
+  }
+
+  async function speakVoicevox(text, cfg, token, onEnd) {
+    const data = await requestVoicevox(text, token, vvCharOf(cfg.vvSpeaker).speaker);
+    if (!data || token !== speakToken) return;
+    const ready = await waitVoicevoxReady(data.audioStatusUrl, token);
+    if (!ready || token !== speakToken) return;
+
+    const speed = cfg.vvSpeed ?? 1.5;
+    let finished = false;
+    const finish = () => { if (finished) return; finished = true; if (onEnd) onEnd(); };
+    ttsAudio.onended = finish;
+    ttsAudio.onerror = () => {
+      console.warn('[VOICEVOX Audio error]');
+      if (finished) return;
+      finished = true;
+      speakBrowser(text, onEnd, cfg); // 再生できなければブラウザ音声に切替
+    };
+    ttsAudio.defaultPlaybackRate = speed;
+    ttsAudio.src = data.mp3DownloadUrl;
+    ttsAudio.playbackRate = speed;
+    try {
+      await ttsAudio.play();
+    } catch (err) {
+      // onerror と重ならないよう、まだ未完了のときだけフォールバック
+      if (finished || token !== speakToken) return;
+      finished = true;
+      console.warn('[VOICEVOX play error]', err);
+      speakBrowser(text, onEnd, cfg);
+    }
+  }
+
+  // ブラウザ内蔵の音声(VOICEVOXがOFFのとき/失敗時のフォールバック)
+  function speakBrowser(text, onEnd, cfg) {
+    if (!('speechSynthesis' in window)) { if (onEnd) onEnd(); return; }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const selectedVoice = voices.find((v) => (v.voiceURI || v.name) === cfg.voiceURI);
+    if (selectedVoice) utterance.voice = selectedVoice;
     utterance.lang = 'ja-JP';
-    utterance.rate = 1.15;
-    if (onEnd) {
-      utterance.onend = onEnd;
-      utterance.onerror = onEnd;
-    }
+    utterance.pitch = cfg.pitch ?? 1.40;
+    utterance.rate = cfg.rate ?? 1.15;
+    if (onEnd) { utterance.onend = onEnd; utterance.onerror = onEnd; }
     window.speechSynthesis.speak(utterance);
+  }
+
+  function speak(text, onEnd, customConfig = null) {
+    const cfg = customConfig || voiceConfig;
+    const token = ++speakToken;
+    stopSpeaking();
+    if (!text) { if (onEnd) onEnd(); return; }
+    if (cfg.useVoicevox === false) { speakBrowser(text, onEnd, cfg); return; }
+    speakVoicevox(text, cfg, token, onEnd).catch((err) => {
+      console.warn('[VOICEVOX]', err);
+      if (token === speakToken) speakBrowser(text, onEnd, cfg);
+    });
   }
 
   els.replayBtn.addEventListener('click', () => speak(lastNarration));
@@ -971,7 +1165,9 @@
   // ============ リセット ============
   function resetSession() {
     endTalkMode(false);
-    window.speechSynthesis.cancel();
+    cancelSpeech();
+    resultCreditVisible = false;
+    renderResultCredit();
     els.resultPanel.classList.remove('open');
     els.capturedPreview.style.display = 'none';
     els.cameraFeed.style.display = 'block';
@@ -1082,7 +1278,7 @@
       setCharacterState('speaking');
       speak('またね。', () => setCharacterState('normal'));
     } else {
-      window.speechSynthesis.cancel();
+      cancelSpeech();
       setCharacterState('normal');
     }
   }
