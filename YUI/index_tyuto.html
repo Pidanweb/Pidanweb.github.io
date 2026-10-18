@@ -554,6 +554,12 @@
 <script>
 (() => {
   const PROGRESS_KEY = 'yui_tutorial_progress';
+  // 立ち絵は index.html / settings.html と同じ保存先(yui_custom_char)を使う。未設定ならデフォルト画像
+  const CHAR_IMAGE_KEY = 'yui_custom_char';
+  const DEFAULT_CHAR = 'chars/char_normal.png';
+  function standImage() {
+    try { return localStorage.getItem(CHAR_IMAGE_KEY) || DEFAULT_CHAR; } catch (e) { return DEFAULT_CHAR; }
+  }
   const PROFILE_KEY = 'yui_profile';
 
   // --- 定義: チュートリアルステップ ---
@@ -727,7 +733,7 @@
         return;
       }
       const d = activeDialogs[currentDialogIndex];
-      els.advCharImg.src = d.face || 'chars/char_normal.png';
+      els.advCharImg.src = standImage(); // 設定した立ち絵を表示(会話ごとの差分画像は使わない)
       els.advText.textContent = d.text.replace(/キツカさん/g, userName);
       els.advModal.classList.add('active');
     }
@@ -773,6 +779,8 @@
   });
 
   // 初期化実行
+  els.homeCharacterImg.src = standImage();
+  els.advCharImg.src = standImage();
   renderUI();
   checkStoryEvent();
 
