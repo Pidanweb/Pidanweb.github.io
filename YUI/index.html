@@ -940,9 +940,21 @@
 
   // ============ 起動時の分岐 ============
   // まだ初期設定が済んでいなければ初期設定ページ(shoki.html)へ、済んでいればホーム画面を表示
+  // 初期設定済み: チュートリアル(index_tyuto.html)が未完了ならそちらへ、完了していればホーム画面を表示
+  function tutorialDone() {
+    try {
+      const prog = JSON.parse(localStorage.getItem('yui_tutorial_progress') || 'null');
+      return !!(prog && prog.level >= 5);
+    } catch (e) { return false; }
+  }
+
   const profile = loadProfile();
   if (profile && profile.onboarded) {
-    showHome();
+    if (tutorialDone()) {
+      showHome();
+    } else {
+      window.location.href = 'index_tyuto.html';
+    }
   } else {
     window.location.href = 'shoki.html';
   }
