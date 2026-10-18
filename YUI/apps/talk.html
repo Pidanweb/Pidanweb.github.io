@@ -409,9 +409,9 @@
     try {
       const raw = localStorage.getItem(PROGRESS_KEY);
       const prog = raw ? JSON.parse(raw) : null;
-      // チュートリアル実行中(completedでない)の場合は index_tutorial.html へ戻す
-      if (prog && prog.level && !prog.completed) {
-        els.backBtn.href = '../index_tutorial.html';
+      // チュートリアル実行中(level 5 未満)の場合は index_tyuto.html へ戻す(level 5 で完了)
+      if (prog && prog.level && prog.level < 5) {
+        els.backBtn.href = '../index_tyuto.html';
       } else {
         els.backBtn.href = '../index.html';
       }
