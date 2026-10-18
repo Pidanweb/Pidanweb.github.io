@@ -272,6 +272,32 @@
 (() => {
   const SCHEDULE_KEY = 'yui_schedule';
 
+  // ---- チュートリアル進行(yui_tutorial_progress の level。5 以上で完了) ----
+  const PROGRESS_KEY = 'yui_tutorial_progress';
+  function loadProgress() {
+    try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) || 'null'); } catch (e) { return null; }
+  }
+  // 戻り先: チュートリアル中は index_tyuto.html、完了後は index.html(このファイルは apps/ にあるので ../ が必要)
+  function setupBackLinks() {
+    const prog = loadProgress();
+    const href = (prog && prog.level && prog.level < 5) ? '../index_tyuto.html' : '../index.html';
+    document.getElementById('back_btn').href = href;
+  }
+  // 予定を登録したらチュートリアルを進める(スケジュール手順 Lv.3 → Lv.4)
+  function advanceTutorial(fromLevel) {
+    try {
+      const prog = loadProgress();
+      if (prog && prog.level === fromLevel) {
+        prog.level = fromLevel + 1;
+        localStorage.setItem(PROGRESS_KEY, JSON.stringify(prog));
+        setupBackLinks();
+      }
+    } catch (e) {
+      console.error('Tutorial progress error:', e);
+    }
+  }
+  setupBackLinks();
+
   const els = {
     calMonthLabel: document.getElementById('cal_month_label'),
     calGrid: document.getElementById('cal_grid'),
@@ -447,6 +473,7 @@
       memo: els.formMemo.value.trim(),
     });
     saveSchedule(all);
+    advanceTutorial(3); // 予定を登録できたらレベルアップ
     els.formPanel.classList.remove('active');
     renderCalendar();
     renderEventList();

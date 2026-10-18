@@ -567,6 +567,32 @@
   const MODEL = "gemini-3.6-flash";
   const API_KEY_STORAGE = 'yui_api_key';
   const PROFILE_KEY = 'yui_profile';
+
+  // ---- チュートリアル進行(yui_tutorial_progress の level。5 以上で完了) ----
+  const PROGRESS_KEY = 'yui_tutorial_progress';
+  function loadProgress() {
+    try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) || 'null'); } catch (e) { return null; }
+  }
+  // 戻り先: チュートリアル中は index_tyuto.html、完了後は index.html(このファイルは apps/ にあるので ../ が必要)
+  function setupBackLinks() {
+    const prog = loadProgress();
+    const href = (prog && prog.level && prog.level < 5) ? '../index_tyuto.html' : '../index.html';
+    ['back_home', 'exit_btn'].forEach(id => { const a = document.getElementById(id); if (a) a.href = href; });
+  }
+  // 1ゲーム最後まで遊んだらチュートリアルを進める(お絵描き手順 Lv.4 → Lv.5)
+  function advanceTutorial(fromLevel) {
+    try {
+      const prog = loadProgress();
+      if (prog && prog.level === fromLevel) {
+        prog.level = fromLevel + 1;
+        localStorage.setItem(PROGRESS_KEY, JSON.stringify(prog));
+        setupBackLinks();
+      }
+    } catch (e) {
+      console.error('Tutorial progress error:', e);
+    }
+  }
+  setupBackLinks();
   const RANDOM_CATEGORIES = ['動物', '食べ物', '家電', '乗り物', '趣味'];
   const TIME_LIMITS = { fast: 75, normal: 150, unlimited: null };
 
@@ -972,6 +998,7 @@
     else if (score >= 1) comment = `うーん、${userName}の画力についてはノーコメントにしておきます。`;
     else comment = `0点とは、なかなかやりますね${userName}。次は期待していますよ。`;
     els.finalComment.textContent = comment;
+    advanceTutorial(4); // 5問すべて遊び終えたらレベルアップ(全チュートリアル完了)
     showScreen('final_screen');
   }
 
