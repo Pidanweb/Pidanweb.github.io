@@ -620,8 +620,7 @@
       unlocked: ['talk', 'camera', 'schedule', 'draw', 'study', 'music'],
       gauge: '100%',
       dialogs: [
-        { text: 'すべてのチュートリアルをクリア！本当にお疲れさま！', face: 'chars/char_normal.png' },
-        { text: 'これですべての機能が使えるようになったよ。これからもたくさん頼ってね！', face: 'chars/char_normal.png' }
+        { text: 'チュートリアルお疲れさまでした。これからもAIとの時間をお楽しみください。', face: 'chars/char_normal.png' }
       ]
     }
   };
@@ -757,7 +756,12 @@
         prog.lastSeenLevel = currentLv;
         saveProgress(prog);
         renderUI();
+        // 最後のメッセージを見終えたらメインのホーム画面(index.html)へ
+        if (currentLv >= 5) window.location.href = 'index.html';
       });
+    } else if (currentLv >= 5) {
+      // すでに完了メッセージを見ている場合は、そのままホームへ
+      window.location.href = 'index.html';
     }
   }
 
