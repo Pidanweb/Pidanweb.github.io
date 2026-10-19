@@ -238,6 +238,18 @@
     font-size: 12.5px;
     font-weight: 600;
   }
+  #canvas_tools button#tool_toggle_btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+  }
+  #tool_toggle_btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+  #tool_toggle_btn.eraser_active {
+    border-color: var(--scan);
+    background: var(--scan-soft);
+    color: var(--scan);
+  }
   #color_row {
     display: flex;
     align-items: center;
@@ -519,6 +531,7 @@
       <input type="color" id="custom_color_picker" value="#1a1a1a">
     </div>
     <div id="canvas_tools">
+      <button id="tool_toggle_btn" aria-label="消しゴムに切り替え"></button>
       <button id="undo_btn">戻す</button>
       <button id="clear_btn">全部消す</button>
       <button id="use_canvas_btn" style="display:none;">キャンバスに戻す</button>
@@ -576,8 +589,7 @@
   // 戻り先: チュートリアル中は index_tyuto.html、完了後は index.html(このファイルは apps/ にあるので ../ が必要)
   function setupBackLinks() {
     const prog = loadProgress();
-    const done = !!(prog && prog.level >= 5 && prog.lastSeenLevel >= 5); // 完了メッセージ(index_tyuto.html)を見終えたら完了
-    const href = (prog && prog.level && !done) ? '../index_tyuto.html' : '../index.html';
+    const href = (prog && prog.level && prog.level < 5) ? '../index_tyuto.html' : '../index.html';
     ['back_home', 'exit_btn'].forEach(id => { const a = document.getElementById(id); if (a) a.href = href; });
   }
   // 1ゲーム最後まで遊んだらチュートリアルを進める(お絵描き手順 Lv.4 → Lv.5)
@@ -748,8 +760,39 @@
     el.addEventListener('contextmenu', (e) => e.preventDefault());
   });
 
+  // ---- 消しゴム/えんぴつ切り替え ----
+  // ボタンには「押すと切り替わる先」のマークを表示する
+  //   えんぴつ中 → 消しゴムマーク(押すと消しゴムに)
+  //   消しゴム中 → 鉛筆マーク(押すとえんぴつに)
+  let isEraser = false;
+  const ERASER_WIDTH = 22;
+  const ICON_ERASER =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M20 20H9l-5.3-5.3a1.5 1.5 0 0 1 0-2.1L13.4 2.9a1.5 1.5 0 0 1 2.1 0l5.6 5.6a1.5 1.5 0 0 1 0 2.1L11 20"/>' +
+    '<path d="M6 12l6 6"/></svg>';
+  const ICON_PENCIL =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M17 3a2.8 2.8 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>' +
+    '<path d="M15 5l4 4"/></svg>';
+
+  function setEraser(on) {
+    isEraser = on;
+    if (on) {
+      els.toolToggleBtn.innerHTML = ICON_PENCIL + '<span>えんぴつ</span>';
+      els.toolToggleBtn.setAttribute('aria-label', 'えんぴつに切り替え');
+      els.toolToggleBtn.classList.add('eraser_active');
+    } else {
+      els.toolToggleBtn.innerHTML = ICON_ERASER + '<span>消しゴム</span>';
+      els.toolToggleBtn.setAttribute('aria-label', '消しゴムに切り替え');
+      els.toolToggleBtn.classList.remove('eraser_active');
+    }
+  }
+  els.toolToggleBtn.addEventListener('click', () => setEraser(!isEraser));
+  setEraser(false);
+
   // ---- 色選択 ----
   function selectColor(hex) {
+    setEraser(false); // 色を選んだらえんぴつに戻す
     currentColor = hex;
     document.querySelectorAll('.color_swatch').forEach(b => {
       b.classList.toggle('selected', b.dataset.color.toLowerCase() === hex.toLowerCase());
@@ -760,6 +803,7 @@
     btn.addEventListener('click', () => selectColor(btn.dataset.color));
   });
   els.customColorPicker.addEventListener('input', (e) => {
+    setEraser(false);
     document.querySelectorAll('.color_swatch').forEach(b => b.classList.remove('selected'));
     currentColor = e.target.value;
   });
@@ -794,9 +838,10 @@
   canvas.addEventListener('pointermove', (e) => {
     if (!drawing || usingPhoto) return;
     const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
-    ctx.lineWidth = Math.max(1.5, pressure * 7);
+    ctx.lineWidth = isEraser ? ERASER_WIDTH : Math.max(1.5, pressure * 7);
     ctx.lineCap = 'round';
-    ctx.strokeStyle = currentColor;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = isEraser ? '#ffffff' : currentColor;
     ctx.beginPath();
     ctx.moveTo(lastX, lastY);
     ctx.lineTo(e.offsetX, e.offsetY);
@@ -853,6 +898,7 @@
     canvas.style.display = 'block';
     els.useCanvasBtn.style.display = 'none';
     undoStack = [];
+    setEraser(false);
 
     showScreen('draw_screen');
     resizeCanvas();
@@ -910,10 +956,11 @@
   async function callGemini(base64Image) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const prompt =
-      "これはお絵描き当てゲームの一場面です。この絵に何が描かれているか、あなたの推測を答えてください。" +
-      "自信がなくても構わないので、最も近いと思う具体的なものを1つ挙げてください。前置きは不要です。" +
-      "ただし、線が少なすぎたり抽象的すぎたりして本当に判断できない場合は、" +
-      "無理に当てはめず「わかりません」のように正直に答えてください。";
+      "これはお絵描き当てゲームの一場面です。この絵に何が描かれているか答えてください。" +
+      "何が描かれているかはっきり判断できる場合だけ、最も近いものを1つ挙げてください。" +
+      "線が少ない、形が崩れている、複数の解釈ができて決め手がない、などで確信が持てない場合は、" +
+      "無理に何かに決めつけず「わかりません」と正直に答え、読み取れなかった理由を一言添えてください。" +
+      "前置きは不要です。回答は必ず最後の文まで言い切ってください。";
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -928,7 +975,8 @@
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         generationConfig: {
           thinkingConfig: { thinkingLevel: 'low' },
-          maxOutputTokens: 200,
+          // 思考トークンも上限に含まれるため、本文が切れないよう余裕を持たせる
+          maxOutputTokens: 2048,
         },
       }),
     });
@@ -937,7 +985,17 @@
       throw new Error(errBody?.error?.message || `APIエラー (${res.status})`);
     }
     const data = await res.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    const cand = data.candidates?.[0];
+    // 思考パートを除いた全テキストパートを結合する(parts[0]だけだと取りこぼす)
+    const text = (cand?.content?.parts || [])
+      .filter(p => !p.thought && typeof p.text === 'string')
+      .map(p => p.text)
+      .join('')
+      .trim();
+    if (!text) {
+      return 'うまく答えを出せませんでした。もう一度試してみてください。';
+    }
+    return text;
   }
 
   async function submitToAI() {
