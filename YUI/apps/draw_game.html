@@ -589,7 +589,8 @@
   // 戻り先: チュートリアル中は index_tyuto.html、完了後は index.html(このファイルは apps/ にあるので ../ が必要)
   function setupBackLinks() {
     const prog = loadProgress();
-    const href = (prog && prog.level && prog.level < 5) ? '../index_tyuto.html' : '../index.html';
+    const done = !!(prog && prog.level >= 5 && prog.lastSeenLevel >= 5); // 完了メッセージ(index_tyuto.html)を見終えたら完了
+    const href = (prog && prog.level && !done) ? '../index_tyuto.html' : '../index.html';
     ['back_home', 'exit_btn'].forEach(id => { const a = document.getElementById(id); if (a) a.href = href; });
   }
   // 1ゲーム最後まで遊んだらチュートリアルを進める(お絵描き手順 Lv.4 → Lv.5)
@@ -852,12 +853,24 @@
     canvas.addEventListener(evt, () => { drawing = false; });
   });
 
-  els.undoBtn.addEventListener('click', () => {
+  function doUndo() {
     if (undoStack.length === 0) return;
     const prev = undoStack.pop();
     const img = new Image();
     img.onload = () => { fillWhite(); ctx.drawImage(img, 0, 0); };
     img.src = prev;
+  }
+  els.undoBtn.addEventListener('click', doUndo);
+
+  // PC: Ctrl+Z (Macは Cmd+Z) で「戻す」
+  document.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+    if (e.key.toLowerCase() !== 'z') return;
+    if (!document.getElementById('draw_screen').classList.contains('active')) return;
+    if (els.thinkingOverlay.classList.contains('active')) return;
+    if (drawing || usingPhoto) return;
+    e.preventDefault();
+    doUndo();
   });
   els.clearBtn.addEventListener('click', () => {
     pushUndo();
