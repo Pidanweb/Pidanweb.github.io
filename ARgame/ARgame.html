@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>回避ゲーム</title>
+<style>
+:root{--bg:#14161f;--pn:#1f2333;--tx:#e8e9f0;--mu:#9aa0b8;--ok:#37c9a7;--ng:#ff5a5f;--ac:#ffb938}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.6 "Yu Gothic UI",Meiryo,sans-serif}
+main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;max-width:1280px;margin:0 auto;padding:16px}
+@media(max-width:860px){main{grid-template-columns:1fr}}
+#stage{position:relative;background:#000;border-radius:8px;overflow:hidden}
+canvas{display:block;width:100%;height:auto}
+#toast{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:var(--ok);color:#06231c;padding:6px 16px;border-radius:99px;font-weight:700;opacity:0;transition:opacity .2s;pointer-events:none}
+#toast.on{opacity:1}
+aside{display:flex;flex-direction:column;gap:12px}
+section{background:var(--pn);border-radius:8px;padding:12px}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:14px;margin:0 0 8px;color:var(--mu)}
+p{margin:8px 0 0}
+button{font:inherit;padding:8px 12px;border:0;border-radius:6px;background:var(--ac);color:#2a1d00;font-weight:700;cursor:pointer;margin:0 6px 6px 0}
+button:disabled{opacity:.4;cursor:default}
+button.s{background:#363b55;color:var(--tx)}
+.chips{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.chip{padding:6px 8px;border-radius:6px;background:#2a2f45;color:var(--mu)}
+.chip.ok{background:var(--ok);color:#06231c;font-weight:700}
+#errors{padding:0;margin:0}
+#errors li{list-style:none;margin-bottom:8px}
+.code{background:var(--ng);color:#fff;border-radius:4px;padding:0 6px;font-weight:700;margin-right:6px}
+small{color:var(--mu)}
+</style>
+</head>
+<body>
+<main>
+<div id="stage"><canvas id="cv" width="1280" height="720"></canvas><div id="toast" role="status"></div></div>
+<aside>
+<section>
+<h1>回避ゲーム</h1>
+<small>カメラを背後に置き、床の四隅にQRコード(0〜3)を置いて、体を動かして攻撃を避けます。</small>
+<p><button id="bCam">カメラを開始</button><button id="bStart" class="s" disabled>ゲーム開始</button><button id="bRe" class="s">QRやり直し</button></p>
+</section>
+<section><h2>状態</h2><div class="chips" id="chips"></div><p id="info"></p></section>
+<section id="errBox" hidden role="alert"><h2>エラー</h2><ul id="errors"></ul></section>
+<section><h2>QRの置き方</h2><small>カメラ映像で見て 奥左=0 / 奥右=1 / 手前右=2 / 手前左=3。奥が敵側です。エリアは2m×2mです。</small></section>
+</aside>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script type="module">
+const $=s=>document.querySelector(s),cv=$('#cv'),ctx=cv.getContext('2d');
+const AREA_W=2,AREA_H=2,JUMP=.25,CROUCH=.3,WARN=1.5,MAXHP=5;
+const video=document.createElement('video');video.playsInline=true;video.muted=true;
+let W=1280,H=720,stream=null,pose=null,conn=[],raf=0,lastQ=0,lastT=-1,pfail=0,tt;
+const st={corners:{},H:null,Hi:null,note:''};
+const pl={pos:null,bh:null,bt:null,crouch:false,jump:-9,seen:false,lm:null};
+const g={s:'idle',hp:MAXHP,ok:0,atk:[],next:0,end:0,msg:'',mc:'#fff',mu:0};
+
+/* ---------- エラー表示 ---------- */
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const errs=new Map();
+function fail(code,title,e,hint){
+  console.error(code,title,e);
+  let r=errs.get(code);
+  if(!r){const li=document.createElement('li');$('#errors').append(li);r={li,n:0};errs.set(code,r)}
+  r.n++;
+  r.li.innerHTML=`<span class="code">${code}</span><b>${title}</b>${r.n>1?` ×${r.n}`:''}<br><small>${e?esc((e.name||'Error')+': '+(e.message||e)):''}${hint?'<br>対処: '+hint:''}</small>`;
+  $('#errBox').hidden=false;
+}
+function clr(code){const r=errs.get(code);if(r){r.li.remove();errs.delete(code)}$('#errBox').hidden=!errs.size}
+addEventListener('error',e=>fail('E-900','予期しないエラー',e.error||e.message,'ページを再読み込みしてください'));
+addEventListener('unhandledrejection',e=>fail('E-900','予期しないエラー',e.reason,'ページを再読み込みしてください'));
+
+/* ---------- 状態表示 ---------- */
+const chipEl={};
+function mk(k,t){const d=document.createElement('div');d.className='chip';d.textContent=t;$('#chips').append(d);chipEl[k]=d}
+['0','1','2','3'].forEach(i=>mk(i,`QR ${i} 待機中`));mk('pose','姿勢 未検出');mk('model','モデル 準備中');
+const chip=(k,t,ok)=>{chipEl[k].textContent=t;chipEl[k].className='chip'+(ok?' ok':'')};
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2800)}
+function upd(){
+  for(const i of '0123')chip(i,`QR ${i} `+(st.corners[i]?'確認済み':'待機中'),!!st.corners[i]);
+  chip('pose',pl.seen?'姿勢 検出中':'姿勢 未検出',pl.seen);
+  $('#bStart').disabled=!(st.H&&pose&&g.s!=='countdown'&&g.s!=='playing');
+  $('#info').textContent=st.H?'QRを4つ確認できました。「ゲーム開始」を押せます。':`QR ${Object.keys(st.corners).length}/4 確認済み ${st.note}`;
+}
+
+/* ---------- ホモグラフィ ---------- */
+function homog(s,d){
+  const M=[];
+  for(let i=0;i<4;i++){
+    const[x,y]=s[i],[u,v]=d[i];
+    M.push([x,y,1,0,0,0,-u*x,-u*y,u],[0,0,0,x,y,1,-v*x,-v*y,v]);
+  }
+  for(let c=0;c<8;c++){
+    let p=c;for(let r=c+1;r<8;r++)if(Math.abs(M[r][c])>Math.abs(M[p][c]))p=r;
+    if(Math.abs(M[p][c])<1e-9)throw new Error('特異行列(4点が一直線に近い)');
+    [M[c],M[p]]=[M[p],M[c]];
+    for(let r=0;r<8;r++)if(r!==c){const f=M[r][c]/M[c][c];for(let k=c;k<9;k++)M[r][k]-=f*M[c][k]}
+  }
+  const h=M.map((r,i)=>r[8]/r[i]);
+  return[[h[0],h[1],h[2]],[h[3],h[4],h[5]],[h[6],h[7],1]];
+}
+const ap=(m,x,y)=>{const w=m[2][0]*x+m[2][1]*y+m[2][2];return[(m[0][0]*x+m[0][1]*y+m[0][2])/w,(m[1][0]*x+m[1][1]*y+m[1][2])/w]};
+function lock(){
+  try{
+    const s=[0,1,2,3].map(i=>[st.corners[i].x,st.corners[i].y]);
+    const cr=s.map((p,i)=>{const a=s[(i+1)%4],b=s[(i+2)%4];return(a[0]-p[0])*(b[1]-a[1])-(a[1]-p[1])*(b[0]-a[0])});
+    if(!(cr.every(c=>c>0)||cr.every(c=>c<0))){
+      fail('E-041','QRの順番が正しくありません',null,'奥左=0→奥右=1→手前右=2→手前左=3 に置き直し、「QRやり直し」を押してください');
+      st.corners={};upd();return;
+    }
+    const w=[[0,0],[AREA_W,0],[AREA_W,AREA_H],[0,AREA_H]];
+    st.H=homog(s,w);st.Hi=homog(w,s);
+    toast('QRを4つ確認できました!プレイエリアを設定しました');
+  }catch(e){
+    fail('E-040','エリアの計算に失敗しました',e,'QRの位置を見直して「QRやり直し」を押してください');
+    st.corners={};
+  }
+  upd();
+}
+
+/* ---------- QR検出 ---------- */
+const off=document.createElement('canvas'),octx=off.getContext('2d',{willReadFrequently:true});
+function detectQR(){
+  if(typeof jsQR==='undefined')return;
+  try{
+    off.width=W;off.height=H;octx.drawImage(video,0,0,W,H);
+    let img=octx.getImageData(0,0,W,H),changed=false;
+    for(let n=0;n<8;n++){
+      const r=jsQR(img.data,W,H,{inversionAttempts:'dontInvert'});
+      if(!r)break;
+      const l=r.location,pts=[l.topLeftCorner,l.topRightCorner,l.bottomRightCorner,l.bottomLeftCorner];
+      const cx=pts.reduce((s,p)=>s+p.x,0)/4,cy=pts.reduce((s,p)=>s+p.y,0)/4,id=r.data.trim();
+      if('0123'.includes(id)&&id.length===1){
+        if(!st.corners[id]){toast(`QR ${id} を確認しました`);changed=true}
+        st.corners[id]={x:cx,y:cy,pts};
+      }else st.note=`(対象外のQR「${id.slice(0,10)}」を検出。0〜3のQRを使ってください)`;
+      octx.fillStyle='#fff';octx.beginPath();
+      pts.forEach((p,i)=>{const x=cx+(p.x-cx)*1.3,y=cy+(p.y-cy)*1.3;i?octx.lineTo(x,y):octx.moveTo(x,y)});
+      octx.fill();img=octx.getImageData(0,0,W,H);
+    }
+    if(changed)upd();
+    if(Object.keys(st.corners).length===4)lock();
+  }catch(e){fail('E-021','QR検出でエラー',e,'ページを再読み込みしてください')}
+}
+
+/* ---------- 姿勢 ---------- */
+function updPlayer(lm,now){
+  const P=i=>[lm[i].x*W,lm[i].y*H],m=(a,b)=>[(a[0]+b[0])/2,(a[1]+b[1])/2];
+  if(lm[27].visibility>.4&&lm[28].visibility>.4&&st.H){const f=m(P(27),P(28));pl.pos=ap(st.H,f[0],f[1])}
+  const hip=m(P(23),P(24)),sh=m(P(11),P(12)),t=Math.hypot(hip[0]-sh[0],hip[1]-sh[1]);
+  if(t<5)return;
+  if(pl.bh==null){pl.bh=hip[1];pl.bt=t}
+  const rel=(pl.bh-hip[1])/pl.bt;
+  if(rel>JUMP)pl.jump=now;
+  pl.crouch=rel<-CROUCH;
+  if(Math.abs(rel)<.1){pl.bh=.98*pl.bh+.02*hip[1];pl.bt=.98*pl.bt+.02*t}
+}
+function doPose(now){
+  if(!pose||video.currentTime===lastT)return;
+  lastT=video.currentTime;
+  try{
+    const lm=pose.detectForVideo(video,performance.now()).landmarks[0];
+    pfail=0;pl.lm=lm;
+    if(!!lm!==pl.seen){pl.seen=!!lm;upd()}
+    if(lm)updPlayer(lm,now);
+  }catch(e){
+    if(++pfail===1||pfail%60===0)fail('E-032','姿勢検出でエラー',e,'ページを再読み込みしてください');
+    if(pfail>30){pose=null;upd()}
+  }
+}
+(async()=>{
+  if(typeof jsQR==='undefined')fail('E-020','QR読み取りライブラリを読み込めません',null,'インターネット接続を確認してください');
+  chip('model','モデル 読み込み中');
+  const V='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+  let M;
+  try{M=await import(V+'/vision_bundle.mjs')}
+  catch(e){chip('model','モデル エラー');return fail('E-030','MediaPipeを読み込めません',e,'インターネット接続を確認してください')}
+  try{
+    const fs=await M.FilesetResolver.forVisionTasks(V+'/wasm');
+    const make=d=>M.PoseLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',delegate:d},runningMode:'VIDEO',numPoses:1});
+    try{pose=await make('GPU')}catch{pose=await make('CPU')}
+    conn=M.PoseLandmarker.POSE_CONNECTIONS||[];
+    chip('model','モデル 準備OK',true);upd();
+  }catch(e){chip('model','モデル エラー');fail('E-031','姿勢モデルを初期化できません',e,'インターネット接続を確認し、再読み込みしてください')}
+})();
+
+/* ---------- カメラ ---------- */
+$('#bCam').onclick=async()=>{
+  if(!navigator.mediaDevices?.getUserMedia)return fail('E-001','カメラAPIが使えません',null,'Chrome か Edge の最新版で開いてください');
+  try{
+    stream?.getTracks().forEach(t=>t.stop());
+    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{width:{ideal:1280},height:{ideal:720}}});
+    video.srcObject=stream;await video.play();
+    W=video.videoWidth;H=video.videoHeight;cv.width=W;cv.height=H;
+    ['E-010','E-011','E-012','E-013'].forEach(clr);
+    $('#bCam').textContent='カメラ再起動';
+    if(!raf)loop();
+  }catch(e){
+    const t={NotAllowedError:['E-010','カメラの許可がありません','アドレスバーのカメラ設定を「許可」にしてください'],
+      NotFoundError:['E-011','カメラが見つかりません','カメラの接続を確認してください'],
+      NotReadableError:['E-012','カメラを使用できません','他のアプリがカメラを使っていないか確認してください']}[e.name]
+      ||['E-013','カメラを開始できません','別のカメラやブラウザで試してください'];
+    fail(t[0],t[1],e,t[2]);
+  }
+};
+
+/* ---------- ゲーム ---------- */
+const HINT={Z:'動け!',L:'ジャンプ!',H:'しゃがめ!'},COL={Z:'#ff5a5f',L:'#ffb938',H:'#c084fc'};
+const poly=r=>[[r[0],r[1]],[r[2],r[1]],[r[2],r[3]],[r[0],r[3]]].map(p=>ap(st.Hi,p[0],p[1]));
+function drawPoly(p,col,fa,lw){
+  ctx.beginPath();p.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));ctx.closePath();
+  ctx.globalAlpha=fa;ctx.fillStyle=col;ctx.fill();ctx.globalAlpha=1;ctx.strokeStyle=col;ctx.lineWidth=lw;ctx.stroke();
+}
+function txt(s,x,y,sz,col='#fff'){
+  ctx.font=`700 ${sz}px "Yu Gothic UI",Meiryo,sans-serif`;ctx.textAlign='center';
+  ctx.lineWidth=sz/6;ctx.strokeStyle='#000';ctx.strokeText(s,x,y);ctx.fillStyle=col;ctx.fillText(s,x,y);
+}
+function judge(a,now){
+  if(a.k==='Z'){
+    if(!pl.pos)return false;
+    const[x,y]=pl.pos,[x0,y0,x1,y1]=a.r;
+    return!(x>=x0&&x<=x1&&y>=y0&&y<=y1);
+  }
+  return a.k==='L'?Math.abs(now-pl.jump)<.4:pl.crouch;
+}
+function spawn(now){
+  const k=['Z','Z','L','H'][Math.random()*4|0];let r=[0,0,AREA_W,AREA_H];
+  if(k==='Z'){const w=.9,x=Math.random()*(AREA_W-w),y=Math.random()*(AREA_H-w);r=[x,y,x+w,y+w]}
+  g.atk.push({k,r,t0:now,t:now+WARN,done:false});
+}
+function game(now,fs){
+  if(g.s==='idle'){
+    txt('QRを4つ確認できました',W/2,fs*1.5,fs,'#37c9a7');
+    txt('「ゲーム開始」を押して、直立してください',W/2,fs*2.8,fs*.7);return;
+  }
+  if(g.s==='countdown'){
+    pl.bh=null;const n=Math.ceil(g.end-now);
+    if(n<=0){g.s='playing';g.next=now+1;upd()}
+    else{txt('直立して待機',W/2,fs*1.5,fs);txt(n,W/2,H/2,fs*4);return}
+  }
+  if(g.s==='playing'&&now>=g.next){spawn(now);g.next=now+2+Math.random()*1.5}
+  for(const a of g.atk){
+    const p=poly(a.r),c=COL[a.k];
+    if(!a.done){
+      drawPoly(p,c,.15+.35*Math.min(1,(now-a.t0)/WARN),3);
+      const cx=p.reduce((s,q)=>s+q[0],0)/4,cy=p.reduce((s,q)=>s+q[1],0)/4;
+      txt(`${HINT[a.k]} ${Math.max(0,a.t-now).toFixed(1)}`,cx,cy,fs*.8,c);
+      if(now>=a.t&&g.s==='playing'){
+        a.done=true;a.ok=judge(a,now);a.fin=now;
+        if(a.ok)g.ok++;else g.hp--;
+        g.msg=a.ok?'回避!':'被弾!';g.mc=a.ok?'#37c9a7':'#ff5a5f';g.mu=now+.8;
+        if(g.hp<=0){g.s='over';g.atk=[];upd()}
+      }
+    }else drawPoly(p,a.ok?'#37c9a7':'#ff5a5f',.5,3);
+  }
+  g.atk=g.atk.filter(a=>!a.done||now<a.fin+.3);
+  if(now<g.mu)txt(g.msg,W/2,H/2,fs*2.5,g.mc);
+  if(g.s==='over')txt('GAME OVER',W/2,H/2-fs,fs*3,'#ff5a5f');
+  txt(`HP ${'♥'.repeat(Math.max(0,g.hp))}   回避 ${g.ok}`,W/2,H-fs*.6,fs*.9);
+  if(!pl.lm)txt('姿勢を検出できません',W/2,fs*1.5,fs*.8,'#ffb938');
+}
+$('#bStart').onclick=()=>{g.hp=MAXHP;g.ok=0;g.atk=[];g.s='countdown';g.end=performance.now()/1e3+3;upd()};
+$('#bRe').onclick=()=>{st.corners={};st.H=st.Hi=null;st.note='';g.s='idle';g.atk=[];['E-040','E-041'].forEach(clr);upd()};
+
+/* ---------- メインループ ---------- */
+function loop(){
+  raf=requestAnimationFrame(loop);
+  if(video.readyState<2)return;
+  const now=performance.now()/1e3,fs=H/24;
+  ctx.drawImage(video,0,0,W,H);
+  if(!st.H&&now-lastQ>.3){lastQ=now;detectQR()}
+  doPose(now);
+  for(const i in st.corners){
+    const c=st.corners[i];
+    ctx.beginPath();c.pts.forEach((q,j)=>j?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.closePath();
+    ctx.strokeStyle='#37c9a7';ctx.lineWidth=4;ctx.stroke();
+    txt(`QR ${i} 確認!`,c.x,c.y-fs,fs*.7,'#37c9a7');
+  }
+  if(pl.lm){
+    ctx.strokeStyle='rgba(255,255,255,.8)';ctx.lineWidth=3;
+    for(const c of conn){
+      const a=pl.lm[c.start],b=pl.lm[c.end];
+      if(a.visibility>.4&&b.visibility>.4){ctx.beginPath();ctx.moveTo(a.x*W,a.y*H);ctx.lineTo(b.x*W,b.y*H);ctx.stroke()}
+    }
+  }
+  if(st.H){
+    drawPoly(poly([0,0,AREA_W,AREA_H]),'#37c9a7',.06,2);
+    if(pl.pos){const c=ap(st.Hi,pl.pos[0],pl.pos[1]);ctx.fillStyle='#ffe066';ctx.beginPath();ctx.arc(c[0],c[1],10,0,7);ctx.fill()}
+    game(now,fs);
+  }else txt(`QR ${Object.keys(st.corners).length}/4 確認済み`,W/2,fs*1.5,fs,'#ffb938');
+}
+ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);txt('「カメラを開始」を押してください',W/2,H/2,H/18);
+upd();
+</script>
+</body>
+</html>
