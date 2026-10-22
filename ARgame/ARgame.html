@@ -38,15 +38,16 @@ small{color:var(--mu)}
 <section>
 <h1>回避ゲーム</h1>
 <small>カメラを背後に置き、床の四隅にQRコード(0〜3)を置いて、体を動かして攻撃を避けます。</small>
-<p><button id="bCam">カメラを開始</button><button id="bStart" class="s" disabled>ゲーム開始</button><button id="bRe" class="s">QRやり直し</button></p>
+<p><button id="bCam">カメラを開始</button><button id="bStart" class="s" disabled>ゲーム開始</button><button id="bRe" class="s">QRやり直し</button><button id="bEnemy" class="s">敵モデルを選ぶ</button><input id="file" type="file" multiple hidden accept=".gltf,.glb,.bin,.png,.jpg,.jpeg,.webp"></p>
 </section>
-<section><h2>状態</h2><div class="chips" id="chips"></div><p id="info"></p></section>
+<section><h2>状態</h2><div class="chips" id="chips"></div><p id="info"></p><small id="clips"></small></section>
 <section id="errBox" hidden role="alert"><h2>エラー</h2><ul id="errors"></ul></section>
 <section><h2>QRの置き方</h2><small>カメラ映像で見て 奥左=0 / 奥右=1 / 手前右=2 / 手前左=3。奥が敵側です。エリアは2m×2mです。</small></section>
 </aside>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 const $=s=>document.querySelector(s),cv=$('#cv'),ctx=cv.getContext('2d');
 const AREA_W=2,AREA_H=2,JUMP=.25,CROUCH=.3,WARN=1.5,MAXHP=5;
@@ -74,7 +75,7 @@ addEventListener('unhandledrejection',e=>fail('E-900','予期しないエラー'
 /* ---------- 状態表示 ---------- */
 const chipEl={};
 function mk(k,t){const d=document.createElement('div');d.className='chip';d.textContent=t;$('#chips').append(d);chipEl[k]=d}
-['0','1','2','3'].forEach(i=>mk(i,`QR ${i} 待機中`));mk('pose','姿勢 未検出');mk('model','モデル 準備中');
+['0','1','2','3'].forEach(i=>mk(i,`QR ${i} 待機中`));mk('pose','姿勢 未検出');mk('model','モデル 準備中');mk('enemy','敵 未読み込み');
 const chip=(k,t,ok)=>{chipEl[k].textContent=t;chipEl[k].className='chip'+(ok?' ok':'')};
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2800)}
 function upd(){
@@ -192,7 +193,7 @@ $('#bCam').onclick=async()=>{
     stream?.getTracks().forEach(t=>t.stop());
     stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{width:{ideal:1280},height:{ideal:720}}});
     video.srcObject=stream;await video.play();
-    W=video.videoWidth;H=video.videoHeight;cv.width=W;cv.height=H;
+    W=video.videoWidth;H=video.videoHeight;cv.width=W;cv.height=H;enemy.fit();
     ['E-010','E-011','E-012','E-013'].forEach(clr);
     $('#bCam').textContent='カメラ再起動';
     if(!raf)loop();
@@ -227,7 +228,9 @@ function judge(a,now){
 function spawn(now){
   const k=['Z','Z','L','H'][Math.random()*4|0];let r=[0,0,AREA_W,AREA_H];
   if(k==='Z'){const w=.9,x=Math.random()*(AREA_W-w),y=Math.random()*(AREA_H-w);r=[x,y,x+w,y+w]}
-  g.atk.push({k,r,t0:now,t:now+WARN,done:false});
+  const a={k,r,t0:now,t:now+WARN,done:false},c=enemy.clip(k);
+  if(c){const D=c.duration;a.clip=c;a.ts=Math.max(1,STRIKE*D/WARN);a.start=Math.max(now,a.t-STRIKE*D/a.ts)}
+  g.atk.push(a);
 }
 function game(now,fs){
   if(g.s==='idle'){
@@ -241,6 +244,7 @@ function game(now,fs){
   }
   if(g.s==='playing'&&now>=g.next){spawn(now);g.next=now+2+Math.random()*1.5}
   for(const a of g.atk){
+    if(a.clip&&!a.go&&now>=a.start){a.go=true;enemy.attack(a.clip,a.ts)}
     const p=poly(a.r),c=COL[a.k];
     if(!a.done){
       drawPoly(p,c,.15+.35*Math.min(1,(now-a.t0)/WARN),3);
@@ -250,7 +254,7 @@ function game(now,fs){
         a.done=true;a.ok=judge(a,now);a.fin=now;
         if(a.ok)g.ok++;else g.hp--;
         g.msg=a.ok?'回避!':'被弾!';g.mc=a.ok?'#37c9a7':'#ff5a5f';g.mu=now+.8;
-        if(g.hp<=0){g.s='over';g.atk=[];upd()}
+        if(g.hp<=0){g.s='over';g.atk=[];enemy.death();upd()}
       }
     }else drawPoly(p,a.ok?'#37c9a7':'#ff5a5f',.5,3);
   }
@@ -260,8 +264,77 @@ function game(now,fs){
   txt(`HP ${'♥'.repeat(Math.max(0,g.hp))}   回避 ${g.ok}`,W/2,H-fs*.6,fs*.9);
   if(!pl.lm)txt('姿勢を検出できません',W/2,fs*1.5,fs*.8,'#ffb938');
 }
-$('#bStart').onclick=()=>{g.hp=MAXHP;g.ok=0;g.atk=[];g.s='countdown';g.end=performance.now()/1e3+3;upd()};
+$('#bStart').onclick=()=>{enemy.idle();g.hp=MAXHP;g.ok=0;g.atk=[];g.s='countdown';g.end=performance.now()/1e3+3;upd()};
 $('#bRe').onclick=()=>{st.corners={};st.H=st.Hi=null;st.note='';g.s='idle';g.atk=[];['E-040','E-041'].forEach(clr);upd()};
+
+/* ---------- 敵(3Dモデル) ---------- */
+const STRIKE=.5;      // 攻撃アニメの「当たる瞬間」が全体の何割目か(0〜1)。見た目とズレたら調整
+const ENEMY_SIZE=1;   // 敵の高さ(奥側の辺の幅に対する倍率)
+const enemy={ready:false,root:null,fit(){},frame(){},clip(){return null},attack(){},death(){},idle(){}};
+let T=null;
+async function setupThree(){
+  if(T)return T;
+  try{
+    const THREE=await import('three'),{GLTFLoader}=await import('three/addons/loaders/GLTFLoader.js');
+    const r=new THREE.WebGLRenderer({alpha:true,antialias:true});
+    r.domElement.style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none';
+    $('#stage').append(r.domElement);
+    const scene=new THREE.Scene(),cam=new THREE.OrthographicCamera(0,W,0,-H,-2000,2000),d=new THREE.DirectionalLight(0xffffff,2.5);
+    d.position.set(0,300,500);scene.add(new THREE.HemisphereLight(0xffffff,0x445566,2),d);
+    enemy.fit=()=>{r.setSize(W,H,false);cam.right=W;cam.bottom=-H;cam.updateProjectionMatrix()};
+    enemy.fit();
+    return T={THREE,GLTFLoader,r,scene,cam,clock:new THREE.Clock()};
+  }catch(e){chip('enemy','敵 エラー');fail('E-050','3D表示(three.js)を読み込めません',e,'インターネット接続を確認してください')}
+}
+async function loadEnemy(url,mgr){
+  const t=await setupThree();if(!t)return;
+  chip('enemy','敵 読み込み中');
+  new t.GLTFLoader(mgr).load(url,gltf=>{
+    try{
+      const{THREE}=t,m=gltf.scene,b=new THREE.Box3().setFromObject(m),sz=b.getSize(new THREE.Vector3()),c=b.getCenter(new THREE.Vector3());
+      m.position.set(-c.x,-b.min.y,-c.z);
+      const norm=new THREE.Group(),holder=new THREE.Group();
+      norm.add(m);norm.scale.setScalar(1/sz.y);holder.add(norm);
+      if(enemy.root)t.scene.remove(enemy.root);
+      t.scene.add(holder);enemy.root=holder;
+      const cl=gltf.animations,C=re=>cl.filter(x=>re.test(x.name));
+      $('#clips').textContent='アニメ: '+(cl.map(x=>x.name).join(', ')||'なし');
+      if(!cl.length)fail('E-052','このモデルにはアニメーションがありません',null,'動きの付いたモデルを使ってください(静止状態で表示します)');
+      const mix=new THREE.AnimationMixer(m),idle=C(/idle|stand|wait/i)[0]||cl[0],
+        atk=cl.filter(x=>x!==idle&&/attack|punch|bite|slash|swipe|smash|slam|claw/i.test(x.name)),
+        pool=atk.length?atk:cl.filter(x=>x!==idle&&!/death|die|walk|run|hit|hurt/i.test(x.name)),
+        dead=C(/death|die/i)[0],ia=idle&&mix.clipAction(idle);
+      ia?.play();
+      mix.addEventListener('finished',e=>{if(ia&&e.action.getClip()!==dead)ia.reset().fadeIn(.2).play()});
+      enemy.clip=k=>pool.length?pool[{Z:0,L:1,H:2}[k]%pool.length]:null;
+      enemy.attack=(x,ts)=>{const a=mix.clipAction(x);a.reset().setLoop(THREE.LoopOnce,1);a.clampWhenFinished=false;a.timeScale=ts;a.fadeIn(.1).play();ia?.fadeOut(.1)};
+      enemy.death=()=>{if(!dead)return;const a=mix.clipAction(dead);mix.stopAllAction();a.reset().setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;a.play()};
+      enemy.idle=()=>{mix.stopAllAction();ia?.reset().play()};
+      enemy.frame=()=>{
+        mix.update(t.clock.getDelta());
+        holder.visible=!!st.H;
+        if(st.H){
+          const a=ap(st.Hi,0,0),b2=ap(st.Hi,AREA_W,0),mid=ap(st.Hi,AREA_W/2,-.2);
+          holder.position.set(mid[0],-mid[1],0);holder.scale.setScalar(Math.hypot(a[0]-b2[0],a[1]-b2[1])*ENEMY_SIZE);
+        }
+        t.r.render(t.scene,t.cam);
+      };
+      enemy.ready=true;clr('E-051');chip('enemy','敵 準備OK',true);
+    }catch(e){chip('enemy','敵 エラー');fail('E-051','敵モデルの設定に失敗しました',e,'別のモデルで試してください')}
+  },undefined,e=>{chip('enemy','敵 エラー');fail('E-051','敵モデルを読み込めません',e,'「敵モデルを選ぶ」ボタンで .gltf と同じフォルダのファイル(.bin・画像)をまとめて選んでください')});
+}
+$('#bEnemy').onclick=()=>$('#file').click();
+$('#file').onchange=async e=>{
+  const fs=[...e.target.files],main=fs.find(f=>/\.(gltf|glb)$/i.test(f.name));
+  if(!main)return fail('E-053','モデルファイル(.gltf / .glb)が選ばれていません',null,'Demon.gltf と同じフォルダの .bin や画像も、Ctrlキーを押しながらまとめて選んでください');
+  clr('E-053');
+  const t=await setupThree();if(!t)return;
+  const map=new Map(fs.map(f=>[f.name,URL.createObjectURL(f)])),mgr=new t.THREE.LoadingManager();
+  mgr.setURLModifier(u=>map.get(decodeURIComponent(u.split('?')[0].split('/').pop()))||u);
+  loadEnemy(map.get(main.name),mgr);
+  e.target.value='';
+};
+if(location.protocol.startsWith('http'))loadEnemy('Demon.gltf');
 
 /* ---------- メインループ ---------- */
 function loop(){
@@ -289,6 +362,7 @@ function loop(){
     if(pl.pos){const c=ap(st.Hi,pl.pos[0],pl.pos[1]);ctx.fillStyle='#ffe066';ctx.beginPath();ctx.arc(c[0],c[1],10,0,7);ctx.fill()}
     game(now,fs);
   }else txt(`QR ${Object.keys(st.corners).length}/4 確認済み`,W/2,fs*1.5,fs,'#ffb938');
+  enemy.frame();
 }
 ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);txt('「カメラを開始」を押してください',W/2,H/2,H/18);
 upd();
