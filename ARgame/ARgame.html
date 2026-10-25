@@ -278,6 +278,7 @@ $('#bRe').onclick=()=>{st.corners={};st.H=st.Hi=null;st.note='';g.s='idle';g.atk
 
 /* ---------- 敵(3Dモデル) ---------- */
 const STRIKE=.5;      // 攻撃アニメの「当たる瞬間」が全体の何割目か(0〜1)。見た目とズレたら調整
+const ENEMY_DIST=1;   // 敵の足元を、エリア奥の辺から何m奥に置くか(大きいほどエリアから離れる)
 const ENEMY_SIZE=1;   // 敵の高さ(奥側の辺の幅に対する倍率)
 const enemy={ready:false,root:null,fit(){},frame(){},clip(){return null},attack(){},death(){},idle(){}};
 let T=null;
@@ -323,8 +324,9 @@ async function loadEnemy(url,mgr){
         mix.update(t.clock.getDelta());
         holder.visible=!!st.H;
         if(st.H){
-          const a=ap(st.Hi,0,0),b2=ap(st.Hi,AREA_W,0),mid=ap(st.Hi,AREA_W/2,-.2);
-          holder.position.set(mid[0],-mid[1],0);holder.scale.setScalar(Math.hypot(a[0]-b2[0],a[1]-b2[1])*ENEMY_SIZE);
+          const a=ap(st.Hi,0,0),b2=ap(st.Hi,AREA_W,0),mid=ap(st.Hi,AREA_W/2,-ENEMY_DIST);
+          const base=Math.hypot(a[0]-b2[0],a[1]-b2[1])*ENEMY_SIZE,room=mid[1]-H*.03; // 足元から画面上端までの余白(3%は頭の上の余裕)
+          holder.position.set(mid[0],-mid[1],0);holder.scale.setScalar(Math.max(20,Math.min(base,room)));  // 頭が画面上端を越えないよう自動で縮める
         }
         t.r.render(t.scene,t.cam);
       };
