@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>イェルム（Elyms）情報まとめ｜NTE</title>
+<meta name="description" content="Neverness to Everness（NTE）のキャラクター、イェルム（Elyms）の情報まとめ。">
+
+<!--
+  ==============================================
+  編集ガイド
+  ==============================================
+  ・文章を変えたいとき   → 下の <body> 内の日本語を直接書き換える
+  ・色を変えたいとき     → すぐ下の <style> の「色の設定」を変える
+  ・項目を増やしたいとき → <section> ごとコピーして貼り付ける
+  ・表に行を足したいとき → <tr>〜</tr> を1行コピーして貼り付ける
+  ・確定していない情報には <span class="tag unconfirmed">未確定</span> を付ける
+  ==============================================
+-->
+
+<style>
+  /* ========== 色の設定（ここを変えると全体の色が変わる） ========== */
+  :root {
+    --bg: #f1f8f7;          /* 背景 */
+    --surface: #ffffff;     /* カードの背景 */
+    --text: #1f2a3c;        /* 文字 */
+    --muted: #5d6b80;       /* 補足の文字 */
+    --line: #d5e4e2;        /* 罫線 */
+    --accent: #d6457c;      /* メインの色（ストロベリー） */
+    --accent-soft: #fbe3ec; /* メインの色の薄い版 */
+    --mint: #2a9d8f;        /* サブの色（ミント） */
+    --mint-soft: #dff2ef;
+    --warn: #8a5a00;        /* 未確定タグの文字 */
+    --warn-soft: #fff1cc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141c26;
+      --surface: #1d2733;
+      --text: #e8eef6;
+      --muted: #9aa8bb;
+      --line: #2e3b4b;
+      --accent: #ff7aa8;
+      --accent-soft: #3a2230;
+      --mint: #5fd0c2;
+      --mint-soft: #1c3436;
+      --warn: #ffd37a;
+      --warn-soft: #3a3016;
+    }
+  }
+
+  /* ========== 基本レイアウト ========== */
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    line-height: 1.85;
+    font-size: 16px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 20px; }
+  a { color: var(--mint); }
+  a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  /* ========== ヘッダー ========== */
+  header { padding: 56px 0 32px; border-bottom: 4px solid var(--accent); background: var(--surface); }
+  header .game { margin: 0 0 4px; color: var(--muted); font-size: 14px; }
+  header h1 { margin: 0; font-size: clamp(40px, 9vw, 64px); line-height: 1.15; letter-spacing: .02em; }
+  header .en { margin: 4px 0 0; color: var(--accent); font-size: 20px; font-weight: 700; }
+  header .lead { margin: 20px 0 0; max-width: 34em; }
+
+  /* ========== ナビ ========== */
+  nav { background: var(--bg); border-bottom: 1px solid var(--line); }
+  nav ul { list-style: none; margin: 0; padding: 12px 0; display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 14px; }
+  nav a { text-decoration: none; color: var(--text); }
+  nav a:hover { color: var(--accent); text-decoration: underline; }
+
+  /* ========== セクション ========== */
+  main section { padding: 40px 0 8px; }
+  h2 { margin: 0 0 16px; font-size: 24px; padding-left: 12px; border-left: 6px solid var(--mint); line-height: 1.4; }
+  h3 { margin: 28px 0 8px; font-size: 18px; }
+  p { margin: 0 0 14px; }
+
+  /* ========== 表 ========== */
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); }
+  th, td { padding: 10px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+  th { width: 9em; background: var(--mint-soft); font-weight: 700; white-space: nowrap; }
+  tr:last-child th, tr:last-child td { border-bottom: none; }
+  .members th { width: auto; }
+  .members td:first-child { white-space: nowrap; font-weight: 700; }
+
+  /* ========== 部品 ========== */
+  .tag { display: inline-block; padding: 0 8px; margin-left: 6px; border-radius: 4px; font-size: 12px; line-height: 1.7; vertical-align: 1px; }
+  .tag.unconfirmed { background: var(--warn-soft); color: var(--warn); }
+  .tag.confirmed { background: var(--mint-soft); color: var(--mint); }
+  .note { background: var(--accent-soft); border-left: 6px solid var(--accent); padding: 12px 16px; margin: 16px 0; }
+  ul.plain { padding-left: 1.4em; margin: 0 0 14px; }
+  ul.plain li { margin-bottom: 4px; }
+
+  /* ========== フッター ========== */
+  footer { margin-top: 56px; padding: 28px 0 48px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+  footer p { margin-bottom: 8px; }
+</style>
+</head>
+
+<body>
+
+<!-- ========== ヘッダー ========== -->
+<header>
+  <div class="wrap">
+    <p class="game">Neverness to Everness（NTE）</p>
+    <h1>イェルム</h1>
+    <p class="en">Elyms</p>
+    <p class="lead">
+      異象事件対策局（BAC）ETD-6の副隊長。Cosmos属性のSランクキャラクターで、バージョン1.5での実装が予告されています。
+    </p>
+  </div>
+</header>
+
+<!-- ========== ナビ（セクションを増やしたらここにも追加） ========== -->
+<nav>
+  <div class="wrap">
+    <ul>
+      <li><a href="#profile">基本情報</a></li>
+      <li><a href="#release">実装時期</a></li>
+      <li><a href="#story">背景・設定</a></li>
+      <li><a href="#etd6">ETD-6のメンバー</a></li>
+      <li><a href="#unknown">まだ分からないこと</a></li>
+      <li><a href="#log">更新履歴</a></li>
+      <li><a href="#sources">参考にした情報</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <!-- ========== 基本情報 ========== -->
+  <section id="profile">
+    <h2>基本情報</h2>
+    <div class="table-scroll">
+      <table>
+        <tr><th>名前</th><td>イェルム（Elyms）</td></tr>
+        <tr><th>各言語の名前</th><td>英語：Elyms ／ 中国語（簡体）：曳尔沐 ／ 日本語：イェルム ／ 韓国語：엘림</td></tr>
+        <tr><th>レア度</th><td>S</td></tr>
+        <tr><th>属性</th><td>Cosmos</td></tr>
+        <tr><th>性別</th><td>女性</td></tr>
+        <tr><th>所属</th><td>異象事件対策局（Bureau of Anomaly Control）／ ETD-6</td></tr>
+        <tr><th>役職</th><td>ETD-6の副隊長</td></tr>
+        <tr><th>日本語CV</th><td>雨宮天</td></tr>
+        <tr><th>アーク</th><td>未発表<span class="tag unconfirmed">未確定</span></td></tr>
+        <tr><th>ロール</th><td>未発表<span class="tag unconfirmed">未確定</span></td></tr>
+      </table>
+    </div>
+    <p class="note">
+      <!-- ↓ 一言メモ。自由に書き換えてください -->
+      見た目はアイスクリームをモチーフにした、カラフルなデザインです。
+    </p>
+  </section>
+
+  <!-- ========== 実装時期 ========== -->
+  <section id="release">
+    <h2>実装時期</h2>
+    <p>
+      公式の発表では、イェルムはバージョン1.5の限定キャラクターとして登場します。ETD-6のもう一人の残るメンバーであるExeと組み、イェルムが前半、Exeが後半に実装される見込みです。
+    </p>
+    <div class="table-scroll">
+      <table>
+        <tr><th>実装バージョン</th><td>1.5（前半）<span class="tag unconfirmed">未確定</span></td></tr>
+        <tr><th>ピックアップ開始日</th><td>11月11日 または 12月2日（2026年）と予想されています<span class="tag unconfirmed">未確定</span></td></tr>
+        <tr><th>公式の初公開</th><td>2026年10月4日（NTE Global「Hethereau Special Bulletin | Elyms」）<span class="tag confirmed">確定</span></td></tr>
+      </table>
+    </div>
+    <p style="margin-top:14px; color:var(--muted); font-size:14px;">
+      ※ 日程は情報源によって違いがあります。正式な日程は公式サイトやSNSでご確認ください。
+    </p>
+  </section>
+
+  <!-- ========== 背景・設定 ========== -->
+  <section id="story">
+    <h2>背景・設定</h2>
+    <p>
+      イェルムは、都市ヘテロー（Hethereau）で活動する異象事件対策局（BAC）の一員です。ETD-6では隊長Exeの下で副隊長を務め、Chaos、Linko、Exeとともに任務にあたっています。
+    </p>
+    <h3>デザインの変更について</h3>
+    <p>
+      バージョン1.2の特別番組では、現在とは違うデザインが「Elyms?」という表記で紹介されました。この表記から、メインストーリーで何らかの秘密が明かされるのではないかと見られています。
+    </p>
+    <p class="note">
+      <!-- ↓ ストーリーで分かったことをここに追記していくと便利です -->
+      メインストーリーで分かったことは、実装後にここへ追記します。
+    </p>
+  </section>
+
+  <!-- ========== ETD-6のメンバー ========== -->
+  <section id="etd6">
+    <h2>ETD-6のメンバー</h2>
+    <div class="table-scroll">
+      <table class="members">
+        <thead>
+          <tr><th>名前</th><th>役職・備考</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Exe</td><td>隊長（バージョン1.5後半に実装予定）</td></tr>
+          <tr><td>イェルム</td><td>副隊長（このページの主役）</td></tr>
+          <tr><td>Chaos</td><td>隊員</td></tr>
+          <tr><td>Linko</td><td>隊員</td></tr>
+          <!-- 行を足すときはこの1行をコピーして貼り付け -->
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ========== まだ分からないこと ========== -->
+  <section id="unknown">
+    <h2>まだ分からないこと</h2>
+    <p>公式の詳細が出たら、順次この欄から本文へ移します。</p>
+    <ul class="plain">
+      <li>アークの種類</li>
+      <li>戦闘でのロール（アタッカー・サポートなど）</li>
+      <li>スキルや覚醒効果の内容</li>
+      <li>正確なピックアップ期間</li>
+      <li>デザイン変更にまつわる設定</li>
+    </ul>
+  </section>
+
+  <!-- ========== 更新履歴 ========== -->
+  <section id="log">
+    <h2>更新履歴</h2>
+    <ul class="plain">
+      <li>2026年10月27日　ページを作成</li>
+      <!-- 更新したらここに1行足す -->
+    </ul>
+  </section>
+
+  <!-- ========== 参考にした情報 ========== -->
+  <section id="sources">
+    <h2>参考にした情報</h2>
+    <ul class="plain">
+      <li><a href="https://neverness-to-everness.fandom.com/wiki/Elyms" target="_blank" rel="noopener">Neverness to Everness Wiki（Fandom）- Elyms</a></li>
+      <li><a href="https://game8.co/games/Neverness-to-Everness/archives/632702" target="_blank" rel="noopener">Game8 - Elyms Release Date</a></li>
+      <li><a href="https://www.ntebuild.com/characters/elyms" target="_blank" rel="noopener">NTE Build - Elyms</a></li>
+      <li><a href="https://www.gosugamers.net/entertainment/news/79294-neverness-to-everness-nte-reveals-elyms-and-exe-as-next-playable-characters-in-version-1-5" target="_blank" rel="noopener">GosuGamers - Version 1.5 の新キャラクター発表</a></li>
+      <li><a href="https://gamewith.net/nte/76148" target="_blank" rel="noopener">GameWith - Elyms</a></li>
+    </ul>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>このページは非公式のファンサイトです。</p>
+    <p>Neverness to Everness に関する権利は、各権利者に帰属します。</p>
+  </div>
+</footer>
+
+</body>
+</html>
