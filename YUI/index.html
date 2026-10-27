@@ -467,6 +467,14 @@
   .mode_gesture_icon.active { background: var(--scan); transform: translateX(-50%) scale(1.12); }
   .mode_gesture_icon.active .mode_gesture_label { color: #fff; }
 </style>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f7f3e9">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="YUI">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 </head>
 <body>
 
@@ -962,5 +970,13 @@
 })();
 </script>
 
+<script>
+  // PWA: Service Worker 登録(オフライン対応)
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW登録失敗:', err));
+    });
+  }
+</script>
 </body>
 </html>
