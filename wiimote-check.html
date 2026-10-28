@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wiiリモコン Plus 接続チェック</title>
+<style>
+:root{--bg:#f3f5f2;--card:#fff;--ink:#1c2420;--mute:#667068;--line:#d5dad4;--on:#1f9d5a;--onink:#fff;--warn:#c2410c;--bar:#3b6ea5}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151a17;--card:#1e2521;--ink:#e6ebe7;--mute:#98a39b;--line:#323b35;--on:#37c37a;--onink:#08150d;--warn:#fb923c;--bar:#6fa3d8}}
+*{box-sizing:border-box}
+body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font-family:"Hiragino Sans","Yu Gothic UI","Meiryo",system-ui,sans-serif;line-height:1.6}
+main{max-width:760px;margin:0 auto;display:grid;gap:14px}
+h1{font-size:1.3rem;margin:0}
+h2{font-size:1rem;margin:0 0 10px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+button{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button.main{background:var(--on);color:var(--onink);border-color:var(--on);font-weight:600}
+button:focus-visible{outline:3px solid var(--bar);outline-offset:2px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+#status{font-weight:600}
+.mute{color:var(--mute);font-size:.9rem}
+.pad{display:grid;grid-template-columns:repeat(3,52px);gap:6px}
+.k{height:44px;min-width:52px;display:grid;place-items:center;border:1px solid var(--line);border-radius:8px;color:var(--mute);font-size:.85rem}
+.k.on{background:var(--on);color:var(--onink);border-color:var(--on);font-weight:700}
+.btns{display:flex;flex-wrap:wrap;gap:24px;align-items:center}
+.btnrow{display:flex;flex-wrap:wrap;gap:6px}
+.axis{display:grid;grid-template-columns:2rem 1fr 4.5rem;gap:8px;align-items:center;margin:4px 0}
+.track{height:12px;background:var(--bg);border:1px solid var(--line);border-radius:6px;position:relative}
+.fill{position:absolute;top:0;bottom:0;background:var(--bar);border-radius:6px}
+.mid{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--mute)}
+.num{font-variant-numeric:tabular-nums;text-align:right}
+.tilt{display:flex;gap:24px;align-items:center;flex-wrap:wrap}
+.stage{width:150px;height:110px;border:1px solid var(--line);border-radius:8px;display:grid;place-items:center;overflow:hidden}
+#body{width:100px;height:26px;background:var(--bar);border-radius:6px;position:relative}
+#body::after{content:"A";position:absolute;right:8px;top:2px;color:#fff;font-weight:700}
+.leds label{margin-right:10px}
+pre{margin:0;font-size:.82rem;white-space:pre-wrap;word-break:break-all;color:var(--mute)}
+#msg{color:var(--warn)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Wiiリモコン Plus 接続チェック</h1>
+
+  <section>
+    <div class="row">
+      <button id="connect" class="main">Wiiリモコンを選んで接続</button>
+      <button id="disconnect">切断</button>
+      <span id="status">未接続</span>
+    </div>
+    <p class="mute" style="margin:8px 0 0">先にWindowsのBluetooth設定でペアリングしてから押してください。受信レート: <b id="hz">0</b> Hz / バッテリー: <b id="batt">-</b></p>
+    <p id="msg" style="margin:6px 0 0"></p>
+  </section>
+
+  <section>
+    <h2>ボタン</h2>
+    <div class="btns">
+      <div class="pad">
+        <span></span><div class="k" id="Up">上</div><span></span>
+        <div class="k" id="Left">左</div><span></span><div class="k" id="Right">右</div>
+        <span></span><div class="k" id="Down">下</div><span></span>
+      </div>
+      <div class="btnrow">
+        <div class="k" id="A">A</div><div class="k" id="B">B</div>
+        <div class="k" id="Minus">−</div><div class="k" id="Home">HOME</div><div class="k" id="Plus">+</div>
+        <div class="k" id="One">1</div><div class="k" id="Two">2</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>加速度センサー（傾き）</h2>
+    <div class="axis"><span>X</span><div class="track"><div class="mid"></div><div class="fill" id="fx"></div></div><span class="num" id="vx">0.00 g</span></div>
+    <div class="axis"><span>Y</span><div class="track"><div class="mid"></div><div class="fill" id="fy"></div></div><span class="num" id="vy">0.00 g</span></div>
+    <div class="axis"><span>Z</span><div class="track"><div class="mid"></div><div class="fill" id="fz"></div></div><span class="num" id="vz">0.00 g</span></div>
+    <div class="tilt" style="margin-top:12px">
+      <div class="stage"><div id="body"></div></div>
+      <div>
+        <div>ロール（左右の傾き）: <b id="roll">0</b>°</div>
+        <div>ピッチ（前後の傾き）: <b id="pitch">0</b>°</div>
+        <div class="mute">静止して水平に置くとZが約+1gになります。値は概算です。</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>本体へ送信（双方向の確認）</h2>
+    <div class="row">
+      <span class="leds">
+        <label><input type="checkbox" data-led="0"> LED1</label>
+        <label><input type="checkbox" data-led="1"> LED2</label>
+        <label><input type="checkbox" data-led="2"> LED3</label>
+        <label><input type="checkbox" data-led="3"> LED4</label>
+      </span>
+      <button id="rumble">振動 0.3秒</button>
+      <button id="status-req">バッテリー取得</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>生データ</h2>
+    <pre id="raw">待機中</pre>
+  </section>
+</main>
+
+<script>
+const VID = 0x057e, PIDS = [0x0306, 0x0330]; // Wiimote / Wiimote Plus (RVL-CNT-01-TR)
+const $ = id => document.getElementById(id);
+const BTN0 = {Left:0x01, Right:0x02, Down:0x04, Up:0x08, Plus:0x10};
+const BTN1 = {Two:0x01, One:0x02, B:0x04, A:0x08, Minus:0x10, Home:0x80};
+let dev = null, leds = 0, frames = 0;
+
+function say(t, bad){ $('msg').textContent = bad ? t : ''; }
+function setStatus(t){ $('status').textContent = t; }
+
+if(!('hid' in navigator)){
+  say('このブラウザはWebHIDに対応していません。Chrome または Edge を使ってください。', true);
+  $('connect').disabled = true;
+}
+
+async function send(id, bytes){
+  if(!dev) return;
+  try{ await dev.sendReport(id, new Uint8Array(bytes)); }
+  catch(e){ say('送信エラー: ' + e.message, true); }
+}
+const setMode = () => send(0x12, [0x04, 0x31]); // 連続送信 + ボタン&加速度
+const sendLed = (rumble=0) => send(0x11, [(leds << 4) | rumble]);
+
+async function open(d){
+  dev = d;
+  if(!d.opened) await d.open();
+  d.addEventListener('inputreport', onReport);
+  await setMode();
+  await sendLed();
+  setStatus('接続中: ' + d.productName);
+}
+
+$('connect').onclick = async () => {
+  try{
+    const [d] = await navigator.hid.requestDevice({filters: PIDS.map(p => ({vendorId:VID, productId:p}))});
+    if(d) await open(d);
+  }catch(e){ say('接続できません: ' + e.message, true); }
+};
+$('disconnect').onclick = async () => {
+  if(dev){ await dev.close(); dev = null; setStatus('未接続'); }
+};
+navigator.hid?.addEventListener('disconnect', e => { if(e.device === dev){ dev = null; setStatus('切断されました'); } });
+navigator.hid?.getDevices().then(l => {
+  const d = l.find(x => x.vendorId === VID && PIDS.includes(x.productId));
+  if(d) open(d).catch(() => {});
+});
+
+function bar(id, v){
+  const f = $('f' + id), c = Math.max(-2, Math.min(2, v)) / 2; // -2g..+2g
+  f.style.left = (c < 0 ? 50 + c * 50 : 50) + '%';
+  f.style.width = Math.abs(c) * 50 + '%';
+  $('v' + id).textContent = v.toFixed(2) + ' g';
+}
+
+function onReport(e){
+  const d = e.data, id = e.reportId;
+  frames++;
+  $('raw').textContent = 'report 0x' + id.toString(16) + ' : ' +
+    Array.from({length:d.byteLength}, (_, i) => d.getUint8(i).toString(16).padStart(2,'0')).join(' ');
+  if(id === 0x20){ // ステータス応答。バッテリーは0〜200
+    $('batt').textContent = Math.round(d.getUint8(5) / 2) + '%';
+    setMode(); // ステータス応答でレポートモードが戻るので再設定
+    return;
+  }
+  if(id !== 0x30 && id !== 0x31) return;
+  const b0 = d.getUint8(0), b1 = d.getUint8(1);
+  for(const k in BTN0) $(k).classList.toggle('on', !!(b0 & BTN0[k]));
+  for(const k in BTN1) $(k).classList.toggle('on', !!(b1 & BTN1[k]));
+  if(id === 0x31){
+    // 概算: 0g=128, 1g=約26カウント（個体差あり）
+    const x = (d.getUint8(2) - 128) / 26, y = (d.getUint8(3) - 128) / 26, z = (d.getUint8(4) - 128) / 26;
+    bar('x', x); bar('y', y); bar('z', z);
+    const roll = Math.atan2(x, z) * 180 / Math.PI;
+    const pitch = Math.atan2(y, Math.hypot(x, z)) * 180 / Math.PI;
+    $('roll').textContent = Math.round(roll);
+    $('pitch').textContent = Math.round(pitch);
+    $('body').style.transform = 'translateY(' + (-pitch * 0.5) + 'px) rotate(' + roll + 'deg)';
+  }
+}
+
+setInterval(() => { $('hz').textContent = frames; frames = 0; }, 1000);
+
+document.querySelectorAll('[data-led]').forEach(c => c.onchange = () => {
+  leds = 0; document.querySelectorAll('[data-led]').forEach(x => { if(x.checked) leds |= 1 << x.dataset.led; });
+  sendLed();
+});
+$('rumble').onclick = async () => { await sendLed(1); setTimeout(() => sendLed(0), 300); };
+$('status-req').onclick = () => send(0x15, [0x00]);
+</script>
+</body>
+</html>
