@@ -106,6 +106,12 @@ pre{margin:0;font-size:.82rem;white-space:pre-wrap;word-break:break-all;color:va
       <button id="playPc" disabled>PCのスピーカーで再生</button>
       <button id="playWii" disabled>Wiiリモコンのスピーカーで再生</button>
       <button id="stopWii" disabled>停止</button>
+      <label>Wiiの再生速度
+        <select id="rateDiv">
+          <option value="6000000">設定A（新）</option>
+          <option value="12000000">設定B（以前の版）</option>
+        </select>
+      </label>
     </div>
     <p class="mute" style="margin:8px 0 0" id="sndInfo">先に「決定音.mp3」を選んでください。Wiiリモコンの音は小さく粗い音質（約4kHz・8bit）になります。</p>
   </section>
@@ -286,7 +292,7 @@ async function playOnWii(pcm){
   if(!pcm || wiiPlaying) return;
   wiiPlaying = true; stopFlag = false; say('');
   $('playWii').disabled = true; $('stopWii').disabled = false;
-  const rv = Math.round(12000000 / RATE); // 8bit PCMのレート値
+  const rv = Math.round(Number($('rateDiv').value) / RATE); // レート値（分子は機種で解釈が違う可能性があるため切替式）
   try{
     await send(0x14, [0x04]);                 // スピーカー有効
     await send(0x19, [0x04]);                 // ミュート
