@@ -115,7 +115,13 @@ pre{margin:0;font-size:.82rem;white-space:pre-wrap;word-break:break-all;color:va
     </div>
     <div class="row" style="margin-top:10px">
       <button id="testTone">テスト音（ピー）をWiiで鳴らす</button>
-      <label>データ形式
+      <label>音の形式
+        <select id="fmtSel">
+          <option value="adpcm">ADPCM（4bit・おすすめ）</option>
+          <option value="pcm">8bit PCM</option>
+        </select>
+      </label>
+      <label>PCMの符号
         <select id="signSel">
           <option value="s">符号付き（signed）</option>
           <option value="u">符号なし（unsigned）</option>
@@ -310,15 +316,46 @@ $('testTone').onclick = () => {
 };
 
 $('playWii').onclick = () => playOnWii(pcmData);
+function resampleLinear(src, from, to){ // Int8(from Hz) → Int16(to Hz)
+  const n = Math.floor(src.length * to / from), out = new Int16Array(n);
+  for(let i = 0; i < n; i++){
+    const p = i * from / to, a = Math.floor(p), f = p - a, s0 = src[a] ?? 0, s1 = src[a + 1] ?? s0;
+    out[i] = Math.round((s0 + (s1 - s0) * f) * 256);
+  }
+  return out;
+}
+// Yamaha系ADPCM(4bit)エンコード。上位ニブルが先
+function adpcmEncode(s16){
+  const look = [1,3,5,7,9,11,13,15,-1,-3,-5,-7,-9,-11,-13,-15], scale = [230,230,230,230,307,409,512,614];
+  let pred = 0, step = 127; const nib = [];
+  for(const s of s16){
+    const diff = s - pred;
+    let m = Math.round((Math.abs(diff) * 8 / step - 1) / 2); m = Math.max(0, Math.min(7, m));
+    const nb = (diff < 0 ? 8 : 0) | m;
+    pred = Math.max(-32768, Math.min(32767, pred + Math.trunc(look[nb] * step / 8)));
+    step = Math.max(127, Math.min(24576, (step * scale[m]) >> 8));
+    nib.push(nb);
+  }
+  const out = new Uint8Array(Math.ceil(nib.length / 2));
+  for(let i = 0; i < nib.length; i++) out[i >> 1] |= (i % 2 === 0) ? nib[i] << 4 : nib[i];
+  return out;
+}
+
 async function playOnWii(pcm){
   if(!dev){ say('先にWiiリモコンを接続してください。', true); return; }
   if(!pcm || wiiPlaying) return;
   wiiPlaying = true; stopFlag = false; say('');
   $('playWii').disabled = true; $('stopWii').disabled = false;
-  const rv = Math.round(Number($('rateDiv').value) / RATE); // レート値（分子は機種で解釈が違う可能性があるため切替式）
-  const uns = $('signSel').value === 'u';
-  slog('送信開始: ' + pcm.length + 'サンプル / レート値=' + rv + ' / ' + (uns ? 'unsigned' : 'signed') +
-       ' / 先頭=' + Array.from(pcm.slice(0, 8)).join(','));
+  const adpcm = $('fmtSel').value === 'adpcm', uns = $('signSel').value === 'u';
+  const sr = adpcm ? 3000 : RATE, CH = 20;
+  let data, rv, fmt, pad;
+  if(adpcm){
+    data = adpcmEncode(resampleLinear(pcm, RATE, sr)); rv = Math.round(6000000 / sr); fmt = 0x00; pad = 0x08;
+  }else{
+    data = Uint8Array.from(pcm, v => (uns ? v + 128 : v) & 0xff); rv = Math.round(Number($('rateDiv').value) / RATE); fmt = 0x40; pad = uns ? 128 : 0;
+  }
+  const per = CH * (adpcm ? 2 : 1) / sr * 1000, total = Math.ceil(data.length / CH);
+  slog('送信開始: ' + (adpcm ? 'ADPCM' : '8bit PCM') + ' / ' + data.length + 'バイト / ' + sr + 'Hz / レート値=' + rv + ' / 理想間隔=' + per.toFixed(1) + 'ms');
   try{
     await send(0x19, [0x04]); await send(0x14, [0x00]); // 前回の状態をリセット
     await sleep(150);
@@ -326,18 +363,20 @@ async function playOnWii(pcm){
     await send(0x19, [0x04]);                 // ミュート
     await writeReg(0xA20009, [0x01]);
     await writeReg(0xA20001, [0x08]);
-    await writeReg(0xA20001, [0x00, 0x40, rv & 0xff, rv >> 8, 0x60, 0x00, 0x00]); // 8bit PCM / レート / 音量
+    await writeReg(0xA20001, [0x00, fmt, rv & 0xff, rv >> 8, 0x60, 0x00, 0x00]); // 形式 / レート / 音量
     await writeReg(0xA20008, [0x01]);
     await send(0x19, [0x00]);                 // ミュート解除
     await sleep(50);
-    const CH = 20, per = CH / RATE * 1000, total = Math.ceil(pcm.length / CH), t0 = performance.now();
+    const t0 = performance.now();
     for(let i = 0; i < total && !stopFlag; i++){
       const wait = t0 + i * per - 60 - performance.now(); // 60ms先行して送る
       if(wait > 0) await sleep(wait);
       const b = new Array(21).fill(0); b[0] = CH << 3;
-      for(let k = 0; k < CH; k++){ const v = pcm[i * CH + k] ?? 0; b[1 + k] = (uns ? v + 128 : v) & 0xff; }
+      for(let k = 0; k < CH; k++) b[1 + k] = data[i * CH + k] ?? pad;
       await send(0x18, b);
     }
+    const el = performance.now() - t0;
+    slog('実際にかかった時間 ' + el.toFixed(0) + 'ms / 理想 ' + (total * per - 60).toFixed(0) + 'ms');
     if(!stopFlag) await sleep(200);
   }finally{
     await send(0x19, [0x04]); await send(0x14, [0x00]);
