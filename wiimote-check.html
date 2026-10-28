@@ -113,6 +113,16 @@ pre{margin:0;font-size:.82rem;white-space:pre-wrap;word-break:break-all;color:va
         </select>
       </label>
     </div>
+    <div class="row" style="margin-top:10px">
+      <button id="testTone">テスト音（ピー）をWiiで鳴らす</button>
+      <label>データ形式
+        <select id="signSel">
+          <option value="s">符号付き（signed）</option>
+          <option value="u">符号なし（unsigned）</option>
+        </select>
+      </label>
+    </div>
+    <pre id="sndLog" style="margin-top:8px">ログ: （まだありません）</pre>
     <p class="mute" style="margin:8px 0 0" id="sndInfo">先に「決定音.mp3」を選んでください。Wiiリモコンの音は小さく粗い音質（約4kHz・8bit）になります。</p>
   </section>
 
@@ -286,6 +296,19 @@ $('playPc').onclick = () => {
   $('stopWii').disabled = false;
 };
 
+function slog(t){
+  const el = $('sndLog');
+  el.textContent = (el.textContent.startsWith('ログ: （') ? '' : el.textContent + '\n') + t;
+  el.textContent = el.textContent.split('\n').slice(-10).join('\n');
+}
+
+// mp3を使わない確認用: 440Hzのサイン波を1秒分つくってWiiへ送る
+$('testTone').onclick = () => {
+  const n = RATE, tone = new Int8Array(n);
+  for(let i = 0; i < n; i++) tone[i] = Math.round(Math.sin(2 * Math.PI * 440 * i / RATE) * 100);
+  playOnWii(tone);
+};
+
 $('playWii').onclick = () => playOnWii(pcmData);
 async function playOnWii(pcm){
   if(!dev){ say('先にWiiリモコンを接続してください。', true); return; }
@@ -293,7 +316,12 @@ async function playOnWii(pcm){
   wiiPlaying = true; stopFlag = false; say('');
   $('playWii').disabled = true; $('stopWii').disabled = false;
   const rv = Math.round(Number($('rateDiv').value) / RATE); // レート値（分子は機種で解釈が違う可能性があるため切替式）
+  const uns = $('signSel').value === 'u';
+  slog('送信開始: ' + pcm.length + 'サンプル / レート値=' + rv + ' / ' + (uns ? 'unsigned' : 'signed') +
+       ' / 先頭=' + Array.from(pcm.slice(0, 8)).join(','));
   try{
+    await send(0x19, [0x04]); await send(0x14, [0x00]); // 前回の状態をリセット
+    await sleep(150);
     await send(0x14, [0x04]);                 // スピーカー有効
     await send(0x19, [0x04]);                 // ミュート
     await writeReg(0xA20009, [0x01]);
@@ -307,12 +335,13 @@ async function playOnWii(pcm){
       const wait = t0 + i * per - 60 - performance.now(); // 60ms先行して送る
       if(wait > 0) await sleep(wait);
       const b = new Array(21).fill(0); b[0] = CH << 3;
-      for(let k = 0; k < CH; k++) b[1 + k] = (pcm[i * CH + k] ?? 0) & 0xff;
+      for(let k = 0; k < CH; k++){ const v = pcm[i * CH + k] ?? 0; b[1 + k] = (uns ? v + 128 : v) & 0xff; }
       await send(0x18, b);
     }
     if(!stopFlag) await sleep(200);
   }finally{
     await send(0x19, [0x04]); await send(0x14, [0x00]);
+    slog('送信終了');
     wiiPlaying = false; $('playWii').disabled = !pcmData; $('stopWii').disabled = true;
   }
 }
