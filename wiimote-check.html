@@ -98,6 +98,40 @@ pre{margin:0;font-size:.82rem;white-space:pre-wrap;word-break:break-all;color:va
   </section>
 
   <section>
+    <h2>音（決定音.mp3）</h2>
+    <div class="row">
+      <input type="file" id="snd" accept="audio/*,.mp3">
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="playPc" disabled>PCのスピーカーで再生</button>
+      <button id="playWii" disabled>Wiiリモコンのスピーカーで再生</button>
+      <button id="stopWii" disabled>停止</button>
+    </div>
+    <p class="mute" style="margin:8px 0 0" id="sndInfo">先に「決定音.mp3」を選んでください。Wiiリモコンの音は小さく粗い音質（約4kHz・8bit）になります。</p>
+  </section>
+
+  <section>
+    <h2>振ったら鳴らす（剣スイング）</h2>
+    <div class="row">
+      <button id="swToggle">スイング検出: オフ</button>
+      <label>鳴らす場所
+        <select id="swDest"><option value="pc">PCのスピーカー</option><option value="wii">Wiiリモコン</option></select>
+      </label>
+      <span id="swFlash" class="mute"></span>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label>感度（しきい値）
+        <input type="range" id="swTh" min="1.2" max="4" step="0.1" value="2.2">
+        <b id="swThv">2.2</b> g
+      </label>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label>剣の音: <input type="file" id="swFile" accept="audio/*,.mp3"></label>
+    </div>
+    <p class="mute" style="margin:8px 0 0">現在の加速度 <b id="swNow">0.0</b> g / 直近の最大 <b id="swPeak">0.0</b> g。剣の音を選ばない場合は上の「決定音」を使います。止まっている時は約1gです。振って最大値を見ながらしきい値を調整してください。連続で鳴りすぎないよう0.6秒の間隔を空けています。</p>
+  </section>
+
+  <section>
     <h2>生データ</h2>
     <pre id="raw">待機中</pre>
   </section>
@@ -159,6 +193,7 @@ function bar(id, v){
 
 function onReport(e){
   const d = e.data, id = e.reportId;
+  if(id === 0x22) return; // 書き込み確認応答は無視（音声送信中は大量に来る）
   frames++;
   $('raw').textContent = 'report 0x' + id.toString(16) + ' : ' +
     Array.from({length:d.byteLength}, (_, i) => d.getUint8(i).toString(16).padStart(2,'0')).join(' ');
@@ -175,6 +210,7 @@ function onReport(e){
     // 概算: 0g=128, 1g=約26カウント（個体差あり）
     const x = (d.getUint8(2) - 128) / 26, y = (d.getUint8(3) - 128) / 26, z = (d.getUint8(4) - 128) / 26;
     bar('x', x); bar('y', y); bar('z', z);
+    checkSwing(Math.hypot(x, y, z));
     const roll = Math.atan2(x, z) * 180 / Math.PI;
     const pitch = Math.atan2(y, Math.hypot(x, z)) * 180 / Math.PI;
     $('roll').textContent = Math.round(roll);
@@ -191,6 +227,135 @@ document.querySelectorAll('[data-led]').forEach(c => c.onchange = () => {
 });
 $('rumble').onclick = async () => { await sendLed(1); setTimeout(() => sendLed(0), 300); };
 $('status-req').onclick = () => send(0x15, [0x00]);
+
+// ===== 音 =====
+const RATE = 4000; // Wiiリモコンスピーカー用サンプルレート(Hz)。8bit PCM
+let sndFile = null, pcmData = null, wiiPlaying = false, stopFlag = false, pcAudio = null;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// 8bit符号付きPCMへ変換（モノラル化 → 平均で間引き → 音量正規化）
+function toPcm8(buf, rate){
+  const n = buf.length, ch = buf.numberOfChannels, sr = buf.sampleRate;
+  const mono = new Float32Array(n);
+  for(let c = 0; c < ch; c++){ const a = buf.getChannelData(c); for(let i = 0; i < n; i++) mono[i] += a[i] / ch; }
+  const outLen = Math.floor(n * rate / sr), out = new Float32Array(outLen), step = sr / rate;
+  let peak = 0.001;
+  for(let i = 0; i < outLen; i++){
+    const s = Math.floor(i * step), e = Math.min(n, Math.max(s + 1, Math.floor((i + 1) * step)));
+    let sum = 0; for(let j = s; j < e; j++) sum += mono[j];
+    out[i] = sum / (e - s); peak = Math.max(peak, Math.abs(out[i]));
+  }
+  const pcm = new Int8Array(outLen);
+  for(let i = 0; i < outLen; i++) pcm[i] = Math.round(out[i] / peak * 120);
+  return pcm;
+}
+
+// 本体のレジスタ書き込み (report 0x16)
+function writeReg(addr, data){
+  const b = new Array(21).fill(0);
+  b[0] = 0x04; b[1] = (addr >> 16) & 0xff; b[2] = (addr >> 8) & 0xff; b[3] = addr & 0xff; b[4] = data.length;
+  data.forEach((v, i) => b[5 + i] = v);
+  return send(0x16, b);
+}
+
+$('snd').onchange = async () => {
+  const f = $('snd').files[0]; if(!f) return;
+  sndFile = f; pcmData = null; say('');
+  $('playPc').disabled = false; $('playWii').disabled = true;
+  try{
+    const ctx = new AudioContext();
+    const buf = await ctx.decodeAudioData(await f.arrayBuffer());
+    ctx.close();
+    pcmData = toPcm8(buf, RATE);
+    $('sndInfo').textContent = f.name + '：' + buf.duration.toFixed(2) + '秒 / Wiiリモコン用データ ' + pcmData.length + ' バイト';
+    $('playWii').disabled = false;
+  }catch(err){ say('音声を読み込めません: ' + err.message, true); }
+};
+
+$('playPc').onclick = () => {
+  if(!sndFile) return;
+  if(pcAudio) URL.revokeObjectURL(pcAudio.src);
+  pcAudio = new Audio(URL.createObjectURL(sndFile));
+  pcAudio.play().catch(e => say('再生エラー: ' + e.message, true));
+  $('stopWii').disabled = false;
+};
+
+$('playWii').onclick = () => playOnWii(pcmData);
+async function playOnWii(pcm){
+  if(!dev){ say('先にWiiリモコンを接続してください。', true); return; }
+  if(!pcm || wiiPlaying) return;
+  wiiPlaying = true; stopFlag = false; say('');
+  $('playWii').disabled = true; $('stopWii').disabled = false;
+  const rv = Math.round(12000000 / RATE); // 8bit PCMのレート値
+  try{
+    await send(0x14, [0x04]);                 // スピーカー有効
+    await send(0x19, [0x04]);                 // ミュート
+    await writeReg(0xA20009, [0x01]);
+    await writeReg(0xA20001, [0x08]);
+    await writeReg(0xA20001, [0x00, 0x40, rv & 0xff, rv >> 8, 0x60, 0x00, 0x00]); // 8bit PCM / レート / 音量
+    await writeReg(0xA20008, [0x01]);
+    await send(0x19, [0x00]);                 // ミュート解除
+    await sleep(50);
+    const CH = 20, per = CH / RATE * 1000, total = Math.ceil(pcm.length / CH), t0 = performance.now();
+    for(let i = 0; i < total && !stopFlag; i++){
+      const wait = t0 + i * per - 60 - performance.now(); // 60ms先行して送る
+      if(wait > 0) await sleep(wait);
+      const b = new Array(21).fill(0); b[0] = CH << 3;
+      for(let k = 0; k < CH; k++) b[1 + k] = (pcm[i * CH + k] ?? 0) & 0xff;
+      await send(0x18, b);
+    }
+    if(!stopFlag) await sleep(200);
+  }finally{
+    await send(0x19, [0x04]); await send(0x14, [0x00]);
+    wiiPlaying = false; $('playWii').disabled = !pcmData; $('stopWii').disabled = true;
+  }
+}
+
+function playOnPc(file){
+  if(!file) return;
+  const a = new Audio(URL.createObjectURL(file));
+  a.onended = () => URL.revokeObjectURL(a.src);
+  a.play().catch(e => say('再生エラー: ' + e.message, true));
+}
+
+// ===== スイング検出 =====
+let swingOn = false, swingFile = null, swingPcm = null, lastSwing = 0, peak = 0;
+
+$('swFile').onchange = async () => {
+  const f = $('swFile').files[0]; if(!f) return;
+  swingFile = f; swingPcm = null;
+  try{
+    const ctx = new AudioContext();
+    const buf = await ctx.decodeAudioData(await f.arrayBuffer());
+    ctx.close();
+    swingPcm = toPcm8(buf, RATE);
+  }catch(err){ say('剣の音を読み込めません: ' + err.message, true); }
+};
+$('swToggle').onclick = () => {
+  swingOn = !swingOn;
+  $('swToggle').textContent = 'スイング検出: ' + (swingOn ? 'オン' : 'オフ');
+  $('swToggle').classList.toggle('main', swingOn);
+};
+$('swTh').oninput = () => $('swThv').textContent = $('swTh').value;
+
+function checkSwing(m){ // m: 加速度の大きさ(g)
+  $('swNow').textContent = m.toFixed(1);
+  if(m > peak){ peak = m; $('swPeak').textContent = m.toFixed(1); }
+  const now = performance.now();
+  if(!swingOn || m < parseFloat($('swTh').value) || now - lastSwing < 600) return;
+  lastSwing = now;
+  $('swFlash').textContent = 'スイング検出！';
+  setTimeout(() => $('swFlash').textContent = '', 400);
+  if($('swDest').value === 'pc') playOnPc(swingFile || sndFile);
+  else playOnWii(swingPcm || pcmData);
+}
+setInterval(() => { peak = 0; }, 2000);
+
+$('stopWii').onclick = () => {
+  stopFlag = true;
+  if(pcAudio) pcAudio.pause();
+  $('stopWii').disabled = true;
+};
 </script>
 </body>
 </html>
