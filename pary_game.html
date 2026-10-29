@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PARRY ARENA</title>
+<style>
+  html,body{margin:0;height:100%;background:#0a1110;overflow:hidden}
+  #v{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;display:none}
+  canvas{position:fixed;inset:0;display:block;cursor:crosshair;touch-action:none}
+</style>
+</head>
+<body>
+<video id="v" autoplay playsinline muted></video>
+<canvas id="c"></canvas>
+<script>
+// ===== PARRY ARENA =====
+// 左クリック: 攻撃 / 右クリック: パリィ / WASD or 矢印: 移動
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+let W, H;
+function resize(){ W = cv.width = innerWidth; H = cv.height = innerHeight; AW = W; AH = H; cam.x = W/2; cam.y = H/2; }
+
+addEventListener('contextmenu', e => e.preventDefault());
+
+let AW = 1600, AH = 1000;                 // アリーナ = 画面サイズ（resizeで更新）
+const FONT = '"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif';
+const COL = { ground:'#14201f', tile:'#182726', player:'#7ae7ff', parry:'#ffd35a', warn:'#ff4d5e' };
+const keys = {}, mouse = { x:0, y:0, wx:0, wy:0 };
+const cam = { x:AW/2, y:AH/2, z:1, sh:0 };
+resize(); addEventListener('resize', resize);
+let P, E, PR, FX, TX, wave, score, state = 'title', hitstop = 0, waveWait = 0, flash = 0;
+
+const TYPES = {
+  slime: { hp:30, r:20, sp:95,  range:70,  wind:.55, score:10 },
+  ghost: { hp:24, r:18, sp:70,  range:320, wind:.75, score:15 },
+  golem: { hp:90, r:38, sp:55,  range:100, wind:1.0, score:40 },
+};
+
+const ad = (a,b) => { const d = Math.abs(a-b) % (Math.PI*2); return d > Math.PI ? Math.PI*2-d : d; };
+const rnd = (a,b) => a + Math.random()*(b-a);
+
+function reset(){
+  P = { x:AW/2, y:AH/2, hp:100, face:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, inv:0, sa:0 };
+  E = []; PR = []; FX = []; TX = []; wave = 0; score = 0; waveWait = .5; flash = 0;
+}
+reset();
+
+function spawnWave(){
+  wave++;
+  const n = wave + 2, pool = ['slime'];
+  if (wave >= 2) pool.push('ghost');
+  if (wave >= 3) pool.push('golem');
+  let golems = 0;
+  for (let i = 0; i < n; i++){
+    let t = pool[Math.random()*pool.length | 0];
+    if (t === 'golem' && ++golems > 1 + (wave/4|0)) t = 'slime';
+    const d = TYPES[t]; let x, y;
+    let tries = 0;
+    do { x = rnd(60, AW-60); y = rnd(60, AH-60); } while (Math.hypot(x-P.x, y-P.y) < Math.min(400, AW*.3) && ++tries < 50);
+    E.push({ type:t, x, y, hp:d.hp, max:d.hp, r:d.r, sp:d.sp, range:d.range, wind:d.wind,
+             s:'idle', t:0, cd:1 + Math.random()*1.5, la:0, hf:0, did:false, score:d.score, born:.5 });
+    burst(x, y, '#b48cff', 10, 120);
+  }
+  addText(P.x, P.y-60, 'WAVE ' + wave, '#fff', 34, 1.4);
+}
+
+// ===== エフェクト =====
+function burst(x, y, col, n, sp){
+  for (let i = 0; i < n; i++){
+    const a = Math.random()*Math.PI*2, v = rnd(sp*.3, sp);
+    FX.push({ k:'p', x, y, vx:Math.cos(a)*v, vy:Math.sin(a)*v, life:rnd(.25,.6), max:.6, col, s:rnd(2,5) });
+  }
+}
+function ring(x, y, r0, r1, col, life=.4, w=5){ FX.push({ k:'ring', x, y, r0, r1, life, max:life, col, w }); }
+function addText(x, y, s, col='#fff', size=22, life=.8){ TX.push({ x, y, s, col, size, life, max:life }); }
+
+// ===== 戦闘 =====
+function attack(){
+  if (P.swingCd > 0 || P.par > 0) return;
+  P.swingCd = .32; P.swing = .18; P.sa = P.face;
+  FX.push({ k:'slash', x:P.x, y:P.y, a:P.face, life:.18, max:.18 });
+  for (const e of E){
+    const dx = e.x-P.x, dy = e.y-P.y;
+    if (Math.hypot(dx,dy) < 105 + e.r && ad(Math.atan2(dy,dx), P.face) < 1.1)
+      hurtEnemy(e, e.s === 'stun' ? 26 : 10, P.face);
+  }
+}
+function parry(){
+  if (P.parCd > 0 || P.par > 0) return;
+  P.par = .22; P.parAge = 0; P.parCd = .6;
+}
+function hurtEnemy(e, dmg, ang){
+  e.hp -= dmg; e.hf = .12;
+  const kb = e.s === 'stun' ? 12 : 28;
+  e.x += Math.cos(ang)*kb; e.y += Math.sin(ang)*kb;
+  hitstop = Math.max(hitstop, .04); cam.sh = Math.max(cam.sh, 5);
+  burst(e.x, e.y, e.s === 'stun' ? '#ffd35a' : '#ffffff', 8, 220);
+  addText(e.x, e.y-e.r-8, dmg, e.s === 'stun' ? '#ffd35a' : '#fff', e.s === 'stun' ? 28 : 20);
+  if (e.hp <= 0){
+    e.dead = true; score += e.score;
+    burst(e.x, e.y, '#ff9a5a', 24, 320); ring(e.x, e.y, e.r, e.r+60, '#ff9a5a', .4, 4);
+    cam.sh = Math.max(cam.sh, 8);
+  }
+}
+// 敵の攻撃がプレイヤーに届いた時: 'parry' | 'hit' | 'inv'
+function hitPlayer(src, dmg){
+  if (P.inv > 0) return 'inv';
+  const a = Math.atan2(src.y-P.y, src.x-P.x);
+  if (P.par > 0 && ad(a, P.face) < 1.4){
+    const perfect = P.parAge < .1;
+    hitstop = perfect ? .2 : .12; cam.sh = perfect ? 16 : 9; cam.z = perfect ? 1.16 : 1.09; flash = perfect ? .25 : .12;
+    const px = P.x + Math.cos(P.face)*30, py = P.y + Math.sin(P.face)*30;
+    ring(px, py, 10, perfect ? 130 : 90, COL.parry, .4, 6);
+    ring(px, py, 4, 60, '#fff', .25, 3);
+    burst(px, py, COL.parry, perfect ? 36 : 20, 420);
+    addText(P.x, P.y-52, perfect ? 'PERFECT!' : 'PARRY!', COL.parry, perfect ? 34 : 26, 1);
+    P.inv = .4; P.par = 0; P.parCd = 0;
+    if (src.type){ // 敵本体 → スタン
+      src.s = 'stun'; src.t = perfect ? 2.6 : 1.6; src.cd = 1;
+      hurtEnemy(src, 8, a + Math.PI);
+    } else {       // 弾 → 反射
+      src.o = 'p'; src.vx *= -1.6; src.vy *= -1.6;
+    }
+    return 'parry';
+  }
+  P.hp -= dmg; P.inv = .7; cam.sh = 14; flash = .18;
+  P.x += Math.cos(a+Math.PI)*28; P.y += Math.sin(a+Math.PI)*28;
+  burst(P.x, P.y, COL.warn, 16, 260); addText(P.x, P.y-40, '-' + dmg, COL.warn, 26);
+  if (P.hp <= 0){ P.hp = 0; state = 'over'; burst(P.x, P.y, COL.player, 50, 400); }
+  return 'hit';
+}
+
+// ===== 更新 =====
+function updateEnemy(e, dt){
+  e.hf -= dt; if (e.born > 0){ e.born -= dt; return; }
+  const dx = P.x-e.x, dy = P.y-e.y, d = Math.hypot(dx,dy), a = Math.atan2(dy,dx);
+  if (e.s === 'stun'){ e.t -= dt; if (e.t <= 0) e.s = 'idle'; return; }
+  if (e.s === 'idle'){
+    const want = e.type === 'ghost' ? (d < 220 ? -1 : d > 300 ? 1 : 0) : (d > e.range ? 1 : 0);
+    e.x += Math.cos(a)*e.sp*dt*want; e.y += Math.sin(a)*e.sp*dt*want;
+    e.cd -= dt;
+    const inRange = e.type === 'ghost' ? d < 420 : d < e.range + 12;
+    if (e.cd <= 0 && inRange){ e.s = 'wind'; e.t = e.wind; e.la = a; }
+  } else if (e.s === 'wind'){
+    e.t -= dt; if (e.t > .15 && e.type !== 'golem') e.la = a;
+    if (e.t <= 0){
+      if (e.type === 'slime'){ e.s = 'strike'; e.t = .3; e.did = false; }
+      else if (e.type === 'ghost'){
+        PR.push({ x:e.x, y:e.y, vx:Math.cos(e.la)*300, vy:Math.sin(e.la)*300, o:'e', life:3 });
+        e.s = 'idle'; e.cd = 2 + Math.random();
+      } else {
+        ring(e.x, e.y, 10, 135, '#ff9a5a', .35, 8); burst(e.x, e.y, '#b9a58a', 24, 340); cam.sh = Math.max(cam.sh, 10);
+        if (d < 135) hitPlayer(e, 25);
+        e.s = 'idle'; e.cd = 1.8 + Math.random();
+      }
+    }
+  } else if (e.s === 'strike'){
+    e.t -= dt; e.x += Math.cos(e.la)*430*dt; e.y += Math.sin(e.la)*430*dt;
+    if (!e.did && d < e.r + 16){ e.did = true; hitPlayer(e, 12); }
+    if (e.t <= 0){ e.s = 'idle'; e.cd = 1.2 + Math.random()*1.2; }
+  }
+  e.x = Math.max(e.r, Math.min(AW-e.r, e.x)); e.y = Math.max(e.r, Math.min(AH-e.r, e.y));
+}
+
+function update(dt){
+  if (hitstop > 0){ hitstop -= dt; dt *= .04; }
+  // camera
+  cam.z += (1 - cam.z) * Math.min(1, dt*8); cam.sh *= Math.pow(.001, dt); flash = Math.max(0, flash - dt);
+  mouse.wx = (mouse.x - W/2)/cam.z + cam.x; mouse.wy = (mouse.y - H/2)/cam.z + cam.y;
+
+  for (const f of FX){
+    f.life -= dt;
+    if (f.k === 'p'){ f.x += f.vx*dt; f.y += f.vy*dt; f.vx *= .92; f.vy *= .92; }
+  }
+  FX = FX.filter(f => f.life > 0);
+  for (const t of TX){ t.life -= dt; t.y -= 30*dt; }
+  TX = TX.filter(t => t.life > 0);
+  if (state !== 'play') return;
+
+  // player
+  let mx = (keys.d||keys.arrowright?1:0) - (keys.a||keys.arrowleft?1:0);
+  let my = (keys.s||keys.arrowdown?1:0) - (keys.w||keys.arrowup?1:0);
+  const l = Math.hypot(mx,my) || 1, sp = P.par > 0 ? 90 : 270;
+  P.x = Math.max(16, Math.min(AW-16, P.x + mx/l*sp*dt)); P.y = Math.max(16, Math.min(AH-16, P.y + my/l*sp*dt));
+  P.face = Math.atan2(mouse.wy - P.y, mouse.wx - P.x);
+  P.swing -= dt; P.swingCd -= dt; P.inv -= dt; P.parCd -= dt;
+  if (P.par > 0){ P.par -= dt; P.parAge += dt; }
+
+  for (const e of E) updateEnemy(e, dt);
+  for (const p of PR){
+    p.x += p.vx*dt; p.y += p.vy*dt; p.life -= dt;
+    FX.push({ k:'p', x:p.x, y:p.y, vx:0, vy:0, life:.2, max:.2, col:p.o==='e'?'#c28cff':COL.parry, s:4 });
+    if (p.o === 'e'){
+      if (Math.hypot(p.x-P.x, p.y-P.y) < 22){ if (hitPlayer(p, 10) === 'hit') p.life = 0; }
+    } else for (const e of E){
+      if (!e.dead && Math.hypot(p.x-e.x, p.y-e.y) < e.r + 8){ hurtEnemy(e, 30, Math.atan2(p.vy,p.vx)); p.life = 0; break; }
+    }
+  }
+  PR = PR.filter(p => p.life > 0 && p.x > -50 && p.x < AW+50 && p.y > -50 && p.y < AH+50);
+  E = E.filter(e => !e.dead);
+  if (!E.length){
+    waveWait -= dt;
+    if (waveWait <= 0){ spawnWave(); waveWait = 2; }
+  }
+}
+
+// ===== 描画 =====
+function draw(){
+  g.clearRect(0,0,W,H);
+  if (camOn){ g.fillStyle = 'rgba(0,8,8,.22)'; g.fillRect(0,0,W,H); } else { g.fillStyle = '#070c0b'; g.fillRect(0,0,W,H); }
+  g.save();
+  const sx = (Math.random()-.5)*cam.sh, sy = (Math.random()-.5)*cam.sh;
+  g.translate(W/2, H/2); g.scale(cam.z, cam.z); g.translate(-cam.x + sx, -cam.y + sy);
+
+  if (!camOn){
+    g.fillStyle = COL.ground; g.fillRect(0,0,AW,AH);
+    g.fillStyle = COL.tile;
+    for (let x = 0; x < AW; x += 80) for (let y = 0; y < AH; y += 80) if (((x+y)/80)%2 === 0) g.fillRect(x,y,80,80);
+  }
+  g.strokeStyle = camOn ? 'rgba(122,231,255,.35)' : '#3b5a55'; g.lineWidth = 6; g.strokeRect(0,0,AW,AH);
+
+  for (const e of E) drawTelegraph(e);
+  for (const e of [...E, P].sort((a,b) => a.y-b.y)) e === P ? drawPlayer() : drawEnemy(e);
+
+  for (const p of PR){
+    g.fillStyle = p.o === 'e' ? '#c28cff' : COL.parry;
+    g.shadowColor = g.fillStyle; g.shadowBlur = 18;
+    g.beginPath(); g.arc(p.x, p.y, 9, 0, 7); g.fill(); g.shadowBlur = 0;
+  }
+  for (const f of FX){
+    const k = f.life/f.max;
+    if (f.k === 'p'){ g.globalAlpha = k; g.fillStyle = f.col; g.fillRect(f.x - f.s/2, f.y - f.s/2, f.s, f.s); }
+    else if (f.k === 'ring'){
+      g.globalAlpha = k; g.strokeStyle = f.col; g.lineWidth = f.w*k;
+      g.beginPath(); g.arc(f.x, f.y, f.r0 + (f.r1-f.r0)*(1-k), 0, 7); g.stroke();
+    } else if (f.k === 'slash'){
+      const pr = 1-k; g.globalAlpha = Math.min(1, k*2.2); g.strokeStyle = '#fff'; g.lineCap = 'round';
+      g.shadowColor = COL.player; g.shadowBlur = 16; g.lineWidth = 14*k + 3;
+      g.beginPath(); g.arc(f.x, f.y, 88, f.a - 1.1, f.a - 1.1 + 2.2*Math.min(1, pr*1.8 + .2)); g.stroke(); g.shadowBlur = 0;
+    }
+    g.globalAlpha = 1;
+  }
+  g.textAlign = 'center'; g.font = 'bold 20px ' + FONT;
+  for (const t of TX){
+    g.globalAlpha = Math.min(1, t.life/t.max*2); g.font = `bold ${t.size}px ${FONT}`;
+    g.lineWidth = 4; g.strokeStyle = '#000a'; g.strokeText(t.s, t.x, t.y);
+    g.fillStyle = t.col; g.fillText(t.s, t.x, t.y);
+  }
+  g.globalAlpha = 1; g.restore();
+
+  if (flash > 0){ g.fillStyle = `rgba(255,255,255,${flash*1.2})`; g.fillRect(0,0,W,H); }
+  if (P.hp < 35 && state === 'play'){
+    const gr = g.createRadialGradient(W/2,H/2,H*.35,W/2,H/2,H*.8);
+    gr.addColorStop(0,'#0000'); gr.addColorStop(1,'#ff2a4a66'); g.fillStyle = gr; g.fillRect(0,0,W,H);
+  }
+  drawHUD();
+}
+
+function drawTelegraph(e){
+  if (e.s !== 'wind') return;
+  const k = 1 - e.t/e.wind, blink = (Math.sin(performance.now()/40) > 0) ? 1 : .55;
+  g.save(); g.strokeStyle = COL.warn; g.fillStyle = COL.warn;
+  if (e.type === 'golem'){
+    g.globalAlpha = .18*blink; g.beginPath(); g.arc(e.x, e.y, 135, 0, 7); g.fill();
+    g.globalAlpha = .5; g.lineWidth = 4; g.stroke();
+    g.globalAlpha = .35; g.beginPath(); g.arc(e.x, e.y, 135*k, 0, 7); g.fill();
+  } else if (e.type === 'slime'){
+    g.globalAlpha = .35*blink; g.lineWidth = 22; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(e.x, e.y); g.lineTo(e.x + Math.cos(e.la)*130, e.y + Math.sin(e.la)*130); g.stroke();
+  } else {
+    g.globalAlpha = .9; g.shadowColor = '#c28cff'; g.shadowBlur = 20; g.fillStyle = '#c28cff';
+    g.beginPath(); g.arc(e.x + Math.cos(e.la)*26, e.y + Math.sin(e.la)*26, 4 + 12*k, 0, 7); g.fill();
+  }
+  g.restore();
+  // 「!」マーク
+  g.fillStyle = COL.warn; g.font = `bold ${26 + 8*blink}px ${FONT}`; g.textAlign = 'center';
+  g.fillText('!', e.x, e.y - e.r - 24);
+}
+
+function drawEnemy(e){
+  g.save(); g.translate(e.x, e.y);
+  if (e.born > 0) g.globalAlpha = 1 - e.born*2;
+  g.fillStyle = '#0006'; g.beginPath(); g.ellipse(0, e.r*.8, e.r, e.r*.4, 0, 0, 7); g.fill();
+  const t = performance.now()/1000, white = e.hf > 0, stun = e.s === 'stun';
+  const body = white ? '#fff' : stun ? '#9aa' : null;
+  if (e.type === 'slime'){
+    const sq = 1 + Math.sin(t*6 + e.x)*.08 + (e.s === 'wind' ? -.2*(1-e.t/e.wind) : 0);
+    g.scale(1/sq, sq); g.fillStyle = body || '#6ee06e';
+    g.beginPath(); g.arc(0, 0, e.r, Math.PI, 0); g.lineTo(e.r, e.r*.7); g.lineTo(-e.r, e.r*.7); g.fill();
+    eyes(-7, -4, 7, -4, e);
+  } else if (e.type === 'ghost'){
+    g.translate(0, Math.sin(t*3 + e.x)*5); g.globalAlpha *= .85; g.fillStyle = body || '#b48cff';
+    g.beginPath(); g.arc(0, -2, e.r, Math.PI, 0); g.lineTo(e.r, e.r);
+    for (let i = 3; i >= -3; i--) g.lineTo(i*e.r/3.5, e.r - (i%2 ? 0 : 7)); g.fill();
+    eyes(-6, -4, 6, -4, e);
+  } else {
+    g.fillStyle = body || '#8a8478'; g.fillRect(-e.r, -e.r*.8, e.r*2, e.r*1.7);
+    g.fillStyle = body || '#6d675c'; g.fillRect(-e.r-10, -e.r*.5, 14, e.r*1.1); g.fillRect(e.r-4, -e.r*.5, 14, e.r*1.1);
+    g.fillStyle = body || '#a39d90'; g.fillRect(-e.r*.7, -e.r*1.1, e.r*1.4, e.r*.5);
+    eyes(-10, -e.r*.85, 10, -e.r*.85, e, true);
+  }
+  g.restore();
+  if (stun){
+    for (let i = 0; i < 3; i++){
+      const a = performance.now()/200 + i*2.1;
+      g.fillStyle = COL.parry; g.beginPath(); g.arc(e.x + Math.cos(a)*e.r*.8, e.y - e.r - 14 + Math.sin(a)*5, 5, 0, 7); g.fill();
+    }
+  }
+  if (e.hp < e.max){
+    g.fillStyle = '#000a'; g.fillRect(e.x - 22, e.y + e.r + 8, 44, 5);
+    g.fillStyle = COL.warn; g.fillRect(e.x - 22, e.y + e.r + 8, 44*e.hp/e.max, 5);
+  }
+}
+function eyes(x1, y1, x2, y2, e, glow){
+  g.fillStyle = e.s === 'wind' ? COL.warn : glow ? '#ffb347' : '#111';
+  if (e.s === 'stun'){ g.font = 'bold 12px sans-serif'; g.fillText('×', x1, y1+4); g.fillText('×', x2, y2+4); return; }
+  g.beginPath(); g.arc(x1, y1, 3.5, 0, 7); g.arc(x2, y2, 3.5, 0, 7); g.fill();
+}
+
+function drawPlayer(){
+  g.save(); g.translate(P.x, P.y);
+  g.fillStyle = '#0006'; g.beginPath(); g.ellipse(0, 12, 16, 7, 0, 0, 7); g.fill();
+  if (P.inv > 0 && Math.floor(P.inv*30) % 2) g.globalAlpha = .4;
+  g.fillStyle = COL.player; g.beginPath(); g.arc(0, 0, 16, 0, 7); g.fill();
+  g.strokeStyle = '#0a3a4a'; g.lineWidth = 3; g.stroke();
+  g.rotate(P.face);
+  g.fillStyle = '#0a3a4a'; g.beginPath(); g.arc(8, -5, 2.5, 0, 7); g.arc(8, 5, 2.5, 0, 7); g.fill();
+  const sw = P.swing > 0 ? (1 - P.swing/.18) * 2.2 - 1.1 : 0;
+  g.save(); g.rotate(sw); g.strokeStyle = '#e8f6ff'; g.lineWidth = 5; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(14, 0); g.lineTo(44, 0); g.stroke();
+  g.strokeStyle = '#8a6a3a'; g.beginPath(); g.moveTo(12, -6); g.lineTo(12, 6); g.stroke(); g.restore();
+  if (P.par > 0){
+    g.globalAlpha = .5 + .5*P.par/.22; g.strokeStyle = COL.parry; g.lineWidth = 6; g.shadowColor = COL.parry; g.shadowBlur = 16;
+    g.beginPath(); g.arc(0, 0, 32, -1.2, 1.2); g.stroke();
+  }
+  g.restore();
+}
+
+function drawHUD(){
+  g.textAlign = 'left'; g.font = `bold 15px ${FONT}`;
+  g.fillStyle = '#000a'; g.fillRect(20, 20, 240, 18);
+  g.fillStyle = P.hp > 35 ? '#5ee08a' : COL.warn; g.fillRect(20, 20, 240*P.hp/100, 18);
+  g.strokeStyle = '#fff6'; g.lineWidth = 2; g.strokeRect(20, 20, 240, 18);
+  g.fillStyle = '#fff'; g.fillText(`WAVE ${wave}   SCORE ${score}`, 20, 58);
+  // パリィのクールタイム
+  g.fillStyle = '#000a'; g.fillRect(20, 68, 120, 6);
+  g.fillStyle = COL.parry; g.fillRect(20, 68, 120*(P.parCd > 0 ? 1 - P.parCd/.6 : 1), 6);
+  g.fillStyle = '#fffa'; g.font = `12px ${FONT}`; g.fillText('PARRY', 148, 75);
+
+  if (state !== 'play'){
+    g.fillStyle = camOn ? '#0007' : '#000b'; g.fillRect(0,0,W,H); g.textAlign = 'center'; g.fillStyle = '#fff';
+    if (state === 'title'){
+      g.font = `bold 64px ${FONT}`; g.fillStyle = COL.parry; g.fillText('PARRY ARENA', W/2, H/2 - 60);
+      g.font = `20px ${FONT}`; g.fillStyle = '#fff';
+      g.fillText('左クリック: 攻撃　　右クリック: パリィ　　WASD: 移動', W/2, H/2);
+      g.fillText('敵の「!」が光った瞬間に右クリックでパリィ → スタン → 大ダメージ', W/2, H/2 + 34);
+      g.fillText('魔法の弾はパリィで跳ね返せる', W/2, H/2 + 68);
+      g.fillStyle = COL.player; g.fillText('クリックでスタート（Webカメラを使います）', W/2, H/2 + 124);
+      if (camMsg){ g.fillStyle = COL.warn; g.fillText(camMsg, W/2, H/2 + 160); }
+    } else {
+      g.font = `bold 56px ${FONT}`; g.fillStyle = COL.warn; g.fillText('GAME OVER', W/2, H/2 - 30);
+      g.font = `22px ${FONT}`; g.fillStyle = '#fff'; g.fillText(`WAVE ${wave}  /  SCORE ${score}`, W/2, H/2 + 14);
+      g.fillStyle = COL.player; g.fillText('クリックでリトライ', W/2, H/2 + 64);
+    }
+  }
+}
+
+// ===== Webカメラ（AR背景）=====
+const vid = document.getElementById('v');
+let camOn = false, camMsg = '';
+async function startCam(){
+  if (camOn) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    camMsg = 'カメラを使えません（HTTPS か localhost で開いてください）'; return;
+  }
+  try {
+    const st = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment', width:{ideal:1280}, height:{ideal:720} }, audio:false });
+    const fm = st.getVideoTracks()[0].getSettings().facingMode;
+    vid.style.transform = fm === 'environment' ? '' : 'scaleX(-1)';   // インカメラは鏡像
+    vid.srcObject = st; await vid.play();
+    vid.style.display = 'block'; camOn = true; camMsg = '';
+  } catch (err){ camMsg = 'カメラを起動できませんでした（許可を確認）。通常背景で遊べます'; }
+}
+
+// ===== 入力 =====
+addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+addEventListener('keyup',   e => keys[e.key.toLowerCase()] = false);
+addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+addEventListener('mousedown', e => {
+  mouse.x = e.clientX; mouse.y = e.clientY;
+  if (state !== 'play'){
+    if (hitstop > 0 || (state === 'over' && P.hp > 0)) return;
+    startCam(); reset(); state = 'play'; return;
+  }
+  if (e.button === 0) attack(); else if (e.button === 2) parry();
+});
+
+// ===== ループ =====
+let last = performance.now();
+function loop(now){
+  const dt = Math.min(.033, (now - last)/1000); last = now;
+  update(dt); draw(); requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
