@@ -14,6 +14,7 @@
   #camPanel div{margin-top:6px}
   #camStat{font-size:12px;color:#ffd35a;word-break:break-all}
   #v,#fv{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
+  #facePrev{position:fixed;left:10px;bottom:10px;z-index:5;width:240px;height:180px;border:2px solid #7ae7ff88;border-radius:8px;background:#000;pointer-events:none;display:none}
   #faceBadge{margin-top:6px;font-size:12px;color:#7ae7ff;text-shadow:0 0 4px #000}
   #camPanel input[type=range]{width:100%}
 </style>
@@ -29,10 +30,12 @@
     <label><input type="checkbox" id="faceOn" checked> 顔の動きで視点・照準を操作</label>
     <label>顔認識に使うカメラ<select id="faceSel"><option value="">自動（インカメラ）</option></select></label>
     <label>感度 <input type="range" id="faceGain" min="0.5" max="3" step="0.1" value="1.5"></label>
-    <div><button id="faceCal">顔の中心をリセット (C)</button></div>
+    <label><input type="checkbox" id="facePrevOn" checked> 認識プレビューを表示</label>
+    <div><button id="faceStart">顔認識を開始/再起動</button> <button id="faceCal">中心リセット (C)</button></div>
     <div id="faceStat" style="font-size:12px;color:#ffd35a"></div>
   </div>
   <div id="faceBadge"></div></div>
+<canvas id="facePrev" width="320" height="240"></canvas>
 <video id="v" autoplay playsinline muted></video>
 <video id="fv" autoplay playsinline muted></video>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -268,7 +271,7 @@ async function loadFaceModel(){
     try { face.lm = await mp.FaceLandmarker.createFromOptions(fs, opt('GPU')); }
     catch (e){ face.lm = await mp.FaceLandmarker.createFromOptions(fs, opt('CPU')); }
     setBadge('👤 顔を探しています…');
-  } catch (e){ console.error(e); setBadge('👤 顔認識を読み込めません（ネット接続を確認）'); }
+  } catch (e){ console.error(e); setBadge('👤 顔認識を読み込めません: ' + (e && e.message || e)); }
   face.loading = false;
 }
 async function openFaceCam(){
@@ -293,8 +296,8 @@ function faceStep(now){
   const v = face.src;
   if (!face.on || !face.lm || !v || v.readyState < 2 || !v.videoWidth || v.currentTime === face.lastT) return;
   face.lastT = v.currentTime;
-  let r; try { r = face.lm.detectForVideo(v, now); } catch (e){ return; }
-  const p = r.faceLandmarks && r.faceLandmarks[0];
+  let r; try { r = face.lm.detectForVideo(v, now); } catch (e){ console.error(e); return; }
+  const p = r.faceLandmarks && r.faceLandmarks[0]; face.pts = p || null;
   if (!p){ face.seen = false; setBadge('👤 顔が見つかりません'); return; }
   face.seen = true; face.x = p[1].x; face.y = p[1].y;           // 1 = 鼻先
   if (face.cx === null){
@@ -315,6 +318,33 @@ function faceUpdate(dt){
   face.sx += ((face.tx || 0) - face.sx)*k; face.sy += ((face.ty || 0) - face.sy)*k;
   mouse.nx = face.sx; mouse.ny = face.sy;
 }
+const prevC = $('facePrev'), pctx = prevC.getContext('2d');
+function faceDraw(){
+  const show = prevOn && face.on && !vr && state !== undefined;
+  prevC.style.display = show ? 'block' : 'none'; if (!show) return;
+  const w = prevC.width, h = prevC.height, v = face.src;
+  pctx.fillStyle = '#000'; pctx.fillRect(0, 0, w, h);
+  if (!v || v.readyState < 2 || !v.videoWidth){
+    pctx.fillStyle = '#ffd35a'; pctx.font = 'bold 18px sans-serif'; pctx.textAlign = 'center';
+    pctx.fillText(face.lm || face.loading ? 'カメラ待機中…' : '「顔認識を開始」を押すか、ゲームを開始', w/2, h/2); return;
+  }
+  pctx.save(); pctx.translate(w, 0); pctx.scale(-1, 1);   // 鏡像表示
+  const va = v.videoWidth/v.videoHeight, dw = va > w/h ? h*va : w, dh = va > w/h ? h : w/va;
+  pctx.drawImage(v, (w - dw)/2, (h - dh)/2, dw, dh); pctx.restore();
+  const X = x => (1 - x)*w, Y = y => y*h;
+  if (face.seen && face.pts){
+    pctx.fillStyle = '#5ee08a'; for (const q of face.pts) pctx.fillRect(X(q.x) - 1, Y(q.y) - 1, 2, 2);
+    pctx.fillStyle = '#ff4d5e'; pctx.beginPath(); pctx.arc(X(face.x), Y(face.y), 5, 0, 7); pctx.fill();   // 鼻先
+  }
+  if (face.cx !== null){   // 構えた中心
+    pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 1.5; const cx = X(face.cx), cy = Y(face.cy);
+    pctx.beginPath(); pctx.moveTo(cx - 12, cy); pctx.lineTo(cx + 12, cy); pctx.moveTo(cx, cy - 12); pctx.lineTo(cx, cy + 12); pctx.stroke();
+    if (face.seen){ pctx.strokeStyle = '#ff4d5e'; pctx.beginPath(); pctx.moveTo(cx, cy); pctx.lineTo(X(face.x), Y(face.y)); pctx.stroke(); }
+  }
+  pctx.font = 'bold 16px sans-serif'; pctx.textAlign = 'left';
+  pctx.fillStyle = !face.lm ? '#ffd35a' : face.seen ? '#5ee08a' : '#ff4d5e';
+  pctx.fillText(!face.lm ? 'モデル読み込み中…' : face.seen ? (face.cx === null ? '顔を中心に構えて…' : '● 追跡中') : '× 顔が見つかりません', 8, 22);
+}
 $('faceOn').onchange = e => {
   face.on = e.target.checked;
   if (face.on){ if (state !== 'title' || camStream) startFace(); }
@@ -323,6 +353,8 @@ $('faceOn').onchange = e => {
 $('faceGain').oninput = e => face.gain = +e.target.value;
 faceSel.onchange = () => { if (face.on) openFaceCam(); };
 $('faceCal').onclick = faceRecenter;
+$('faceStart').onclick = () => { if (!face.on){ $('faceOn').checked = face.on = true; } startFace(); };
+let prevOn = true; $('facePrevOn').onchange = e => prevOn = e.target.checked;
 
 // ===== ゲーム状態 =====
 const keys = {}, mouse = { nx:0, ny:0 }, ray = new THREE.Raycaster(), tmp = new THREE.Vector3();
@@ -505,7 +537,7 @@ addEventListener('mousedown', e => {
 let last = performance.now();
 function loop(now){
   const dt = Math.min(.033, (now - last)/1000); last = now;
-  faceStep(now); update(dt); render(); requestAnimationFrame(loop);
+  faceStep(now); faceDraw(); update(dt); render(); requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 </script>
