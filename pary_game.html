@@ -3,403 +3,364 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PARRY ARENA</title>
+<title>GIANT SLIME RAID</title>
 <style>
-  html,body{margin:0;height:100%;background:#0a1110;overflow:hidden}
-  #v{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;display:none}
-  canvas{position:fixed;inset:0;display:block;cursor:crosshair;touch-action:none}
+  html,body{margin:0;height:100%;overflow:hidden;background:#0a1110}
+  canvas{display:block;cursor:crosshair;touch-action:none}
+  #v{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
 </style>
 </head>
 <body>
 <video id="v" autoplay playsinline muted></video>
-<canvas id="c"></canvas>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-// ===== PARRY ARENA =====
-// 左クリック: 攻撃 / 右クリック: パリィ / WASD or 矢印: 移動
-const cv = document.getElementById('c'), g = cv.getContext('2d');
-let W, H;
-function resize(){ W = cv.width = innerWidth; H = cv.height = innerHeight; AW = W; AH = H; cam.x = W/2; cam.y = H/2; }
-
-addEventListener('contextmenu', e => e.preventDefault());
-
-let AW = 1600, AH = 1000;                 // アリーナ = 画面サイズ（resizeで更新）
+// ===== GIANT SLIME RAID =====
+// 左クリック: 斬る / 右クリック: パリィ / A,D: 左右に回避 / V: VR(左右分割)モード切替
 const FONT = '"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif';
-const COL = { ground:'#14201f', tile:'#182726', player:'#7ae7ff', parry:'#ffd35a', warn:'#ff4d5e' };
-const keys = {}, mouse = { x:0, y:0, wx:0, wy:0 };
-const cam = { x:AW/2, y:AH/2, z:1, sh:0 };
+const vid = document.getElementById('v');
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setScissorTest(true);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(70, 1, .05, 100);
+camera.rotation.order = 'YXZ'; scene.add(camera);
+const EYE = 1.6, HOVER = -8.5, R = 1.8;
+let W, H;
+function resize(){ W = innerWidth; H = innerHeight; renderer.setSize(W, H); }
 resize(); addEventListener('resize', resize);
-let P, E, PR, FX, TX, wave, score, state = 'title', hitstop = 0, waveWait = 0, flash = 0;
+addEventListener('contextmenu', e => e.preventDefault());
+scene.background = new THREE.Color(0x0b1622);
+scene.add(new THREE.HemisphereLight(0xcfeaff, 0x203020, 1.0));
+const sun = new THREE.DirectionalLight(0xffffff, .9); sun.position.set(3, 8, 4); scene.add(sun);
 
-const TYPES = {
-  slime: { hp:30, r:20, sp:95,  range:70,  wind:.55, score:10 },
-  ghost: { hp:24, r:18, sp:70,  range:320, wind:.75, score:15 },
-  golem: { hp:90, r:38, sp:55,  range:100, wind:1.0, score:40 },
-};
-
-const ad = (a,b) => { const d = Math.abs(a-b) % (Math.PI*2); return d > Math.PI ? Math.PI*2-d : d; };
-const rnd = (a,b) => a + Math.random()*(b-a);
-
-function reset(){
-  P = { x:AW/2, y:AH/2, hp:100, face:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, inv:0, sa:0 };
-  E = []; PR = []; FX = []; TX = []; wave = 0; score = 0; waveWait = .5; flash = 0;
+function canvasTex(w, h, fn){ const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), w, h); return new THREE.CanvasTexture(c); }
+function mkSprite(text, hex, sc){
+  const t = canvasTex(384, 128, (x, w, h) => {
+    let f = 60; do { x.font = `bold ${f}px ${FONT}`; f -= 4; } while (x.measureText(text).width > 360 && f > 16);
+    x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineWidth = 10; x.strokeStyle = '#000c';
+    x.strokeText(text, w/2, h/2); x.fillStyle = hex; x.fillText(text, w/2, h/2);
+  });
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:t, transparent:true, depthTest:false }));
+  s.scale.set(3*sc, sc, 1); s.renderOrder = 20; return s;
 }
-reset();
 
-function spawnWave(){
-  wave++;
-  const n = wave + 2, pool = ['slime'];
-  if (wave >= 2) pool.push('ghost');
-  if (wave >= 3) pool.push('golem');
-  let golems = 0;
-  for (let i = 0; i < n; i++){
-    let t = pool[Math.random()*pool.length | 0];
-    if (t === 'golem' && ++golems > 1 + (wave/4|0)) t = 'slime';
-    const d = TYPES[t]; let x, y;
-    let tries = 0;
-    do { x = rnd(60, AW-60); y = rnd(60, AH-60); } while (Math.hypot(x-P.x, y-P.y) < Math.min(400, AW*.3) && ++tries < 50);
-    E.push({ type:t, x, y, hp:d.hp, max:d.hp, r:d.r, sp:d.sp, range:d.range, wind:d.wind,
-             s:'idle', t:0, cd:1 + Math.random()*1.5, la:0, hf:0, did:false, score:d.score, born:.5 });
-    burst(x, y, '#b48cff', 10, 120);
+// ===== 床（ARでは映像の上に半透明グリッド）=====
+const gridTex = canvasTex(256, 256, (x, w, h) => { x.strokeStyle = 'rgba(122,231,255,.6)'; x.lineWidth = 4; x.strokeRect(0, 0, w, h); });
+gridTex.wrapS = gridTex.wrapT = THREE.RepeatWrapping; gridTex.repeat.set(10, 20);
+const floorMat = new THREE.MeshBasicMaterial({ map:gridTex, transparent:true, opacity:.5, depthWrite:false });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 40), floorMat);
+floor.rotation.x = -Math.PI/2; floor.position.set(0, 0, -16); scene.add(floor);
+const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
+  map:canvasTex(128, 128, (x, w, h) => { const g = x.createRadialGradient(64,64,0,64,64,64); g.addColorStop(0,'rgba(0,0,0,.6)'); g.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0,0,w,h); }),
+  transparent:true, depthWrite:false }));
+shadow.rotation.x = -Math.PI/2; shadow.position.y = .02; scene.add(shadow);
+const lane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color:0xff3a4a, transparent:true, opacity:.3, depthWrite:false }));
+lane.rotation.x = -Math.PI/2; lane.visible = false; scene.add(lane);
+
+// ===== ボス：ジャイアントスライム =====
+const bossG = new THREE.Group(); scene.add(bossG);
+const bGeo = new THREE.SphereGeometry(1, 40, 28), bBase = bGeo.attributes.position.array.slice();
+const bMat = new THREE.MeshStandardMaterial({ color:0x5fe07a, roughness:.12, transparent:true, opacity:.86, emissive:0x0a3a18 });
+bossG.add(new THREE.Mesh(bGeo, bMat));
+const core = new THREE.Mesh(new THREE.SphereGeometry(.32, 16, 12), new THREE.MeshStandardMaterial({ color:0x1d9a44, emissive:0x0a5a20 }));
+core.position.set(0, -.1, -.1); bossG.add(core);
+const eyes = [], pupils = [];
+for (const s of [-1, 1]){
+  const w = new THREE.Mesh(new THREE.SphereGeometry(.15, 12, 10), new THREE.MeshBasicMaterial({ color:0xffffff }));
+  w.position.set(s*.33, .22, .86);
+  const p = new THREE.Mesh(new THREE.SphereGeometry(.07, 10, 8), new THREE.MeshBasicMaterial({ color:0x111111 }));
+  p.position.set(0, 0, .12); w.add(p); bossG.add(w); eyes.push(w); pupils.push(p);
+}
+const stars = new THREE.Group(); stars.position.y = 1.35; bossG.add(stars);
+for (let i = 0; i < 3; i++){ const m = new THREE.Mesh(new THREE.SphereGeometry(.12, 8, 6), new THREE.MeshBasicMaterial({ color:0xffd35a })); m.position.set(Math.cos(i*2.09)*.6, 0, Math.sin(i*2.09)*.6); stars.add(m); }
+function jiggle(t, amp){
+  const p = bGeo.attributes.position.array;
+  for (let i = 0; i < p.length; i += 3){
+    const x = bBase[i], y = bBase[i+1], z = bBase[i+2], k = 1 + amp*Math.sin(t*7 + x*4 + y*3)*Math.cos(t*5 + z*4);
+    p[i] = x*k; p[i+1] = y*k; p[i+2] = z*k;
   }
-  addText(P.x, P.y-60, 'WAVE ' + wave, '#fff', 34, 1.4);
+  bGeo.attributes.position.needsUpdate = true; bGeo.computeVertexNormals();
 }
 
 // ===== エフェクト =====
-function burst(x, y, col, n, sp){
-  for (let i = 0; i < n; i++){
-    const a = Math.random()*Math.PI*2, v = rnd(sp*.3, sp);
-    FX.push({ k:'p', x, y, vx:Math.cos(a)*v, vy:Math.sin(a)*v, life:rnd(.25,.6), max:.6, col, s:rnd(2,5) });
+const NP = 500, pp = new Float32Array(NP*3), pc = new Float32Array(NP*3), pv = new Float32Array(NP*3), pl = new Float32Array(NP); let pn = 0;
+const pg = new THREE.BufferGeometry();
+pg.setAttribute('position', new THREE.BufferAttribute(pp, 3)); pg.setAttribute('color', new THREE.BufferAttribute(pc, 3));
+const pts = new THREE.Points(pg, new THREE.PointsMaterial({ size:.16, vertexColors:true, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false }));
+pts.frustumCulled = false; scene.add(pts);
+function burst(v, hex, n, sp){
+  const c = new THREE.Color(hex);
+  for (let k = 0; k < n; k++){
+    const i = pn++ % NP, a = Math.random()*6.28, b = Math.random()*3.14 - 1.57, s = sp*(.3 + Math.random());
+    pp.set([v.x, v.y, v.z], i*3); pc.set([c.r, c.g, c.b], i*3); pl[i] = .4 + Math.random()*.6;
+    pv.set([Math.cos(a)*Math.cos(b)*s, Math.sin(b)*s + 1, Math.sin(a)*Math.cos(b)*s], i*3);
   }
 }
-function ring(x, y, r0, r1, col, life=.4, w=5){ FX.push({ k:'ring', x, y, r0, r1, life, max:life, col, w }); }
-function addText(x, y, s, col='#fff', size=22, life=.8){ TX.push({ x, y, s, col, size, life, max:life }); }
+const rings = [], pops = [];
+function ring(v, r1, hex, life = .45){
+  const m = new THREE.Mesh(new THREE.RingGeometry(.85, 1, 48), new THREE.MeshBasicMaterial({ color:hex, transparent:true, blending:THREE.AdditiveBlending, depthTest:false, side:THREE.DoubleSide }));
+  m.position.copy(v); m.quaternion.copy(camera.quaternion); m.renderOrder = 15; scene.add(m);
+  rings.push({ m, r1, life, max:life });
+}
+function popup(text, hex, pos, sc = .8, life = .9, parent = scene){
+  const s = mkSprite(text, hex, sc); s.position.copy(pos); parent.add(s); pops.push({ s, life, max:life, parent });
+}
+const popCam = (text, hex, sc = 1, life = .9) => popup(text, hex, new THREE.Vector3(0, .5, -3), sc, life, camera);
+function updFX(dt){
+  for (let i = 0; i < NP; i++){
+    if (pl[i] <= 0){ pp[i*3+1] = -999; continue; }
+    pl[i] -= dt; pv[i*3+1] -= 6*dt;
+    for (let j = 0; j < 3; j++){ pp[i*3+j] += pv[i*3+j]*dt; pc[i*3+j] *= 1 - dt*1.2; }
+  }
+  pg.attributes.position.needsUpdate = true; pg.attributes.color.needsUpdate = true;
+  for (let i = rings.length - 1; i >= 0; i--){
+    const r = rings[i]; r.life -= dt; const k = Math.max(0, r.life/r.max);
+    r.m.scale.setScalar(.1 + r.r1*(1-k)); r.m.material.opacity = k;
+    if (r.life <= 0){ scene.remove(r.m); r.m.geometry.dispose(); r.m.material.dispose(); rings.splice(i, 1); }
+  }
+  for (let i = pops.length - 1; i >= 0; i--){
+    const p = pops[i]; p.life -= dt; p.s.position.y += .6*dt; p.s.material.opacity = Math.min(1, p.life/p.max*2);
+    if (p.life <= 0){ p.parent.remove(p.s); p.s.material.map.dispose(); p.s.material.dispose(); pops.splice(i, 1); }
+  }
+}
 
-// ===== 戦闘 =====
+// ===== 一人称の大剣 =====
+const sword = new THREE.Group(); camera.add(sword);
+const steel = new THREE.MeshStandardMaterial({ color:0xdff6ff, metalness:.8, roughness:.2, emissive:0x2a6f88 });
+const gold = new THREE.MeshStandardMaterial({ color:0xd8a23a, metalness:.7, roughness:.3, emissive:0x3a2a08 });
+const blade = new THREE.Mesh(new THREE.BoxGeometry(.28, 3.4, .07), steel); blade.position.y = 2.1;
+const edge = new THREE.Mesh(new THREE.BoxGeometry(.05, 3.4, .09), new THREE.MeshBasicMaterial({ color:0x7ae7ff })); edge.position.y = 2.1;
+const tip = new THREE.Mesh(new THREE.ConeGeometry(.2, .6, 4), steel); tip.position.y = 4.1; tip.rotation.y = Math.PI/4; tip.scale.z = .25;
+const guard = new THREE.Mesh(new THREE.BoxGeometry(1.3, .16, .24), gold); guard.position.y = .35;
+const grip = new THREE.Mesh(new THREE.CylinderGeometry(.08, .08, .8, 10), new THREE.MeshStandardMaterial({ color:0x4a2a1a })); grip.position.y = -.1;
+const pommel = new THREE.Mesh(new THREE.SphereGeometry(.14, 12, 10), gold); pommel.position.y = -.55;
+sword.add(blade, edge, tip, guard, grip, pommel);
+sword.position.set(.9, -1.1, -1.9); sword.rotation.set(-.95, 0, .3);
+const shield = new THREE.Group(); shield.position.z = -2.3; shield.visible = false; camera.add(shield);
+shield.add(new THREE.Mesh(new THREE.CircleGeometry(.9, 32), new THREE.MeshBasicMaterial({ color:0xffd35a, transparent:true, opacity:.25, blending:THREE.AdditiveBlending, depthTest:false })));
+shield.add(new THREE.Mesh(new THREE.RingGeometry(.85, .95, 40), new THREE.MeshBasicMaterial({ color:0xffd35a, transparent:true, blending:THREE.AdditiveBlending, depthTest:false })));
+const arc = new THREE.Mesh(new THREE.RingGeometry(1.5, 2.3, 40, 1, 0, 2.2), new THREE.MeshBasicMaterial({ color:0xbfefff, transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthTest:false, side:THREE.DoubleSide }));
+arc.position.z = -2.8; arc.renderOrder = 12; camera.add(arc);
+const flashM = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0, depthTest:false }));
+flashM.position.z = -.5; flashM.renderOrder = 40; camera.add(flashM);
+
+// ===== HUD（3Dで描くのでVRモードでも見える）=====
+const hud = new THREE.Group(); camera.add(hud);
+function bar(w, y, hex){
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(w + .06, .2), new THREE.MeshBasicMaterial({ color:0, transparent:true, opacity:.6, depthTest:false }));
+  back.position.set(0, y, -3); back.renderOrder = 10;
+  const g = new THREE.PlaneGeometry(w, .14); g.translate(w/2, 0, 0);
+  const fill = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color:hex, depthTest:false })); fill.position.set(-w/2, y, -3); fill.renderOrder = 11;
+  hud.add(back, fill); return fill;
+}
+const bossBar = bar(3.4, 1.55, 0xff4d5e), pBar = bar(2.4, -1.55, 0x5ee08a), parBar = bar(1.0, -1.78, 0xffd35a);
+const nameS = mkSprite('GIANT SLIME', '#ffffff', .4); nameS.position.set(0, 1.85, -3); hud.add(nameS);
+hud.visible = false;
+const msg = new THREE.Sprite(new THREE.SpriteMaterial({ transparent:true, depthTest:false }));
+msg.position.z = -4; msg.renderOrder = 30; camera.add(msg);
+function setMsg(L){
+  if (!L){ msg.visible = false; return; }
+  const t = canvasTex(1024, 512, (x, w, h) => {
+    x.fillStyle = 'rgba(0,0,0,.62)'; x.fillRect(0, 0, w, h); x.strokeStyle = '#ffd35a'; x.lineWidth = 4; x.strokeRect(8, 8, w-16, h-16);
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    let y = h/2 - L.reduce((a, l) => a + l[2]*1.5, 0)/2;
+    for (const [s, c, z] of L){ y += z*.75; x.font = `bold ${z}px ${FONT}`; x.fillStyle = c; x.fillText(s, w/2, y); y += z*.75; }
+  });
+  if (msg.material.map) msg.material.map.dispose();
+  msg.material.map = t; msg.material.needsUpdate = true; msg.visible = true;
+}
+
+// ===== Webカメラ =====
+let camTex = null, camMirror = false;
+async function startCam(){
+  if (camTex) return;
+  try {
+    const st = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment', width:{ ideal:1280 }, height:{ ideal:720 } }, audio:false });
+    camMirror = st.getVideoTracks()[0].getSettings().facingMode !== 'environment';
+    vid.srcObject = st; await vid.play();
+    camTex = new THREE.VideoTexture(vid); camTex.minFilter = THREE.LinearFilter; scene.background = camTex;
+  } catch (e){ popCam('カメラ起動失敗', '#ff4d5e', .6, 3); }
+}
+function cover(a){
+  if (!camTex || !vid.videoWidth) return;
+  const va = vid.videoWidth/vid.videoHeight; let rx = 1, ry = 1; if (a > va) ry = va/a; else rx = a/va;
+  const c0 = (1 - rx)/2; camTex.repeat.set(camMirror ? -rx : rx, ry); camTex.offset.set(camMirror ? c0 + rx : c0, (1 - ry)/2);
+}
+
+// ===== ゲーム状態 =====
+const keys = {}, mouse = { nx:0, ny:0 }, ray = new THREE.Raycaster(), tmp = new THREE.Vector3();
+const P = { x:0, hp:100, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, dir:1 };
+const B = { x:0, z:-16, vz:0, s:'enter', t:1, wt:1, hp:800, max:800, hit:false, weak:0, flash:0, combo:0, stun:false, phase:1, wob:0, time:0 };
+let state = 'title', hitstop = 0, shake = 0, fovp = 0, flash = 0, vr = false, endAt = 0;
+function reset(){
+  Object.assign(P, { x:0, hp:100, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0 });
+  Object.assign(B, { x:0, z:-16, vz:0, s:'enter', t:1, hp:800, hit:false, weak:0, combo:0, stun:false, phase:1 });
+  bossG.visible = true;
+}
+function titleMsg(){
+  setMsg([['GIANT SLIME RAID', '#ffd35a', 72], ['左クリック: 斬る　右クリック: パリィ　A / D: 回避', '#fff', 34],
+          ['突進が迫る直前にパリィ → 弾き飛ばしてスタン → 大ダメージ', '#fff', 30], ['V: VR(左右分割)モード', '#7ae7ff', 28],
+          ['クリックでスタート（Webカメラを使います）', '#7ae7ff', 34]]);
+}
+titleMsg();
+
+function hurtBoss(d, at, big){
+  B.hp -= d; B.flash = .12; B.wob = .25;
+  burst(at, big ? 0xffd35a : 0xffffff, big ? 40 : 22, 6);
+  popup(String(Math.round(d)), big ? '#ffd35a' : '#ffffff', tmp.copy(at).add(new THREE.Vector3(0, .6, 0)).clone(), big ? 1.1 : .8);
+  shake = Math.max(shake, .12); hitstop = Math.max(hitstop, .05);
+  if (B.hp <= 0){
+    B.hp = 0; B.s = 'dead'; state = 'win'; endAt = performance.now(); bossG.visible = false; lane.visible = false;
+    burst(bossG.position, 0x5fe07a, 200, 12); ring(bossG.position, 8, 0x5fe07a, .8); shake = .6;
+    setMsg([['VICTORY!', '#ffd35a', 80], ['ジャイアントスライムを倒した', '#fff', 34], ['クリックでもう一度', '#7ae7ff', 32]]);
+  }
+}
 function attack(){
   if (P.swingCd > 0 || P.par > 0) return;
-  P.swingCd = .32; P.swing = .18; P.sa = P.face;
-  FX.push({ k:'slash', x:P.x, y:P.y, a:P.face, life:.18, max:.18 });
-  for (const e of E){
-    const dx = e.x-P.x, dy = e.y-P.y;
-    if (Math.hypot(dx,dy) < 105 + e.r && ad(Math.atan2(dy,dx), P.face) < 1.1)
-      hurtEnemy(e, e.s === 'stun' ? 26 : 10, P.face);
+  P.swingCd = .4; P.swing = .22; P.dir *= -1;
+  arc.position.x = mouse.nx*1.5; arc.position.y = mouse.ny*1.0;
+  ray.setFromCamera(new THREE.Vector2(mouse.nx, mouse.ny), camera);
+  const hit = ray.ray.intersectSphere(new THREE.Sphere(bossG.position.clone(), R*1.1), new THREE.Vector3());
+  if (hit && B.s !== 'dead' && ray.ray.origin.distanceTo(hit) < 12){
+    const stunned = B.s === 'knock' && B.stun;
+    hurtBoss(stunned ? 45 : B.weak > 0 ? 27 : 18, hit, stunned);
   }
 }
-function parry(){
-  if (P.parCd > 0 || P.par > 0) return;
-  P.par = .22; P.parAge = 0; P.parCd = .6;
+function parry(){ if (P.parCd > 0 || P.par > 0) return; P.par = .3; P.parAge = 0; P.parCd = .7; }
+function parried(){
+  const perfect = P.parAge < .12, at = camera.localToWorld(new THREE.Vector3(0, 0, -2.4));
+  hitstop = perfect ? .22 : .14; shake = perfect ? .5 : .3; fovp = perfect ? 14 : 8; flash = perfect ? .8 : .4; flashM.material.color.set(0xfff2b0);
+  ring(at, perfect ? 6 : 4, 0xffd35a, .5); ring(at, 2.5, 0xffffff, .3); burst(at, 0xffd35a, perfect ? 90 : 55, 9);
+  popCam(perfect ? 'PERFECT!' : 'PARRY!', '#ffd35a', perfect ? 1.3 : 1, 1);
+  P.inv = .5; P.par = 0; P.parCd = .15;
+  B.s = 'knock'; B.stun = true; B.t = perfect ? 3 : 2.2; B.vz = perfect ? -24 : -17;
+  hurtBoss(perfect ? 50 : 30, bossG.position.clone().add(new THREE.Vector3(0, 1, R)), true);
 }
-function hurtEnemy(e, dmg, ang){
-  e.hp -= dmg; e.hf = .12;
-  const kb = e.s === 'stun' ? 12 : 28;
-  e.x += Math.cos(ang)*kb; e.y += Math.sin(ang)*kb;
-  hitstop = Math.max(hitstop, .04); cam.sh = Math.max(cam.sh, 5);
-  burst(e.x, e.y, e.s === 'stun' ? '#ffd35a' : '#ffffff', 8, 220);
-  addText(e.x, e.y-e.r-8, dmg, e.s === 'stun' ? '#ffd35a' : '#fff', e.s === 'stun' ? 28 : 20);
-  if (e.hp <= 0){
-    e.dead = true; score += e.score;
-    burst(e.x, e.y, '#ff9a5a', 24, 320); ring(e.x, e.y, e.r, e.r+60, '#ff9a5a', .4, 4);
-    cam.sh = Math.max(cam.sh, 8);
+function hurtPlayer(){
+  P.hp -= [20, 25, 30][B.phase-1]; P.inv = 1.2; shake = .8; flash = .6; flashM.material.color.set(0xff2a3a);
+  burst(camera.localToWorld(new THREE.Vector3(0, 0, -2)), 0xff4d5e, 60, 8);
+  B.s = 'knock'; B.stun = false; B.t = 1.2; B.vz = -10;
+  if (P.hp <= 0){
+    P.hp = 0; state = 'over'; endAt = performance.now();
+    setMsg([['GAME OVER', '#ff4d5e', 80], [`スライムの残りHP ${Math.ceil(B.hp)}`, '#fff', 34], ['クリックでリトライ', '#7ae7ff', 32]]);
   }
-}
-// 敵の攻撃がプレイヤーに届いた時: 'parry' | 'hit' | 'inv'
-function hitPlayer(src, dmg){
-  if (P.inv > 0) return 'inv';
-  const a = Math.atan2(src.y-P.y, src.x-P.x);
-  if (P.par > 0 && ad(a, P.face) < 1.4){
-    const perfect = P.parAge < .1;
-    hitstop = perfect ? .2 : .12; cam.sh = perfect ? 16 : 9; cam.z = perfect ? 1.16 : 1.09; flash = perfect ? .25 : .12;
-    const px = P.x + Math.cos(P.face)*30, py = P.y + Math.sin(P.face)*30;
-    ring(px, py, 10, perfect ? 130 : 90, COL.parry, .4, 6);
-    ring(px, py, 4, 60, '#fff', .25, 3);
-    burst(px, py, COL.parry, perfect ? 36 : 20, 420);
-    addText(P.x, P.y-52, perfect ? 'PERFECT!' : 'PARRY!', COL.parry, perfect ? 34 : 26, 1);
-    P.inv = .4; P.par = 0; P.parCd = 0;
-    if (src.type){ // 敵本体 → スタン
-      src.s = 'stun'; src.t = perfect ? 2.6 : 1.6; src.cd = 1;
-      hurtEnemy(src, 8, a + Math.PI);
-    } else {       // 弾 → 反射
-      src.o = 'p'; src.vx *= -1.6; src.vy *= -1.6;
-    }
-    return 'parry';
-  }
-  P.hp -= dmg; P.inv = .7; cam.sh = 14; flash = .18;
-  P.x += Math.cos(a+Math.PI)*28; P.y += Math.sin(a+Math.PI)*28;
-  burst(P.x, P.y, COL.warn, 16, 260); addText(P.x, P.y-40, '-' + dmg, COL.warn, 26);
-  if (P.hp <= 0){ P.hp = 0; state = 'over'; burst(P.x, P.y, COL.player, 50, 400); }
-  return 'hit';
 }
 
-// ===== 更新 =====
-function updateEnemy(e, dt){
-  e.hf -= dt; if (e.born > 0){ e.born -= dt; return; }
-  const dx = P.x-e.x, dy = P.y-e.y, d = Math.hypot(dx,dy), a = Math.atan2(dy,dx);
-  if (e.s === 'stun'){ e.t -= dt; if (e.t <= 0) e.s = 'idle'; return; }
-  if (e.s === 'idle'){
-    const want = e.type === 'ghost' ? (d < 220 ? -1 : d > 300 ? 1 : 0) : (d > e.range ? 1 : 0);
-    e.x += Math.cos(a)*e.sp*dt*want; e.y += Math.sin(a)*e.sp*dt*want;
-    e.cd -= dt;
-    const inRange = e.type === 'ghost' ? d < 420 : d < e.range + 12;
-    if (e.cd <= 0 && inRange){ e.s = 'wind'; e.t = e.wind; e.la = a; }
-  } else if (e.s === 'wind'){
-    e.t -= dt; if (e.t > .15 && e.type !== 'golem') e.la = a;
-    if (e.t <= 0){
-      if (e.type === 'slime'){ e.s = 'strike'; e.t = .3; e.did = false; }
-      else if (e.type === 'ghost'){
-        PR.push({ x:e.x, y:e.y, vx:Math.cos(e.la)*300, vy:Math.sin(e.la)*300, o:'e', life:3 });
-        e.s = 'idle'; e.cd = 2 + Math.random();
-      } else {
-        ring(e.x, e.y, 10, 135, '#ff9a5a', .35, 8); burst(e.x, e.y, '#b9a58a', 24, 340); cam.sh = Math.max(cam.sh, 10);
-        if (d < 135) hitPlayer(e, 25);
-        e.s = 'idle'; e.cd = 1.8 + Math.random();
-      }
+function bossAI(dt){
+  B.t -= dt; B.weak -= dt;
+  const ph = B.hp/B.max > .6 ? 1 : B.hp/B.max > .3 ? 2 : 3;
+  if (ph > B.phase){ B.phase = ph; popCam('RAGE!!', '#ff4d5e', 1.2, 1.4); shake = .5; }
+  const idleT = () => (ph === 3 && B.combo % 2 === 1) ? .45 : [2.1, 1.5, 1.1][ph-1] + Math.random()*.5;
+  if (B.s === 'enter'){
+    B.z += (HOVER - B.z)*Math.min(1, dt*2.2);
+    if (B.z > HOVER - .25){ B.s = 'idle'; B.t = idleT(); }
+  } else if (B.s === 'idle'){
+    B.z += (HOVER - B.z)*dt*3; B.x += (Math.sin(B.time*.8)*2.2 + P.x*.4 - B.x)*dt*1.5;
+    if (B.t <= 0){ B.s = 'wind'; B.t = B.wt = [1.1, .9, .7][ph-1]; popup('!', '#ff4d5e', new THREE.Vector3(B.x, 4.6, B.z), 1.2, B.wt); }
+  } else if (B.s === 'wind'){
+    if (B.t > .3) B.x += (P.x - B.x)*Math.min(1, dt*5);
+    if (B.t <= 0){ B.s = 'charge'; B.hit = false; }
+  } else if (B.s === 'charge'){
+    B.z += [17, 20, 24][ph-1]*dt;
+    if (!B.hit && B.z + R >= -1.3){
+      B.hit = true;
+      if (Math.abs(B.x - P.x) < R*.8 + .35 && P.inv <= 0){ P.par > 0 ? parried() : hurtPlayer(); B.combo++; }
+      else if (P.inv <= 0) popCam('回避!', '#7ae7ff', .9, .8);
     }
-  } else if (e.s === 'strike'){
-    e.t -= dt; e.x += Math.cos(e.la)*430*dt; e.y += Math.sin(e.la)*430*dt;
-    if (!e.did && d < e.r + 16){ e.did = true; hitPlayer(e, 12); }
-    if (e.t <= 0){ e.s = 'idle'; e.cd = 1.2 + Math.random()*1.2; }
+    if (B.s === 'charge' && B.z > 3){ B.combo++; B.s = 'enter'; B.z = -16; B.x = (Math.random()-.5)*5; B.weak = 2.5; }
+  } else if (B.s === 'knock'){
+    B.z += B.vz*dt; B.vz *= Math.pow(.04, dt);
+    if (B.stun) B.z += (HOVER - B.z)*dt*.5;
+    if (B.t <= 0){ B.s = 'idle'; B.stun = false; B.t = idleT(); }
   }
-  e.x = Math.max(e.r, Math.min(AW-e.r, e.x)); e.y = Math.max(e.r, Math.min(AH-e.r, e.y));
+}
+
+function bossAnim(dt){
+  B.time += dt; B.flash -= dt; B.wob = Math.max(0, B.wob - dt);
+  let sy = 1 + .05*Math.sin(B.time*3), zs = 1, hop = 0, k = 0;
+  if (B.s === 'enter') hop = Math.abs(Math.sin(B.time*6))*.5;
+  if (B.s === 'wind'){ k = 1 - B.t/B.wt; sy = 1 - .35*k; }
+  if (B.s === 'charge'){ sy = .8; zs = 1.4; }
+  if (B.s === 'knock' && B.stun) sy = 1 + .08*Math.sin(B.time*14);
+  sy += B.wob*Math.sin(B.time*40);
+  const sx = 1/Math.sqrt(sy), blink = Math.sin(B.time*40) > 0 ? 1 : .4;
+  bMat.emissive.setRGB(.04 + .7*k*blink + (B.flash > 0 ? .8 : 0), .23*(1-k) + (B.flash > 0 ? .8 : 0), .09*(1-k) + (B.flash > 0 ? .8 : 0));
+  const stunned = B.s === 'knock' && B.stun;
+  bossG.position.set(B.x, R*sy + hop, B.z); bossG.scale.set(R*sx, R*sy, R*sx*zs);
+  bossG.rotation.set(0, Math.atan2(P.x - B.x, -B.z)*.5, stunned ? Math.sin(B.time*6)*.18 : 0);
+  stars.visible = stunned; stars.rotation.y += dt*5; for (const p of pupils) p.visible = !stunned;
+  for (const e of eyes) e.material.color.set(B.s === 'wind' ? 0xff4d5e : 0xffffff);
+  shadow.position.set(B.x, .02, B.z); shadow.scale.setScalar(R*2.4);
+  lane.visible = B.s === 'wind';
+  if (lane.visible){ const zs0 = B.z + R; lane.scale.set(R*1.8, -zs0, 1); lane.position.set(B.x, .03, zs0/2); lane.material.opacity = .22 + .25*blink*k; }
+  jiggle(B.time, B.s === 'knock' && B.stun ? .08 : .04);
+}
+
+function updSword(dt){
+  let tx = .9 + mouse.nx*.3, ty = -1.1 + mouse.ny*.2, tz = -1.9, rx = -.95, rz = .3, rate = 14;
+  if (P.swing > 0){
+    const t = 1 - P.swing/.22, a = 1 - Math.pow(1 - t, 3);
+    rz = P.dir*(1.5 - 3.0*a); rx = -1.15 + .35*Math.sin(t*Math.PI); tx = .5; ty = -1.0; rate = 60;
+    const kk = P.swing/.22, base = P.dir > 0 ? .2 : Math.PI + .2;
+    arc.material.opacity = kk*.9; arc.rotation.z = base - P.dir*(1 - kk)*.9;
+  } else { arc.material.opacity = 0; if (P.par > 0){ tx = .1; ty = -.8; tz = -1.7; rx = -.2; rz = .1; rate = 40; } }
+  const k = Math.min(1, dt*rate);
+  sword.position.x += (tx - sword.position.x)*k; sword.position.y += (ty - sword.position.y)*k; sword.position.z += (tz - sword.position.z)*k;
+  sword.rotation.x += (rx - sword.rotation.x)*k; sword.rotation.z += (rz - sword.rotation.z)*k;
+  shield.visible = P.par > 0; if (P.par > 0){ const s = .6 + .5*Math.min(1, P.parAge/.1); shield.scale.setScalar(s); }
 }
 
 function update(dt){
-  if (hitstop > 0){ hitstop -= dt; dt *= .04; }
-  // camera
-  cam.z += (1 - cam.z) * Math.min(1, dt*8); cam.sh *= Math.pow(.001, dt); flash = Math.max(0, flash - dt);
-  mouse.wx = (mouse.x - W/2)/cam.z + cam.x; mouse.wy = (mouse.y - H/2)/cam.z + cam.y;
-
-  for (const f of FX){
-    f.life -= dt;
-    if (f.k === 'p'){ f.x += f.vx*dt; f.y += f.vy*dt; f.vx *= .92; f.vy *= .92; }
-  }
-  FX = FX.filter(f => f.life > 0);
-  for (const t of TX){ t.life -= dt; t.y -= 30*dt; }
-  TX = TX.filter(t => t.life > 0);
-  if (state !== 'play') return;
-
-  // player
-  let mx = (keys.d||keys.arrowright?1:0) - (keys.a||keys.arrowleft?1:0);
-  let my = (keys.s||keys.arrowdown?1:0) - (keys.w||keys.arrowup?1:0);
-  const l = Math.hypot(mx,my) || 1, sp = P.par > 0 ? 90 : 270;
-  P.x = Math.max(16, Math.min(AW-16, P.x + mx/l*sp*dt)); P.y = Math.max(16, Math.min(AH-16, P.y + my/l*sp*dt));
-  P.face = Math.atan2(mouse.wy - P.y, mouse.wx - P.x);
-  P.swing -= dt; P.swingCd -= dt; P.inv -= dt; P.parCd -= dt;
-  if (P.par > 0){ P.par -= dt; P.parAge += dt; }
-
-  for (const e of E) updateEnemy(e, dt);
-  for (const p of PR){
-    p.x += p.vx*dt; p.y += p.vy*dt; p.life -= dt;
-    FX.push({ k:'p', x:p.x, y:p.y, vx:0, vy:0, life:.2, max:.2, col:p.o==='e'?'#c28cff':COL.parry, s:4 });
-    if (p.o === 'e'){
-      if (Math.hypot(p.x-P.x, p.y-P.y) < 22){ if (hitPlayer(p, 10) === 'hit') p.life = 0; }
-    } else for (const e of E){
-      if (!e.dead && Math.hypot(p.x-e.x, p.y-e.y) < e.r + 8){ hurtEnemy(e, 30, Math.atan2(p.vy,p.vx)); p.life = 0; break; }
-    }
-  }
-  PR = PR.filter(p => p.life > 0 && p.x > -50 && p.x < AW+50 && p.y > -50 && p.y < AH+50);
-  E = E.filter(e => !e.dead);
-  if (!E.length){
-    waveWait -= dt;
-    if (waveWait <= 0){ spawnWave(); waveWait = 2; }
-  }
+  if (hitstop > 0){ hitstop -= dt; dt *= .05; }
+  shake *= Math.pow(.002, dt); fovp *= Math.pow(.001, dt); flash = Math.max(0, flash - dt*2.5);
+  flashM.material.opacity = flash;
+  if (state === 'play'){
+    const mv = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
+    P.x = Math.max(-3.2, Math.min(3.2, P.x + mv*(P.par > 0 ? 3 : 6)*dt));
+    P.swing -= dt; P.swingCd -= dt; P.inv -= dt; P.parCd -= dt;
+    if (P.par > 0){ P.par -= dt; P.parAge += dt; }
+    bossAI(dt);
+  } else if (state === 'title'){ B.z += (HOVER - B.z)*Math.min(1, dt*2); B.s = 'enter'; }
+  bossAnim(dt); updSword(dt); updFX(dt);
+  camera.rotation.y = -mouse.nx*.2; camera.rotation.x = mouse.ny*.12;
+  camera.position.set(P.x + (Math.random()-.5)*shake, EYE + (Math.random()-.5)*shake*.6, 0);
+  bossBar.scale.x = Math.max(.0001, B.hp/B.max); pBar.scale.x = Math.max(.0001, P.hp/100);
+  parBar.scale.x = Math.max(.0001, P.parCd > 0 ? 1 - P.parCd/.7 : 1);
+  hud.visible = state === 'play';
+  const asp = vr ? W/2/H : W/H, mw = Math.min(7, 5.3*asp); msg.scale.set(mw, mw/2, 1);
 }
 
-// ===== 描画 =====
-function draw(){
-  g.clearRect(0,0,W,H);
-  if (camOn){ g.fillStyle = 'rgba(0,8,8,.22)'; g.fillRect(0,0,W,H); } else { g.fillStyle = '#070c0b'; g.fillRect(0,0,W,H); }
-  g.save();
-  const sx = (Math.random()-.5)*cam.sh, sy = (Math.random()-.5)*cam.sh;
-  g.translate(W/2, H/2); g.scale(cam.z, cam.z); g.translate(-cam.x + sx, -cam.y + sy);
-
-  if (!camOn){
-    g.fillStyle = COL.ground; g.fillRect(0,0,AW,AH);
-    g.fillStyle = COL.tile;
-    for (let x = 0; x < AW; x += 80) for (let y = 0; y < AH; y += 80) if (((x+y)/80)%2 === 0) g.fillRect(x,y,80,80);
+function view(x, y, w, h){ renderer.setViewport(x, y, w, h); renderer.setScissor(x, y, w, h); }
+function render(){
+  camera.fov = 70 - fovp; const bx = camera.position.x;
+  if (!vr){ view(0, 0, W, H); camera.aspect = W/H; camera.updateProjectionMatrix(); cover(W/H); renderer.render(scene, camera); }
+  else {
+    const w = W/2; camera.aspect = w/H; camera.updateProjectionMatrix(); cover(w/H);
+    for (const e of [-1, 1]){ camera.position.x = bx + e*.032; view(e < 0 ? 0 : w, 0, w, H); renderer.render(scene, camera); }
+    camera.position.x = bx;
   }
-  g.strokeStyle = camOn ? 'rgba(122,231,255,.35)' : '#3b5a55'; g.lineWidth = 6; g.strokeRect(0,0,AW,AH);
-
-  for (const e of E) drawTelegraph(e);
-  for (const e of [...E, P].sort((a,b) => a.y-b.y)) e === P ? drawPlayer() : drawEnemy(e);
-
-  for (const p of PR){
-    g.fillStyle = p.o === 'e' ? '#c28cff' : COL.parry;
-    g.shadowColor = g.fillStyle; g.shadowBlur = 18;
-    g.beginPath(); g.arc(p.x, p.y, 9, 0, 7); g.fill(); g.shadowBlur = 0;
-  }
-  for (const f of FX){
-    const k = f.life/f.max;
-    if (f.k === 'p'){ g.globalAlpha = k; g.fillStyle = f.col; g.fillRect(f.x - f.s/2, f.y - f.s/2, f.s, f.s); }
-    else if (f.k === 'ring'){
-      g.globalAlpha = k; g.strokeStyle = f.col; g.lineWidth = f.w*k;
-      g.beginPath(); g.arc(f.x, f.y, f.r0 + (f.r1-f.r0)*(1-k), 0, 7); g.stroke();
-    } else if (f.k === 'slash'){
-      const pr = 1-k; g.globalAlpha = Math.min(1, k*2.2); g.strokeStyle = '#fff'; g.lineCap = 'round';
-      g.shadowColor = COL.player; g.shadowBlur = 16; g.lineWidth = 14*k + 3;
-      g.beginPath(); g.arc(f.x, f.y, 88, f.a - 1.1, f.a - 1.1 + 2.2*Math.min(1, pr*1.8 + .2)); g.stroke(); g.shadowBlur = 0;
-    }
-    g.globalAlpha = 1;
-  }
-  g.textAlign = 'center'; g.font = 'bold 20px ' + FONT;
-  for (const t of TX){
-    g.globalAlpha = Math.min(1, t.life/t.max*2); g.font = `bold ${t.size}px ${FONT}`;
-    g.lineWidth = 4; g.strokeStyle = '#000a'; g.strokeText(t.s, t.x, t.y);
-    g.fillStyle = t.col; g.fillText(t.s, t.x, t.y);
-  }
-  g.globalAlpha = 1; g.restore();
-
-  if (flash > 0){ g.fillStyle = `rgba(255,255,255,${flash*1.2})`; g.fillRect(0,0,W,H); }
-  if (P.hp < 35 && state === 'play'){
-    const gr = g.createRadialGradient(W/2,H/2,H*.35,W/2,H/2,H*.8);
-    gr.addColorStop(0,'#0000'); gr.addColorStop(1,'#ff2a4a66'); g.fillStyle = gr; g.fillRect(0,0,W,H);
-  }
-  drawHUD();
-}
-
-function drawTelegraph(e){
-  if (e.s !== 'wind') return;
-  const k = 1 - e.t/e.wind, blink = (Math.sin(performance.now()/40) > 0) ? 1 : .55;
-  g.save(); g.strokeStyle = COL.warn; g.fillStyle = COL.warn;
-  if (e.type === 'golem'){
-    g.globalAlpha = .18*blink; g.beginPath(); g.arc(e.x, e.y, 135, 0, 7); g.fill();
-    g.globalAlpha = .5; g.lineWidth = 4; g.stroke();
-    g.globalAlpha = .35; g.beginPath(); g.arc(e.x, e.y, 135*k, 0, 7); g.fill();
-  } else if (e.type === 'slime'){
-    g.globalAlpha = .35*blink; g.lineWidth = 22; g.lineCap = 'round';
-    g.beginPath(); g.moveTo(e.x, e.y); g.lineTo(e.x + Math.cos(e.la)*130, e.y + Math.sin(e.la)*130); g.stroke();
-  } else {
-    g.globalAlpha = .9; g.shadowColor = '#c28cff'; g.shadowBlur = 20; g.fillStyle = '#c28cff';
-    g.beginPath(); g.arc(e.x + Math.cos(e.la)*26, e.y + Math.sin(e.la)*26, 4 + 12*k, 0, 7); g.fill();
-  }
-  g.restore();
-  // 「!」マーク
-  g.fillStyle = COL.warn; g.font = `bold ${26 + 8*blink}px ${FONT}`; g.textAlign = 'center';
-  g.fillText('!', e.x, e.y - e.r - 24);
-}
-
-function drawEnemy(e){
-  g.save(); g.translate(e.x, e.y);
-  if (e.born > 0) g.globalAlpha = 1 - e.born*2;
-  g.fillStyle = '#0006'; g.beginPath(); g.ellipse(0, e.r*.8, e.r, e.r*.4, 0, 0, 7); g.fill();
-  const t = performance.now()/1000, white = e.hf > 0, stun = e.s === 'stun';
-  const body = white ? '#fff' : stun ? '#9aa' : null;
-  if (e.type === 'slime'){
-    const sq = 1 + Math.sin(t*6 + e.x)*.08 + (e.s === 'wind' ? -.2*(1-e.t/e.wind) : 0);
-    g.scale(1/sq, sq); g.fillStyle = body || '#6ee06e';
-    g.beginPath(); g.arc(0, 0, e.r, Math.PI, 0); g.lineTo(e.r, e.r*.7); g.lineTo(-e.r, e.r*.7); g.fill();
-    eyes(-7, -4, 7, -4, e);
-  } else if (e.type === 'ghost'){
-    g.translate(0, Math.sin(t*3 + e.x)*5); g.globalAlpha *= .85; g.fillStyle = body || '#b48cff';
-    g.beginPath(); g.arc(0, -2, e.r, Math.PI, 0); g.lineTo(e.r, e.r);
-    for (let i = 3; i >= -3; i--) g.lineTo(i*e.r/3.5, e.r - (i%2 ? 0 : 7)); g.fill();
-    eyes(-6, -4, 6, -4, e);
-  } else {
-    g.fillStyle = body || '#8a8478'; g.fillRect(-e.r, -e.r*.8, e.r*2, e.r*1.7);
-    g.fillStyle = body || '#6d675c'; g.fillRect(-e.r-10, -e.r*.5, 14, e.r*1.1); g.fillRect(e.r-4, -e.r*.5, 14, e.r*1.1);
-    g.fillStyle = body || '#a39d90'; g.fillRect(-e.r*.7, -e.r*1.1, e.r*1.4, e.r*.5);
-    eyes(-10, -e.r*.85, 10, -e.r*.85, e, true);
-  }
-  g.restore();
-  if (stun){
-    for (let i = 0; i < 3; i++){
-      const a = performance.now()/200 + i*2.1;
-      g.fillStyle = COL.parry; g.beginPath(); g.arc(e.x + Math.cos(a)*e.r*.8, e.y - e.r - 14 + Math.sin(a)*5, 5, 0, 7); g.fill();
-    }
-  }
-  if (e.hp < e.max){
-    g.fillStyle = '#000a'; g.fillRect(e.x - 22, e.y + e.r + 8, 44, 5);
-    g.fillStyle = COL.warn; g.fillRect(e.x - 22, e.y + e.r + 8, 44*e.hp/e.max, 5);
-  }
-}
-function eyes(x1, y1, x2, y2, e, glow){
-  g.fillStyle = e.s === 'wind' ? COL.warn : glow ? '#ffb347' : '#111';
-  if (e.s === 'stun'){ g.font = 'bold 12px sans-serif'; g.fillText('×', x1, y1+4); g.fillText('×', x2, y2+4); return; }
-  g.beginPath(); g.arc(x1, y1, 3.5, 0, 7); g.arc(x2, y2, 3.5, 0, 7); g.fill();
-}
-
-function drawPlayer(){
-  g.save(); g.translate(P.x, P.y);
-  g.fillStyle = '#0006'; g.beginPath(); g.ellipse(0, 12, 16, 7, 0, 0, 7); g.fill();
-  if (P.inv > 0 && Math.floor(P.inv*30) % 2) g.globalAlpha = .4;
-  g.fillStyle = COL.player; g.beginPath(); g.arc(0, 0, 16, 0, 7); g.fill();
-  g.strokeStyle = '#0a3a4a'; g.lineWidth = 3; g.stroke();
-  g.rotate(P.face);
-  g.fillStyle = '#0a3a4a'; g.beginPath(); g.arc(8, -5, 2.5, 0, 7); g.arc(8, 5, 2.5, 0, 7); g.fill();
-  const sw = P.swing > 0 ? (1 - P.swing/.18) * 2.2 - 1.1 : 0;
-  g.save(); g.rotate(sw); g.strokeStyle = '#e8f6ff'; g.lineWidth = 5; g.lineCap = 'round';
-  g.beginPath(); g.moveTo(14, 0); g.lineTo(44, 0); g.stroke();
-  g.strokeStyle = '#8a6a3a'; g.beginPath(); g.moveTo(12, -6); g.lineTo(12, 6); g.stroke(); g.restore();
-  if (P.par > 0){
-    g.globalAlpha = .5 + .5*P.par/.22; g.strokeStyle = COL.parry; g.lineWidth = 6; g.shadowColor = COL.parry; g.shadowBlur = 16;
-    g.beginPath(); g.arc(0, 0, 32, -1.2, 1.2); g.stroke();
-  }
-  g.restore();
-}
-
-function drawHUD(){
-  g.textAlign = 'left'; g.font = `bold 15px ${FONT}`;
-  g.fillStyle = '#000a'; g.fillRect(20, 20, 240, 18);
-  g.fillStyle = P.hp > 35 ? '#5ee08a' : COL.warn; g.fillRect(20, 20, 240*P.hp/100, 18);
-  g.strokeStyle = '#fff6'; g.lineWidth = 2; g.strokeRect(20, 20, 240, 18);
-  g.fillStyle = '#fff'; g.fillText(`WAVE ${wave}   SCORE ${score}`, 20, 58);
-  // パリィのクールタイム
-  g.fillStyle = '#000a'; g.fillRect(20, 68, 120, 6);
-  g.fillStyle = COL.parry; g.fillRect(20, 68, 120*(P.parCd > 0 ? 1 - P.parCd/.6 : 1), 6);
-  g.fillStyle = '#fffa'; g.font = `12px ${FONT}`; g.fillText('PARRY', 148, 75);
-
-  if (state !== 'play'){
-    g.fillStyle = camOn ? '#0007' : '#000b'; g.fillRect(0,0,W,H); g.textAlign = 'center'; g.fillStyle = '#fff';
-    if (state === 'title'){
-      g.font = `bold 64px ${FONT}`; g.fillStyle = COL.parry; g.fillText('PARRY ARENA', W/2, H/2 - 60);
-      g.font = `20px ${FONT}`; g.fillStyle = '#fff';
-      g.fillText('左クリック: 攻撃　　右クリック: パリィ　　WASD: 移動', W/2, H/2);
-      g.fillText('敵の「!」が光った瞬間に右クリックでパリィ → スタン → 大ダメージ', W/2, H/2 + 34);
-      g.fillText('魔法の弾はパリィで跳ね返せる', W/2, H/2 + 68);
-      g.fillStyle = COL.player; g.fillText('クリックでスタート（Webカメラを使います）', W/2, H/2 + 124);
-      if (camMsg){ g.fillStyle = COL.warn; g.fillText(camMsg, W/2, H/2 + 160); }
-    } else {
-      g.font = `bold 56px ${FONT}`; g.fillStyle = COL.warn; g.fillText('GAME OVER', W/2, H/2 - 30);
-      g.font = `22px ${FONT}`; g.fillStyle = '#fff'; g.fillText(`WAVE ${wave}  /  SCORE ${score}`, W/2, H/2 + 14);
-      g.fillStyle = COL.player; g.fillText('クリックでリトライ', W/2, H/2 + 64);
-    }
-  }
-}
-
-// ===== Webカメラ（AR背景）=====
-const vid = document.getElementById('v');
-let camOn = false, camMsg = '';
-async function startCam(){
-  if (camOn) return;
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-    camMsg = 'カメラを使えません（HTTPS か localhost で開いてください）'; return;
-  }
-  try {
-    const st = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment', width:{ideal:1280}, height:{ideal:720} }, audio:false });
-    const fm = st.getVideoTracks()[0].getSettings().facingMode;
-    vid.style.transform = fm === 'environment' ? '' : 'scaleX(-1)';   // インカメラは鏡像
-    vid.srcObject = st; await vid.play();
-    vid.style.display = 'block'; camOn = true; camMsg = '';
-  } catch (err){ camMsg = 'カメラを起動できませんでした（許可を確認）。通常背景で遊べます'; }
 }
 
 // ===== 入力 =====
-addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
-addEventListener('keyup',   e => keys[e.key.toLowerCase()] = false);
-addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+addEventListener('keydown', e => { const k = e.key.toLowerCase(); keys[k] = true; if (k === 'v') vr = !vr; });
+addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+function setMouse(e){
+  const w = vr ? W/2 : W; mouse.nx = ((e.clientX % w)/w)*2 - 1; mouse.ny = -((e.clientY/H)*2 - 1);
+}
+addEventListener('mousemove', setMouse);
 addEventListener('mousedown', e => {
-  mouse.x = e.clientX; mouse.y = e.clientY;
+  setMouse(e);
   if (state !== 'play'){
-    if (hitstop > 0 || (state === 'over' && P.hp > 0)) return;
-    startCam(); reset(); state = 'play'; return;
+    if (state !== 'title' && performance.now() - endAt < 600) return;
+    startCam(); reset(); state = 'play'; setMsg(null); return;
   }
   if (e.button === 0) attack(); else if (e.button === 2) parry();
 });
 
-// ===== ループ =====
 let last = performance.now();
 function loop(now){
   const dt = Math.min(.033, (now - last)/1000); last = now;
-  update(dt); draw(); requestAnimationFrame(loop);
+  update(dt); render(); requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 </script>
