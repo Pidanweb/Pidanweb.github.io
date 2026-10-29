@@ -13,7 +13,9 @@
   #camPanel select{width:100%;margin:4px 0 8px;padding:4px;font:inherit}
   #camPanel div{margin-top:6px}
   #camStat{font-size:12px;color:#ffd35a;word-break:break-all}
-  #v{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
+  #v,#fv{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
+  #faceBadge{margin-top:6px;font-size:12px;color:#7ae7ff;text-shadow:0 0 4px #000}
+  #camPanel input[type=range]{width:100%}
 </style>
 </head>
 <body>
@@ -23,12 +25,20 @@
     <label><input type="checkbox" id="mir"> 左右反転</label>
     <div><button id="camApply">このカメラを使う</button> <button id="camRefresh">一覧を更新</button></div>
     <div id="camStat">USBカメラは接続後「一覧を更新」</div>
-  </div></div>
+    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <label><input type="checkbox" id="faceOn" checked> 顔の動きで視点・照準を操作</label>
+    <label>顔認識に使うカメラ<select id="faceSel"><option value="">自動（インカメラ）</option></select></label>
+    <label>感度 <input type="range" id="faceGain" min="0.5" max="3" step="0.1" value="1.5"></label>
+    <div><button id="faceCal">顔の中心をリセット (C)</button></div>
+    <div id="faceStat" style="font-size:12px;color:#ffd35a"></div>
+  </div>
+  <div id="faceBadge"></div></div>
 <video id="v" autoplay playsinline muted></video>
+<video id="fv" autoplay playsinline muted></video>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 // ===== GIANT SLIME RAID =====
-// 左クリック: 斬る / 右クリック: パリィ / A,D: 左右に回避 / V: VR(左右分割)モード切替
+// 左クリック: 斬る / 右クリック: パリィ / A,D: 左右に回避 / V: VR(左右分割)モード切替 / 視点・照準: 顔の動き(マウスでも可) / C: 顔の中心リセット
 const FONT = '"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif';
 const vid = document.getElementById('v');
 const renderer = new THREE.WebGLRenderer({ antialias:true });
@@ -171,6 +181,16 @@ const nameS = mkSprite('GIANT SLIME', '#ffffff', .4); nameS.position.set(0, 1.85
 hud.visible = false;
 const msg = new THREE.Sprite(new THREE.SpriteMaterial({ transparent:true, depthTest:false }));
 msg.position.z = -4; msg.renderOrder = 30; camera.add(msg);
+// ===== 照準（顔操作時に表示。ray.setFromCamera と同じNDC位置に置く）=====
+const reticle = new THREE.Sprite(new THREE.SpriteMaterial({ transparent:true, depthTest:false, map:canvasTex(128, 128, (x, w, h) => {
+  const segs = [[64,14,64,34],[64,94,64,114],[14,64,34,64],[94,64,114,64]];
+  for (const [col, lw] of [['#000a', 10], ['#7ae7ff', 5]]){
+    x.strokeStyle = col; x.lineWidth = lw; x.beginPath(); x.arc(64, 64, 30, 0, 7); x.stroke();
+    x.beginPath(); for (const [a, b, c, d] of segs){ x.moveTo(a, b); x.lineTo(c, d); } x.stroke();
+  }
+  x.fillStyle = '#7ae7ff'; x.beginPath(); x.arc(64, 64, 4, 0, 7); x.fill();
+}) }));
+reticle.renderOrder = 35; reticle.visible = false; camera.add(reticle);
 function setMsg(L){
   if (!L){ msg.visible = false; return; }
   const t = canvasTex(1024, 512, (x, w, h) => {
@@ -185,13 +205,16 @@ function setMsg(L){
 
 // ===== Webカメラ =====
 let camTex = null, camMirror = true, camStream = null;
-const $ = id => document.getElementById(id), camSel = $('camSel'), camStat = $('camStat');
+const $ = id => document.getElementById(id), camSel = $('camSel'), camStat = $('camStat'), faceSel = $('faceSel');
 async function listCams(){
   try {
     const ds = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'), cur = camSel.value;
     camSel.innerHTML = '';
     ds.forEach((d, i) => { const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || ('カメラ ' + (i+1)); camSel.appendChild(o); });
     if (cur) camSel.value = cur;
+    const fcur = faceSel.value; faceSel.innerHTML = '<option value="">自動（インカメラ）</option>';
+    ds.forEach((d, i) => { const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || ('カメラ ' + (i+1)); faceSel.appendChild(o); });
+    if (fcur) faceSel.value = fcur;
     if (!camStream) camStat.textContent = ds.length ? ds.length + '台検出（名前は一度カメラを許可すると表示されます）' : 'カメラが見つかりません';
   } catch (e){ camStat.textContent = '一覧を取得できません'; }
 }
@@ -224,6 +247,83 @@ function cover(a){
   const c0 = (1 - rx)/2; camTex.repeat.set(camMirror ? -rx : rx, ry); camTex.offset.set(camMirror ? c0 + rx : c0, (1 - ry)/2);
 }
 
+// ===== 顔トラッキング（MediaPipe Face Landmarker）=====
+// 鼻先の位置を「構えた中心」からの差分にして、マウス座標(-1〜1)の代わりに使う
+const fv = $('fv');
+const face = { on:true, lm:null, loading:false, stream:null, src:null, seen:false, x:0, y:0, cx:null, cy:null, sx:0, sy:0,
+               sumx:0, sumy:0, cn:0, lastT:-1, gain:1.5, badge:'' };
+const FACE_GX = 6, FACE_GY = 9, FACE_CAL = 20, FACE_DEAD = .012;
+const faceActive = () => face.on && !!face.lm && !!face.src && face.cx !== null;
+function setBadge(t){ if (face.badge === t) return; face.badge = t; $('faceBadge').textContent = t; $('faceStat').textContent = t; }
+function faceRecenter(){ face.cx = face.cy = null; face.sumx = face.sumy = face.cn = 0; }
+async function loadFaceModel(){
+  if (face.lm || face.loading) return;
+  face.loading = true; setBadge('👤 顔認識モデル読み込み中…');
+  try {
+    const V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+    const mp = await import(V + '/vision_bundle.mjs');
+    const fs = await mp.FilesetResolver.forVisionTasks(V + '/wasm');
+    const opt = d => ({ baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task', delegate:d },
+                        runningMode:'VIDEO', numFaces:1 });
+    try { face.lm = await mp.FaceLandmarker.createFromOptions(fs, opt('GPU')); }
+    catch (e){ face.lm = await mp.FaceLandmarker.createFromOptions(fs, opt('CPU')); }
+    setBadge('👤 顔を探しています…');
+  } catch (e){ console.error(e); setBadge('👤 顔認識を読み込めません（ネット接続を確認）'); }
+  face.loading = false;
+}
+async function openFaceCam(){
+  if (face.stream) face.stream.getTracks().forEach(t => t.stop());
+  face.stream = null; face.src = null; faceRecenter();
+  const id = faceSel.value, sz = { width:{ ideal:640 }, height:{ ideal:480 } };
+  const tries = id ? [{ video:{ deviceId:{ exact:id }, ...sz }, audio:false }]
+                   : [{ video:{ facingMode:'user', ...sz }, audio:false }, { video:true, audio:false }];
+  for (const c of tries){ try { face.stream = await navigator.mediaDevices.getUserMedia(c); break; } catch (e){} }
+  if (face.stream){
+    fv.srcObject = face.stream; try { await fv.play(); } catch (e){}
+    face.src = fv;
+  } else if (camStream){ face.src = vid; setBadge('👤 顔用カメラを開けず、背景カメラで認識します'); }
+  else setBadge('👤 顔認識用カメラを開けません');
+  listCams();
+}
+async function startFace(){
+  if (!face.on || !navigator.mediaDevices) return;
+  loadFaceModel(); await openFaceCam();
+}
+function faceStep(now){
+  const v = face.src;
+  if (!face.on || !face.lm || !v || v.readyState < 2 || !v.videoWidth || v.currentTime === face.lastT) return;
+  face.lastT = v.currentTime;
+  let r; try { r = face.lm.detectForVideo(v, now); } catch (e){ return; }
+  const p = r.faceLandmarks && r.faceLandmarks[0];
+  if (!p){ face.seen = false; setBadge('👤 顔が見つかりません'); return; }
+  face.seen = true; face.x = p[1].x; face.y = p[1].y;           // 1 = 鼻先
+  if (face.cx === null){
+    face.sumx += face.x; face.sumy += face.y;
+    if (++face.cn >= FACE_CAL){ face.cx = face.sumx/face.cn; face.cy = face.sumy/face.cn; }
+    else setBadge('👤 顔を画面の中心に構えてください…');
+  }
+  if (face.cx !== null) setBadge('👤 顔認識 OK');
+}
+function faceUpdate(dt){
+  if (!faceActive()) return;
+  if (face.seen){
+    const dx = face.x - face.cx, dy = face.y - face.cy, f = d => Math.abs(d) < FACE_DEAD ? 0 : d - Math.sign(d)*FACE_DEAD;
+    face.tx = Math.max(-1, Math.min(1, -f(dx)*FACE_GX*face.gain));   // カメラ映像は鏡像なので左右を反転
+    face.ty = Math.max(-1, Math.min(1, -f(dy)*FACE_GY*face.gain));
+  }
+  const k = 1 - Math.exp(-dt*16);
+  face.sx += ((face.tx || 0) - face.sx)*k; face.sy += ((face.ty || 0) - face.sy)*k;
+  mouse.nx = face.sx; mouse.ny = face.sy;
+}
+$('faceOn').onchange = e => {
+  face.on = e.target.checked;
+  if (face.on){ if (state !== 'title' || camStream) startFace(); }
+  else { if (face.stream) face.stream.getTracks().forEach(t => t.stop()); face.stream = face.src = null; faceRecenter(); setBadge(''); }
+};
+$('faceGain').oninput = e => face.gain = +e.target.value;
+faceSel.onchange = () => { if (face.on) openFaceCam(); };
+$('faceCal').onclick = faceRecenter;
+
 // ===== ゲーム状態 =====
 const keys = {}, mouse = { nx:0, ny:0 }, ray = new THREE.Raycaster(), tmp = new THREE.Vector3();
 const P = { armed:false, x:0, hp:100, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, dir:1 };
@@ -236,7 +336,7 @@ function reset(){
 }
 function titleMsg(){
   setMsg([['GIANT SLIME RAID', '#ffd35a', 72], ['左クリック: 斬る　右クリック: パリィ　A / D: 回避', '#fff', 34],
-          ['赤く光っている間に右クリック → 突進を弾き返してスタン → 大ダメージ', '#fff', 30], ['V: VR(左右分割)モード', '#7ae7ff', 28],
+          ['赤く光っている間に右クリック → 突進を弾き返してスタン → 大ダメージ', '#fff', 30], ['顔を動かして狙う　C: 顔の中心をリセット　V: VRモード', '#7ae7ff', 28],
           ['クリックでスタート（Webカメラを使います）', '#7ae7ff', 34]]);
 }
 titleMsg();
@@ -360,7 +460,11 @@ function update(dt){
     if (P.par > 0) P.par -= dt;
     bossAI(dt);
   } else if (state === 'title'){ B.z += (HOVER - B.z)*Math.min(1, dt*2); B.s = 'enter'; }
+  faceUpdate(dt);
   bossAnim(dt); updSword(dt); updFX(dt);
+  { const fa = faceActive(); reticle.visible = fa && state === 'play';
+    if (fa){ const asp = vr ? W/2/H : W/H, hh = Math.tan((70 - fovp)*Math.PI/360)*3;
+      reticle.position.set(mouse.nx*hh*asp, mouse.ny*hh, -3); reticle.scale.setScalar(.4); } }
   camera.rotation.y = -mouse.nx*.2; camera.rotation.x = mouse.ny*.12;
   camera.position.set(P.x + (Math.random()-.5)*shake, EYE + (Math.random()-.5)*shake*.6, 0);
   bossBar.scale.x = Math.max(.0001, B.hp/B.max); pBar.scale.x = Math.max(.0001, P.hp/100);
@@ -381,9 +485,10 @@ function render(){
 }
 
 // ===== 入力 =====
-addEventListener('keydown', e => { const k = e.key.toLowerCase(); keys[k] = true; if (k === 'v') vr = !vr; });
+addEventListener('keydown', e => { const k = e.key.toLowerCase(); keys[k] = true; if (k === 'v') vr = !vr; if (k === 'c') faceRecenter(); });
 addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 function setMouse(e){
+  if (faceActive()) return;   // 顔操作中はマウスで視点を動かさない
   const w = vr ? W/2 : W; mouse.nx = ((e.clientX % w)/w)*2 - 1; mouse.ny = -((e.clientY/H)*2 - 1);
 }
 addEventListener('mousemove', setMouse);
@@ -391,7 +496,7 @@ addEventListener('mousedown', e => {
   setMouse(e);
   if (state !== 'play'){
     if (state !== 'title' && performance.now() - endAt < 600) return;
-    if (!camStream) openCam(camSel.value || null);
+    (async () => { if (!camStream) await openCam(camSel.value || null); if (face.on && !face.stream) startFace(); else faceRecenter(); })();
     reset(); state = 'play'; setMsg(null); return;
   }
   if (e.button === 0) attack(); else if (e.button === 2) parry();
@@ -400,7 +505,7 @@ addEventListener('mousedown', e => {
 let last = performance.now();
 function loop(now){
   const dt = Math.min(.033, (now - last)/1000); last = now;
-  update(dt); render(); requestAnimationFrame(loop);
+  faceStep(now); update(dt); render(); requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 </script>
