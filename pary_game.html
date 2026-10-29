@@ -7,10 +7,23 @@
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#0a1110}
   canvas{display:block;cursor:crosshair;touch-action:none}
+  #ui{position:fixed;top:10px;right:10px;z-index:5;font:14px sans-serif;color:#fff;text-align:right}
+  #ui button{background:#0d2a30cc;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer}
+  #camPanel{margin-top:6px;padding:10px;background:#000c;border:1px solid #7ae7ff55;border-radius:8px;width:280px;text-align:left}
+  #camPanel select{width:100%;margin:4px 0 8px;padding:4px;font:inherit}
+  #camPanel div{margin-top:6px}
+  #camStat{font-size:12px;color:#ffd35a;word-break:break-all}
   #v{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
 </style>
 </head>
 <body>
+<div id="ui"><button id="camBtn">📷 カメラ設定</button>
+  <div id="camPanel" hidden>
+    <label>使うカメラ<select id="camSel"></select></label>
+    <label><input type="checkbox" id="mir"> 左右反転</label>
+    <div><button id="camApply">このカメラを使う</button> <button id="camRefresh">一覧を更新</button></div>
+    <div id="camStat">USBカメラは接続後「一覧を更新」</div>
+  </div></div>
 <video id="v" autoplay playsinline muted></video>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -171,16 +184,40 @@ function setMsg(L){
 }
 
 // ===== Webカメラ =====
-let camTex = null, camMirror = false;
-async function startCam(){
-  if (camTex) return;
+let camTex = null, camMirror = true, camStream = null;
+const $ = id => document.getElementById(id), camSel = $('camSel'), camStat = $('camStat');
+async function listCams(){
   try {
-    const st = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment', width:{ ideal:1280 }, height:{ ideal:720 } }, audio:false });
-    camMirror = st.getVideoTracks()[0].getSettings().facingMode !== 'environment';
-    vid.srcObject = st; await vid.play();
-    camTex = new THREE.VideoTexture(vid); camTex.minFilter = THREE.LinearFilter; scene.background = camTex;
-  } catch (e){ popCam('カメラ起動失敗', '#ff4d5e', .6, 3); }
+    const ds = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'), cur = camSel.value;
+    camSel.innerHTML = '';
+    ds.forEach((d, i) => { const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || ('カメラ ' + (i+1)); camSel.appendChild(o); });
+    if (cur) camSel.value = cur;
+    if (!camStream) camStat.textContent = ds.length ? ds.length + '台検出（名前は一度カメラを許可すると表示されます）' : 'カメラが見つかりません';
+  } catch (e){ camStat.textContent = '一覧を取得できません'; }
 }
+async function openCam(id){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ camStat.textContent = 'HTTPS か localhost で開いてください'; return false; }
+  if (camStream) camStream.getTracks().forEach(t => t.stop());
+  camStream = null;
+  const tries = id ? [{ video:{ deviceId:{ exact:id } }, audio:false }] : [{ video:{ facingMode:'environment' }, audio:false }, { video:true, audio:false }];
+  let err;
+  for (const c of tries){ try { camStream = await navigator.mediaDevices.getUserMedia(c); break; } catch (e){ err = e; } }
+  if (!camStream){ camStat.textContent = '起動失敗: ' + (err && err.name) + '（他のアプリが使用中、または許可なし）'; popCam('カメラ起動失敗', '#ff4d5e', .6, 3); return false; }
+  const tr = camStream.getVideoTracks()[0], st = tr.getSettings();
+  $('mir').checked = camMirror = st.facingMode !== 'environment';
+  vid.srcObject = camStream;
+  try { await vid.play(); } catch (e){}
+  if (!camTex){ camTex = new THREE.VideoTexture(vid); camTex.minFilter = THREE.LinearFilter; scene.background = camTex; }
+  camStat.textContent = '使用中: ' + (tr.label || 'カメラ');
+  await listCams(); if (st.deviceId) camSel.value = st.deviceId;
+  return true;
+}
+$('camBtn').onclick = () => { const p = $('camPanel'); p.hidden = !p.hidden; if (!p.hidden) listCams(); };
+$('camApply').onclick = () => openCam(camSel.value || null);
+$('camRefresh').onclick = () => camStream ? listCams() : openCam(null);
+$('mir').onchange = e => camMirror = e.target.checked;
+for (const ev of ['mousedown', 'keydown', 'keyup']) $('ui').addEventListener(ev, e => e.stopPropagation());
+if (navigator.mediaDevices) navigator.mediaDevices.addEventListener('devicechange', listCams);
 function cover(a){
   if (!camTex || !vid.videoWidth) return;
   const va = vid.videoWidth/vid.videoHeight; let rx = 1, ry = 1; if (a > va) ry = va/a; else rx = a/va;
@@ -189,17 +226,17 @@ function cover(a){
 
 // ===== ゲーム状態 =====
 const keys = {}, mouse = { nx:0, ny:0 }, ray = new THREE.Raycaster(), tmp = new THREE.Vector3();
-const P = { x:0, hp:100, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, dir:1 };
+const P = { armed:false, x:0, hp:100, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, dir:1 };
 const B = { x:0, z:-16, vz:0, s:'enter', t:1, wt:1, hp:800, max:800, hit:false, weak:0, flash:0, combo:0, stun:false, phase:1, wob:0, time:0 };
 let state = 'title', hitstop = 0, shake = 0, fovp = 0, flash = 0, vr = false, endAt = 0;
 function reset(){
-  Object.assign(P, { x:0, hp:100, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0 });
+  Object.assign(P, { armed:false, x:0, hp:100, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0 });
   Object.assign(B, { x:0, z:-16, vz:0, s:'enter', t:1, hp:800, hit:false, weak:0, combo:0, stun:false, phase:1 });
   bossG.visible = true;
 }
 function titleMsg(){
   setMsg([['GIANT SLIME RAID', '#ffd35a', 72], ['左クリック: 斬る　右クリック: パリィ　A / D: 回避', '#fff', 34],
-          ['突進が迫る直前にパリィ → 弾き飛ばしてスタン → 大ダメージ', '#fff', 30], ['V: VR(左右分割)モード', '#7ae7ff', 28],
+          ['赤く光っている間に右クリック → 突進を弾き返してスタン → 大ダメージ', '#fff', 30], ['V: VR(左右分割)モード', '#7ae7ff', 28],
           ['クリックでスタート（Webカメラを使います）', '#7ae7ff', 34]]);
 }
 titleMsg();
@@ -216,7 +253,7 @@ function hurtBoss(d, at, big){
   }
 }
 function attack(){
-  if (P.swingCd > 0 || P.par > 0) return;
+  if (P.swingCd > 0 || P.par > 0 || P.armed) return;
   P.swingCd = .4; P.swing = .22; P.dir *= -1;
   arc.position.x = mouse.nx*1.5; arc.position.y = mouse.ny*1.0;
   ray.setFromCamera(new THREE.Vector2(mouse.nx, mouse.ny), camera);
@@ -226,18 +263,19 @@ function attack(){
     hurtBoss(stunned ? 45 : B.weak > 0 ? 27 : 18, hit, stunned);
   }
 }
-function parry(){ if (P.parCd > 0 || P.par > 0) return; P.par = .3; P.parAge = 0; P.parCd = .7; }
+// 赤く光っている間(予兆〜突進)に押せば、突進が当たる瞬間までパリィが有効（armed）
+function parry(){ if (P.parCd > 0 || P.par > 0 || P.armed) return; P.par = .3; P.parAge = 0; P.parCd = .7; P.armed = B.s === 'wind' || B.s === 'charge'; }
 function parried(){
-  const perfect = P.parAge < .12, at = camera.localToWorld(new THREE.Vector3(0, 0, -2.4));
+  const perfect = P.parAge < .45, at = camera.localToWorld(new THREE.Vector3(0, 0, -2.4));
   hitstop = perfect ? .22 : .14; shake = perfect ? .5 : .3; fovp = perfect ? 14 : 8; flash = perfect ? .8 : .4; flashM.material.color.set(0xfff2b0);
   ring(at, perfect ? 6 : 4, 0xffd35a, .5); ring(at, 2.5, 0xffffff, .3); burst(at, 0xffd35a, perfect ? 90 : 55, 9);
   popCam(perfect ? 'PERFECT!' : 'PARRY!', '#ffd35a', perfect ? 1.3 : 1, 1);
-  P.inv = .5; P.par = 0; P.parCd = .15;
+  P.inv = .5; P.par = 0; P.armed = false; P.parCd = .15;
   B.s = 'knock'; B.stun = true; B.t = perfect ? 3 : 2.2; B.vz = perfect ? -24 : -17;
   hurtBoss(perfect ? 50 : 30, bossG.position.clone().add(new THREE.Vector3(0, 1, R)), true);
 }
 function hurtPlayer(){
-  P.hp -= [20, 25, 30][B.phase-1]; P.inv = 1.2; shake = .8; flash = .6; flashM.material.color.set(0xff2a3a);
+  P.hp -= [20, 25, 30][B.phase-1]; P.inv = 1.2; P.armed = false; shake = .8; flash = .6; flashM.material.color.set(0xff2a3a);
   burst(camera.localToWorld(new THREE.Vector3(0, 0, -2)), 0xff4d5e, 60, 8);
   B.s = 'knock'; B.stun = false; B.t = 1.2; B.vz = -10;
   if (P.hp <= 0){
@@ -256,7 +294,7 @@ function bossAI(dt){
     if (B.z > HOVER - .25){ B.s = 'idle'; B.t = idleT(); }
   } else if (B.s === 'idle'){
     B.z += (HOVER - B.z)*dt*3; B.x += (Math.sin(B.time*.8)*2.2 + P.x*.4 - B.x)*dt*1.5;
-    if (B.t <= 0){ B.s = 'wind'; B.t = B.wt = [1.1, .9, .7][ph-1]; popup('!', '#ff4d5e', new THREE.Vector3(B.x, 4.6, B.z), 1.2, B.wt); }
+    if (B.t <= 0){ B.s = 'wind'; P.armed = false; B.t = B.wt = [1.1, .9, .7][ph-1]; popup('!', '#ff4d5e', new THREE.Vector3(B.x, 4.6, B.z), 1.2, B.wt); }
   } else if (B.s === 'wind'){
     if (B.t > .3) B.x += (P.x - B.x)*Math.min(1, dt*5);
     if (B.t <= 0){ B.s = 'charge'; B.hit = false; }
@@ -264,10 +302,10 @@ function bossAI(dt){
     B.z += [17, 20, 24][ph-1]*dt;
     if (!B.hit && B.z + R >= -1.3){
       B.hit = true;
-      if (Math.abs(B.x - P.x) < R*.8 + .35 && P.inv <= 0){ P.par > 0 ? parried() : hurtPlayer(); B.combo++; }
+      if (Math.abs(B.x - P.x) < R*.8 + .35 && P.inv <= 0){ (P.par > 0 || P.armed) ? parried() : hurtPlayer(); B.combo++; }
       else if (P.inv <= 0) popCam('回避!', '#7ae7ff', .9, .8);
     }
-    if (B.s === 'charge' && B.z > 3){ B.combo++; B.s = 'enter'; B.z = -16; B.x = (Math.random()-.5)*5; B.weak = 2.5; }
+    if (B.s === 'charge' && B.z > 3){ B.combo++; B.s = 'enter'; B.z = -16; B.x = (Math.random()-.5)*5; B.weak = 2.5; P.armed = false; }
   } else if (B.s === 'knock'){
     B.z += B.vz*dt; B.vz *= Math.pow(.04, dt);
     if (B.stun) B.z += (HOVER - B.z)*dt*.5;
@@ -303,11 +341,11 @@ function updSword(dt){
     rz = P.dir*(1.5 - 3.0*a); rx = -1.15 + .35*Math.sin(t*Math.PI); tx = .5; ty = -1.0; rate = 60;
     const kk = P.swing/.22, base = P.dir > 0 ? .2 : Math.PI + .2;
     arc.material.opacity = kk*.9; arc.rotation.z = base - P.dir*(1 - kk)*.9;
-  } else { arc.material.opacity = 0; if (P.par > 0){ tx = .1; ty = -.8; tz = -1.7; rx = -.2; rz = .1; rate = 40; } }
+  } else { arc.material.opacity = 0; if (P.par > 0 || P.armed){ tx = .1; ty = -.8; tz = -1.7; rx = -.2; rz = .1; rate = 40; } }
   const k = Math.min(1, dt*rate);
   sword.position.x += (tx - sword.position.x)*k; sword.position.y += (ty - sword.position.y)*k; sword.position.z += (tz - sword.position.z)*k;
   sword.rotation.x += (rx - sword.rotation.x)*k; sword.rotation.z += (rz - sword.rotation.z)*k;
-  shield.visible = P.par > 0; if (P.par > 0){ const s = .6 + .5*Math.min(1, P.parAge/.1); shield.scale.setScalar(s); }
+  shield.visible = P.par > 0 || P.armed; if (shield.visible){ const s = .6 + .5*Math.min(1, P.parAge/.1); shield.scale.setScalar(s); }
 }
 
 function update(dt){
@@ -318,7 +356,8 @@ function update(dt){
     const mv = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
     P.x = Math.max(-3.2, Math.min(3.2, P.x + mv*(P.par > 0 ? 3 : 6)*dt));
     P.swing -= dt; P.swingCd -= dt; P.inv -= dt; P.parCd -= dt;
-    if (P.par > 0){ P.par -= dt; P.parAge += dt; }
+    if (P.par > 0 || P.armed) P.parAge += dt;
+    if (P.par > 0) P.par -= dt;
     bossAI(dt);
   } else if (state === 'title'){ B.z += (HOVER - B.z)*Math.min(1, dt*2); B.s = 'enter'; }
   bossAnim(dt); updSword(dt); updFX(dt);
@@ -326,7 +365,7 @@ function update(dt){
   camera.position.set(P.x + (Math.random()-.5)*shake, EYE + (Math.random()-.5)*shake*.6, 0);
   bossBar.scale.x = Math.max(.0001, B.hp/B.max); pBar.scale.x = Math.max(.0001, P.hp/100);
   parBar.scale.x = Math.max(.0001, P.parCd > 0 ? 1 - P.parCd/.7 : 1);
-  hud.visible = state === 'play';
+  hud.visible = state === 'play'; $('ui').style.display = vr ? 'none' : '';
   const asp = vr ? W/2/H : W/H, mw = Math.min(7, 5.3*asp); msg.scale.set(mw, mw/2, 1);
 }
 
@@ -352,7 +391,8 @@ addEventListener('mousedown', e => {
   setMouse(e);
   if (state !== 'play'){
     if (state !== 'title' && performance.now() - endAt < 600) return;
-    startCam(); reset(); state = 'play'; setMsg(null); return;
+    if (!camStream) openCam(camSel.value || null);
+    reset(); state = 'play'; setMsg(null); return;
   }
   if (e.button === 0) attack(); else if (e.button === 2) parry();
 });
