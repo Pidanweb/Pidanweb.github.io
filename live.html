@@ -65,6 +65,8 @@
   <audio id="bgmPlain" controls style="display:none"></audio>
   <div>伴奏音量 <input type="range" id="bgmVol" min="0" max="1" step="0.01" value="0.7"></div>
   <div>マイク音量 <input type="range" id="micVol" min="0" max="2" step="0.01" value="1"></div>
+  <div>🎤 <span id="micInfo">未接続</span> <button id="micBtn" style="padding:3px 8px">マイク接続</button></div>
+  <div style="height:6px;background:#333;border-radius:3px;overflow:hidden;margin-top:3px"><div id="micLvl" style="height:100%;width:0;background:#4f8"></div></div>
   <div><label><input type="checkbox" id="monitor"> マイクを自分で聞く(イヤホン必須)</label></div>
   <div><label><input type="checkbox" id="zoomOn" checked> 近づくとアバターがアップ</label></div>
   <div>寄り感度 <input type="range" id="zoomGain" min="0.5" max="3" step="0.1" value="1.5"> <button id="zoomCal" style="padding:3px 8px">基準位置を今に</button></div>
@@ -385,15 +387,42 @@ async function startVideo(deviceId) {
   camStream = vs; video.srcObject = vs; await video.play(); lastT = -1;
   await refreshCams(vs.getVideoTracks()[0].getSettings().deviceId || '');   // 許可後はカメラ名が取れる
 }
+let micAn = null, micBuf = null;
 async function startMic(deviceId) {
   if (micSrc) { micSrc.disconnect(); micSrc = null; }
   if (micStream) micStream.getTracks().forEach(t => t.stop());
-  const a = { echoCancellation: true, noiseSuppression: false, autoGainControl: false };
-  if (deviceId) a.deviceId = { exact: deviceId };
-  micStream = await navigator.mediaDevices.getUserMedia({ audio: a });
+  micStream = null; micAn = null;
+  const base = { echoCancellation: true, noiseSuppression: false, autoGainControl: false };
+  const gum = c => navigator.mediaDevices.getUserMedia({ audio: c });
+  try { micStream = await gum(deviceId ? { ...base, deviceId: { exact: deviceId } } : base); }
+  catch (e) {
+    if (e.name === 'NotAllowedError' || e.name === 'SecurityError') throw e;   // 許可されていない場合はそのまま失敗
+    micStream = await gum(true);   // 制約が原因の可能性 → 最小条件で再挑戦
+  }
+  const tr = micStream.getAudioTracks()[0];
   micSrc = actx.createMediaStreamSource(micStream); micSrc.connect(micGain);
-  await refreshCams(undefined, micStream.getAudioTracks()[0].getSettings().deviceId || '');
+  micAn = actx.createAnalyser(); micAn.fftSize = 512; micBuf = new Uint8Array(micAn.fftSize); micSrc.connect(micAn);   // レベルメーター用
+  $('micInfo').textContent = tr.label || '接続中';
+  await refreshCams(undefined, tr.getSettings().deviceId || '');
 }
+setInterval(() => {   // マイク入力レベル表示(音が来ていれば緑のバーが動く)
+  if (!micAn) return;
+  micAn.getByteTimeDomainData(micBuf);
+  let m = 0; for (const v of micBuf) m = Math.max(m, Math.abs(v - 128));
+  $('micLvl').style.width = Math.min(100, m / 128 * 150) + '%';
+}, 100);
+async function connectMic() {   // 失敗しても例外を投げず、理由を画面に残す
+  try {
+    if (!actx) initAudio(); await actx.resume();
+    await startMic(micSel.value); return true;
+  } catch (err) {
+    const why = err.name === 'NotAllowedError' ? '許可されていません(ブラウザのマイク許可を確認)'
+      : err.name === 'NotFoundError' ? 'マイクが見つかりません'
+      : err.name === 'NotReadableError' ? '他のアプリが使用中の可能性' : (err.message || err.name);
+    $('micInfo').textContent = '失敗: ' + why; console.warn(err); return false;
+  }
+}
+$('micBtn').onclick = async () => { say((await connectMic()) ? 'マイク接続OK' : 'マイク接続失敗(パネルの🎤表示を確認)'); };
 camSel.onchange = async () => {
   if (!camStream) return;   // 開始前/停止中は選択だけ保持して、開始ボタンで使う
   const want = camSel.value, prev = camStream.getVideoTracks()[0].getSettings().deviceId || '';
@@ -404,7 +433,7 @@ micSel.onchange = async () => {
   if (!micStream) return;
   const want = micSel.value, prev = micStream.getAudioTracks()[0].getSettings().deviceId || '';
   try { await startMic(want); say('マイクを切り替えました'); }
-  catch (err) { say('マイク切替失敗: ' + err.message); try { await startMic(prev); } catch {} }
+  catch (err) { say('マイク切替失敗: ' + (err.message || err.name)); try { await startMic(prev); } catch {} }
 };
 navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshCams());
 refreshCams();
@@ -429,12 +458,12 @@ $('camBtn').onclick = async () => {
   try {
     if (!actx) initAudio();
     await actx.resume();
+    if (!micStream) await connectMic();
     await startVideo(camSel.value);
-    if (!micStream) { try { await startMic(micSel.value); } catch { say('マイクが使えません(カメラのみ)'); } }
     if (!pose) await initMediaPipe();
     tracking = true; $('rec').disabled = false;
     $('camBtn').textContent = '■ カメラ停止'; $('camBtn').disabled = false;
-    say(hand ? modeHint() : modeHint() + ' ※ハンドモデルの読込に失敗(手指なし)');
+    say((hand ? modeHint() : modeHint() + ' ※ハンドモデルの読込に失敗(手指なし)') + (micStream ? '' : ' ※マイク未接続(🎤欄を確認)'));
   } catch (err) { stopCamera(); say('カメラ開始失敗: ' + err.message); $('camBtn').disabled = false; }
 };
 
