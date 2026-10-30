@@ -18,6 +18,12 @@
   #panel audio{width:240px;margin-top:6px}
   #panel div{margin-top:4px}
   #status{margin-left:auto;opacity:.85}
+  select{background:#2b2f3a;color:#fff;border:1px solid #555;border-radius:8px;padding:6px 8px;font-size:13px;max-width:220px}
+  .seg{display:inline-flex;gap:2px}
+  .seg button.act{background:#4a5bd0;border-color:#8fa0ff}
+  #vwrap{position:relative;width:240px}
+  #overlay{position:absolute;left:0;top:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none}
+  #legend{font-size:11px;opacity:.8}
   #dl{display:none;color:#8fd;font-weight:bold}
   #drop{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.7);z-index:9;font-size:24px}
 </style>
@@ -29,17 +35,22 @@
 <div class="bar">
   <label class="btn">① VRM選択<input type="file" id="vrmFile" accept=".vrm"></label>
   <button id="camBtn">② カメラ＆マイク開始</button>
+  <select id="camSel" title="カメラ選択"><option value="">既定のカメラ</option></select>
   <label class="btn">③ 伴奏(音楽)選択<input type="file" id="bgmFile" accept="audio/*"></label>
   <button id="rec" disabled>● 録画開始</button>
   <a id="dl" href="#">⬇ 録画を保存</a>
   <label><input type="checkbox" id="mirror"> 左右反転</label>
+  <span class="seg" title="トラッキング範囲"><button id="modeUpper">上半身</button><button id="modeFull" class="act">全身</button></span>
+  <label><input type="checkbox" id="showBones" checked> カメラ映像にボーン</label>
+  <label><input type="checkbox" id="showAvBones"> アバターのボーン</label>
   <label>背景 <input type="color" id="bgColor" value="#1b1030"></label>
   <label class="btn">背景画像<input type="file" id="bgImg" accept="image/*"></label>
   <span id="status">VRMを読み込んでください</span>
 </div>
 
 <div id="panel">
-  <video id="video" playsinline muted></video>
+  <div id="vwrap"><video id="video" playsinline muted></video><canvas id="overlay"></canvas></div>
+  <div id="legend">ボーンの色: 緑=信頼高 / 黄=中 / 赤=低</div>
   <audio id="bgm" controls></audio>
   <div>伴奏音量 <input type="range" id="bgmVol" min="0" max="1" step="0.01" value="0.7"></div>
   <div>マイク音量 <input type="range" id="micVol" min="0" max="2" step="0.01" value="1"></div>
@@ -71,8 +82,12 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color($('bgColor').value);
 const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
-camera.position.set(0, 0.95, 4.4);   // 全身が入る距離
-camera.lookAt(0, 0.85, 0);
+// フレーミング(全身 / 上半身)
+const FRAME = { full: { pos: [0, 0.95, 4.4], look: [0, 0.85, 0] }, upper: { pos: [0, 1.3, 2.2], look: [0, 1.25, 0] } };
+let mode = 'full';
+const camPos = new THREE.Vector3(...FRAME.full.pos), camLook = new THREE.Vector3(...FRAME.full.look);
+const tgtPos = camPos.clone(), tgtLook = camLook.clone();
+camera.position.copy(camPos); camera.lookAt(camLook);
 scene.add(new THREE.AmbientLight(0xffffff, 1.0));
 const dl = new THREE.DirectionalLight(0xffffff, 2.2); dl.position.set(1, 2, 3); scene.add(dl);
 const stage = new THREE.Mesh(new THREE.CircleGeometry(1.1, 48),
@@ -105,6 +120,7 @@ function loadVRM(url, quiet) {
     VRMUtils.removeUnnecessaryVertices(gltf.scene);
     VRMUtils.rotateVRM0(vrm);
     scene.add(vrm.scene);
+    buildAvatarBones();
     say('VRM読み込み完了。カメラを開始してください');
   }, undefined, err => { if (!quiet) say('VRM読み込み失敗'); console.warn(err); });
 }
@@ -116,6 +132,82 @@ addEventListener('drop', e => {
   e.preventDefault(); $('drop').style.display = 'none';
   const f = e.dataTransfer.files[0]; if (f && /\.vrm$/i.test(f.name)) loadVRM(URL.createObjectURL(f));
 });
+
+/* ---------- モード切替 / ボーン表示 ---------- */
+let showCamBones = true, showAvBones = false, avBones = null;
+const _p = new THREE.Vector3();
+const modeHint = () => mode === 'full'
+  ? 'トラッキング中。全身がカメラに映る位置に立ってください'
+  : 'トラッキング中(上半身モード)。腰から上が映っていればOKです';
+function setMode(m) {
+  mode = m; tgtPos.set(...FRAME[m].pos); tgtLook.set(...FRAME[m].look);
+  $('modeFull').classList.toggle('act', m === 'full'); $('modeUpper').classList.toggle('act', m === 'upper');
+  if (tracking && !(recorder && recorder.state === 'recording')) say(modeHint());
+}
+$('modeFull').onclick = () => setMode('full');
+$('modeUpper').onclick = () => setMode('upper');
+
+// (1) カメラ映像に重ねるトラッキング結果の骨格
+const ov = $('overlay'), octx = ov.getContext('2d');
+const CONN_UP = [[11,12],[11,13],[13,15],[12,14],[14,16],[15,17],[15,19],[15,21],[17,19],[16,18],[16,20],[16,22],[18,20]];
+const CONN_LOW = [[11,23],[12,24],[23,24],[23,25],[25,27],[27,29],[29,31],[27,31],[24,26],[26,28],[28,30],[30,32],[28,32]];
+const visCol = v => v > 0.7 ? '#33ff88' : v > 0.4 ? '#ffdd33' : '#ff5555';
+function drawOverlay() {
+  const w = $('video').videoWidth, h = $('video').videoHeight; if (!w) return;
+  if (ov.width !== w || ov.height !== h) { ov.width = w; ov.height = h; }
+  octx.clearRect(0, 0, w, h);
+  const P = poseRes?.landmarks?.[0];
+  if (!showCamBones || !P) return;
+  const conns = mode === 'full' ? CONN_UP.concat(CONN_LOW) : CONN_UP;   // 上半身モードでは下半身は描かない
+  const lw = Math.max(2, w / 150);
+  octx.lineWidth = lw; octx.lineCap = 'round';
+  for (const [a, b] of conns) {
+    octx.strokeStyle = visCol(Math.min(P[a].visibility ?? 0, P[b].visibility ?? 0));
+    octx.beginPath(); octx.moveTo(P[a].x * w, P[a].y * h); octx.lineTo(P[b].x * w, P[b].y * h); octx.stroke();
+  }
+  const ids = new Set(conns.flat()); ids.add(0);
+  for (const i of ids) {
+    octx.fillStyle = visCol(P[i].visibility ?? 0);
+    octx.beginPath(); octx.arc(P[i].x * w, P[i].y * h, lw * 1.4, 0, Math.PI * 2); octx.fill();
+  }
+}
+$('showBones').onchange = e => { showCamBones = e.target.checked; if (!showCamBones) octx.clearRect(0, 0, ov.width, ov.height); };
+
+// (2) 3D画面上のアバター側ボーン(録画には映らない)
+$('showAvBones').onchange = e => showAvBones = e.target.checked;
+function buildAvatarBones() {
+  if (avBones) { scene.remove(avBones.group); avBones.group.traverse(o => o.geometry?.dispose()); avBones = null; }
+  const g = n => n && vrm.humanoid.getNormalizedBoneNode(n);
+  const segs = [], link = (a, b) => { if (g(a) && g(b)) segs.push([g(a), g(b)]); };
+  const chain = ['hips', 'spine', 'chest', 'upperChest', 'neck', 'head'].filter(g);
+  chain.slice(1).forEach((n, i) => link(chain[i], n));
+  const top = ['upperChest', 'chest', 'spine'].find(g);
+  for (const s of ['left', 'right']) {
+    const arm = [s + 'Shoulder', s + 'UpperArm', s + 'LowerArm', s + 'Hand'].filter(g);
+    link(top, arm[0]); arm.slice(1).forEach((n, i) => link(arm[i], n));
+    const leg = [s + 'UpperLeg', s + 'LowerLeg', s + 'Foot', s + 'Toes'].filter(g);
+    link('hips', leg[0]); leg.slice(1).forEach((n, i) => link(leg[i], n));
+  }
+  const pos = new Float32Array(segs.length * 6);
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const line = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x00ff99, depthTest: false }));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffee33, size: 0.025, depthTest: false }));
+  line.renderOrder = pts.renderOrder = 999; line.frustumCulled = pts.frustumCulled = false;
+  const group = new THREE.Group(); group.add(line, pts); scene.add(group);
+  avBones = { group, segs, pos, geo };
+}
+function updateAvatarBones() {
+  if (!avBones) return;
+  const rec = recorder && recorder.state === 'recording';
+  avBones.group.visible = showAvBones && !rec;   // 録画中は非表示
+  if (!avBones.group.visible) return;
+  vrm.scene.updateMatrixWorld(true);
+  avBones.segs.forEach(([a, b], i) => {
+    a.getWorldPosition(_p); _p.toArray(avBones.pos, i * 6);
+    b.getWorldPosition(_p); _p.toArray(avBones.pos, i * 6 + 3);
+  });
+  avBones.geo.attributes.position.needsUpdate = true;
+}
 
 /* ---------- モーションキャプチャ ---------- */
 const video = $('video');
@@ -153,20 +245,47 @@ $('micVol').oninput = e => micGain && (micGain.gain.value = +e.target.value);
 $('monitor').onchange = e => monGain && (monGain.gain.value = e.target.checked ? 1 : 0);
 $('bgm').addEventListener('play', () => actx && actx.resume());
 
+const camSel = $('camSel');
+let camStream = null;
+async function refreshCams(sel) {
+  try {
+    const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput' && d.deviceId);
+    const keep = sel ?? camSel.value;
+    camSel.replaceChildren(new Option('既定のカメラ', ''));
+    devs.forEach((d, i) => camSel.add(new Option(d.label || 'カメラ ' + (i + 1), d.deviceId)));
+    camSel.value = devs.some(d => d.deviceId === keep) ? keep : '';
+  } catch (e) { console.warn(e); }
+}
+async function startVideo(deviceId) {
+  if (camStream) camStream.getTracks().forEach(t => t.stop());   // 先に止める(同時に開けないカメラ対策)
+  const v = { width: 640, height: 480 };
+  if (deviceId) v.deviceId = { exact: deviceId }; else v.facingMode = 'user';
+  const vs = await navigator.mediaDevices.getUserMedia({ video: v, audio: false });
+  camStream = vs; video.srcObject = vs; await video.play(); lastT = -1;
+  await refreshCams(vs.getVideoTracks()[0].getSettings().deviceId || '');   // 許可後はカメラ名が取れる
+}
+camSel.onchange = async () => {
+  if (!camStream) return;   // 開始前は選択だけ保持して、開始ボタンで使う
+  const want = camSel.value, prev = camStream.getVideoTracks()[0].getSettings().deviceId || '';
+  try { await startVideo(want); say('カメラを切り替えました'); }
+  catch (err) { say('カメラ切替失敗: ' + err.message); try { await startVideo(prev); } catch {} }
+};
+navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshCams());
+refreshCams();
+
 $('camBtn').onclick = async () => {
   $('camBtn').disabled = true;
   try {
     if (!actx) initAudio();
     await actx.resume();
-    const vs = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' }, audio: false });
-    video.srcObject = vs; await video.play();
+    await startVideo(camSel.value);
     try {
       const ms = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false } });
       actx.createMediaStreamSource(ms).connect(micGain);
     } catch { say('マイクが使えません(カメラのみ)'); }
     await initMediaPipe();
     tracking = true; $('rec').disabled = false;
-    say('トラッキング中。全身がカメラに映る位置に立ってください');
+    say(modeHint());
   } catch (err) { say('カメラ開始失敗: ' + err.message); $('camBtn').disabled = false; }
 };
 
@@ -193,28 +312,41 @@ function setRot(name, q, k = 0.5) {
 }
 
 function applyPose() {
+  const I = () => new THREE.Quaternion();
   const armDown = (side) => {  // 未検出時は腕を下ろす
     const s = side === 'left' ? 1 : -1, rest = side === 'left' ? X : NX;
     const d = new THREE.Vector3(s * 0.18, -1, 0).normalize();
     setDir(side + 'UpperArm', rest, d, 0.15); setDir(side + 'LowerArm', rest, d, 0.15);
   };
-  if (!LM || !visOK(0.5, 11, 12, 23, 24)) {
-    setRot('hips', new THREE.Quaternion(), 0.1); setRot('spine', new THREE.Quaternion(), 0.1);
-    armDown('left'); armDown('right');
-    for (const s of ['left', 'right']) { setRot(s + 'UpperLeg', new THREE.Quaternion(), .1); setRot(s + 'LowerLeg', new THREE.Quaternion(), .1); }
+  const resetLegs = k => { for (const s of ['left', 'right']) { setRot(s + 'UpperLeg', I(), k); setRot(s + 'LowerLeg', I(), k); } };
+  // 肩が見えない → 待機姿勢(腰は判定に使わない: 上半身だけ映っていても腕を追従させるため)
+  if (!LM || !visOK(0.5, 11, 12)) {
+    setRot('hips', I(), 0.1); setRot('spine', I(), 0.1);
+    armDown('left'); armDown('right'); resetLegs(0.1);
     return;
   }
-  // 腰の向き(ヨー)
-  const hv = dirOf(24, 23);
-  const yaw = THREE.MathUtils.clamp(Math.atan2(-hv.z, hv.x), -1.2, 1.2);
-  const hipsQ = new THREE.Quaternion().setFromAxisAngle(UP, yaw);
-  setRot('hips', hipsQ, 0.4);
-  // 上半身の傾き
-  const mid = (a, b) => ({ x: (lm(a).x + lm(b).x) / 2, y: (lm(a).y + lm(b).y) / 2, z: (lm(a).z + lm(b).z) / 2 });
-  const sh = mid(11, 12), hp = mid(23, 24), mx = mirror ? -1 : 1;
-  const torso = new THREE.Vector3((sh.x - hp.x) * mx, -(sh.y - hp.y), -(sh.z - hp.z)).normalize();
-  const tilt = new THREE.Quaternion().setFromUnitVectors(UP, torso);
-  setRot('spine', hipsQ.clone().invert().multiply(tilt), 0.4);
+  const useHips = mode === 'full' && visOK(0.5, 23, 24);
+  if (useHips) {
+    // 腰の向き(ヨー)
+    const hv = dirOf(24, 23);
+    const yaw = THREE.MathUtils.clamp(Math.atan2(-hv.z, hv.x), -1.2, 1.2);
+    const hipsQ = new THREE.Quaternion().setFromAxisAngle(UP, yaw);
+    setRot('hips', hipsQ, 0.4);
+    // 上半身の傾き
+    const mid = (a, b) => ({ x: (lm(a).x + lm(b).x) / 2, y: (lm(a).y + lm(b).y) / 2, z: (lm(a).z + lm(b).z) / 2 });
+    const sh = mid(11, 12), hp = mid(23, 24), mx = mirror ? -1 : 1;
+    const torso = new THREE.Vector3((sh.x - hp.x) * mx, -(sh.y - hp.y), -(sh.z - hp.z)).normalize();
+    const tilt = new THREE.Quaternion().setFromUnitVectors(UP, torso);
+    setRot('spine', hipsQ.clone().invert().multiply(tilt), 0.4);
+  } else {
+    // 上半身モード: 腰・脚は固定。肩のラインから胴体のひねり(ヨー)と傾き(ロール)だけ推定
+    const sv = dirOf(12, 11);
+    const yaw = THREE.MathUtils.clamp(Math.atan2(-sv.z, sv.x), -1.2, 1.2);
+    const roll = THREE.MathUtils.clamp(Math.atan2(sv.y, Math.hypot(sv.x, sv.z)), -0.5, 0.5);
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, roll, 'YXZ'));
+    setRot('hips', I(), 0.2);
+    setRot('spine', I().slerp(q, 0.7), 0.4);
+  }
 
   // 腕
   for (const [side, sh_, el, wr] of [['left', 11, 13, 15], ['right', 12, 14, 16]]) {
@@ -222,11 +354,12 @@ function applyPose() {
     if (visOK(0.4, sh_, el)) setDir(side + 'UpperArm', rest, dirOf(sh_, el)); else armDown(side);
     if (visOK(0.4, el, wr)) setDir(side + 'LowerArm', rest, dirOf(el, wr)); else if (!visOK(0.4, sh_, el)) {}
   }
-  // 脚(映っているときだけ)
+  // 脚(全身モードで映っているときだけ。上半身モードは常に直立)
+  if (mode !== 'full') { resetLegs(0.2); return; }
   for (const [side, hi, kn, an] of [['left', 23, 25, 27], ['right', 24, 26, 28]]) {
     if (visOK(0.7, hi, kn, an)) {
       setDir(side + 'UpperLeg', DOWN, dirOf(hi, kn)); setDir(side + 'LowerLeg', DOWN, dirOf(kn, an));
-    } else { setRot(side + 'UpperLeg', new THREE.Quaternion(), .1); setRot(side + 'LowerLeg', new THREE.Quaternion(), .1); }
+    } else { setRot(side + 'UpperLeg', I(), .1); setRot(side + 'LowerLeg', I(), .1); }
   }
 }
 
@@ -291,6 +424,9 @@ const clock = new THREE.Clock();
 function loop() {
   requestAnimationFrame(loop);
   const dt = clock.getDelta();
+  const kc = 1 - Math.exp(-dt * 6);   // 全身/上半身のカメラ移動を滑らかに
+  camPos.lerp(tgtPos, kc); camLook.lerp(tgtLook, kc);
+  camera.position.copy(camPos); camera.lookAt(camLook);
   if (vrm) {
     if (tracking && video.readyState >= 2 && video.currentTime !== lastT) {
       lastT = video.currentTime;
@@ -299,11 +435,13 @@ function loop() {
         poseRes = pose.detectForVideo(video, ts);
         faceRes = face.detectForVideo(video, ts);
         LM = poseRes.worldLandmarks?.[0] || null;
+        drawOverlay();
       } catch (e) { console.warn(e); }
     }
     applyPose();
     if (tracking) applyFace();
     vrm.update(dt);
+    updateAvatarBones();
   }
   renderer.render(scene, camera);
 }
