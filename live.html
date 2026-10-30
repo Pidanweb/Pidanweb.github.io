@@ -13,7 +13,7 @@
   button:disabled{opacity:.4;cursor:default}
   #rec.on{background:#c0202a;border-color:#ff6b6b}
   input[type=file]{display:none}
-  #panel{position:fixed;left:8px;bottom:8px;z-index:5;background:rgba(0,0,0,.55);padding:8px;border-radius:10px;font-size:12px;max-width:260px}
+  #panel{position:fixed;left:8px;bottom:8px;z-index:5;background:rgba(0,0,0,.55);padding:8px;border-radius:10px;font-size:12px;max-width:340px}
   #video{width:240px;display:block;border-radius:6px;transform:scaleX(-1);background:#000}
   #panel audio{width:240px;margin-top:6px}
   #panel div{margin-top:4px}
@@ -39,6 +39,8 @@
   <label class="btn">① VRM選択<input type="file" id="vrmFile" accept=".vrm"></label>
   <button id="camBtn">② カメラ＆マイク開始</button>
   <select id="camSel" title="カメラ選択"><option value="">既定のカメラ</option></select>
+  <select id="micSel" title="マイク選択"><option value="">既定のマイク</option></select>
+  <label>負荷 <select id="perfSel" title="重いときは軽量に"><option value="high">高精度</option><option value="std" selected>標準</option><option value="low">軽量</option></select></label>
   <label class="btn">③ 伴奏ファイル<input type="file" id="bgmFile" accept="audio/*"></label>
   <input type="text" id="urlIn" placeholder="伴奏URL (mp3/ogg/mp4の直リンク or YouTube)">
   <button id="urlBtn">URL読込</button>
@@ -115,6 +117,14 @@ function resize() {
 }
 addEventListener('resize', resize); resize();
 
+/* ---------- 負荷プリセット ---------- */
+// dpr: 描画解像度の上限 / skip: Nフレームに1回だけ検出 / alt: ポーズと手を交互に検出 / frameMs: 描画FPS上限(0=無制限)
+const PERF = { high: { dpr: 2, skip: 1, alt: false, frameMs: 0 }, std: { dpr: 1.5, skip: 1, alt: true, frameMs: 0 }, low: { dpr: 1, skip: 2, alt: true, frameMs: 33 } };
+let P = PERF.std, lastRender = 0, detN = 0;
+function applyPerf(k) { P = PERF[k] || PERF.std; renderer.setPixelRatio(Math.min(devicePixelRatio, P.dpr)); resize(); }
+$('perfSel').onchange = e => applyPerf(e.target.value);
+applyPerf('std');
+
 $('bgColor').oninput = e => scene.background = new THREE.Color(e.target.value);
 $('bgImg').onchange = e => {
   const f = e.target.files[0]; if (!f) return;
@@ -129,7 +139,7 @@ function loadVRM(url, quiet) {
   loader.load(url, gltf => {
     if (vrm) { scene.remove(vrm.scene); VRMUtils.deepDispose(vrm.scene); }
     vrm = gltf.userData.vrm;
-    VRMUtils.removeUnnecessaryVertices(gltf.scene);
+    VRMUtils.removeUnnecessaryVertices(gltf.scene); VRMUtils.combineSkeletons?.(gltf.scene);
     VRMUtils.rotateVRM0(vrm);
     scene.add(vrm.scene);
     buildAvatarBones();
@@ -310,9 +320,10 @@ async function playYT(id) {
   await loadYTApi();
   if (yt) { yt.loadVideoById(id); return; }
   yt = new YT.Player('ytplayer', {
-    width: 240, height: 135, videoId: id, playerVars: { playsinline: 1, rel: 0, autoplay: 1 },
+    width: 320, height: 180, videoId: id, playerVars: { playsinline: 1, rel: 0, autoplay: 1 },
     events: {
       onReady: e => { e.target.setVolume(bgmVolVal() * 100); say('YouTube再生。録画に音を入れるには「YouTube音声を録画に入れる」を押してください'); },
+      onStateChange: e => { if (e.data === 1) try { e.target.setPlaybackQuality('hd720'); } catch {} },   // 小さい画面だと低画質/低ビットレートが選ばれがちなので高めを要求
       onError: e => say('YouTube再生エラー(' + e.data + '): 埋め込み禁止の動画、または file:// で開いている可能性があります')
     }
   });
@@ -335,7 +346,7 @@ $('urlIn').onkeydown = e => { if (e.key === 'Enter') $('urlBtn').click(); };
 $('tabAudio').onclick = async () => {
   try {
     if (!actx) initAudio(); await actx.resume();
-    const ds = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true, preferCurrentTab: true, selfBrowserSurface: 'include' });
+    const ds = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, preferCurrentTab: true, selfBrowserSurface: 'include' });
     const a = ds.getAudioTracks(); ds.getVideoTracks().forEach(t => t.stop());
     if (!a.length) return say('音声が共有されていません(「タブの音声も共有」にチェックしてください)');
     actx.createMediaStreamSource(new MediaStream(a)).connect(dest);
@@ -351,52 +362,84 @@ $('micVol').oninput = e => micGain && (micGain.gain.value = +e.target.value);
 $('monitor').onchange = e => monGain && (monGain.gain.value = e.target.checked ? 1 : 0);
 $('bgm').addEventListener('play', () => actx && actx.resume());
 
-const camSel = $('camSel');
-let camStream = null;
-async function refreshCams(sel) {
+const camSel = $('camSel'), micSel = $('micSel');
+let camStream = null, micStream = null, micSrc = null;
+async function refreshCams(camKeep, micKeep) {
   try {
-    const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput' && d.deviceId);
-    const keep = sel ?? camSel.value;
-    camSel.replaceChildren(new Option('既定のカメラ', ''));
-    devs.forEach((d, i) => camSel.add(new Option(d.label || 'カメラ ' + (i + 1), d.deviceId)));
-    camSel.value = devs.some(d => d.deviceId === keep) ? keep : '';
+    const all = await navigator.mediaDevices.enumerateDevices();
+    const fill = (sel, kind, def, label, keep) => {
+      const devs = all.filter(d => d.kind === kind && d.deviceId), k = keep ?? sel.value;
+      sel.replaceChildren(new Option(def, ''));
+      devs.forEach((d, i) => sel.add(new Option(d.label || label + (i + 1), d.deviceId)));
+      sel.value = devs.some(d => d.deviceId === k) ? k : '';
+    };
+    fill(camSel, 'videoinput', '既定のカメラ', 'カメラ ', camKeep);
+    fill(micSel, 'audioinput', '既定のマイク', 'マイク ', micKeep);
   } catch (e) { console.warn(e); }
 }
 async function startVideo(deviceId) {
   if (camStream) camStream.getTracks().forEach(t => t.stop());   // 先に止める(同時に開けないカメラ対策)
-  const v = { width: 640, height: 480 };
+  const v = { width: 640, height: 480, frameRate: { ideal: 30, max: 30 } };
   if (deviceId) v.deviceId = { exact: deviceId }; else v.facingMode = 'user';
   const vs = await navigator.mediaDevices.getUserMedia({ video: v, audio: false });
   camStream = vs; video.srcObject = vs; await video.play(); lastT = -1;
   await refreshCams(vs.getVideoTracks()[0].getSettings().deviceId || '');   // 許可後はカメラ名が取れる
 }
+async function startMic(deviceId) {
+  if (micSrc) { micSrc.disconnect(); micSrc = null; }
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  const a = { echoCancellation: true, noiseSuppression: false, autoGainControl: false };
+  if (deviceId) a.deviceId = { exact: deviceId };
+  micStream = await navigator.mediaDevices.getUserMedia({ audio: a });
+  micSrc = actx.createMediaStreamSource(micStream); micSrc.connect(micGain);
+  await refreshCams(undefined, micStream.getAudioTracks()[0].getSettings().deviceId || '');
+}
 camSel.onchange = async () => {
-  if (!camStream) return;   // 開始前は選択だけ保持して、開始ボタンで使う
+  if (!camStream) return;   // 開始前/停止中は選択だけ保持して、開始ボタンで使う
   const want = camSel.value, prev = camStream.getVideoTracks()[0].getSettings().deviceId || '';
   try { await startVideo(want); say('カメラを切り替えました'); }
   catch (err) { say('カメラ切替失敗: ' + err.message); try { await startVideo(prev); } catch {} }
 };
+micSel.onchange = async () => {
+  if (!micStream) return;
+  const want = micSel.value, prev = micStream.getAudioTracks()[0].getSettings().deviceId || '';
+  try { await startMic(want); say('マイクを切り替えました'); }
+  catch (err) { say('マイク切替失敗: ' + err.message); try { await startMic(prev); } catch {} }
+};
 navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshCams());
 refreshCams();
 
+// カメラ停止: 映像とAI検出を止めて負荷を下げる(マイク・伴奏・録画は継続。AIモデルは読み込み済みのまま)
+function stopCamera() {
+  tracking = false;
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  video.srcObject = null; lastT = -1;
+  poseRes = faceRes = handRes = null; LM = null;
+  octx.clearRect(0, 0, ov.width, ov.height);
+  distCur = distBase = null; calBuf = []; zoomT = 0;
+  const em = vrm?.expressionManager;
+  if (em) for (const n of ['blinkLeft', 'blinkRight', 'aa', 'oh', 'ou', 'ee', 'happy']) if (em.getExpression(n)) em.setValue(n, 0);
+}
 $('camBtn').onclick = async () => {
+  if (tracking) {
+    stopCamera(); $('camBtn').textContent = '▶ カメラ再開';
+    say('カメラ停止中(マイクと伴奏は動作中)'); return;
+  }
   $('camBtn').disabled = true;
   try {
     if (!actx) initAudio();
     await actx.resume();
     await startVideo(camSel.value);
-    try {
-      const ms = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false } });
-      actx.createMediaStreamSource(ms).connect(micGain);
-    } catch { say('マイクが使えません(カメラのみ)'); }
-    await initMediaPipe();
+    if (!micStream) { try { await startMic(micSel.value); } catch { say('マイクが使えません(カメラのみ)'); } }
+    if (!pose) await initMediaPipe();
     tracking = true; $('rec').disabled = false;
+    $('camBtn').textContent = '■ カメラ停止'; $('camBtn').disabled = false;
     say(hand ? modeHint() : modeHint() + ' ※ハンドモデルの読込に失敗(手指なし)');
-  } catch (err) { say('カメラ開始失敗: ' + err.message); $('camBtn').disabled = false; }
+  } catch (err) { stopCamera(); say('カメラ開始失敗: ' + err.message); $('camBtn').disabled = false; }
 };
 
 /* ---------- リターゲット ---------- */
-const Q = new THREE.Quaternion(), V = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
+const QI = new THREE.Quaternion(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 const X = new THREE.Vector3(1, 0, 0), NX = new THREE.Vector3(-1, 0, 0), DOWN = new THREE.Vector3(0, -1, 0);
 let mirror = false; $('mirror').onchange = e => mirror = e.target.checked;
 let LM = null;
@@ -526,8 +569,8 @@ function applyHands() {
   for (const side of ['left', 'right']) {
     const a = assigned[side];
     if (!a) {   // 手が見えない → 手首と指をゆっくり戻す
-      setRot(side + 'Hand', new THREE.Quaternion(), 0.1);
-      for (const [f, , bones] of FINGERS) for (const b of bones) setLocal(side + f + b, new THREE.Quaternion(), 0.15);
+      setRot(side + 'Hand', QI, 0.1);
+      for (const [f, , bones] of FINGERS) for (const b of bones) setLocal(side + f + b, QI, 0.15);
       continue;
     }
     const W = handRes.worldLandmarks[a.i];
@@ -555,7 +598,7 @@ function applyHands() {
 
 const bsMap = {};
 function applyFace() {
-  if (!faceRes || !faceRes.faceBlendshapes?.length) return;
+  if (!faceRes || !faceRes.faceBlendshapes?.length) { setRot('neck', QI, 0.1); setRot('head', QI, 0.1); return; }
   const m = new THREE.Matrix4().fromArray(faceRes.facialTransformationMatrixes[0].data);
   const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
   m.decompose(p, q, s);
@@ -611,7 +654,7 @@ $('rec').onclick = () => {
 
 /* ---------- 接近ズーム ---------- */
 // 顔の姿勢行列のz平行移動(カメラまでの距離, cm相当)から「近づいた倍率」を出し、カメラをアバターの顔に寄せる
-let distBase = null, distCur = null, calBuf = [], zoomT = 0, lastFaceT = 0;
+let distBase = null, distCur = null, calBuf = [], zoomT = 0, lastFaceT = 0, lastInfo = '';
 const closePos = new THREE.Vector3(0, 1.5, 1.4), closeLook = new THREE.Vector3(0, 1.45, 0);
 function updateDist() {
   const M = faceRes?.facialTransformationMatrixes?.[0]; if (!M) return;
@@ -634,7 +677,7 @@ function stepZoom(dt) {
   } else if (distCur != null) info = '基準位置を測定中…(離れた位置で静止)';
   if (!$('zoomOn').checked || performance.now() - lastFaceT > 2000) target = 0;   // 顔を見失ったら2秒後に引く
   zoomT += (target - zoomT) * (1 - Math.exp(-dt * 4));
-  $('zoomInfo').textContent = info;
+  if (info !== lastInfo) { lastInfo = info; $('zoomInfo').textContent = info; }
 }
 function updateCloseTargets() {
   const h = vrm.humanoid.getNormalizedBoneNode('head'); if (!h) return;
@@ -646,7 +689,10 @@ function updateCloseTargets() {
 const clock = new THREE.Clock();
 function loop() {
   requestAnimationFrame(loop);
-  const dt = clock.getDelta();
+  const now = performance.now();
+  if (P.frameMs && now - lastRender < P.frameMs - 1.5) return;   // 軽量モード: 描画を約30fpsに制限
+  lastRender = now;
+  const dt = Math.min(clock.getDelta(), 0.1);
   if (vrm) updateCloseTargets();
   stepZoom(dt);
   const fr = FRAME[mode];   // 全身/上半身の基本フレーミング → 接近ズームでアップ位置へ合成
@@ -657,17 +703,19 @@ function loop() {
   if (vrm) {
     if (tracking && video.readyState >= 2 && video.currentTime !== lastT) {
       lastT = video.currentTime;
-      const ts = performance.now();
-      try {
-        poseRes = pose.detectForVideo(video, ts);
-        faceRes = face.detectForVideo(video, ts);
-        handRes = (hand && $('handTrack').checked) ? hand.detectForVideo(video, ts) : null;
-        LM = poseRes.worldLandmarks?.[0] || null;
-        drawOverlay(); updateDist();
-      } catch (e) { console.warn(e); }
+      if (++detN % P.skip === 0) {
+        const ts = performance.now(), turn = (detN / P.skip) | 0, useHand = hand && $('handTrack').checked;
+        try {
+          faceRes = face.detectForVideo(video, ts);   // 表情・口パクは毎回
+          // 標準/軽量: ポーズと手を交互に検出して1フレームあたりの負荷を半分に
+          if (!P.alt || !useHand || (turn & 1) === 0) { poseRes = pose.detectForVideo(video, ts); LM = poseRes.worldLandmarks?.[0] || null; }
+          if (useHand) { if (!P.alt || (turn & 1) === 1) handRes = hand.detectForVideo(video, ts); } else handRes = null;
+          drawOverlay(); updateDist();
+        } catch (e) { console.warn(e); }
+      }
     }
     applyPose();
-    if (tracking) { applyHands(); applyFace(); }
+    applyHands(); applyFace();   // 検出結果が無いときは手・頭が待機姿勢へ戻る
     vrm.update(dt);
     updateAvatarBones();
   }
