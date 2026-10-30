@@ -25,6 +25,9 @@
   #overlay{position:absolute;left:0;top:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none}
   #legend{font-size:11px;opacity:.8}
   #dl{display:none;color:#8fd;font-weight:bold}
+  input[type=text]{background:#2b2f3a;color:#fff;border:1px solid #555;border-radius:8px;padding:7px 10px;font-size:13px;width:260px}
+  #ytbox{margin-top:6px}
+  #panel{max-height:calc(100% - 80px);overflow:auto}
   #drop{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.7);z-index:9;font-size:24px}
 </style>
 </head>
@@ -36,7 +39,10 @@
   <label class="btn">① VRM選択<input type="file" id="vrmFile" accept=".vrm"></label>
   <button id="camBtn">② カメラ＆マイク開始</button>
   <select id="camSel" title="カメラ選択"><option value="">既定のカメラ</option></select>
-  <label class="btn">③ 伴奏(音楽)選択<input type="file" id="bgmFile" accept="audio/*"></label>
+  <label class="btn">③ 伴奏ファイル<input type="file" id="bgmFile" accept="audio/*"></label>
+  <input type="text" id="urlIn" placeholder="伴奏URL (mp3/ogg/mp4の直リンク or YouTube)">
+  <button id="urlBtn">URL読込</button>
+  <button id="tabAudio" style="display:none" title="YouTubeの音をマイクと一緒に録画へ入れます(Chrome/Edge)">🔊 YouTube音声を録画に入れる</button>
   <button id="rec" disabled>● 録画開始</button>
   <a id="dl" href="#">⬇ 録画を保存</a>
   <label><input type="checkbox" id="mirror"> 左右反転</label>
@@ -52,10 +58,15 @@
 <div id="panel">
   <div id="vwrap"><video id="video" playsinline muted></video><canvas id="overlay"></canvas></div>
   <div id="legend">ボーンの色: 緑=信頼高 / 黄=中 / 赤=低 / 水色=手</div>
+  <div id="ytbox" style="display:none"><div id="ytplayer"></div></div>
   <audio id="bgm" controls></audio>
+  <audio id="bgmPlain" controls style="display:none"></audio>
   <div>伴奏音量 <input type="range" id="bgmVol" min="0" max="1" step="0.01" value="0.7"></div>
   <div>マイク音量 <input type="range" id="micVol" min="0" max="2" step="0.01" value="1"></div>
   <div><label><input type="checkbox" id="monitor"> マイクを自分で聞く(イヤホン必須)</label></div>
+  <div><label><input type="checkbox" id="zoomOn" checked> 近づくとアバターがアップ</label></div>
+  <div>寄り感度 <input type="range" id="zoomGain" min="0.5" max="3" step="0.1" value="1.5"> <button id="zoomCal" style="padding:3px 8px">基準位置を今に</button></div>
+  <div id="zoomInfo">距離: -</div>
 </div>
 
 <script type="importmap">
@@ -141,7 +152,7 @@ const modeHint = () => mode === 'full'
   ? 'トラッキング中。全身がカメラに映る位置に立ってください'
   : 'トラッキング中(上半身モード)。腰から上が映っていればOKです';
 function setMode(m) {
-  mode = m; tgtPos.set(...FRAME[m].pos); tgtLook.set(...FRAME[m].look);
+  mode = m;
   $('modeFull').classList.toggle('act', m === 'full'); $('modeUpper').classList.toggle('act', m === 'upper');
   if (tracking && !(recorder && recorder.state === 'recording')) say(modeHint());
 }
@@ -260,8 +271,82 @@ function initAudio() {
   const src = actx.createMediaElementSource($('bgm'));
   src.connect(bgmGain); bgmGain.connect(dest); bgmGain.connect(actx.destination);
 }
-$('bgmFile').onchange = e => { const f = e.target.files[0]; if (f) $('bgm').src = URL.createObjectURL(f); };
-$('bgmVol').oninput = e => bgmGain && (bgmGain.gain.value = +e.target.value);
+/* ---------- 伴奏: ファイル / URL / YouTube ---------- */
+const bgm = $('bgm'), bgmPlain = $('bgmPlain');
+let yt = null, ytApi = null;
+const bgmVolVal = () => +$('bgmVol').value;
+function stopAllBgm() { bgm.pause(); bgmPlain.pause(); try { yt?.pauseVideo?.(); } catch {} }
+function showPlayer(which) {   // 'bgm' | 'plain' | 'yt'
+  bgm.style.display = which === 'bgm' ? '' : 'none';
+  bgmPlain.style.display = which === 'plain' ? '' : 'none';
+  $('ytbox').style.display = which === 'yt' ? 'block' : 'none';
+  $('tabAudio').style.display = which === 'yt' ? '' : 'none';
+}
+$('bgmFile').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  stopAllBgm(); showPlayer('bgm'); bgm.onerror = null;
+  bgm.crossOrigin = 'anonymous'; bgm.src = URL.createObjectURL(f);
+};
+function ytId(u) {
+  try {
+    const x = new URL(u);
+    if (x.hostname === 'youtu.be') return x.pathname.slice(1, 12);
+    if (/(^|\.)youtube\.com$/.test(x.hostname)) {
+      if (x.searchParams.get('v')) return x.searchParams.get('v');
+      const m = x.pathname.match(/\/(embed|shorts|live)\/([\w-]{11})/); if (m) return m[2];
+    }
+  } catch {}
+  return null;
+}
+function loadYTApi() {
+  return ytApi ||= new Promise(res => {
+    if (window.YT?.Player) return res();
+    window.onYouTubeIframeAPIReady = res;
+    const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s);
+  });
+}
+async function playYT(id) {
+  stopAllBgm(); showPlayer('yt'); say('YouTube読込中…');
+  await loadYTApi();
+  if (yt) { yt.loadVideoById(id); return; }
+  yt = new YT.Player('ytplayer', {
+    width: 240, height: 135, videoId: id, playerVars: { playsinline: 1, rel: 0, autoplay: 1 },
+    events: {
+      onReady: e => { e.target.setVolume(bgmVolVal() * 100); say('YouTube再生。録画に音を入れるには「YouTube音声を録画に入れる」を押してください'); },
+      onError: e => say('YouTube再生エラー(' + e.data + '): 埋め込み禁止の動画、または file:// で開いている可能性があります')
+    }
+  });
+}
+function playUrl(u) {
+  stopAllBgm();
+  const id = ytId(u); if (id) return playYT(id);
+  showPlayer('bgm');
+  bgm.onerror = () => {   // CORS非対応など → 録画には入らない通常再生にフォールバック
+    bgm.onerror = null; bgm.pause(); showPlayer('plain');
+    bgmPlain.onerror = () => say('読み込めません。音声/動画ファイルへの直リンクか確認してください');
+    bgmPlain.volume = bgmVolVal(); bgmPlain.src = u; bgmPlain.play().catch(() => {});
+    say('このURLはCORS非対応のため再生のみ(録画には伴奏が入りません)');
+  };
+  bgm.crossOrigin = 'anonymous'; bgm.src = u; bgm.play().catch(() => {});
+}
+$('urlBtn').onclick = () => { const u = $('urlIn').value.trim(); if (u) playUrl(u); };
+$('urlIn').onkeydown = e => { if (e.key === 'Enter') $('urlBtn').click(); };
+// YouTubeの音はWeb Audioに取り込めないので、タブ音声の共有で録画ミックスに入れる
+$('tabAudio').onclick = async () => {
+  try {
+    if (!actx) initAudio(); await actx.resume();
+    const ds = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true, preferCurrentTab: true, selfBrowserSurface: 'include' });
+    const a = ds.getAudioTracks(); ds.getVideoTracks().forEach(t => t.stop());
+    if (!a.length) return say('音声が共有されていません(「タブの音声も共有」にチェックしてください)');
+    actx.createMediaStreamSource(new MediaStream(a)).connect(dest);
+    say('YouTubeの音声を録画に追加しました');
+  } catch (e) { say('タブ音声の取得に失敗: ' + e.message); }
+};
+$('bgmVol').oninput = e => {
+  const v = +e.target.value;
+  bgmGain && (bgmGain.gain.value = v); bgmPlain.volume = v;
+  try { yt?.setVolume?.(v * 100); } catch {}
+};
 $('micVol').oninput = e => micGain && (micGain.gain.value = +e.target.value);
 $('monitor').onchange = e => monGain && (monGain.gain.value = e.target.checked ? 1 : 0);
 $('bgm').addEventListener('play', () => actx && actx.resume());
@@ -524,12 +609,49 @@ $('rec').onclick = () => {
   timer = setInterval(() => { const s = ((Date.now() - t0) / 1000) | 0; say('● REC ' + String((s / 60) | 0).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0')); }, 500);
 };
 
+/* ---------- 接近ズーム ---------- */
+// 顔の姿勢行列のz平行移動(カメラまでの距離, cm相当)から「近づいた倍率」を出し、カメラをアバターの顔に寄せる
+let distBase = null, distCur = null, calBuf = [], zoomT = 0, lastFaceT = 0;
+const closePos = new THREE.Vector3(0, 1.5, 1.4), closeLook = new THREE.Vector3(0, 1.45, 0);
+function updateDist() {
+  const M = faceRes?.facialTransformationMatrixes?.[0]; if (!M) return;
+  const d = Math.abs(M.data[14]); if (!(d > 5)) return;
+  lastFaceT = performance.now();
+  distCur = distCur == null ? d : distCur + (d - distCur) * 0.3;
+  if (distBase == null) {   // 最初の30フレームの中央値を基準位置にする
+    calBuf.push(d);
+    if (calBuf.length >= 30) { calBuf.sort((a, b) => a - b); distBase = calBuf[15]; calBuf = []; }
+  }
+}
+$('zoomCal').onclick = () => { if (distCur != null) { distBase = distCur; zoomT = 0; } };
+function stepZoom(dt) {
+  let target = 0, info = '距離: -';
+  if (distCur != null && distBase != null) {
+    const near = distBase / distCur;   // 1.0=基準位置、大きいほど近い
+    const raw = THREE.MathUtils.clamp((near - 1.12) * +$('zoomGain').value, 0, 1);
+    target = raw * raw * (3 - 2 * raw);
+    info = '近さ ×' + near.toFixed(2) + ' / アップ ' + Math.round(zoomT * 100) + '%';
+  } else if (distCur != null) info = '基準位置を測定中…(離れた位置で静止)';
+  if (!$('zoomOn').checked || performance.now() - lastFaceT > 2000) target = 0;   // 顔を見失ったら2秒後に引く
+  zoomT += (target - zoomT) * (1 - Math.exp(-dt * 4));
+  $('zoomInfo').textContent = info;
+}
+function updateCloseTargets() {
+  const h = vrm.humanoid.getNormalizedBoneNode('head'); if (!h) return;
+  h.getWorldPosition(_p);
+  closePos.set(0, _p.y + 0.03, 1.4); closeLook.set(0, _p.y - 0.04, 0);
+}
+
 /* ---------- メインループ ---------- */
 const clock = new THREE.Clock();
 function loop() {
   requestAnimationFrame(loop);
   const dt = clock.getDelta();
-  const kc = 1 - Math.exp(-dt * 6);   // 全身/上半身のカメラ移動を滑らかに
+  if (vrm) updateCloseTargets();
+  stepZoom(dt);
+  const fr = FRAME[mode];   // 全身/上半身の基本フレーミング → 接近ズームでアップ位置へ合成
+  tgtPos.set(...fr.pos).lerp(closePos, zoomT); tgtLook.set(...fr.look).lerp(closeLook, zoomT);
+  const kc = 1 - Math.exp(-dt * 6);   // カメラ移動を滑らかに
   camPos.lerp(tgtPos, kc); camLook.lerp(tgtLook, kc);
   camera.position.copy(camPos); camera.lookAt(camLook);
   if (vrm) {
@@ -541,7 +663,7 @@ function loop() {
         faceRes = face.detectForVideo(video, ts);
         handRes = (hand && $('handTrack').checked) ? hand.detectForVideo(video, ts) : null;
         LM = poseRes.worldLandmarks?.[0] || null;
-        drawOverlay();
+        drawOverlay(); updateDist();
       } catch (e) { console.warn(e); }
     }
     applyPose();
