@@ -133,7 +133,7 @@ input[type=range]{vertical-align:middle}
       <button id="clrBtn" disabled>記録をクリア</button>
       <span class="mute" id="recInfo">記録: 0行</span>
     </div>
-    <p class="mute" style="margin:8px 0 0">列: 時刻ms, ax, ay, az, yaw, roll, pitch（゜/s概算・ゼロ点補正済）, yaw_slow, roll_slow, pitch_slow, ボタン, ラベル, yaw_raw, roll_raw, pitch_raw（14bit生値）, swing_id（スイング区間中のみ番号、他は0）。記録中はLED4が点灯します。</p>
+    <p class="mute" style="margin:8px 0 0">列: 時刻ms, ax, ay, az, yaw, roll, pitch（゜/s概算・ゼロ点補正済）, yaw_slow, roll_slow, pitch_slow, ボタン, ラベル, yaw_raw, roll_raw, pitch_raw（14bit生値）, swing_id（スイング区間中のみ番号、他は0）, w_vert（鉛直軸まわり角速度＝横成分, 符号付き）, w_horiz（水平軸まわり＝縦成分）, upx, upy, upz（推定した上向きベクトル）。記録中はLED4が点灯します。</p>
   </section>
 
   <section>
@@ -141,22 +141,24 @@ input[type=range]{vertical-align:middle}
     <div class="row">
       <label>加速度しきい値 <input type="range" id="swTh" min="1.2" max="4" step="0.1" value="2.2"> <b id="swThv">2.2</b> g</label>
       <label>区切り待ち時間 <input type="range" id="swHold" min="80" max="400" step="10" value="150"> <b id="swHoldv">150</b> ms</label>
+      <label>斬りと見なす最小ピーク角速度 <input type="range" id="swMin" min="200" max="1200" step="50" value="600"> <b id="swMinv">600</b> °/s</label>
       <button id="swClr">一覧をクリア</button>
     </div>
-    <p class="mute" style="margin:8px 0">|a|がしきい値を超えた所から、しきい値未満が「区切り待ち時間」続くまでを1スイングとします（開始の約0.12秒前から角速度を積分）。軸は決め打ちせず、ピーク角速度の軸と積分角度の大きい軸を両方出します。</p>
+    <p class="mute" style="margin:8px 0">|a|がしきい値を超えた所から、しきい値未満が「区切り待ち時間」続くまでを1スイングとします（開始の約0.12秒前から角速度を積分）。軸は決め打ちしません。重力基準で角速度を「水平軸まわり＝縦斬り成分」と「鉛直軸まわり＝横斬り成分」に分け、積分角度の大きい方を判定します（握りが回っても対応）。センサー軸(yaw/roll/pitch)の値も参考に併記します。</p>
     <p class="diag" id="swSummary">スイング待機中…</p>
     <div class="tbl">
       <table>
         <thead><tr>
           <th>#</th><th class="l">ラベル</th><th>時間 s</th><th>最大|a| g</th>
+          <th class="l">判定</th><th>∫縦 °</th><th>∫横 °(±)</th><th>peak縦 °/s</th><th>peak横 °/s</th>
           <th>∫yaw °</th><th>∫roll °</th><th>∫pitch °</th>
           <th>peak yaw °/s</th><th>peak roll °/s</th><th>peak pitch °/s</th>
           <th class="l">主軸(速度)</th><th class="l">主軸(角度)</th>
         </tr></thead>
-        <tbody id="swBody"><tr><td colspan="12" class="l mute">まだありません</td></tr></tbody>
+        <tbody id="swBody"><tr><td colspan="16" class="l mute">まだありません</td></tr></tbody>
       </table>
     </div>
-    <p class="mute" style="margin:6px 0 0">薄い緑の行 = 直前のスイングと主軸(速度)が違うスイング。最新8件を新しい順に表示。</p>
+    <p class="mute" style="margin:6px 0 0">薄い緑の行 = 直前のスイングと判定(縦/横)が違うスイング。判定「小」は最小ピーク角速度に届かない動き（構え直しなど）。最新8件を新しい順に表示。</p>
   </section>
 
   <section>
@@ -295,7 +297,7 @@ $('mpEnable').onclick = () => enableMP();
 
 function resetAll(){
   mp.state = 'off'; mp.cal = null; mp.calibrated = false; mp.lastValid = 0;
-  ring = []; sw = null; prevPlus = prevMinus = false;
+  ring = []; sw = null; prevPlus = prevMinus = false; upv = null;
 }
 
 // ---------- ゼロ点キャリブレーション ----------
@@ -317,7 +319,7 @@ function calFeed(raw, slow, t){
   const mean = c.sum.map(s => s / c.n);
   const std = c.sq.map((s, i) => Math.sqrt(Math.max(0, s / c.n - mean[i] * mean[i])));
   if(Math.max(...std) > CAL_STD_MAX){ restartCal('揺れが大きい(σ=' + Math.max(...std).toFixed(0) + ')'); return; }
-  mp.zero = mean; mp.calibrated = true; mp.cal = null;
+  mp.zero = mean; mp.calibrated = true; mp.cal = null; mp.reinit = true;
   const m = 'ゼロ点OK: yaw=' + mean[0].toFixed(0) + ' roll=' + mean[1].toFixed(0) + ' pitch=' + mean[2].toFixed(0);
   $('calMsg').textContent = m; log(m + ' / σ最大 ' + Math.max(...std).toFixed(1));
 }
@@ -325,6 +327,28 @@ function restartCal(why){
   const c = mp.cal; c.n = 0; c.sum = [0,0,0]; c.sq = [0,0,0]; c.t0 = null; c.restarts++;
   $('calMsg').textContent = why + '。静止してやり直し中…（リモコンを机に置くと確実です）';
   if(c.restarts === 1) log('キャリブレーションやり直し: ' + why);
+}
+
+// ---------- 姿勢（重力方向）推定 ----------
+// ジャイロで「上向きベクトル(センサー座標)」を更新し、|a|≈1g の時だけ加速度で補正する。
+// センサー軸の対応: pitch→X軸, roll→Y軸(長手), yaw→Z軸 / 符号は右手系そのまま（前回CSVで最も整合）
+const UP_GAIN = 0.03, UP_TOL = 0.15;
+let upv = null, upT = 0;
+function orient(wyrp, ax, ay, az, a, t){
+  const w = [wyrp[2], wyrp[1], wyrp[0]];       // 配列は[yaw,roll,pitch] → センサーX,Y,Z = [pitch,roll,yaw]
+  if(!upv || mp.reinit){ upv = a > 0.5 ? [ax / a, ay / a, az / a] : [0, 0, 1]; mp.reinit = false; upT = t; }
+  const dt = Math.min(0.05, Math.max(0, (t - upT) / 1000)); upT = t;
+  const r = Math.PI / 180, W = [w[0] * r, w[1] * r, w[2] * r], u = upv;
+  let n = [u[0] - (W[1] * u[2] - W[2] * u[1]) * dt, u[1] - (W[2] * u[0] - W[0] * u[2]) * dt, u[2] - (W[0] * u[1] - W[1] * u[0]) * dt];
+  let l = Math.hypot(n[0], n[1], n[2]) || 1; n = n.map(v => v / l);
+  if(Math.abs(a - 1) < UP_TOL){
+    n = [n[0] + UP_GAIN * (ax / a - n[0]), n[1] + UP_GAIN * (ay / a - n[1]), n[2] + UP_GAIN * (az / a - n[2])];
+    l = Math.hypot(n[0], n[1], n[2]) || 1; n = n.map(v => v / l);
+  }
+  upv = n;
+  const wv = w[0] * n[0] + w[1] * n[1] + w[2] * n[2];
+  const wh = Math.hypot(w[0] - wv * n[0], w[1] - wv * n[1], w[2] - wv * n[2]);
+  return [wv, wh, n];
 }
 
 // ---------- 受信 ----------
@@ -375,7 +399,7 @@ function onReport(e){
 
   const ax = (d.getUint8(2) - 128) / 26, ay = (d.getUint8(3) - 128) / 26, az = (d.getUint8(4) - 128) / 26;
   const a = Math.hypot(ax, ay, az);
-  let w = [0,0,0], slow = [true,true,true], raw = [0,0,0], gyro = false;
+  let w = [0,0,0], slow = [true,true,true], raw = [0,0,0], gyro = false, wv = 0, wh = 0, up = [0,0,1];
 
   if(id === 0x35 && d.byteLength >= MP_OFF + 6){
     mp.n35++;
@@ -396,9 +420,10 @@ function onReport(e){
       if(mp.cal) calFeed(raw, slow, t);
       for(let i = 0; i < 3; i++) w[i] = (raw[i] - mp.zero[i]) * SLOW_DPS * (slow[i] ? 1 : FAST_RATIO);
       gyro = true;
+      [wv, wh, up] = orient(w, ax, ay, az, a, t);
     }
   }
-  const s = {t, ax, ay, az, a, w, raw, slow, gyro};
+  const s = {t, ax, ay, az, a, w, raw, slow, gyro, wv, wh, up};
   view = s; dirty = true;
   if(a > peakA){ peakA = a; peakAt = t; }
   swingStep(s);
@@ -522,6 +547,7 @@ let ring = [], sw = null, swId = 0, swings = [];
 const th = () => parseFloat($('swTh').value), holdMs = () => parseFloat($('swHold').value);
 $('swTh').oninput = () => $('swThv').textContent = $('swTh').value;
 $('swHold').oninput = () => $('swHoldv').textContent = $('swHold').value;
+$('swMin').oninput = () => $('swMinv').textContent = $('swMin').value;
 $('swClr').onclick = () => { swings = []; renderSwings(); };
 
 function integ(o, s, prev){
@@ -533,6 +559,9 @@ function integ(o, s, prev){
     o.ang[i] += s.w[i] * dt;
     if(Math.abs(s.w[i]) > Math.abs(o.pk[i])) o.pk[i] = s.w[i];
   }
+  o.iv += s.wv * dt; o.ih += s.wh * dt;
+  if(Math.abs(s.wv) > Math.abs(o.pv)) o.pv = s.wv;
+  if(s.wh > o.ph) o.ph = s.wh;
   o.gf++;
 }
 function swingStep(s){
@@ -540,7 +569,7 @@ function swingStep(s){
     ring.push(s);
     while(ring.length && s.t - ring[0].t > PRE_MS) ring.shift();
     if(s.a >= th()){
-      sw = {id: ++swId, t0: ring[0].t, ang: [0,0,0], pk: [0,0,0], pa: 0, gf: 0, lastHigh: s.t, last: null,
+      sw = {id: ++swId, t0: ring[0].t, ang: [0,0,0], pk: [0,0,0], iv: 0, ih: 0, pv: 0, ph: 0, pa: 0, gf: 0, lastHigh: s.t, last: null,
             label: $('lbl').value, rel: rec ? ring[0].t - recT0 : null};
       for(const r of ring){ integ(sw, r, sw.last); sw.last = r; }
       ring = [];
@@ -554,34 +583,40 @@ function swingStep(s){
 const argmaxAbs = arr => arr.reduce((b, v, i) => Math.abs(v) > Math.abs(arr[b]) ? i : b, 0);
 function finishSwing(s){
   const o = sw; sw = null;
+  const pkMax = Math.max(Math.abs(o.pv), o.ph), minPk = parseFloat($('swMin').value);
+  const kind = !o.gf ? '-' : pkMax < minPk ? '小' : (Math.abs(o.iv) > o.ih ? '横' : '縦');
   const res = {id: o.id, label: o.label, rel: o.rel, dur: (s.t - o.t0) / 1000, pa: o.pa, gyro: o.gf > 0,
+    t0: o.t0, t1: s.t, iv: o.iv, ih: o.ih, pv: o.pv, ph: o.ph, kind,
     ang: o.ang, pk: o.pk,
     domRate: o.gf ? argmaxAbs(o.pk) : -1, domAng: o.gf ? argmaxAbs(o.ang) : -1};
   swings.push(res);
   log('スイング#' + res.id + ' [' + res.label + '] ' + res.dur.toFixed(2) + 's 最大' + res.pa.toFixed(1) + 'g' +
-      (res.gyro ? ' 主軸(速度)=' + AX[res.domRate] + ' 主軸(角度)=' + AX[res.domAng] : ' (ジャイロなし)'));
+      (res.gyro ? ' 判定=' + kind + ' ∫縦=' + res.ih.toFixed(0) + ' ∫横=' + res.iv.toFixed(0) + ' / センサー主軸(速度)=' + AX[res.domRate] : ' (ジャイロなし)'));
   renderSwings(); updRecInfo();
 }
 function renderSwings(){
   const tb = $('swBody');
-  if(!swings.length){ tb.innerHTML = '<tr><td colspan="12" class="l mute">まだありません</td></tr>'; $('swSummary').textContent = 'スイング待機中…'; return; }
+  if(!swings.length){ tb.innerHTML = '<tr><td colspan="16" class="l mute">まだありません</td></tr>'; $('swSummary').textContent = 'スイング待機中…'; return; }
   const last = swings.slice(-8).reverse();
   const f0 = v => v.toFixed(0);
   tb.innerHTML = last.map(r => {
     const idx = swings.indexOf(r), prev = swings[idx - 1];
-    const diff = prev && r.gyro && prev.gyro && prev.domRate !== r.domRate;
+    const diff = prev && r.gyro && prev.gyro && prev.kind !== r.kind && r.kind !== '小' && prev.kind !== '小';
     return '<tr' + (diff ? ' class="diff"' : '') + '><td>' + r.id + '</td><td class="l">' + r.label + '</td><td>' + r.dur.toFixed(2) + '</td><td>' + r.pa.toFixed(1) + '</td>' +
-      (r.gyro ? r.ang.map(v => '<td>' + f0(v) + '</td>').join('') + r.pk.map(v => '<td>' + f0(v) + '</td>').join('') +
+      (r.gyro ? '<td class="l"><b>' + r.kind + '</b></td><td>' + f0(r.ih) + '</td><td>' + f0(r.iv) + '</td><td>' + f0(r.ph) + '</td><td>' + f0(r.pv) + '</td>' +
+        r.ang.map(v => '<td>' + f0(v) + '</td>').join('') +
         '<td class="l">' + AX[r.domRate] + '</td><td class="l">' + AX[r.domAng] + '</td>'
-        : '<td colspan="8" class="l mute">ジャイロデータなし</td>') + '</tr>';
+        : '<td colspan="12" class="l mute">ジャイロデータなし</td>') + '</tr>';
   }).join('');
-  const n = swings.length, a = swings[n - 1], b = swings[n - 2];
-  let s = '直近: #' + a.id + (a.gyro ? ' 主軸=' + AX[a.domRate] + '(' + (a.pk[a.domRate] >= 0 ? '+' : '−') + ')' : '');
-  if(b && a.gyro && b.gyro){
-    s += ' ／ 1つ前 #' + b.id + ' 主軸=' + AX[b.domRate] + '(' + (b.pk[b.domRate] >= 0 ? '+' : '−') + ') → ' +
-         (a.domRate !== b.domRate ? '主軸が違う（縦→横の候補）' : '同じ軸');
+  const valid = swings.filter(r => r.gyro && r.kind !== '小');
+  let sm = '直近の斬り: ' + (valid.length ? valid.slice(-4).map(r => '#' + r.id + r.kind).join(' → ') : 'なし');
+  const a = valid[valid.length - 1], b = valid[valid.length - 2];
+  if(a && b){
+    const gap = (a.t0 - b.t1) / 1000;
+    sm += ' ／ 最新2回の間隔 ' + gap.toFixed(2) + 's';
+    if(b.kind === '縦' && a.kind === '横') sm += ' → 縦→横 成立';
   }
-  $('swSummary').textContent = s;
+  $('swSummary').textContent = sm;
 }
 
 // ---------- 記録 ----------
@@ -592,7 +627,8 @@ function recRow(s){
   rows.push([(s.t - recT0).toFixed(1), s.ax.toFixed(3), s.ay.toFixed(3), s.az.toFixed(3),
     g ? s.w[0].toFixed(1) : '', g ? s.w[1].toFixed(1) : '', g ? s.w[2].toFixed(1) : '',
     g ? +s.slow[0] : '', g ? +s.slow[1] : '', g ? +s.slow[2] : '',
-    btnNames, $('lbl').value, g ? s.raw[0] : '', g ? s.raw[1] : '', g ? s.raw[2] : '', sw ? sw.id : 0].join(','));
+    btnNames, $('lbl').value, g ? s.raw[0] : '', g ? s.raw[1] : '', g ? s.raw[2] : '', sw ? sw.id : 0,
+    g ? s.wv.toFixed(1) : '', g ? s.wh.toFixed(1) : '', g ? s.up[0].toFixed(3) : '', g ? s.up[1].toFixed(3) : '', g ? s.up[2].toFixed(3) : ''].join(','));
   if(rows.length % 50 === 0) updRecInfo();
 }
 function updRecInfo(){
@@ -633,12 +669,12 @@ const stamp = () => { const d = new Date(), p = n => String(n).padStart(2, '0');
 $('dlBtn').onclick = () => {
   updRecInfo();
   download('wiimote-motion-' + stamp() + '.csv',
-    '時刻ms,ax,ay,az,yaw,roll,pitch,yaw_slow,roll_slow,pitch_slow,ボタン,ラベル,yaw_raw,roll_raw,pitch_raw,swing_id\n' + rows.join('\n') + '\n');
+    '時刻ms,ax,ay,az,yaw,roll,pitch,yaw_slow,roll_slow,pitch_slow,ボタン,ラベル,yaw_raw,roll_raw,pitch_raw,swing_id,w_vert,w_horiz,upx,upy,upz\n' + rows.join('\n') + '\n');
 };
 $('dlSwBtn').onclick = () => {
-  const h = 'swing_id,ラベル,開始ms(記録内),継続s,最大a_g,積分yaw,積分roll,積分pitch,peak_yaw,peak_roll,peak_pitch,主軸_速度,主軸_角度';
+  const h = 'swing_id,ラベル,開始ms(記録内),継続s,最大a_g,積分yaw,積分roll,積分pitch,peak_yaw,peak_roll,peak_pitch,主軸_速度,主軸_角度,判定,積分縦,積分横,peak縦,peak横';
   const r = swings.map(s => [s.id, s.label, s.rel == null ? '' : s.rel.toFixed(0), s.dur.toFixed(3), s.pa.toFixed(2),
-    ...(s.gyro ? [...s.ang.map(v => v.toFixed(1)), ...s.pk.map(v => v.toFixed(1)), AX[s.domRate], AX[s.domAng]] : ['','','','','','','','',''])].join(','));
+    ...(s.gyro ? [...s.ang.map(v => v.toFixed(1)), ...s.pk.map(v => v.toFixed(1)), AX[s.domRate], AX[s.domAng], s.kind, s.ih.toFixed(1), s.iv.toFixed(1), s.ph.toFixed(1), s.pv.toFixed(1)] : ['','','','','','','','','','','','',''])].join(','));
   download('wiimote-swings-' + stamp() + '.csv', h + '\n' + r.join('\n') + '\n');
 };
 setInterval(() => { if(rec) updRecInfo(); }, 500);
