@@ -121,6 +121,22 @@ pre{margin:0;font-size:.82rem;white-space:pre-wrap;word-break:break-all;color:va
           <option value="pcm">8bit PCM</option>
         </select>
       </label>
+      <label>テスト音の高さ
+        <select id="toneHz">
+          <option value="440">440 Hz（低い）</option>
+          <option value="1000">1000 Hz</option>
+          <option value="1500">1500 Hz</option>
+          <option value="2000" selected>2000 Hz</option>
+        </select>
+      </label>
+      <label>音量
+        <select id="volSel">
+          <option value="8">小</option>
+          <option value="16" selected>中</option>
+          <option value="32">大</option>
+          <option value="64">最大（歪みやすい）</option>
+        </select>
+      </label>
       <label>ADPCMのレート
         <select id="adpcmRate">
           <option value="3000" selected>3000 Hz（従来）</option>
@@ -321,7 +337,7 @@ function slog(t){
 // mp3を使わない確認用: 440Hzのサイン波を1秒分つくってWiiへ送る
 $('testTone').onclick = () => {
   const n = RATE, tone = new Int8Array(n);
-  for(let i = 0; i < n; i++) tone[i] = Math.round(Math.sin(2 * Math.PI * 440 * i / RATE) * 100);
+  for(let i = 0; i < n; i++) tone[i] = Math.round(Math.sin(2 * Math.PI * Number($('toneHz').value) * i / RATE) * 100);
   playOnWii(tone);
 };
 
@@ -379,13 +395,14 @@ async function playOnWii(pcm){
   const adpcm = $('fmtSel').value === 'adpcm', uns = $('signSel').value === 'u';
   const sr = adpcm ? Number($('adpcmRate').value) : RATE, CH = 20;
   let data, rv, fmt, pad;
+  const vol = adpcm ? Number($('volSel').value) : Math.min(255, Number($('volSel').value) * 4);
   if(adpcm){
     data = adpcmEncode(resampleLinear(sr < RATE ? lowpass(pcm, RATE, sr * 0.45) : pcm, RATE, sr)); rv = Math.round(Number($('rateDiv').value) / sr); fmt = 0x00; pad = 0x08;
   }else{
     data = Uint8Array.from(pcm, v => (uns ? v + 128 : v) & 0xff); rv = Math.round(Number($('rateDiv').value) / RATE); fmt = 0x40; pad = uns ? 128 : 0;
   }
   const per = CH * (adpcm ? 2 : 1) / sr * 1000, total = Math.ceil(data.length / CH);
-  slog('送信開始: ' + (adpcm ? 'ADPCM' : '8bit PCM') + ' / ' + data.length + 'バイト / ' + sr + 'Hz / レート値=' + rv + ' / 理想間隔=' + per.toFixed(1) + 'ms');
+  slog('送信開始: ' + (adpcm ? 'ADPCM' : '8bit PCM') + ' / ' + data.length + 'バイト / ' + sr + 'Hz / レート値=' + rv + ' / 音量=0x' + vol.toString(16) + ' / 理想間隔=' + per.toFixed(1) + 'ms');
   try{
     await send(0x19, [0x04]); await send(0x14, [0x00]); // 前回の状態をリセット
     await sleep(150);
@@ -393,7 +410,7 @@ async function playOnWii(pcm){
     await send(0x19, [0x04]);                 // ミュート
     await writeReg(0xA20009, [0x01]);
     await writeReg(0xA20001, [0x08]);
-    await writeReg(0xA20001, [0x00, fmt, rv & 0xff, rv >> 8, 0x40, 0x00, 0x00]); // 形式 / レート / 音量
+    await writeReg(0xA20001, [0x00, fmt, rv & 0xff, rv >> 8, vol, 0x00, 0x00]); // 形式 / レート / 音量
     await writeReg(0xA20008, [0x01]);
     await send(0x19, [0x00]);                 // ミュート解除
     await sleep(50);
