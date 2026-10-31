@@ -108,8 +108,8 @@ pre{margin:0;font-size:.82rem;white-space:pre-wrap;word-break:break-all;color:va
       <button id="stopWii" disabled>停止</button>
       <label>Wiiの再生速度
         <select id="rateDiv">
-          <option value="6000000">設定A（新）</option>
-          <option value="12000000">設定B（以前の版）</option>
+          <option value="6000000">設定A（6000000で計算・従来）</option>
+          <option value="12000000">設定B（12000000で計算・ADPCMはこっちを試す）</option>
         </select>
       </label>
     </div>
@@ -380,7 +380,7 @@ async function playOnWii(pcm){
   const sr = adpcm ? Number($('adpcmRate').value) : RATE, CH = 20;
   let data, rv, fmt, pad;
   if(adpcm){
-    data = adpcmEncode(resampleLinear(sr < RATE ? lowpass(pcm, RATE, sr * 0.45) : pcm, RATE, sr)); rv = Math.round(6000000 / sr); fmt = 0x00; pad = 0x08;
+    data = adpcmEncode(resampleLinear(sr < RATE ? lowpass(pcm, RATE, sr * 0.45) : pcm, RATE, sr)); rv = Math.round(Number($('rateDiv').value) / sr); fmt = 0x00; pad = 0x08;
   }else{
     data = Uint8Array.from(pcm, v => (uns ? v + 128 : v) & 0xff); rv = Math.round(Number($('rateDiv').value) / RATE); fmt = 0x40; pad = uns ? 128 : 0;
   }
