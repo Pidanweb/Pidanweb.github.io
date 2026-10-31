@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PARY GAME</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:radial-gradient(circle at 50% 40%,#12303a,#050b0e);color:#fff;font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;user-select:none;-webkit-user-select:none;touch-action:none;cursor:pointer}
+  main{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center}
+  h1{margin:0;font-size:clamp(40px,9vw,92px);letter-spacing:.08em;color:#ffd35a;text-shadow:0 0 24px #ffd35a88}
+  h2{margin:0;font-size:clamp(14px,2.4vw,22px);color:#5fe07a;letter-spacing:.3em}
+  #orb{width:150px;height:150px;border-radius:50%;border:3px solid #7ae7ff88;display:grid;place-items:center;font-size:56px;position:relative;margin:14px 0;transition:transform .2s}
+  #orb svg{position:absolute;inset:-9px;width:168px;height:168px;transform:rotate(-90deg)}
+  #orb circle{fill:none;stroke:#ffd35a;stroke-width:5;stroke-dasharray:515;stroke-dashoffset:515}
+  body.hold #orb circle{stroke-dashoffset:0;transition:stroke-dashoffset .5s linear}
+  body.listen #orb{transform:scale(1.12);background:#7ae7ff22;animation:p 1s infinite}
+  body.go #orb{background:#5fe07a55;border-color:#5fe07a}
+  @keyframes p{50%{box-shadow:0 0 40px #7ae7ff}}
+  #st{font-size:clamp(16px,2.6vw,24px);color:#7ae7ff;min-height:1.4em}
+  #say{font-size:clamp(14px,2vw,20px);color:#ffd35a;min-height:1.4em}
+  small{color:#8aa;font-size:13px}
+</style>
+</head>
+<body>
+<main>
+  <h2>PARRY BOSS BATTLE</h2>
+  <h1>PARY GAME</h1>
+  <div id="orb">🎤<svg viewBox="0 0 168 168"><circle cx="84" cy="84" r="82"/></svg></div>
+  <div id="st">画面を長押しして「パリィゲーム起動」と話してください</div>
+  <div id="say"></div>
+  <small>長押しの間だけ音声認識します（Chrome / Edge / Safari・HTTPS または localhost）／音声が使えない時は Enter キー</small>
+</main>
+<script>
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition, $ = id => document.getElementById(id), st = $('st'), say = $('say');
+let rec = null, holding = false, timer = 0, done = false;
+// 表記ゆれ対策：カタカナ→ひらがな、長音・小さい「ぃ」・空白記号を除去して判定
+const norm = s => s.normalize('NFKC').toLowerCase().replace(/[\sー〜ぃィ、。,.!！?？]/g, '').replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 96));
+const match = s => /([ぱばは]り|parr?y)い?.{0,2}(げむ|game).{0,2}(起動|きどう|きどお|きとう)/.test(norm(s));
+
+function launch(){
+  if (done) return; done = true; holding = false;
+  try { rec && rec.abort(); } catch (e){}
+  document.body.className = 'go'; st.textContent = '⚔ パリィゲーム起動！';
+  setTimeout(() => location.href = 'pary_game.html?start=1', 900);
+}
+function listen(){
+  if (!SR){ st.textContent = 'このブラウザは音声認識に未対応です（Enterキーで開始）'; return; }
+  rec = new SR(); rec.lang = 'ja-JP'; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 3;
+  rec.onresult = e => {
+    let t = '';
+    for (const r of e.results){
+      for (let k = 0; k < r.length; k++) if (match(r[k].transcript)) return launch();
+      t += r[0].transcript;
+    }
+    say.textContent = '「' + t + '」';
+  };
+  rec.onerror = e => { if (e.error !== 'no-speech' && e.error !== 'aborted') st.textContent = '音声エラー: ' + e.error + (e.error === 'not-allowed' ? '（マイクを許可してください）' : ''); };
+  rec.onend = () => { if (holding && !done) try { rec.start(); } catch (e){} };   // 長押し中は聞き続ける
+  try { rec.start(); document.body.className = 'listen'; st.textContent = '🎙 聞いています… 「パリィゲーム起動」'; say.textContent = ''; } catch (e){}
+}
+function down(){
+  if (done || holding) return; holding = true; document.body.className = 'hold'; st.textContent = '長押し中…';
+  timer = setTimeout(listen, 500);
+}
+function up(){
+  if (done) return; holding = false; clearTimeout(timer);
+  try { rec && rec.stop(); } catch (e){}
+  document.body.className = ''; st.textContent = '画面を長押しして「パリィゲーム起動」と話してください';
+}
+addEventListener('pointerdown', down); addEventListener('pointerup', up); addEventListener('pointercancel', up); addEventListener('contextmenu', e => e.preventDefault());
+addEventListener('keydown', e => { if (e.key === 'Enter') launch(); });
+</script>
+</body>
+</html>
