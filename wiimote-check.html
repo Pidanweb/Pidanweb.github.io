@@ -123,9 +123,9 @@ pre{margin:0;font-size:.82rem;white-space:pre-wrap;word-break:break-all;color:va
       </label>
       <label>ADPCMのレート
         <select id="adpcmRate">
-          <option value="3000">3000 Hz（従来）</option>
+          <option value="3000" selected>3000 Hz（従来）</option>
           <option value="2600">2600 Hz</option>
-          <option value="2200" selected>2200 Hz</option>
+          <option value="2200">2200 Hz</option>
           <option value="2000">2000 Hz</option>
           <option value="1600">1600 Hz</option>
           <option value="1200">1200 Hz</option>
@@ -393,20 +393,25 @@ async function playOnWii(pcm){
     await send(0x19, [0x04]);                 // ミュート
     await writeReg(0xA20009, [0x01]);
     await writeReg(0xA20001, [0x08]);
-    await writeReg(0xA20001, [0x00, fmt, rv & 0xff, rv >> 8, 0x60, 0x00, 0x00]); // 形式 / レート / 音量
+    await writeReg(0xA20001, [0x00, fmt, rv & 0xff, rv >> 8, 0x40, 0x00, 0x00]); // 形式 / レート / 音量
     await writeReg(0xA20008, [0x01]);
     await send(0x19, [0x00]);                 // ミュート解除
     await sleep(50);
-    const t0 = performance.now();
+    const LEAD = 30; // 先行送信(ms)。大きすぎるとWii側バッファが溢れて途切れる
+    const t0 = performance.now(); let late = 0, maxLate = 0, last = null;
     for(let i = 0; i < total && !stopFlag; i++){
-      const wait = t0 + i * per - 60 - performance.now(); // 60ms先行して送る
-      if(wait > 0) await sleep(wait);
+      const target = t0 + i * per - LEAD;
+      let wait = target - performance.now();
+      if(wait > 4) await sleep(wait - 3);        // 粗く待つ(setTimeoutは精度が悪い)
+      while(performance.now() < target){ /* 残りは短く空回しして正確に */ }
+      const lag = performance.now() - target; if(lag > 5){ late++; maxLate = Math.max(maxLate, lag); }
       const b = new Array(21).fill(0); b[0] = CH << 3;
       for(let k = 0; k < CH; k++) b[1 + k] = data[i * CH + k] ?? pad;
-      await send(0x18, b);
+      last = send(0x18, b);                       // 送信完了を待たずに次の時刻へ（順番はキューで保たれる）
     }
+    await last;
     const el = performance.now() - t0;
-    slog('実際にかかった時間 ' + el.toFixed(0) + 'ms / 理想 ' + (total * per - 60).toFixed(0) + 'ms');
+    slog('実際にかかった時間 ' + el.toFixed(0) + 'ms / 理想 ' + (total * per - LEAD).toFixed(0) + 'ms / 5ms以上の遅れ ' + late + '回（最大 ' + maxLate.toFixed(0) + 'ms）');
     if(!stopFlag) await sleep(200);
   }finally{
     await send(0x19, [0x04]); await send(0x14, [0x00]);
