@@ -121,6 +121,16 @@ pre{margin:0;font-size:.82rem;white-space:pre-wrap;word-break:break-all;color:va
           <option value="pcm">8bit PCM</option>
         </select>
       </label>
+      <label>ADPCMのレート
+        <select id="adpcmRate">
+          <option value="3000">3000 Hz（従来）</option>
+          <option value="2600">2600 Hz</option>
+          <option value="2200" selected>2200 Hz</option>
+          <option value="2000">2000 Hz</option>
+          <option value="1600">1600 Hz</option>
+          <option value="1200">1200 Hz</option>
+        </select>
+      </label>
       <label>PCMの符号
         <select id="signSel">
           <option value="s">符号付き（signed）</option>
@@ -316,6 +326,26 @@ $('testTone').onclick = () => {
 };
 
 $('playWii').onclick = () => playOnWii(pcmData);
+// 間引き前のエイリアシング対策: 窓付きsincローパス (cutoffはHz)
+function lowpass(src, rate, cutoff){
+  const N = 63, h = new Float32Array(N), fc = cutoff / rate, m = (N - 1) / 2;
+  let sum = 0;
+  for(let i = 0; i < N; i++){
+    const x = i - m, sinc = x === 0 ? 2 * fc : Math.sin(2 * Math.PI * fc * x) / (Math.PI * x);
+    h[i] = sinc * (0.54 - 0.46 * Math.cos(2 * Math.PI * i / (N - 1))); sum += h[i];
+  }
+  for(let i = 0; i < N; i++) h[i] /= sum;
+  const out = new Float32Array(src.length);
+  for(let i = 0; i < src.length; i++){
+    let a = 0;
+    for(let k = 0; k < N; k++){ const j = i + k - m; if(j >= 0 && j < src.length) a += src[j] * h[k]; }
+    out[i] = a;
+  }
+  // 音量を再正規化
+  let pk = 1; for(const v of out) pk = Math.max(pk, Math.abs(v));
+  const g = 120 / pk; for(let i = 0; i < out.length; i++) out[i] *= g;
+  return out;
+}
 function resampleLinear(src, from, to){ // Int8(from Hz) → Int16(to Hz)
   const n = Math.floor(src.length * to / from), out = new Int16Array(n);
   for(let i = 0; i < n; i++){
@@ -347,10 +377,10 @@ async function playOnWii(pcm){
   wiiPlaying = true; stopFlag = false; say('');
   $('playWii').disabled = true; $('stopWii').disabled = false;
   const adpcm = $('fmtSel').value === 'adpcm', uns = $('signSel').value === 'u';
-  const sr = adpcm ? 3000 : RATE, CH = 20;
+  const sr = adpcm ? Number($('adpcmRate').value) : RATE, CH = 20;
   let data, rv, fmt, pad;
   if(adpcm){
-    data = adpcmEncode(resampleLinear(pcm, RATE, sr)); rv = Math.round(6000000 / sr); fmt = 0x00; pad = 0x08;
+    data = adpcmEncode(resampleLinear(sr < RATE ? lowpass(pcm, RATE, sr * 0.45) : pcm, RATE, sr)); rv = Math.round(6000000 / sr); fmt = 0x00; pad = 0x08;
   }else{
     data = Uint8Array.from(pcm, v => (uns ? v + 128 : v) & 0xff); rv = Math.round(Number($('rateDiv').value) / RATE); fmt = 0x40; pad = uns ? 128 : 0;
   }
