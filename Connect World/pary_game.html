@@ -18,7 +18,7 @@
   #faceBadge{margin-top:6px;font-size:12px;color:#7ae7ff;text-shadow:0 0 4px #000}
   #camPanel input[type=range]{width:100%}
   #menu{position:fixed;top:0;bottom:0;left:50%;transform:translateX(-50%);width:min(260px,44vw);z-index:9;background:#061418cc;border:1px solid #7ae7ff88;border-radius:12px;padding:16px;display:none;flex-direction:column;gap:12px;justify-content:center;font:15px sans-serif;color:#fff;text-align:center;box-sizing:border-box}
-  #menu.on{display:flex} #menu button{background:#0d2a30;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:8px;padding:10px;font:inherit;cursor:pointer}
+  #menu.on{display:flex} #menu{overflow-y:auto;gap:8px} #menu>:first-child{margin-top:auto} #menu>:last-child{margin-bottom:auto} #jobs{display:none;flex-direction:column;gap:6px} #jobs.on{display:flex} #menu button:disabled{opacity:.45;cursor:not-allowed} #menu button{background:#0d2a30;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:8px;padding:10px;font:inherit;cursor:pointer}
 </style>
 </head>
 <body>
@@ -40,6 +40,8 @@
   <div id="faceBadge"></div></div>
 <div id="menu"><h3 style="margin:0">MENU</h3>
   <button id="mClose">▶ 再開</button><button id="mView">👁 視点: 一人称</button><button id="mFace">🔄 顔カメラ: フロント</button>
+  <button id="jobBtn">🔁 ジョブチェンジ</button>
+  <div id="jobs"><button id="jSword">⚔ 剣士</button><button id="jWiz">🪄 魔法使い</button><button id="jGun" disabled>🔫 ガンナー（準備中）</button></div>
   <label>効果音 <input type="range" id="mVol" min="0" max="1" step=".1" value=".8"></label>
   <button id="mRestart">↻ リスタート</button><button id="mTitle">⌂ タイトルへ</button>
   <small style="color:#9fdcea">✋ 人差し指で「1」を描く / M キーで開閉</small></div>
@@ -416,6 +418,12 @@ $('mClose').onclick = () => toggleMenu(false); $('mFace').onclick = $('faceFlip'
 $('mVol').oninput = e => vol = +e.target.value;
 $('mRestart').onclick = () => { toggleMenu(false); reset(); state = 'play'; setMsg(null); };
 $('mTitle').onclick = () => location.href = 'parytitle.html';
+const JOB = 'sword';   // このHTMLの職業
+for (const [k, id, url] of [['sword', 'jSword', 'pary_game.html'], ['wiz', 'jWiz', 'Connectworld_Wizard.html']]){
+  const b = $(id); if (k === JOB){ b.textContent = '✔ ' + b.textContent; b.style.borderColor = '#ffd35a'; b.onclick = () => toggleMenu(false); }
+  else b.onclick = () => location.href = url + '?start=1';   // 別HTMLへ移動して自動スタート
+}
+$('jobBtn').onclick = () => $('jobs').classList.toggle('on');
 
 // ===== ゲーム状態 =====
 const keys = {}, mouse = { nx:0, ny:0 }, ray = new THREE.Raycaster(), tmp = new THREE.Vector3();
