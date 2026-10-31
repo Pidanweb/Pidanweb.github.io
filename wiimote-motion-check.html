@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wiiリモコン Plus モーション確認・記録</title>
+<style>
+:root{--bg:#f3f5f2;--card:#fff;--ink:#1c2420;--mute:#667068;--line:#d5dad4;--on:#1f9d5a;--onink:#fff;--warn:#c2410c;--bar:#3b6ea5;--fast:#d97706;--rec:#c0262d}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151a17;--card:#1e2521;--ink:#e6ebe7;--mute:#98a39b;--line:#323b35;--on:#37c37a;--onink:#08150d;--warn:#fb923c;--bar:#6fa3d8;--fast:#fbbf24;--rec:#f87171}}
+*{box-sizing:border-box}
+body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font-family:"Hiragino Sans","Yu Gothic UI","Meiryo",system-ui,sans-serif;line-height:1.6}
+main{max-width:860px;margin:0 auto;display:grid;gap:14px}
+h1{font-size:1.3rem;margin:0}
+h2{font-size:1rem;margin:0 0 10px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+button,select,input{font:inherit}
+button{padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.main{background:var(--on);color:var(--onink);border-color:var(--on);font-weight:600}
+button.rec{background:var(--rec);color:#fff;border-color:var(--rec);font-weight:600}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--bar);outline-offset:2px}
+select{padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.row+.row{margin-top:10px}
+#status{font-weight:600}
+.mute{color:var(--mute);font-size:.9rem}
+.pad{display:grid;grid-template-columns:repeat(3,52px);gap:6px}
+.k{height:44px;min-width:52px;display:grid;place-items:center;border:1px solid var(--line);border-radius:8px;color:var(--mute);font-size:.85rem}
+.k.on{background:var(--on);color:var(--onink);border-color:var(--on);font-weight:700}
+.btns{display:flex;flex-wrap:wrap;gap:24px;align-items:center}
+.btnrow{display:flex;flex-wrap:wrap;gap:6px}
+.axis{display:grid;grid-template-columns:3.2rem 1fr 6.5rem 3.2rem;gap:8px;align-items:center;margin:4px 0}
+.track{height:12px;background:var(--bg);border:1px solid var(--line);border-radius:6px;position:relative}
+.fill{position:absolute;top:0;bottom:0;background:var(--bar);border-radius:6px}
+.fill.fast{background:var(--fast)}
+.mid{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--mute)}
+.num{font-variant-numeric:tabular-nums;text-align:right}
+.badge{font-size:.75rem;text-align:center;border:1px solid var(--line);border-radius:6px;color:var(--mute)}
+.badge.fast{color:var(--fast);border-color:var(--fast)}
+pre{margin:0;font-size:.8rem;white-space:pre-wrap;word-break:break-all;color:var(--mute)}
+#log{max-height:200px;overflow:auto}
+#msg{color:var(--warn)}
+.pill{display:inline-block;padding:1px 10px;border-radius:999px;border:1px solid var(--line);font-weight:600;font-size:.9rem}
+.pill.ok{background:var(--on);color:var(--onink);border-color:var(--on)}
+.pill.ng{color:var(--warn);border-color:var(--warn)}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.85rem;font-variant-numeric:tabular-nums}
+th,td{padding:4px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{color:var(--mute);font-weight:600}
+td:first-child,th:first-child,td.l,th.l{text-align:left}
+tr.diff td{background:color-mix(in srgb,var(--on) 14%,transparent)}
+.diag{color:var(--ink);font-size:.9rem;margin:8px 0 0}
+label{white-space:nowrap}
+input[type=range]{vertical-align:middle}
+</style>
+</head>
+<body>
+<main>
+  <h1>Wiiリモコン Plus モーション確認・記録</h1>
+
+  <section>
+    <div class="row">
+      <button id="connect" class="main">Wiiリモコンを選んで接続</button>
+      <button id="disconnect">切断</button>
+      <span id="status">未接続</span>
+    </div>
+    <p class="mute" style="margin:8px 0 0">先にBluetooth設定でペアリングしてから押してください。受信レート: <b id="hz">0</b> Hz / バッテリー: <b id="batt">-</b></p>
+    <p id="msg" style="margin:6px 0 0"></p>
+    <div class="row">
+      <span>MotionPlus: <span id="mpState" class="pill ng">未有効化</span></span>
+      <button id="mpEnable">MotionPlus 再有効化</button>
+      <button id="calBtn">ゼロ点キャリブレーション</button>
+      <span class="mute" id="calMsg">接続後、約1秒静止して自動で実行します</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>ボタン</h2>
+    <div class="btns">
+      <div class="pad">
+        <span></span><div class="k" id="Up">上</div><span></span>
+        <div class="k" id="Left">左</div><span></span><div class="k" id="Right">右</div>
+        <span></span><div class="k" id="Down">下</div><span></span>
+      </div>
+      <div class="btnrow">
+        <div class="k" id="A">A</div><div class="k" id="B">B</div>
+        <div class="k" id="Minus">−</div><div class="k" id="Home">HOME</div><div class="k" id="Plus">+</div>
+        <div class="k" id="One">1</div><div class="k" id="Two">2</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>加速度（±3g表示）</h2>
+    <div id="accBars"></div>
+    <div class="row mute" style="margin-top:6px">
+      <span>大きさ |a|: <b id="amag">0.00</b> g</span>
+      <span>直近2秒の最大: <b id="apeak">0.00</b> g</span>
+      <span>0g=128, 1g=26カウントで換算（概算）</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>ジャイロ（MotionPlus・角速度）</h2>
+    <div class="row" style="margin-bottom:6px">
+      <label>バーの範囲
+        <select id="gRange">
+          <option value="500">±500 °/s</option>
+          <option value="1000">±1000 °/s</option>
+          <option value="2000" selected>±2000 °/s</option>
+        </select>
+      </label>
+      <span class="mute">ゼロ点補正後。slow=低速高感度(橙でない) / fast=高速(橙)。fastはslowの約4.5倍(2000/440)で換算した概算値です。</span>
+    </div>
+    <div id="gyBars"></div>
+    <p class="mute" style="margin:6px 0 0">符号は「生値 − ゼロ点」そのままです（WiiBrew定義の向き）。縦/横がどの軸・どの符号かは実データから決めます。</p>
+  </section>
+
+  <section>
+    <h2>記録（CSV）</h2>
+    <div class="row">
+      <button id="recBtn" class="main">記録開始</button>
+      <label>ラベル
+        <select id="lbl">
+          <option>縦</option><option>横</option><option>縦→横</option><option>その他</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="remoteCtl" checked> リモコンの + で開始/停止、− でラベル切替</label>
+    </div>
+    <div class="row">
+      <button id="dlBtn" disabled>CSVをダウンロード</button>
+      <button id="dlSwBtn" disabled>スイング集計CSV</button>
+      <button id="clrBtn" disabled>記録をクリア</button>
+      <span class="mute" id="recInfo">記録: 0行</span>
+    </div>
+    <p class="mute" style="margin:8px 0 0">列: 時刻ms, ax, ay, az, yaw, roll, pitch（゜/s概算・ゼロ点補正済）, yaw_slow, roll_slow, pitch_slow, ボタン, ラベル, yaw_raw, roll_raw, pitch_raw（14bit生値）, swing_id（スイング区間中のみ番号、他は0）。記録中はLED4が点灯します。</p>
+  </section>
+
+  <section>
+    <h2>スイング解析</h2>
+    <div class="row">
+      <label>加速度しきい値 <input type="range" id="swTh" min="1.2" max="4" step="0.1" value="2.2"> <b id="swThv">2.2</b> g</label>
+      <label>区切り待ち時間 <input type="range" id="swHold" min="80" max="400" step="10" value="150"> <b id="swHoldv">150</b> ms</label>
+      <button id="swClr">一覧をクリア</button>
+    </div>
+    <p class="mute" style="margin:8px 0">|a|がしきい値を超えた所から、しきい値未満が「区切り待ち時間」続くまでを1スイングとします（開始の約0.12秒前から角速度を積分）。軸は決め打ちせず、ピーク角速度の軸と積分角度の大きい軸を両方出します。</p>
+    <p class="diag" id="swSummary">スイング待機中…</p>
+    <div class="tbl">
+      <table>
+        <thead><tr>
+          <th>#</th><th class="l">ラベル</th><th>時間 s</th><th>最大|a| g</th>
+          <th>∫yaw °</th><th>∫roll °</th><th>∫pitch °</th>
+          <th>peak yaw °/s</th><th>peak roll °/s</th><th>peak pitch °/s</th>
+          <th class="l">主軸(速度)</th><th class="l">主軸(角度)</th>
+        </tr></thead>
+        <tbody id="swBody"><tr><td colspan="12" class="l mute">まだありません</td></tr></tbody>
+      </table>
+    </div>
+    <p class="mute" style="margin:6px 0 0">薄い緑の行 = 直前のスイングと主軸(速度)が違うスイング。最新8件を新しい順に表示。</p>
+  </section>
+
+  <section>
+    <h2>本体へ送信</h2>
+    <div class="row">
+      <span>
+        <label><input type="checkbox" data-led="0"> LED1</label>
+        <label><input type="checkbox" data-led="1"> LED2</label>
+        <label><input type="checkbox" data-led="2"> LED3</label>
+        <label><input type="checkbox" data-led="3"> LED4</label>
+      </span>
+      <button id="rumble">振動 0.3秒</button>
+      <button id="status-req">バッテリー取得</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>診断（MotionPlusが検出できない時の切り分け）</h2>
+    <p class="diag" id="diag">接続すると、ここに診断結果が出ます。</p>
+    <div class="row">
+      <button id="idRead">拡張ID読み取り（A6/A4）</button>
+      <button id="dumpBtn">診断ログをコピー</button>
+    </div>
+    <p class="mute" style="margin:8px 0 4px">受信レポート（直近1秒の件数）: <span id="idCounts">-</span></p>
+    <pre id="raw">待機中</pre>
+    <p class="mute" style="margin:8px 0 4px">MotionPlus 6byte のビット解析</p>
+    <pre id="mpDec">-</pre>
+    <p class="mute" style="margin:8px 0 4px">イベントログ</p>
+    <pre id="log"></pre>
+  </section>
+</main>
+
+<script>
+const VID = 0x057e, PIDS = [0x0306, 0x0330]; // Wiimote / Wiimote Plus (RVL-CNT-01-TR)
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const BTN0 = {Left:0x01, Right:0x02, Down:0x04, Up:0x08, Plus:0x10};
+const BTN1 = {Two:0x01, One:0x02, B:0x04, A:0x08, Minus:0x10, Home:0x80};
+const REPORT_MODE = 0x35;                 // ボタン2 + 加速度3 + 拡張16
+const MP_OFF = 5;                          // レポート内の拡張データ開始位置
+const SLOW_DPS = 440 / 8192;               // slow: 1カウント当たりの概算 °/s
+const FAST_RATIO = 2000 / 440;             // fast は slow の約4.5倍
+const AX = ['yaw', 'roll', 'pitch'];
+const PRE_MS = 120, MAX_SWING_MS = 1500, CAL_MS = 1000, CAL_STD_MAX = 80;
+
+let dev = null, leds = 0, frames = 0, T0 = performance.now();
+
+// ---------- ログ ----------
+const logs = [];
+function log(t){
+  logs.push(((performance.now() - T0) / 1000).toFixed(2) + 's ' + t);
+  if(logs.length > 80) logs.shift();
+  const el = $('log'); el.textContent = logs.join('\n'); el.scrollTop = el.scrollHeight;
+}
+const hex = (v, n = 2) => v.toString(16).padStart(n, '0');
+function say(t, bad){ $('msg').textContent = bad ? t : ''; }
+function setStatus(t){ $('status').textContent = t; }
+
+if(!('hid' in navigator)){
+  say('このブラウザはWebHIDに対応していません。Chrome または Edge を使ってください。', true);
+  $('connect').disabled = true;
+}
+
+// ---------- 送信 ----------
+async function send(id, bytes){
+  if(!dev) return;
+  try{ await dev.sendReport(id, new Uint8Array(bytes)); }
+  catch(e){ say('送信エラー: ' + e.message, true); log('送信エラー 0x' + hex(id) + ': ' + e.message); }
+}
+const setMode = () => send(0x12, [0x04, REPORT_MODE]);
+const ledOut = () => leds | (rec ? 8 : 0);
+const sendLed = (rumble = 0) => send(0x11, [(ledOut() << 4) | rumble]);
+function writeReg(addr, data){
+  const b = new Array(21).fill(0);
+  b[0] = 0x04; b[1] = (addr >> 16) & 0xff; b[2] = (addr >> 8) & 0xff; b[3] = addr & 0xff; b[4] = data.length;
+  data.forEach((v, i) => b[5 + i] = v);
+  return send(0x16, b);
+}
+function readReg(addr, size){ return send(0x17, [0x04, (addr >> 16) & 0xff, (addr >> 8) & 0xff, addr & 0xff, 0, size]); }
+
+// ---------- MotionPlus 状態 ----------
+const mp = {
+  state: 'off',            // off / activating / ok / lost
+  zero: [8192, 8192, 8192],
+  calibrated: false, cal: null,
+  lastValid: 0, nTotal: 0, n35: 0, nValid: 0, nEmpty: 0, nOther: 0, n3031: 0,
+  extBit: null, writeErr: null, lastModeSet: 0, activatedAt: 0
+};
+
+async function enableMP(){
+  if(!dev) return;
+  mp.state = 'activating'; mp.activatedAt = performance.now();
+  mp.n35 = mp.nValid = mp.nEmpty = mp.nOther = mp.n3031 = 0; mp.writeErr = null;
+  log('MotionPlus有効化: 0xA600FE ← 0x04');
+  await writeReg(0xA600FE, [0x04]);
+  await sleep(150);
+  await send(0x15, [0x00]);        // ステータス要求 → 0x20 が来たらレポートモードを再設定
+  setTimeout(diagnose, 2500);
+}
+
+function mpPill(){
+  const el = $('mpState');
+  const map = {off:['未有効化','ng'], activating:['有効化中…','ng'], ok:['検出（受信中）','ok'], lost:['データが止まりました','ng']};
+  let [t, c] = map[mp.state];
+  if(mp.state === 'activating' && performance.now() - mp.activatedAt > 2500) { t = '検出できません（診断を参照）'; }
+  el.textContent = t; el.className = 'pill ' + c;
+}
+
+// ---------- 接続 ----------
+async function open(d){
+  dev = d;
+  if(!d.opened) await d.open();
+  d.oninputreport = onReport;
+  resetAll();
+  setStatus('接続中: ' + d.productName);
+  log('接続: ' + d.productName + ' (pid 0x' + hex(d.productId, 4) + ')');
+  await setMode();
+  await sendLed();
+  await enableMP();
+}
+$('connect').onclick = async () => {
+  try{
+    const [d] = await navigator.hid.requestDevice({filters: PIDS.map(p => ({vendorId:VID, productId:p}))});
+    if(d) await open(d);
+  }catch(e){ say('接続できません: ' + e.message, true); }
+};
+$('disconnect').onclick = async () => {
+  if(dev){ if(rec) stopRec(); await dev.close(); dev = null; setStatus('未接続'); mp.state = 'off'; mpPill(); log('切断'); }
+};
+navigator.hid?.addEventListener('disconnect', e => { if(e.device === dev){ dev = null; setStatus('切断されました'); mp.state = 'off'; mpPill(); } });
+navigator.hid?.getDevices().then(l => {
+  const d = l.find(x => x.vendorId === VID && PIDS.includes(x.productId));
+  if(d) open(d).catch(() => {});
+});
+$('mpEnable').onclick = () => enableMP();
+
+function resetAll(){
+  mp.state = 'off'; mp.cal = null; mp.calibrated = false; mp.lastValid = 0;
+  ring = []; sw = null; prevPlus = prevMinus = false;
+}
+
+// ---------- ゼロ点キャリブレーション ----------
+function startCal(){
+  mp.cal = {n: 0, sum: [0,0,0], sq: [0,0,0], t0: null, restarts: 0};
+  $('calMsg').textContent = '静止してください…（約1秒）';
+  log('キャリブレーション開始');
+}
+$('calBtn').onclick = () => { if(mp.state === 'ok') startCal(); else say('MotionPlusのデータが来てから実行してください。', true); };
+
+function calFeed(raw, slow, t){
+  const c = mp.cal; if(!c) return;
+  if(!slow[0] || !slow[1] || !slow[2]){ restartCal('動きを検出（fast）'); return; }
+  if(c.t0 == null) c.t0 = t;
+  c.n++;
+  for(let i = 0; i < 3; i++){ c.sum[i] += raw[i]; c.sq[i] += raw[i] * raw[i]; }
+  const el = t - c.t0;
+  if(el < CAL_MS || c.n < 20){ $('calMsg').textContent = '静止してください… ' + Math.round(el / CAL_MS * 100) + '%'; return; }
+  const mean = c.sum.map(s => s / c.n);
+  const std = c.sq.map((s, i) => Math.sqrt(Math.max(0, s / c.n - mean[i] * mean[i])));
+  if(Math.max(...std) > CAL_STD_MAX){ restartCal('揺れが大きい(σ=' + Math.max(...std).toFixed(0) + ')'); return; }
+  mp.zero = mean; mp.calibrated = true; mp.cal = null;
+  const m = 'ゼロ点OK: yaw=' + mean[0].toFixed(0) + ' roll=' + mean[1].toFixed(0) + ' pitch=' + mean[2].toFixed(0);
+  $('calMsg').textContent = m; log(m + ' / σ最大 ' + Math.max(...std).toFixed(1));
+}
+function restartCal(why){
+  const c = mp.cal; c.n = 0; c.sum = [0,0,0]; c.sq = [0,0,0]; c.t0 = null; c.restarts++;
+  $('calMsg').textContent = why + '。静止してやり直し中…（リモコンを机に置くと確実です）';
+  if(c.restarts === 1) log('キャリブレーションやり直し: ' + why);
+}
+
+// ---------- 受信 ----------
+const idCount = {}, idCountSec = {}, lastData = {};
+let view = {ax:0, ay:0, az:0, w:[0,0,0], slow:[true,true,true], gyro:false, a:0};
+let btnNames = '-', peakA = 0, peakAt = 0, dirty = false, lastDec = '-';
+let prevPlus = false, prevMinus = false, lastToggle = 0;
+
+function onReport(e){
+  const d = e.data, id = e.reportId, t = e.timeStamp || performance.now();
+  idCount[id] = (idCount[id] || 0) + 1;
+  lastData[id] = d;
+  if(id === 0x22){                                  // 書き込み/コマンド応答
+    const rid = d.getUint8(2), err = d.getUint8(3);
+    if(err !== 0){
+      mp.writeErr = '0x' + hex(rid) + ' err=0x' + hex(err);
+      log('応答エラー: report 0x' + hex(rid) + ' err=0x' + hex(err) + '（0以外=失敗）');
+    }
+    return;
+  }
+  if(id === 0x21){                                  // 読み取り応答
+    const sz = (d.getUint8(2) >> 4) + 1, err = d.getUint8(2) & 0x0f, addr = (d.getUint8(3) << 8) | d.getUint8(4);
+    const bytes = []; for(let i = 0; i < sz && 5 + i < d.byteLength; i++) bytes.push(hex(d.getUint8(5 + i)));
+    log('読み取り応答 addr=0x' + hex(addr, 4) + ' err=' + err + ' data=' + (err ? '(失敗)' : bytes.join(' ')));
+    return;
+  }
+  if(id === 0x20){                                  // ステータス
+    const fl = d.getUint8(2);
+    mp.extBit = !!(fl & 0x02);
+    $('batt').textContent = Math.round(d.getUint8(5) / 2) + '%';
+    log('ステータス: flags=0x' + hex(fl) + ' 拡張接続=' + (mp.extBit ? 'あり' : 'なし') + ' → レポートモード再設定');
+    setMode();
+    return;
+  }
+  if(id !== 0x30 && id !== 0x31 && id !== 0x35) return;
+  frames++;
+  if(id !== 0x35){                                  // モードが戻っている
+    mp.n3031++;
+    if(t - mp.lastModeSet > 1000){ mp.lastModeSet = t; log('0x' + hex(id) + ' が届いています。0x35へ再設定します'); setMode(); }
+  }
+  const b0 = d.getUint8(0), b1 = d.getUint8(1);
+  let names = [];
+  for(const k in BTN0){ const on = !!(b0 & BTN0[k]); $(k).classList.toggle('on', on); if(on) names.push(k); }
+  for(const k in BTN1){ const on = !!(b1 & BTN1[k]); $(k).classList.toggle('on', on); if(on) names.push(k); }
+  btnNames = names.length ? names.join('+') : '-';
+  handleRemote(!!(b0 & BTN0.Plus), !!(b1 & BTN1.Minus), t);
+  if(id === 0x30) return;
+
+  const ax = (d.getUint8(2) - 128) / 26, ay = (d.getUint8(3) - 128) / 26, az = (d.getUint8(4) - 128) / 26;
+  const a = Math.hypot(ax, ay, az);
+  let w = [0,0,0], slow = [true,true,true], raw = [0,0,0], gyro = false;
+
+  if(id === 0x35 && d.byteLength >= MP_OFF + 6){
+    mp.n35++;
+    const e = []; for(let i = 0; i < 6; i++) e.push(d.getUint8(MP_OFF + i));
+    const allFF = e.every(v => v === 0xff), allZero = e.every(v => v === 0);
+    const idBits = e[5] & 0x03;                     // MotionPlusデータは 0b10
+    const valid = !allFF && !allZero && idBits === 0x02;
+    if(allFF || allZero) mp.nEmpty++; else if(!valid) mp.nOther++;
+    lastDec = decodeText(e, valid, idBits);
+    if(valid){
+      mp.nValid++; mp.lastValid = t;
+      raw = [e[0] | ((e[3] & 0xfc) << 6), e[1] | ((e[4] & 0xfc) << 6), e[2] | ((e[5] & 0xfc) << 6)];
+      slow = [!!(e[3] & 0x02), !!(e[4] & 0x02), !!(e[3] & 0x01)];   // yaw / roll / pitch
+      if(mp.state !== 'ok'){
+        mp.state = 'ok'; log('MotionPlusデータ検出（最初の有効フレーム）。ゼロ点キャリブレーションを開始');
+        if(!mp.calibrated) startCal();
+      }
+      if(mp.cal) calFeed(raw, slow, t);
+      for(let i = 0; i < 3; i++) w[i] = (raw[i] - mp.zero[i]) * SLOW_DPS * (slow[i] ? 1 : FAST_RATIO);
+      gyro = true;
+    }
+  }
+  const s = {t, ax, ay, az, a, w, raw, slow, gyro};
+  view = s; dirty = true;
+  if(a > peakA){ peakA = a; peakAt = t; }
+  swingStep(s);
+  if(rec) recRow(s);
+}
+
+function decodeText(e, valid, idBits){
+  return 'ext6: ' + e.map(v => hex(v)).join(' ') + '\n' +
+    'yaw下<7:0>=' + e[0] + '  roll左<7:0>=' + e[1] + '  pitch左<7:0>=' + e[2] + '\n' +
+    'byte3: yaw<13:8>=' + (e[3] >> 2) + ' yawSlow=' + ((e[3] >> 1) & 1) + ' pitchSlow=' + (e[3] & 1) + '\n' +
+    'byte4: roll<13:8>=' + (e[4] >> 2) + ' rollSlow=' + ((e[4] >> 1) & 1) + ' 拡張接続bit=' + (e[4] & 1) + '\n' +
+    'byte5: pitch<13:8>=' + (e[5] >> 2) + ' 下位2bit=' + (idBits >> 1) + (idBits & 1) + '（MotionPlusなら 10）\n' +
+    '判定: ' + (valid ? 'MotionPlusデータ' : (e.every(v => v === 0xff) ? '全FF（拡張なし/未初期化）' : e.every(v => v === 0) ? '全00（拡張なし/未初期化）' : 'MotionPlus形式ではない'));
+}
+
+// ---------- 診断 ----------
+function diagnose(){
+  const el = $('diag');
+  let t;
+  if(!dev) t = '未接続です。';
+  else if(mp.n35 === 0)
+    t = '0x35 レポートが1件も届いていません' + (mp.n3031 ? '（0x30/0x31 は届いている＝レポートモード設定が効いていない）' : '') +
+        '。接続し直す、または一度リモコンの電池を抜いて再ペアリングしてください。';
+  else if(mp.nValid > 0)
+    t = 'OK: MotionPlusデータを ' + mp.nValid + ' フレーム受信しています。';
+  else if(mp.nEmpty >= mp.n35)
+    t = 'ジャイロのデータが空（全00/全FF）です。原因候補: ①0xA600FE への書き込みが失敗している' +
+        (mp.writeErr ? '（応答エラー ' + mp.writeErr + ' あり）' : '（応答エラーは出ていません）') +
+        ' ②Wiiリモコン本体にMotionPlusが無い／有効化できない個体 ③他アプリがHIDを掴んでいる。' +
+        '試すこと: 「MotionPlus 再有効化」→「拡張ID読み取り」。IDの目安（WiiBrew）: ' +
+        '00 00 A6 20 00 05 付近＝MotionPlusあり・未有効、00 00 A4 20 04 05 付近＝有効。' +
+        '拡張接続フラグ(0x20): ' + (mp.extBit == null ? '未受信' : mp.extBit ? 'あり' : 'なし');
+  else
+    t = '拡張データは来ていますが、MotionPlus形式（byte5の下位2bitが10）ではありません。ヌンチャク等の拡張が刺さっていないか確認し、「MotionPlus 再有効化」を試してください。下の6byte解析を見てください。';
+  el.textContent = t;
+}
+$('idRead').onclick = async () => {
+  if(!dev) return say('先に接続してください。', true);
+  log('拡張ID読み取り: 0xA600FA (未有効側)'); await readReg(0xA600FA, 6);
+  await sleep(300);
+  log('拡張ID読み取り: 0xA400FA (有効側)'); await readReg(0xA400FA, 6);
+};
+$('dumpBtn').onclick = async () => {
+  const txt = ['== wiimote-motion-check 診断 ==', 'MPstate=' + mp.state, 'n35=' + mp.n35 + ' valid=' + mp.nValid + ' empty=' + mp.nEmpty + ' other=' + mp.nOther + ' n30/31=' + mp.n3031,
+    'extBit(0x20)=' + mp.extBit, 'writeErr=' + mp.writeErr, $('diag').textContent, '--- raw ---', $('raw').textContent, '--- decode ---', lastDec, '--- log ---', logs.join('\n')].join('\n');
+  try{ await navigator.clipboard.writeText(txt); say(''); log('診断ログをコピーしました'); }
+  catch(e){ say('コピーできませんでした: ' + e.message, true); }
+};
+
+// ---------- 表示 ----------
+function mkBars(box, defs){
+  box.innerHTML = defs.map(([k, name]) =>
+    '<div class="axis"><span>' + name + '</span><div class="track"><div class="mid"></div><div class="fill" id="f' + k + '"></div></div><span class="num" id="v' + k + '">0</span><span class="badge" id="b' + k + '"></span></div>').join('');
+}
+mkBars($('accBars'), [['ax','X'],['ay','Y'],['az','Z']]);
+mkBars($('gyBars'), [['gyaw','yaw'],['groll','roll'],['gpitch','pitch']]);
+
+function bar(k, v, range, text){
+  const f = $('f' + k), c = Math.max(-range, Math.min(range, v)) / range;
+  f.style.left = (c < 0 ? 50 + c * 50 : 50) + '%';
+  f.style.width = Math.abs(c) * 50 + '%';
+  $('v' + k).textContent = text;
+}
+function render(){
+  requestAnimationFrame(render);
+  mpPill();
+  if(!dirty) return; dirty = false;
+  const s = view;
+  bar('ax', s.ax, 3, s.ax.toFixed(2) + ' g'); bar('ay', s.ay, 3, s.ay.toFixed(2) + ' g'); bar('az', s.az, 3, s.az.toFixed(2) + ' g');
+  $('amag').textContent = s.a.toFixed(2);
+  const R = Number($('gRange').value);
+  for(let i = 0; i < 3; i++){
+    const k = 'g' + AX[i];
+    if(s.gyro){
+      bar(k, s.w[i], R, s.w[i].toFixed(0) + ' °/s');
+      $('b' + k).textContent = s.slow[i] ? 'slow' : 'fast';
+      $('b' + k).className = 'badge' + (s.slow[i] ? '' : ' fast');
+      $('f' + k).className = 'fill' + (s.slow[i] ? '' : ' fast');
+    }else{ bar(k, 0, R, '—'); $('b' + k).textContent = ''; }
+  }
+}
+requestAnimationFrame(render);
+
+setInterval(() => {
+  $('hz').textContent = frames; frames = 0;
+  // レポート件数
+  const parts = []; for(const k in idCount) parts.push('0x' + hex(Number(k)) + '=' + idCount[k]);
+  $('idCounts').textContent = parts.length ? parts.join(' / ') : '-';
+  for(const k in idCount) delete idCount[k];
+  // 生データ
+  const lines = [];
+  for(const k of [0x35, 0x31, 0x30, 0x20, 0x21, 0x22]){
+    const d = lastData[k]; if(!d) continue;
+    const h = i => hex(d.getUint8(i));
+    let s = 'report 0x' + hex(k) + ' : ';
+    if(k === 0x35 && d.byteLength >= 11){
+      const rest = []; for(let i = 11; i < d.byteLength; i++) rest.push(h(i));
+      s += 'BTN[' + h(0) + ' ' + h(1) + '] ACC[' + h(2) + ' ' + h(3) + ' ' + h(4) + '] MP[' + [5,6,7,8,9,10].map(h).join(' ') + '] REST[' + rest.join(' ') + ']';
+    }else{ const a = []; for(let i = 0; i < d.byteLength; i++) a.push(h(i)); s += a.join(' '); }
+    lines.push(s);
+  }
+  $('raw').textContent = lines.length ? lines.join('\n') : '待機中';
+  $('mpDec').textContent = lastDec;
+  // ピーク加速度（2秒で減衰）
+  if(performance.now() - peakAt > 2000) peakA = 0;
+  $('apeak').textContent = peakA.toFixed(2);
+  // MotionPlus途切れ監視
+  if(mp.state === 'ok' && performance.now() - mp.lastValid > 1000){ mp.state = 'lost'; log('MotionPlusデータが1秒以上来ていません'); }
+  if(mp.state === 'lost' && performance.now() - mp.lastValid < 300){ mp.state = 'ok'; }
+}, 1000);
+
+document.querySelectorAll('[data-led]').forEach(c => c.onchange = () => {
+  leds = 0; document.querySelectorAll('[data-led]').forEach(x => { if(x.checked) leds |= 1 << x.dataset.led; });
+  sendLed();
+});
+$('rumble').onclick = async () => { await sendLed(1); setTimeout(() => sendLed(0), 300); };
+$('status-req').onclick = () => send(0x15, [0x00]);
+
+// ---------- スイング解析 ----------
+let ring = [], sw = null, swId = 0, swings = [];
+const th = () => parseFloat($('swTh').value), holdMs = () => parseFloat($('swHold').value);
+$('swTh').oninput = () => $('swThv').textContent = $('swTh').value;
+$('swHold').oninput = () => $('swHoldv').textContent = $('swHold').value;
+$('swClr').onclick = () => { swings = []; renderSwings(); };
+
+function integ(o, s, prev){
+  if(s.a > o.pa) o.pa = s.a;
+  if(!prev) return;
+  const dt = Math.min(0.05, (s.t - prev.t) / 1000);
+  if(dt <= 0 || !s.gyro) return;
+  for(let i = 0; i < 3; i++){
+    o.ang[i] += s.w[i] * dt;
+    if(Math.abs(s.w[i]) > Math.abs(o.pk[i])) o.pk[i] = s.w[i];
+  }
+  o.gf++;
+}
+function swingStep(s){
+  if(!sw){
+    ring.push(s);
+    while(ring.length && s.t - ring[0].t > PRE_MS) ring.shift();
+    if(s.a >= th()){
+      sw = {id: ++swId, t0: ring[0].t, ang: [0,0,0], pk: [0,0,0], pa: 0, gf: 0, lastHigh: s.t, last: null,
+            label: $('lbl').value, rel: rec ? ring[0].t - recT0 : null};
+      for(const r of ring){ integ(sw, r, sw.last); sw.last = r; }
+      ring = [];
+    }
+  }else{
+    integ(sw, s, sw.last); sw.last = s;
+    if(s.a >= th()) sw.lastHigh = s.t;
+    if(s.t - sw.lastHigh >= holdMs() || s.t - sw.t0 > MAX_SWING_MS) finishSwing(s);
+  }
+}
+const argmaxAbs = arr => arr.reduce((b, v, i) => Math.abs(v) > Math.abs(arr[b]) ? i : b, 0);
+function finishSwing(s){
+  const o = sw; sw = null;
+  const res = {id: o.id, label: o.label, rel: o.rel, dur: (s.t - o.t0) / 1000, pa: o.pa, gyro: o.gf > 0,
+    ang: o.ang, pk: o.pk,
+    domRate: o.gf ? argmaxAbs(o.pk) : -1, domAng: o.gf ? argmaxAbs(o.ang) : -1};
+  swings.push(res);
+  log('スイング#' + res.id + ' [' + res.label + '] ' + res.dur.toFixed(2) + 's 最大' + res.pa.toFixed(1) + 'g' +
+      (res.gyro ? ' 主軸(速度)=' + AX[res.domRate] + ' 主軸(角度)=' + AX[res.domAng] : ' (ジャイロなし)'));
+  renderSwings(); updRecInfo();
+}
+function renderSwings(){
+  const tb = $('swBody');
+  if(!swings.length){ tb.innerHTML = '<tr><td colspan="12" class="l mute">まだありません</td></tr>'; $('swSummary').textContent = 'スイング待機中…'; return; }
+  const last = swings.slice(-8).reverse();
+  const f0 = v => v.toFixed(0);
+  tb.innerHTML = last.map(r => {
+    const idx = swings.indexOf(r), prev = swings[idx - 1];
+    const diff = prev && r.gyro && prev.gyro && prev.domRate !== r.domRate;
+    return '<tr' + (diff ? ' class="diff"' : '') + '><td>' + r.id + '</td><td class="l">' + r.label + '</td><td>' + r.dur.toFixed(2) + '</td><td>' + r.pa.toFixed(1) + '</td>' +
+      (r.gyro ? r.ang.map(v => '<td>' + f0(v) + '</td>').join('') + r.pk.map(v => '<td>' + f0(v) + '</td>').join('') +
+        '<td class="l">' + AX[r.domRate] + '</td><td class="l">' + AX[r.domAng] + '</td>'
+        : '<td colspan="8" class="l mute">ジャイロデータなし</td>') + '</tr>';
+  }).join('');
+  const n = swings.length, a = swings[n - 1], b = swings[n - 2];
+  let s = '直近: #' + a.id + (a.gyro ? ' 主軸=' + AX[a.domRate] + '(' + (a.pk[a.domRate] >= 0 ? '+' : '−') + ')' : '');
+  if(b && a.gyro && b.gyro){
+    s += ' ／ 1つ前 #' + b.id + ' 主軸=' + AX[b.domRate] + '(' + (b.pk[b.domRate] >= 0 ? '+' : '−') + ') → ' +
+         (a.domRate !== b.domRate ? '主軸が違う（縦→横の候補）' : '同じ軸');
+  }
+  $('swSummary').textContent = s;
+}
+
+// ---------- 記録 ----------
+let rec = false, recT0 = 0, rows = [], recFirst = true;
+function recRow(s){
+  if(recFirst){ recT0 = s.t; recFirst = false; }
+  const g = s.gyro;
+  rows.push([(s.t - recT0).toFixed(1), s.ax.toFixed(3), s.ay.toFixed(3), s.az.toFixed(3),
+    g ? s.w[0].toFixed(1) : '', g ? s.w[1].toFixed(1) : '', g ? s.w[2].toFixed(1) : '',
+    g ? +s.slow[0] : '', g ? +s.slow[1] : '', g ? +s.slow[2] : '',
+    btnNames, $('lbl').value, g ? s.raw[0] : '', g ? s.raw[1] : '', g ? s.raw[2] : '', sw ? sw.id : 0].join(','));
+  if(rows.length % 50 === 0) updRecInfo();
+}
+function updRecInfo(){
+  const sec = rows.length ? (rows[rows.length - 1].split(',')[0] / 1000).toFixed(1) : '0.0';
+  $('recInfo').textContent = '記録: ' + rows.length + '行 / ' + sec + '秒' + (rec ? '（記録中）' : '');
+  $('dlBtn').disabled = !rows.length; $('clrBtn').disabled = !rows.length && !swings.length; $('dlSwBtn').disabled = !swings.length;
+}
+function startRec(){
+  if(!dev) return say('先に接続してください。', true);
+  rec = true; recFirst = true; recT0 = performance.now(); rows = []; swings = []; renderSwings();
+  $('recBtn').textContent = '記録停止'; $('recBtn').className = 'rec';
+  log('記録開始 ラベル=' + $('lbl').value); sendLed(); updRecInfo();
+}
+function stopRec(){
+  rec = false; $('recBtn').textContent = '記録開始'; $('recBtn').className = 'main';
+  log('記録停止 ' + rows.length + '行'); sendLed(); updRecInfo();
+}
+$('recBtn').onclick = () => rec ? stopRec() : startRec();
+$('clrBtn').onclick = () => { rows = []; swings = []; renderSwings(); updRecInfo(); };
+$('lbl').onchange = () => log('ラベル: ' + $('lbl').value);
+
+function handleRemote(plus, minus, t){
+  const en = $('remoteCtl').checked;
+  if(en && plus && !prevPlus && t - lastToggle > 400){ lastToggle = t; rec ? stopRec() : startRec(); if(!rec) { sendLed(1); setTimeout(() => sendLed(0), 200); } }
+  if(en && minus && !prevMinus && t - lastToggle > 400){
+    lastToggle = t; const s = $('lbl'); s.selectedIndex = (s.selectedIndex + 1) % s.options.length; log('ラベル: ' + s.value);
+  }
+  prevPlus = plus; prevMinus = minus;
+}
+
+function download(name, text){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\uFEFF' + text], {type: 'text/csv'}));
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+const stamp = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()); };
+$('dlBtn').onclick = () => {
+  updRecInfo();
+  download('wiimote-motion-' + stamp() + '.csv',
+    '時刻ms,ax,ay,az,yaw,roll,pitch,yaw_slow,roll_slow,pitch_slow,ボタン,ラベル,yaw_raw,roll_raw,pitch_raw,swing_id\n' + rows.join('\n') + '\n');
+};
+$('dlSwBtn').onclick = () => {
+  const h = 'swing_id,ラベル,開始ms(記録内),継続s,最大a_g,積分yaw,積分roll,積分pitch,peak_yaw,peak_roll,peak_pitch,主軸_速度,主軸_角度';
+  const r = swings.map(s => [s.id, s.label, s.rel == null ? '' : s.rel.toFixed(0), s.dur.toFixed(3), s.pa.toFixed(2),
+    ...(s.gyro ? [...s.ang.map(v => v.toFixed(1)), ...s.pk.map(v => v.toFixed(1)), AX[s.domRate], AX[s.domAng]] : ['','','','','','','','',''])].join(','));
+  download('wiimote-swings-' + stamp() + '.csv', h + '\n' + r.join('\n') + '\n');
+};
+setInterval(() => { if(rec) updRecInfo(); }, 500);
+</script>
+</body>
+</html>
