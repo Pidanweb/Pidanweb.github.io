@@ -7,9 +7,9 @@
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#0a1110}
   canvas{display:block;cursor:crosshair;touch-action:none}
-  #ui{position:fixed;top:10px;right:10px;z-index:8;font:14px sans-serif;color:#fff;text-align:right}
+  #ui{position:fixed;top:10px;right:10px;z-index:5;font:14px sans-serif;color:#fff;text-align:right}
   #ui button{background:#0d2a30cc;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer}
-  #camPanel{max-height:calc(100vh - 90px);overflow-y:auto;overscroll-behavior:contain;margin-top:6px;padding:10px;background:#000c;border:1px solid #7ae7ff55;border-radius:8px;width:280px;text-align:left}
+  #camPanel{margin-top:6px;padding:10px;background:#000c;border:1px solid #7ae7ff55;border-radius:8px;width:280px;text-align:left}
   #camPanel select{width:100%;margin:4px 0 8px;padding:4px;font:inherit}
   #camPanel div{margin-top:6px}
   #camStat{font-size:12px;color:#ffd35a;word-break:break-all}
@@ -19,15 +19,32 @@
   #camPanel input[type=range]{width:100%}
   #menu{position:fixed;top:0;bottom:0;left:50%;transform:translateX(-50%);width:min(260px,44vw);z-index:9;background:#061418cc;border:1px solid #7ae7ff88;border-radius:12px;padding:16px;display:none;flex-direction:column;gap:12px;justify-content:center;font:15px sans-serif;color:#fff;text-align:center;box-sizing:border-box}
   #menu.on{display:flex} #menu{overflow-y:auto;gap:8px} #menu>:first-child{margin-top:auto} #menu>:last-child{margin-bottom:auto} #jobs{display:none;flex-direction:column;gap:6px} #jobs.on{display:flex} #menu button:disabled{opacity:.45;cursor:not-allowed} #menu button{background:#0d2a30;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:8px;padding:10px;font:inherit;cursor:pointer}
-  #wiiDbg{position:fixed;left:10px;top:10px;z-index:6;margin:0;padding:6px 8px;max-width:46vw;font:11px/1.35 monospace;color:#9fffb0;background:#000a;border:1px solid #7ae7ff44;border-radius:6px;pointer-events:none;white-space:pre-wrap}
-  #skMenu{border:1px solid #7ae7ff44;border-radius:8px;padding:6px 8px;font-size:13px;text-align:left} #skMenu summary{cursor:pointer;color:#ffd35a;font-weight:bold} #skMenu label{display:block;margin-top:6px} #skMenu input[type=range]{width:100%} #skMenu small{color:#9fdcea}
-  #castUI{position:fixed;bottom:6px;left:50%;transform:translateX(-50%);z-index:6;display:flex;align-items:center;gap:10px;color:#fff;font:12px sans-serif;max-width:94vw}
-  #castSay{max-width:52vw;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#ffd35a;text-shadow:0 0 4px #000}
-  #castBtn{background:#2a0d3acc;color:#e6b8ff;border:1px solid #c07aff;border-radius:10px;padding:7px 12px;font:inherit;touch-action:none;user-select:none;-webkit-user-select:none;cursor:pointer;white-space:nowrap} #castBtn.on{background:#c07aff;color:#fff}
+  #chant{position:fixed;left:10px;top:10px;z-index:6;display:flex;flex-direction:column;gap:6px;width:min(340px,44vw);pointer-events:none;font:13px/1.55 "Hiragino Mincho ProN","Yu Mincho","YuMincho",serif;color:#fff}
+  .ult{position:relative;padding:6px 10px 9px;background:#020a10d9;border:1px solid var(--c);border-radius:8px;overflow:hidden;transition:opacity .3s}
+  .ult .hd{display:flex;justify-content:space-between;align-items:baseline;font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif}
+  .ult .hd b{color:var(--c);font-size:14px;letter-spacing:.04em} .ult .hd span{font-size:12px;color:#ffffffaa}
+  .ult .ph{margin-top:2px;color:#ffffff59}
+  .ult .cp{color:#ffffffb0;border-bottom:1px dashed #ffffff55;padding:0 1px;transition:color .2s,text-shadow .2s}
+  .ult .cp.lit{color:#fff;border-bottom:1px solid var(--c);text-shadow:0 0 6px var(--c),0 0 14px var(--c),0 0 22px var(--c)}
+  .ult .cdb{position:absolute;left:0;bottom:0;height:3px;width:0;background:var(--c)}
+  .ult.cd{opacity:.45} .ult.near{box-shadow:0 0 12px var(--c)}
+  #castUI{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:6;display:flex;flex-direction:column;align-items:center;gap:6px;color:#fff;font:13px sans-serif;text-align:center;max-width:94vw}
+  #spells{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;max-width:560px} .sp{position:relative;overflow:hidden;padding:3px 7px;border:1px solid;border-radius:5px;background:#000a} .sp i{position:absolute;left:0;top:0;bottom:0;background:#fff5}
+  #castSay{min-height:1.3em;color:#ffd35a;text-shadow:0 0 4px #000} #castUI .row{display:flex;gap:8px}
+  #castUI button{background:#2a0d3acc;color:#e6b8ff;border:1px solid #c07aff;border-radius:10px;padding:12px 16px;font:inherit;touch-action:none;user-select:none;-webkit-user-select:none;cursor:pointer} #castUI button.on{background:#c07aff;color:#fff}
+  #micMeter{height:8px;margin:2px 0 6px;background:#ffffff1f;border-radius:4px;overflow:hidden} #micLv{display:block;height:100%;width:0;background:linear-gradient(90deg,#5ee08a,#ffd35a 70%,#ff4d5e)}
+  #ui{z-index:7} #camPanel{max-height:calc(100vh - 70px);overflow-y:auto;box-sizing:border-box}
+  #micStat,#micSay{font-size:12px;color:#ffd35a;word-break:break-all} #micSay{color:#e6b8ff}
+  #hCur{position:fixed;left:0;top:0;z-index:20;width:22px;height:22px;margin:-11px 0 0 -11px;border:3px solid #ffd35a;border-radius:50%;background:#ffd35a33;box-shadow:0 0 10px #ffd35a;pointer-events:none;display:none}
+  #palmRing{position:fixed;left:50%;top:50%;z-index:19;width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:50%;display:none;place-items:center;font-size:40px;pointer-events:none;
+    background:radial-gradient(#061418dd 58%,transparent 60%),conic-gradient(#ffd35a var(--p,0deg),#7ae7ff33 0);box-shadow:0 0 16px #ffd35a66}
+  #palmRing.on{display:grid}
+  #hCur.on{display:block} #hCur.down{background:#ffd35acc;border-color:#fff}
+  #menu .hHover{outline:2px solid #ffd35a;outline-offset:2px;box-shadow:0 0 12px #ffd35a88}
 </style>
 </head>
 <body>
-<div id="ui"><button id="camBtn">📷 カメラ・マイク設定</button> <button id="viewBtn">👁 一人称</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰</button>
+<div id="ui"><button id="camBtn">📷 カメラ設定</button> <button id="viewBtn">👁 一人称</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰</button>
   <div id="camPanel" hidden>
     <label>使うカメラ<select id="camSel"></select></label>
     <label><input type="checkbox" id="mir"> 左右反転</label>
@@ -42,35 +59,32 @@
     <div><button id="faceStart">顔認識を開始/再起動</button> <button id="faceCal">中心リセット (C)</button></div>
     <div id="faceStat" style="font-size:12px;color:#ffd35a"></div>
     <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
-    <b>🎙 マイク設定（音声認識）</b>
-    <label>使うマイク<select id="micSel"><option value="">既定のマイク</option></select></label>
-    <label><input type="checkbox" id="micNs"> ノイズ抑制</label> <label><input type="checkbox" id="micEc"> エコー除去</label> <label><input type="checkbox" id="micAg" checked> 自動ゲイン</label>
-    <label><input type="checkbox" id="micPass"> 認識にもこのマイクを指定する（実験的）</label>
-    <label>↓を離した後も聞く <b id="micTailV">0.7</b>秒 <input type="range" id="micTail" min="0" max="2" step=".1" value=".7"></label>
-    <div><button id="micApply">このマイクを使う / テスト</button> <button id="micOff">指定解除</button> <button id="micRefresh">一覧を更新</button></div>
-    <div><button id="micTest">🎙 音声認識テスト（15秒）</button></div>
-    <div style="height:8px;background:#223;border-radius:4px;overflow:hidden"><div id="micLvl" style="height:100%;width:0;background:#5ee08a"></div></div>
-    <div id="micStat" style="font-size:12px;color:#ffd35a">「このマイクを使う」で入力レベルを確認できます（声でバーが動けばOK）</div>
-    <small style="color:#9fdcea">※ 認識に使われるマイクは、ブラウザが「指定」に対応していない場合は OS / ブラウザ既定のマイクになります（判定ログに表示）</small>
+    <label>🎙 詠唱に使うマイク<select id="micSel"><option value="">既定のマイク</option></select></label>
+    <div id="micMeter"><i id="micLv"></i></div>
+    <div><button id="micApply">このマイクを使う</button> <button id="micRefresh">一覧を更新</button></div>
+    <div><button id="micTest">🎙 押している間 認識テスト</button></div>
+    <div id="micStat">マイクはゲーム開始時にも自動で起動します</div>
+    <div id="micSay"></div>
   </div>
   <div id="faceBadge"></div><div id="wiiStat" style="margin-top:4px;font-size:12px;color:#ffd35a;text-shadow:0 0 4px #000"></div></div>
 <div id="menu"><h3 style="margin:0">MENU</h3>
   <button id="mClose">▶ 再開</button><button id="mView">👁 視点: 一人称</button><button id="mFace">🔄 顔カメラ: フロント</button><button id="mCtrl">🖱 操作: マウス</button>
   <button id="jobBtn">🔁 ジョブチェンジ</button>
   <div id="jobs"><button id="jSword">⚔ 剣士</button><button id="jWiz">🪄 魔法使い</button><button id="jGun" disabled>🔫 ガンナー（準備中）</button></div>
-  <label>効果音 <input type="range" id="mVol" min="0" max="1" step=".1" value=".8"></label><label>BGM <input type="range" id="mBgm" min="0" max="1" step=".05" value=".5"></label><label>Wii振り上げ感度(パリィ) <input type="range" id="mWiiTh" min="1.2" max="4" step=".1" value="2.2"><br><small style="color:#9fdcea">左ほど敏感</small></label>
-  <label style="text-align:left"><input type="checkbox" id="dbgOn" checked> 判定ログを表示（音声・Wii）</label>
+  <label>効果音 <input type="range" id="mVol" min="0" max="1" step=".1" value=".8"></label><label>BGM <input type="range" id="mBgm" min="0" max="1" step=".05" value=".5"></label><label>Wii振り感度 <input type="range" id="mWiiTh" min="1.2" max="4" step=".1" value="2.2"><br><small style="color:#9fdcea">左ほど敏感</small></label>
   <button id="mRestart">↻ リスタート</button><button id="mTitle">⌂ タイトルへ</button>
-  <small style="color:#9fdcea">✋ 人差し指で「1」を描く / M キーで開閉</small></div>
-<pre id="wiiDbg"></pre>
-<div id="castUI"><div id="castSay">↓長押し: 詠唱 ／ 弱攻撃は「ファイヤ」「ウォーター」「リーフ」</div><button id="castBtn">🎙 詠唱（↓長押し）</button></div>
+  <small style="color:#9fdcea">✌ ピースを約1秒キープで開く / 指先でカーソル → Aで決定（スライダーはAを押したまま左右）/ M キーで開閉</small></div>
+<div id="hCur"></div><div id="palmRing">✌</div>
+<div id="chant"></div>
+<div id="castUI"><div id="spells"></div><div id="castSay">ボタン / Space / Wiiの十字キー↓ を押している間に呪文を唱える</div>
+  <div class="row"><button id="castJa">🎙 詠唱（長押し / Space / Wii ↓）</button></div></div>
 <canvas id="facePrev" width="320" height="240"></canvas>
 <video id="v" autoplay playsinline muted></video>
 <video id="fv" autoplay playsinline muted></video>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 // ===== GIANT SLIME RAID =====
-// WIZARD: ↓キー(Wii十字キー下)長押し+声で詠唱(光る言葉を全部言えば発動) / 左長押し(Wii A長押し)=ガード / 右クリック(Wii B+振り上げ)=パリィ / 紫の攻撃はパリィ不可→ガード / A,D: 回避 / V: VR / 顔の動きで視点 / C: 中心リセット
+// 詠唱: ボタン/Space/Wii十字↓を押しながら呪文 / 左クリック長押し: ガード / 右クリック: パリィ / 紫の攻撃はパリィ不可→ガード / Wii: B+振り上げ=パリィ, A長押し=ガード / A,D: 左右に回避 / V: VR(左右分割)モード切替 / 視点・照準: 顔の動き(マウスでも可) / C: 顔の中心リセット
 const FONT = '"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif';
 const vid = document.getElementById('v');
 const renderer = new THREE.WebGLRenderer({ antialias:true });
@@ -294,7 +308,7 @@ $('camApply').onclick = () => openCam(camSel.value || null);
 $('camRefresh').onclick = () => camStream ? listCams() : openCam(null);
 $('mir').onchange = e => camMirror = e.target.checked;
 for (const ev of ['mousedown', 'keydown', 'keyup']) for (const el of ['ui', 'menu', 'castUI']) $(el).addEventListener(ev, e => e.stopPropagation());
-if (navigator.mediaDevices) navigator.mediaDevices.addEventListener('devicechange', listCams);
+if (navigator.mediaDevices) navigator.mediaDevices.addEventListener('devicechange', () => { listCams(); listMics(); });
 function cover(a){
   if (!camTex || !vid.videoWidth) return;
   const va = vid.videoWidth/vid.videoHeight; let rx = 1, ry = 1; if (a > va) ry = va/a; else rx = a/va;
@@ -392,7 +406,7 @@ function faceDraw(){
     pctx.beginPath(); pctx.moveTo(cx - 12, cy); pctx.lineTo(cx + 12, cy); pctx.moveTo(cx, cy - 12); pctx.lineTo(cx, cy + 12); pctx.stroke();
     if (face.seen){ pctx.strokeStyle = '#ff4d5e'; pctx.beginPath(); pctx.moveTo(cx, cy); pctx.lineTo(X(face.x), Y(face.y)); pctx.stroke(); }
   }
-  if (hand.trail.length > 1){ pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 3; pctx.beginPath(); hand.trail.forEach((q, i) => i ? pctx.lineTo(X(q.x), Y(q.y)) : pctx.moveTo(X(q.x), Y(q.y))); pctx.stroke(); }
+  if (hand.palm && hand.prog > 0){ pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 4; pctx.beginPath(); pctx.arc(X(hand.palm.x), Y(hand.palm.y), 22, -Math.PI/2, -Math.PI/2 + hand.prog*Math.PI*2); pctx.stroke(); }
   pctx.font = 'bold 16px sans-serif'; pctx.textAlign = 'left';
   pctx.fillStyle = !face.lm ? '#ffd35a' : face.seen ? '#5ee08a' : '#ff4d5e';
   pctx.fillText(!face.lm ? 'モデル読み込み中…' : face.seen ? (face.cx === null ? '顔を中心に構えて…' : '● 追跡中') : '× 顔が見つかりません', 8, 22);
@@ -408,8 +422,10 @@ $('faceCal').onclick = faceRecenter;
 $('faceStart').onclick = () => { if (!face.on){ $('faceOn').checked = face.on = true; } startFace(); };
 let prevOn = true; $('facePrevOn').onchange = e => prevOn = e.target.checked;
 
-// ===== 指ジェスチャー(人差し指で縦に「1」)でメニュー開閉 =====
-const hand = { lm:null, loading:false, trail:[], last:-1, cool:0 };
+// ===== ピース(✌)を約0.8秒キープするとメニューを開く =====
+const hand = { lm:null, loading:false, trail:[], last:-1, cool:0, pt0:null, px:0, py:0, prog:0, lastOk:-1e9, needRelease:false, palm:null };
+// HOLD = 手のひらを見せ続ける時間(ms) / MOVE = これ以上動いたら数え直し(映像幅比) / GRACE = 認識が途切れても許す時間(ms)
+const PALM = { HOLD:800, MOVE:.08, GRACE:250 };
 async function loadHandModel(){
   if (hand.lm || hand.loading) return; hand.loading = true;
   try {
@@ -422,16 +438,70 @@ async function loadHandModel(){
 function handStep(now){
   const v = face.src; if (!hand.lm || !v || v.readyState < 2 || !v.videoWidth || now - hand.last < 50) return; hand.last = now;
   let r; try { r = hand.lm.detectForVideo(v, now); } catch (e){ return; }
-  const p = r.landmarks && r.landmarks[0]; if (!p){ hand.trail = []; return; }
+  const p = r.landmarks && r.landmarks[0]; if (!p){ palmLost(now); return; }
+  if (menuOn){   // メニュー中は人差し指の先(8)をカーソルに使う
+    hand.needRelease = true; hand.pt0 = null; hand.prog = 0; hc.seen = now;
+    const cl = v => Math.max(0, Math.min(1, v)), x = faceMirror() ? 1 - p[8].x : p[8].x;
+    hc.tx = cl((x - HC.X0)/(1 - HC.X0*2)); hc.ty = cl((p[8].y - HC.Y0)/(1 - HC.Y0*2)); return;
+  }
   const d = (a, b) => Math.hypot(p[a].x - p[b].x, p[a].y - p[b].y);
-  // 人差し指だけ伸ばし、他の指は曲げている形
-  if (!(d(8, 0) > d(6, 0)*1.1 && d(12, 0) < d(10, 0) && d(16, 0) < d(14, 0) && d(20, 0) < d(18, 0))){ hand.trail = []; return; }
-  const T = hand.trail; T.push({ x:p[8].x, y:p[8].y, t:now }); while (T.length && now - T[0].t > 900) T.shift();
-  if (T.length < 5 || now < hand.cool) return;
-  const dy = T[T.length-1].y - T[0].y, xs = T.map(q => q.x), wd = Math.max(...xs) - Math.min(...xs);
-  if (dy > .22 && wd < dy*.35 && now - T[0].t > 250){ hand.cool = now + 1500; hand.trail = []; toggleMenu(); }   // 上→下へ縦一線
+  // ピース(✌): 人差し指と中指だけ伸ばし、薬指・小指は曲げる。2本とも指先が付け根より上(指を立てている)
+  const open = d(8, 0) > d(6, 0)*1.15 && d(12, 0) > d(10, 0)*1.15 && d(16, 0) < d(14, 0) && d(20, 0) < d(18, 0)
+            && p[8].y < p[5].y && p[12].y < p[9].y;
+  if (!open){ palmLost(now); return; }
+  hand.lastOk = now; if (hand.needRelease) return;   // 一度開いた後は、ピースをやめるまで再判定しない
+  const cx = p[9].x, cy = p[9].y; hand.palm = { x:cx, y:cy };   // 9 = 中指の付け根
+  if (hand.pt0 == null || Math.hypot(cx - hand.px, cy - hand.py) > PALM.MOVE){ hand.pt0 = now; hand.px = cx; hand.py = cy; }   // 大きく動いたら数え直し
+  hand.prog = Math.min(1, (now - hand.pt0)/PALM.HOLD);
+  if (hand.prog >= 1){ hand.pt0 = null; hand.prog = 0; hand.needRelease = true; toggleMenu(true); }
+}
+function palmLost(now){   // 一瞬の認識漏れでは途切れないよう少し猶予を持たせる
+  if (now - hand.lastOk < PALM.GRACE) return;
+  hand.pt0 = null; hand.prog = 0; hand.needRelease = false; hand.palm = null;
+}
+function palmUI(now){
+  const el = $('palmRing'), on = !menuOn && hand.prog > .08 && now - hand.lastOk < 300;
+  el.classList.toggle('on', on); if (on) el.style.setProperty('--p', (hand.prog*360).toFixed(0) + 'deg');
 }
 function toggleMenu(f){ menuOn = f === undefined ? !menuOn : f; $('menu').classList.toggle('on', menuOn); }
+
+// ===== 指先カーソル（メニュー表示中のみ）: 人差し指の先で指して、Wiiリモコンの A で決定 =====
+// HC.X0/Y0 = カメラ映像の端からこの割合は使わない（指を画面端まで伸ばさなくても届くように）
+const HC = { X0:.2, Y0:.15, MARGIN:24, SMOOTH:14, EDGE:60, SCROLL:700 };
+const hc = { seen:-1e9, tx:.5, ty:.5, x:0, y:0, init:false, hover:null, drag:null, flash:0 };
+const hcPick = el => { const t = el && el.closest('#menu button, #menu summary, #menu input, #menu label'); return t && !t.disabled ? t : null; };
+function hcSetRange(t){
+  const r = t.getBoundingClientRect(), min = +t.min || 0, max = +(t.max || 100), st = +t.step || 1;
+  const f = Math.max(0, Math.min(1, (hc.x - r.left)/r.width)), v = Math.round(f*(max - min)/st)*st + min;
+  if (+t.value !== v){ t.value = v; t.dispatchEvent(new Event('input', { bubbles:true })); }
+}
+function hcStep(now, dt){
+  const c = $('hCur'), M = $('menu');
+  if (!menuOn || now - hc.seen > 500){
+    if (hc.init){ c.classList.remove('on', 'down'); if (hc.hover) hc.hover.classList.remove('hHover'); hc.hover = hc.drag = null; hc.init = false; }
+    return;
+  }
+  const r = M.getBoundingClientRect(), px = r.left - HC.MARGIN + hc.tx*(r.width + HC.MARGIN*2), py = r.top + hc.ty*r.height;
+  if (!hc.init){ hc.x = px; hc.y = py; hc.init = true; c.classList.add('on'); }
+  const k = 1 - Math.exp(-dt*HC.SMOOTH); hc.x += (px - hc.x)*k; hc.y += (py - hc.y)*k;
+  const down = !!(wii.a && hc.drag) || now < hc.flash;
+  c.classList.toggle('down', down); c.style.transform = `translate(${hc.x}px,${hc.y}px)` + (down ? ' scale(.75)' : '');
+  // メニュー上下の端に寄せると自動スクロール
+  if (hc.y < r.top + HC.EDGE) M.scrollTop -= HC.SCROLL*dt*(1 - (hc.y - r.top)/HC.EDGE);
+  else if (hc.y > r.bottom - HC.EDGE) M.scrollTop += HC.SCROLL*dt*(1 - (r.bottom - hc.y)/HC.EDGE);
+  // スライダーは A を押している間だけドラッグ
+  if (hc.drag){ if (wii.a) { hcSetRange(hc.drag); return; } hc.drag = null; }
+  const t = hcPick(document.elementFromPoint(hc.x, hc.y));
+  if (t !== hc.hover){ if (hc.hover) hc.hover.classList.remove('hHover'); hc.hover = t; if (t) t.classList.add('hHover'); }
+}
+function hcClick(){
+  const t = hc.hover; if (!menuOn || !hc.init || !t) return;
+  hc.flash = performance.now() + 150;
+  if (t.type === 'range'){ hc.drag = t; hcSetRange(t); return; }
+  const rg = t.tagName === 'LABEL' && t.querySelector('input[type=range]');
+  if (rg){ hc.drag = rg; hcSetRange(rg); return; }   // ラベルの文字部分を指していてもスライダー操作にする
+  t.click();
+}
 function flipFaceCam(){
   faceSel.value = faceSel.value === 'environment' ? 'user' : 'environment';
   $('mFace').textContent = '🔄 顔カメラ: ' + (faceSel.value === 'environment' ? 'バック' : 'フロント');
@@ -469,19 +539,22 @@ $('jobBtn').onclick = () => $('jobs').classList.toggle('on');
 // ===== ゲーム状態 =====
 const keys = {}, mouse = { nx:0, ny:0 }, ray = new THREE.Raycaster(), tmp = new THREE.Vector3();
 const PMAX = 250;   // プレイヤー最大HP（旧100）
-const P = { armed:false, x:0, hp:PMAX, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, dir:1, counter:0, cMul:1, guard:false };
+const P = { armed:false, x:0, hp:PMAX, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, dir:1, counter:0, cBig:0, guard:false };
 const B = { x:0, z:-16, vz:0, s:'enter', t:1, wt:1, hp:800, max:800, hit:false, weak:0, flash:0, combo:0, stun:false, phase:1, wob:0, time:0, unp:false };
 let state = 'title', hitstop = 0, shake = 0, fovp = 0, flash = 0, vr = false, endAt = 0;
 function reset(){
   Object.assign(P, { armed:false, x:0, hp:PMAX, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, counter:0, guard:false });
   Object.assign(B, { x:0, z:-16, vz:0, s:'enter', t:1, hp:800, hit:false, weak:0, combo:0, stun:false, phase:1, unp:false });
-  bossG.visible = true; clearFx(); chantReset();
+  bossG.visible = true; wizReset();
 }
 function titleMsg(){
-  setMsg([['WIZARD MODE', '#ffd35a', 72], ['↓キー / Wii十字キー下 を押しながら詠唱', '#fff', 30],
-          ['光る言葉を全部言えば発動 / 被弾しても続きからOK', '#fff', 28], ['弱攻撃: 「ファイヤ」「ウォーター」「リーフ」と言うだけ', '#9dffb0', 26], ['赤 = パリィ（右クリック / B+振り上げ）', '#ffd35a', 26],
-          ['紫 = パリィ不可 → ガード（左長押し / A長押し）', '#c06bff', 26], ['顔を動かして狙う　C:中心リセット　V:VR　T:視点　M:メニュー', '#7ae7ff', 24],
-          ['クリック / Wii A でスタート（Webカメラ・マイクを使います）', '#7ae7ff', 28]]);
+  setMsg([['WIZARD MODE', '#ffd35a', 72], ['詠唱ボタン / Space / Wii十字↓ を押しながら呪文を唱える', '#fff', 28],
+          ['ファイヤ / ウォーター / リーフ / キュア　強: レイジング / スプラッシュ / ブレード', '#e6b8ff', 24],
+          ['必殺は左上の光る言葉を全部言えば発動（途中で被弾しても続きからでOK）', '#ffd35a', 24],
+          ['右クリック / Wii B+振り上げ: パリィ　左長押し / Wii A: ガード　A / D: 回避', '#fff', 24],
+          ['紫に光る攻撃はパリィ不可 → ガードで防ぐ', '#c06bff', 24],
+          ['顔を動かして狙う　C:中心リセット　V:VR　T:視点　M:メニュー', '#7ae7ff', 24],
+          ['クリックでスタート（Webカメラとマイクを使います）', '#7ae7ff', 32]]);
 }
 titleMsg();
 
@@ -499,18 +572,18 @@ function hurtBoss(d, at, big){
 // 赤く光っている間(予兆〜突進)に押せば、突進が当たる瞬間までパリィが有効（armed）
 function parry(){ if (P.parCd > 0 || P.par > 0 || P.armed || P.guard) return; P.par = .3; P.parAge = 0; P.parCd = .7; P.armed = (B.s === 'wind' || B.s === 'charge') && !B.unp; }
 function parried(){
-  playPary(); dbg('パリィ成功'); const perfect = P.parAge < .45, at = rig.localToWorld(new THREE.Vector3(0, 0, -2.4));
+  playPary(); const perfect = P.parAge < .45, at = rig.localToWorld(new THREE.Vector3(0, 0, -2.4));
   hitstop = perfect ? .22 : .14; shake = perfect ? .5 : .3; fovp = perfect ? 14 : 8; flash = perfect ? .8 : .4; flashM.material.color.set(0xfff2b0);
   ring(at, perfect ? 6 : 4, 0xffd35a, .5); ring(at, 2.5, 0xffffff, .3); burst(at, 0xffd35a, perfect ? 90 : 55, 9);
   popCam(perfect ? 'PERFECT!' : 'PARRY!', '#ffd35a', perfect ? 1.3 : 1, 1);
   P.inv = .5; P.par = 0; P.armed = false; P.parCd = .15; wiiRumble(perfect ? 300 : 200);
   B.s = 'knock'; B.stun = true; B.t = perfect ? 3 : 2.2; B.vz = perfect ? -24 : -17;
-  P.counter = 8; P.cMul = perfect ? 2 : 1.6;   // 詠唱は時間がかかるので反撃ボーナスは8秒保持
-  popup('反撃チャンス! 詠唱で大ダメージ', '#7ae7ff', new THREE.Vector3(0, -.6, -3), .7, 1.2, camera);
+  P.counter = B.t; P.cBig = perfect ? 140 : 90;
+  popup('反撃チャンス!', '#7ae7ff', new THREE.Vector3(0, -.6, -3), .7, 1.2, camera);
 }
 // ガード成功：ダメージ無効。突進を受け止めてボスを押し返す
 function guarded(){
-  playGuard(); dbg('ガード成功'); wiiRumble(220);
+  playGuard(); wiiRumble(220);
   const at = rig.localToWorld(new THREE.Vector3(0, 0, -2.2));
   ring(at, 4, 0x7ae7ff, .45); ring(at, 2.2, 0xffffff, .25); burst(at, 0x7ae7ff, 45, 7);
   hitstop = .08; shake = .3; fovp = 5; flash = .35; flashM.material.color.set(0x9fe8ff);
@@ -519,11 +592,9 @@ function guarded(){
   B.s = 'knock'; B.stun = false; B.t = 1.0; B.vz = -12;
 }
 function hurtPlayer(mult = 1){
-  dbg('被弾 -' + Math.round([20, 25, 30][B.phase-1]*mult));
   P.hp -= [20, 25, 30][B.phase-1]*mult; P.inv = 1.2; P.counter = 0; P.armed = false; shake = .8*mult; flash = .6*mult; flashM.material.color.set(0xff2a3a);
   burst(rig.localToWorld(new THREE.Vector3(0, 0, -2)), 0xff4d5e, 60, 8);
   B.s = 'knock'; B.stun = false; B.t = 1.2; B.vz = -10;
-  if (state === 'play' && SP.some(sp => litN(sp) > 0)) popup('詠唱は続きから！', '#7ae7ff', new THREE.Vector3(0, -.3, -3), .7, 1.4, camera);
   if (P.hp <= 0){
     P.hp = 0; state = 'over'; bgmStop(); endAt = performance.now();
     setMsg([['GAME OVER', '#ff4d5e', 80], [`スライムの残りHP ${Math.ceil(B.hp)}`, '#fff', 34], ['クリックでリトライ', '#7ae7ff', 32]]);
@@ -597,11 +668,11 @@ function bossAnim(dt){
 }
 
 function updSword(dt){
-  steel.emissive.setHex(P.counter > 0 ? 0xff9a20 : 0x2a6f88);
   let tx = .9 + mouse.nx*.3, ty = -1.1 + mouse.ny*.2, tz = -1.9, rx = -.95, rz = .3, rate = 14;
   if (P.par > 0 || P.armed || P.guard){ tx = .1; ty = -.8; tz = -1.7; rx = -.2; rz = .1; rate = 40; }
-  else if (hold){ tx = .5; ty = -.7; tz = -1.8; rx = -.45; rz = .12; rate = 18; }   // 詠唱中は杖を構える
-  arc.material.opacity = 0;
+  else if (kick > 0){ const e = kick/.25; ty += .25*e; tz -= .5*e; rx = -.95 + .7*e; rate = 40; }   // 魔法を放った瞬間に杖を突き出す
+  else if (hold){ ty += .2; rx = -.65; rz = .15; }                                                   // 詠唱中は杖を掲げる
+  kick = Math.max(0, kick - dt);
   const k = Math.min(1, dt*rate);
   sword.position.x += (tx - sword.position.x)*k; sword.position.y += (ty - sword.position.y)*k; sword.position.z += (tz - sword.position.z)*k;
   sword.rotation.x += (rx - sword.rotation.x)*k; sword.rotation.z += (rz - sword.rotation.z)*k;
@@ -614,7 +685,8 @@ function update(dt){
   flashM.material.opacity = flash;
   if (state === 'play' && !menuOn){
     const mv = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
-    const gIn = mdn.on || wii.a;   // ガード: マウス左長押し or Wii A長押し（魔法使いは斬らないので即ガード）
+    const nowMs = performance.now();   // 長押し判定：マウス左 or Wii Aボタン
+    const gIn = ctl.mode === 'mouse' ? (mdn.on && nowMs - mdn.t >= GUARD_MS) : (wii.a && nowMs - wii.aT >= 150);
     P.guard = gIn && P.par <= 0 && !P.armed && P.swing <= 0;
     P.x = Math.max(-3.2, Math.min(3.2, P.x + mv*(P.par > 0 || P.guard ? 3 : 6)*dt));
     P.counter -= dt; P.swing -= dt; P.swingCd -= dt; P.inv -= dt; P.parCd -= dt;
@@ -623,8 +695,8 @@ function update(dt){
     bossAI(dt);
   } else if (state === 'title'){ B.z += (HOVER - B.z)*Math.min(1, dt*2); B.s = 'enter'; }
   if (!(state === 'play' && !menuOn)) P.guard = false;
-  faceUpdate(dt); wizUpdate(dt);
-  bossAnim(dt); updSword(dt); updFX(dt); dbgTick();
+  faceUpdate(dt);
+  wizUpdate(dt); bossAnim(dt); updSword(dt); updFX(dt);
   { const fa = faceActive(); reticle.visible = fa && state === 'play';
     if (fa){ const asp = vr ? W/2/H : W/H, hh = Math.tan((70 - fovp)*Math.PI/360)*3;
       reticle.position.set(mouse.nx*hh*asp, mouse.ny*hh, -3); reticle.scale.setScalar(.4); } }
@@ -635,9 +707,8 @@ function update(dt){
   else { camera.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + sh*.6, 0); }
   bossBar.scale.x = Math.max(.0001, B.hp/B.max); pBar.scale.x = Math.max(.0001, P.hp/PMAX);
   parBar.scale.x = Math.max(.0001, P.parCd > 0 ? 1 - P.parCd/.7 : 1);
-  hud.visible = state === 'play'; $('ui').style.display = vr ? 'none' : '';
+  hud.visible = state === 'play'; $('ui').style.display = $('chant').style.display = vr ? 'none' : '';
   const asp = vr ? W/2/H : W/H, mw = Math.min(7, 5.3*asp); msg.scale.set(mw, mw/2, 1);
-  chS.scale.setScalar(Math.min(1, .96*2*2.1*asp/4.6));   // 詠唱パネルが画面幅に収まるように
 }
 
 function view(x, y, w, h){ renderer.setViewport(x, y, w, h); renderer.setScissor(x, y, w, h); }
@@ -652,36 +723,27 @@ function render(){
 }
 
 // ===== 入力 =====
-addEventListener('keydown', e => { const k = e.key.toLowerCase(); keys[k] = true; if (state === 'play' && bgm.paused && !menuOn) bgmPlay(); if (e.key === 'ArrowDown'){ e.preventDefault(); if (!e.repeat) castDown(); } if (k === 'v') vr = !vr; if (k === 'c') faceRecenter(); if (k === 'm') toggleMenu(); if (k === 't') setView(!tp); if (k === 'escape' && menuOn) toggleMenu(false); });
-addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; if (e.key === 'ArrowDown') castUp(); });
+addEventListener('keydown', e => { const k = e.key.toLowerCase(); keys[k] = true; if (state === 'play' && bgm.paused && !menuOn) bgmPlay(); if (k === 'v') vr = !vr; if (k === 'c') faceRecenter(); if (k === 'm') toggleMenu(); if (k === 't') setView(!tp); if (k === 'escape' && menuOn) toggleMenu(false); if (k === 'enter' && menuOn && hc.hover){ e.preventDefault(); hcClick(); } });
+addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 function setMouse(e){
   if (faceActive()) return;   // 顔操作中はマウスで視点を動かさない
   const w = vr ? W/2 : W; mouse.nx = ((e.clientX % w)/w)*2 - 1; mouse.ny = -((e.clientY/H)*2 - 1);
 }
 addEventListener('mousemove', setMouse);
-// ===== 判定ログ（Swordと同じ wiiDbg パネル）=====
-const dbgLines = [], DBG_T0 = performance.now(); let dbgOn = true, dbgHead = '', voiceSt = '停止', liveTxt = '', liveNorm = '';
-function dbg(t){ dbgLines.push(((performance.now() - DBG_T0)/1000).toFixed(1) + ' ' + t); if (dbgLines.length > 12) dbgLines.shift(); dbgDraw(); try { console.log('[wiz] ' + t); } catch (e){} }
-function headText(){
-  const w = !wii.dev ? 'Wii未接続' : 'Wii接続' + (performance.now() - wii.rxT < 800 && wii.rx ? '(受信中 0x' + wii.rxId.toString(16) + ')' : '(入力なし!)') + (wii.pDn ? ' [↓]' : '') + (wii.a ? ' [A]' : '') + (wii.b ? ' [B]' : '');
-  const sp = SP.map(s => `${s.icon}${s.n} ${litN(s)}/${s.cps.length}: ` + s.cps.map((c, j) => lit[s.id][j] ? '【' + c[0] + '】' : '・').join(' ')).join('\n');
-  return `${w} / 操作:${ctl.mode} / 詠唱キー:${hold ? '押下中' : '—'}\n音声認識: ${voiceSt}${SRc ? '' : '（非対応）'} / マイク: ${mic.track ? mic.label + (mic.pass ? '(指定)' : '(確認のみ)') : '既定'}${mic.an ? ' Lv' + Math.round(mic.lvl*20)*5 : ''}\n聞き取り: ${liveTxt || '—'}\n判定用  : ${liveNorm || '—'}\n${sp}\n弱攻撃(単語1つ): ${WK.map(w => w.icon + w.n + (wkCD[w.id] > 0 ? '(' + wkCD[w.id].toFixed(1) + 's)' : '')).join(' ')}` + (P.counter > 0 ? `\n反撃ボーナス ×${P.cMul} 残り${P.counter.toFixed(1)}s` : '');
-}
-function dbgDraw(){ const el = $('wiiDbg'); el.style.display = dbgOn ? '' : 'none'; if (dbgOn) el.textContent = (dbgHead = headText()) + '\n--------\n' + dbgLines.join('\n'); }
-function dbgTick(){ if (dbgOn && headText() !== dbgHead) dbgDraw(); }
-$('dbgOn').onchange = e => { dbgOn = e.target.checked; dbgDraw(); };
-
 // ===== 操作切替（マウス / Wiiリモコン）=====
-const ctl = { mode:'mouse' }, mdn = { on:false };
+const GUARD_MS = 200;   // マウス左ボタンをこの時間(ms)以上押し続けるとガード
+const ctl = { mode:'mouse' }, mdn = { on:false, t:0 };
 const WVID = 0x057e, WPIDS = [0x0306, 0x0330];
-const wii = { dev:null, leds:1, a:false, b:false, pA:false, pPlus:false, pHome:false, pDn:false, pB:false, gx:0, gy:0, gz:1, gok:false, lastSw:0, lastNeg:-1e9, th:2.2, rt:0, mode:0x35, modeT:0, mpOk:false, mpTo:0, rx:0, rxT:0, rxId:0, openT:0, wdT:0, wdN:0 };
+const wii = { dev:null, leds:1, a:false, b:false, aT:0, pA:false, pPlus:false, pHome:false,
+              gx:0, gy:0, gz:1, gok:false, lastSw:0, lastNeg:-1e9, th:2.2, rt:0,
+              mode:0x31, modeT:0, pDown:false };
 function wiiMsg(t){ $('wiiStat').textContent = t; }
 function setCtl(m){
   ctl.mode = m; mdn.on = false; wii.a = wii.b = false;
   const t = m === 'wii' ? '🎮 Wiiリモコン' : '🖱 マウス';
   $('ctrlBtn').textContent = t; $('mCtrl').textContent = '操作: ' + t;
   if (m === 'mouse' && !wii.dev) wiiMsg('');
-  dbg('操作モード: ' + m);
+  if (hold) castUp();
 }
 const wsend = async (id, bytes) => { if (!wii.dev) return; try { await wii.dev.sendReport(id, new Uint8Array(bytes)); } catch (e){} };
 const wLed = (r = 0) => wsend(0x11, [(wii.leds << 4) | r]);
@@ -689,27 +751,17 @@ function wiiRumble(ms){ if (!wii.dev) return; wLed(1); clearTimeout(wii.rt); wii
 async function openWii(d){
   wii.dev = d; if (!d.opened) await d.open();
   d.oninputreport = onWii;   // 再接続しても二重登録にならないよう代入式にする
-  wii.gok = false; wii.rx = 0; wii.rxT = 0; wii.openT = performance.now(); wii.wdN = 0;
-  await wiiEnableMP();
+  wii.gok = false; wii.mode = 0x31;
+  await wsend(0x12, [0x04, 0x31]);   // ボタン+加速度
   await wLed();
-  setCtl('wii'); wiiMsg('🎮 Wii: 接続中（十字キー↓=詠唱 / A=ガード / B+振り上げ=パリィ）'); dbg('Wii接続OK（入力を待っています）');
-}
-// Swordと同じ手順: レポートモード0x35 → MotionPlus有効化 → ステータス要求(0x20応答でモード再設定)。3秒データが来なければ0x31(加速度のみ)へ
-async function wiiEnableMP(){
-  clearTimeout(wii.mpTo); wii.mpOk = false; wii.mode = 0x35;
-  await wsend(0x12, [0x04, 0x35]);
-  const b = new Array(21).fill(0); b[0] = 0x04; b[1] = 0xA6; b[2] = 0x00; b[3] = 0xFE; b[4] = 1; b[5] = 0x04;
-  await wsend(0x16, b);
-  await new Promise(r => setTimeout(r, 150));
-  await wsend(0x15, [0x00]);
-  wii.mpTo = setTimeout(() => { if (wii.mpOk || !wii.dev) return; wii.mode = 0x31; wsend(0x12, [0x04, 0x31]); dbg('MotionPlus未検出 → 0x31(加速度のみ)で動作'); }, 3000);
+  setCtl('wii'); wiiMsg('🎮 Wii: 接続中（十字↓長押し=詠唱 / A=ガード / B+振り上げ=パリィ）');
 }
 async function connectWii(){
   if (!('hid' in navigator)){ wiiMsg('🎮 WebHID非対応です（Chrome / Edge を使用）'); return false; }
   try {
     const [d] = await navigator.hid.requestDevice({ filters: WPIDS.map(p => ({ vendorId:WVID, productId:p })) });
     if (!d) return false; await openWii(d); return true;
-  } catch (e){ wiiMsg('🎮 接続できません: ' + e.message); dbg('Wii接続失敗: ' + e.message); return false; }
+  } catch (e){ wiiMsg('🎮 接続できません: ' + e.message); return false; }
 }
 async function toggleCtl(){
   if (ctl.mode === 'wii'){ setCtl('mouse'); return; }
@@ -720,28 +772,26 @@ $('ctrlBtn').onclick = $('mCtrl').onclick = toggleCtl;
 $('mWiiTh').oninput = e => wii.th = +e.target.value;
 if ('hid' in navigator){
   navigator.hid.getDevices().then(l => { const d = l.find(x => x.vendorId === WVID && WPIDS.includes(x.productId)); if (d) openWii(d).catch(() => {}); });
-  navigator.hid.addEventListener('disconnect', e => { if (e.device === wii.dev){ wii.dev = null; castUp(); setCtl('mouse'); wiiMsg('🎮 Wiiリモコンが切断されました'); dbg('Wii切断'); } });
+  navigator.hid.addEventListener('disconnect', e => { if (e.device === wii.dev){ wii.dev = null; setCtl('mouse'); wiiMsg('🎮 Wiiリモコンが切断されました'); } });
 }
 function onWii(e){
   const d = e.data, id = e.reportId, now = performance.now();
-  wii.rx++; wii.rxT = now; if (id !== wii.rxId){ wii.rxId = id; dbg('Wii受信レポート 0x' + id.toString(16)); }
   if (id === 0x20){ wsend(0x12, [0x04, wii.mode]); return; }   // ステータス応答(MotionPlus有効化後にも来る)でモードが戻るので再設定
-  if (id < 0x30 || id > 0x3f || d.byteLength < 2) return;     // ボタンは 0x30〜0x3f すべての先頭2バイトにある
+  if (id !== 0x31) return;
   if (id !== wii.mode && now - wii.modeT > 1000){ wii.modeT = now; wsend(0x12, [0x04, wii.mode]); }
   const b0 = d.getUint8(0), b1 = d.getUint8(1);
-  const A = !!(b1 & 0x08), Bb = !!(b1 & 0x04), plus = !!(b0 & 0x10), home = !!(b1 & 0x80), dn = !!(b0 & 0x04);
+  const A = !!(b1 & 0x08), Bb = !!(b1 & 0x04), plus = !!(b0 & 0x10), home = !!(b1 & 0x80);
+  if (A && !wii.pA) wii.aT = now;
+  const pressA = A && !wii.pA;
   const pressStart = (A && !wii.pA) || (plus && !wii.pPlus), pressHome = home && !wii.pHome;
-  if (A !== wii.pA) dbg('Wii A ' + (A ? '押' : '離'));
-  if (Bb !== wii.pB) dbg('Wii B ' + (Bb ? '押' : '離'));
-  wii.pA = A; wii.pPlus = plus; wii.pHome = home; wii.a = A; wii.b = Bb; wii.pB = Bb;
+  wii.pA = A; wii.pPlus = plus; wii.pHome = home; wii.a = A; wii.b = Bb;
   if (pressHome) toggleMenu();
+  // 十字キー↓を押している間だけ詠唱（音声認識）
+  const down = !!(b0 & 0x04);
+  if (ctl.mode === 'wii'){ if (down && !wii.pDown && state === 'play' && !menuOn) castDown(); else if (!down && wii.pDown) castUp(); }
+  wii.pDown = down;
   if (pressStart && state !== 'play' && !menuOn && !(state !== 'title' && now - endAt < 600)) startGame();
-  if (dn !== wii.pDn){ wii.pDn = dn; dbg('Wii 十字キー↓ ' + (dn ? '押' : '離')); if (dn) castDown(); else castUp(); }   // 十字キー↓長押し = 詠唱
-  if ((id !== 0x31 && id !== 0x35) || d.byteLength < 5) return;
-  if (id === 0x35 && d.byteLength >= 11 && !wii.mpOk){   // MotionPlusのデータが来たら 0x31 へのフォールバックを止める
-    const ex = []; for (let i = 0; i < 6; i++) ex.push(d.getUint8(5 + i));
-    if (!ex.every(v => v === 0xff) && !ex.every(v => v === 0) && (ex[5] & 3) === 2){ wii.mpOk = true; clearTimeout(wii.mpTo); dbg('MotionPlus検出'); }
-  }
+  if (pressA && menuOn) hcClick();   // 指先カーソルで指している項目を決定
   // 加速度（0g=128, 1g≒26）
   const x = (d.getUint8(2) - 128)/26, y = (d.getUint8(3) - 128)/26, z = (d.getUint8(4) - 128)/26, m = Math.hypot(x, y, z);
   if (Math.abs(m - 1) < .12){   // ほぼ静止している時だけ重力方向を更新
@@ -755,284 +805,287 @@ function onWii(e){
   const upTh = wii.th*.65;
   if (up < -upTh*.7) wii.lastNeg = now;   // 直前に下向きの勢いがあった = 振り下ろしの減速なので除外
   if (now - wii.lastSw < 450) return;
-  if (wii.b && up > upTh && now - wii.lastNeg > 220){ wii.lastSw = now + 200; dbg(`B+振り上げ ${up.toFixed(1)}g → パリィ`); parry(); }
+  if (wii.b){   // B押しながら振り上げ → パリィ（魔法使いは振っても攻撃しない）
+    if (up > upTh && now - wii.lastNeg > 220){ wii.lastSw = now + 200; parry(); }
+  }
 }
 
-// ===== 魔法使い：詠唱（チェックポイント方式）=====
-// 詠唱文の「光る言葉」を認識するたびに点灯。全部そろえば発動。
-// 被弾・ガード・↓を離すなど途中で中断しても点灯は保持され、続きから唱えれば成功。
+// ===== 魔法使い：音声詠唱 =====
 const SRc = window.SpeechRecognition || window.webkitSpeechRecognition, hx = h => '#' + h.toString(16).padStart(6, '0');
-const CHANT_KEEP = 25000;   // 最後の1語から、この時間(ms)何も言わないと点灯をリセット
-const norm = t => t.normalize('NFKC').toLowerCase().replace(/[ーぃィ\s、。,.!！?？'"]/g, '').replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 96));
-// parts: 文字列=ただの文 / [表示, 正規表現]=チェックポイント（正規表現は norm 後＝ひらがな・漢字・小文字に対して判定。漢字変換と誤認識の両方を拾う）
 const SP = [
-  { id:'fire', n:'グレイトフレア', icon:'🔥', hex:0xff6a2a, flashC:0xff8a3a, dmg:120,
-    parts:['わが', ['心', /心|こころ/], 'を', ['燃やし', /燃|もや|もえ/], '、', ['伝説', /伝説|でんせつ|でんせ|legend/], 'の', ['業火', /業火|劫火|ごうか|ごか|豪華|剛火|郷下/], 'となす、グレイト', ['フレア', /ふれあ|ふれ|触れ|flare/]],
-    go(d){ fireSpell({ ...this, count:1, sc:3.4, big:1, boom:9, dur:.7 }, d); } },
-  { id:'water', n:'マザーオブシー', icon:'💧', hex:0x4aa8ff, flashC:0x7ad0ff, dmg:120,
-    parts:[['母', /母|はは/], 'なる', ['海', /海|うみ/], '、わが', ['望み', /望|のぞ/], 'に', ['こたえ', /応|答|こた/], 'よ、', ['マザーオブシー', /まざ|mother|ざおぶ|おぶし|ofsea/]],
-    go(d){ fireSpell({ ...this, count:8, sc:1.1, big:1, boom:5, dur:.55 }, d); } },
-  { id:'nature', n:'ユグドラシル', icon:'🌿', hex:0x5fe07a, flashC:0x9dffb0, dmg:130,
-    parts:[['生命', /生命|せいめい|命|いのち/], 'の', ['緑', /緑|みどり/], 'よ、', ['今ここ', /今|いま|ここ/], 'に', ['咲け', /咲|裂け|さけ|さく|さか|さき/], '、', ['ユグドラシル', /ゆぐ|どらし|どらじ|drasil|drazil|yggdr|igdra|ゆくど/]],
-    go(d){ fireSpell({ ...this, count:3, sc:1.4, blade:1, big:1, boom:4 }, d*.25); setTimeout(() => growTree(d*.75), 700); } }];
-for (const sp of SP) sp.cps = sp.parts.filter(Array.isArray);
-// 弱攻撃: 単語1つで即発動（クールダウン各1秒・反撃ボーナスは消費しない）。詠唱とは別に判定
-const WK = [
-  { id:'wfire', n:'ファイヤ', icon:'🔥', hex:0xff6a2a, cd:1, dmg:8, rx:/ふぁい[やあ]|ふあい[やあ]|fire/ },
-  { id:'wwater', n:'ウォーター', icon:'💧', hex:0x4aa8ff, cd:1, dmg:8, rx:/う[ぉお]た|water/ },
-  { id:'wleaf', n:'リーフ', icon:'🌿', hex:0x5fe07a, cd:1, dmg:8, rx:/りふ|leaf|leave/ }];
-const wkCD = {}; for (const w of WK) wkCD[w.id] = 0;
-const wkDone = new Set(), wkTm = {}, wkAlts = {};
-const chantHits = alts => { let n = 0; for (const sp of SP) for (const c of sp.cps) if (alts.some(t => c[1].test(t))) n++; return n; };
-function evalWeak(key){
-  if (wkDone.has(key)) return; wkDone.add(key); clearTimeout(wkTm[key]);
-  const alts = wkAlts[key] || []; if (chantHits(alts) >= 2) return;   // 詠唱の最中は弱攻撃として扱わない
-  const w = WK.find(x => alts.some(t => x.rx.test(t))); if (w) castWeak(w);
+  { id:'fire', n:'ファイヤ', hex:0xff6a2a, cd:1, dmg:8, rx:/ふぁい[やあ]|fire/ },
+  { id:'water', n:'ウォーター', hex:0x4aa8ff, cd:1, dmg:8, rx:/う[ぉお]た|water/ },
+  { id:'leaf', n:'リーフ', hex:0x5fe07a, cd:1, dmg:8, rx:/りふ|leaf|leave/ },
+  { id:'rfire', n:'レイジングファイヤ', hex:0xff3a1a, cd:5, dmg:36, sc:2.4, big:1, rx:/れ[いえ]じんぐ|raging/ },
+  { id:'swater', n:'スプラッシュウォーター', hex:0x7ad0ff, cd:5, dmg:35, count:5, sc:1.1, big:1, rx:/すぷらっしゅ|splash/ },
+  { id:'lblade', n:'リーフブレード', hex:0x9dff5a, cd:5, dmg:36, count:3, sc:1.4, blade:1, big:1, rx:/ぶれ[いえ]?ど|blade/ },
+  { id:'cure', n:'キュア', hex:0x9dffb0, cd:8, heal:.3, rx:/きゅ[うー]?あ|cure/ }];
+const SPm = SP.slice().sort((a, b) => (b.big ? 1 : 0) - (a.big ? 1 : 0));   // 強攻撃を先に判定
+const norm = t => t.normalize('NFKC').toLowerCase().replace(/[ーぃィ\s、。,.!！?？'"]/g, '').replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 96));
+
+// ===== 必殺：チェックポイント詠唱 =====
+// [表示文字, 認識パターン] がチェックポイント。言えた所が光り、進み具合は被弾しても・ボタンを離しても残る。全部光ったら発動。
+// パターンは norm() 後の文字（カタカナ→ひらがな・長音除去）に当てる。漢字表記・ひらがな表記・誤変換されやすい語も入れておく
+const ULTS = [
+  { id:'flare', n:'グレイトフレア', en:'GREAT FLARE', hex:0xff6a2a, cd:30, dmg:220,
+    parts:['わが', ['心', /心|こころ/], 'を', ['燃やし', /燃や|もや|萌や/], '、', ['伝説', /伝説|でんせつ/], 'の', ['業火', /業火|劫火|ごうか|豪華|轟火/], 'となす、グレイト', ['フレア', /ふれあ|ふれや|触れ合|flare/]] },
+  { id:'sea', n:'マザーオブシー', en:'MOTHER OF SEA', hex:0x4aa8ff, cd:30, dmg:220,
+    parts:[['母', /母|はは/], 'なる', ['海', /海|うみ/], '、わが', ['望み', /望|のぞみ/], 'に', ['こたえよ', /応え|答え|こたえ|堪え/], '、', ['マザーオブシー', /まざ|おぶし|mother/]] },
+  { id:'ygg', n:'ユグドラシル', en:'YGGDRASIL', hex:0x5fe07a, cd:30, dmg:220,
+    parts:[['生命', /生命|せいめい|声明|姓名/], 'の', ['緑', /緑|みどり/], 'よ、', ['今ここ', /今|いま|此処|ここ/], 'に', ['咲け', /咲|さけ|酒|裂け/], '、', ['ユグドラシル', /ゆぐ|どらしる|どらじる|ygg|drasil/]] }];
+const ALLRX = [];   // どれかのチェックポイントに当たる区切りは通常魔法として扱わない
+for (const u of ULTS){
+  const el = document.createElement('div'); el.className = 'ult'; el.style.setProperty('--c', hx(u.hex));
+  const hd = document.createElement('div'); hd.className = 'hd'; hd.innerHTML = `<b>${u.n}</b><span></span>`;
+  const ph = document.createElement('div'); ph.className = 'ph'; u.cps = [];
+  for (const p of u.parts){
+    if (typeof p === 'string'){ ph.append(p); continue; }
+    const sp = document.createElement('span'); sp.className = 'cp'; sp.textContent = p[0]; ph.append(sp);
+    u.cps.push({ w:p[0], rx:p[1], el:sp, lit:false }); ALLRX.push(p[1]);
+  }
+  const cdb = document.createElement('i'); cdb.className = 'cdb';
+  el.append(hd, ph, cdb); $('chant').appendChild(el); u.el = el; u.cnt = hd.lastChild; u.cdb = cdb;
 }
-function castWeak(w){
+function ultDraw(u){
+  const n = u.cps.filter(c => c.lit).length;
+  u.cnt.textContent = CD[u.id] > 0 ? `再詠唱まで ${Math.ceil(CD[u.id])}s` : `${n} / ${u.cps.length}`;
+  u.el.classList.toggle('cd', CD[u.id] > 0); u.el.classList.toggle('near', CD[u.id] <= 0 && n >= u.cps.length - 1 && n > 0);
+}
+// s = 今の詠唱セッション。必殺が発動したら、そこまでに聞き取った言葉は数えない
+// （s.ign より前の区切りは無視。発動時に途中だった区切りは、その時点の文字 s.pre より後ろだけを見る）
+function chantTexts(s){
+  const out = [];
+  for (let k = s.ign; k < s.txt.length; k++){
+    const a = s.txt[k]; if (!a) continue;
+    for (let j = 0; j < a.length; j++){
+      let t = norm(a[j] || '');
+      if (k === s.ign && s.pre){ const p = s.pre[j] || s.pre[0]; if (!t.startsWith(p)) continue; t = t.slice(p.length); }
+      if (t) out.push(t);
+    }
+  }
+  return out;
+}
+function chantCut(s){ s.ign = Math.max(0, s.txt.length - 1); s.pre = (s.txt[s.ign] || []).map(norm); }
+function chantCheck(s){
   if (state !== 'play' || menuOn) return;
-  if (wkCD[w.id] > 0){ dbg(`弱攻撃 ${w.n} はCD中`); popCam(w.n + ' 待機中', '#aaaaaa', .6, .6); return; }
-  wkCD[w.id] = w.cd; colR = w.hex; dbg(`弱攻撃: ${w.icon}${w.n}`); popCam(w.n, hx(w.hex), .9, .9);
-  const o = orbPos(); ring(o, 2.2, w.hex, .4); burst(o, w.hex, 25, 4); fireSpell({ hex:w.hex, sc:1 }, w.dmg);
-}
-const lit = {}; for (const sp of SP) lit[sp.id] = sp.cps.map(() => 0);   // 0=未点灯 / 数値=点灯した時刻
-const litN = sp => lit[sp.id].filter(Boolean).length, lastLit = sp => Math.max(0, ...lit[sp.id]);
-function playTick(n){ try {
-  actx = actx || new AudioContext(); const t = actx.currentTime, o = actx.createOscillator(), g = actx.createGain();
-  o.type = 'sine'; o.frequency.setValueAtTime(520 + n*110, t); o.frequency.exponentialRampToValueAtTime(760 + n*110, t + .13);
-  g.gain.setValueAtTime(.3*vol + .001, t); g.gain.exponentialRampToValueAtTime(.001, t + .16);
-  o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + .18);
-} catch (e){} }
-
-// ---- 3D HUD: 詠唱パネル（VRモードでも見える）----
-const CH_W = 1024, CH_H = 232, chC = document.createElement('canvas'); chC.width = CH_W; chC.height = CH_H;
-const chX = chC.getContext('2d'), chTex = new THREE.CanvasTexture(chC);
-const chS = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 4.6*CH_H/CH_W), new THREE.MeshBasicMaterial({ map:chTex, transparent:true, depthTest:false }));
-chS.position.set(0, -.95, -3); chS.renderOrder = 12; hud.add(chS);
-let chDirty = true, chAnimUntil = 0, castFlash = null;
-function drawChants(now){
-  const x = chX, rowH = (CH_H - 8)/3; x.clearRect(0, 0, CH_W, CH_H); x.textBaseline = 'middle'; x.textAlign = 'left';
-  SP.forEach((sp, r) => {
-    const y = 4 + r*rowH, mid = y + rowH/2 + 2, col = hx(sp.hex), n = litN(sp);
-    x.fillStyle = 'rgba(4,14,20,.62)'; x.fillRect(0, y + 2, CH_W, rowH - 4);
-    x.fillStyle = col; x.fillRect(0, y + 2, 8, rowH - 4);
-    if (castFlash && castFlash.id === sp.id && now - castFlash.t < 800){
-      const k = 1 - (now - castFlash.t)/800; x.globalAlpha = .45*k; x.fillStyle = col; x.fillRect(0, y + 2, CH_W, rowH - 4); x.globalAlpha = 1;
-      x.strokeStyle = '#ffd35a'; x.lineWidth = 4; x.strokeRect(2, y + 4, CH_W - 4, rowH - 8);
-    }
-    x.font = `30px ${FONT}`; x.fillStyle = '#fff'; x.fillText(sp.icon, 18, mid);
-    let fs = 34; x.font = `bold ${fs}px ${FONT}`;
-    const tw = sp.parts.reduce((a, p) => a + x.measureText(Array.isArray(p) ? p[0] : p).width, 0), avail = CH_W - 66 - 90;
-    if (tw > avail){ fs = Math.floor(fs*avail/tw); x.font = `bold ${fs}px ${FONT}`; }
-    let px = 66, j = 0;
-    for (const p of sp.parts){
-      const cp = Array.isArray(p), t = cp ? p[0] : p, w = x.measureText(t).width;
-      if (!cp){ x.fillStyle = '#8fa6ad'; x.fillText(t, px, mid); }
-      else if (lit[sp.id][j]){   // 認識できた言葉は光る（点灯直後は白く強く脈打つ）
-        const pulse = Math.max(0, 1 - (now - lit[sp.id][j])/600);
-        x.shadowColor = col; x.shadowBlur = 14 + 24*pulse; x.fillStyle = pulse > .35 ? '#ffffff' : col;
-        x.fillText(t, px, mid); x.fillText(t, px, mid); x.shadowBlur = 0;
-      } else { x.fillStyle = '#ffffff'; x.fillText(t, px, mid); x.fillRect(px, mid + fs*.55, w, 3); }   // 未点灯のチェックポイント: 白＋下線
-      if (cp) j++; px += w;
-    }
-    x.font = `bold 26px ${FONT}`; x.textAlign = 'right'; x.fillStyle = n ? col : '#6f858c'; x.fillText(`${n}/${sp.cps.length}`, CH_W - 14, mid); x.textAlign = 'left';
-  });
-  chTex.needsUpdate = true;
-}
-
-// ---- マイク設定（カメラ・マイク設定パネル内）----
-const mic = { stream:null, track:null, label:'', pass:false, tail:.7, an:null, buf:null, actx:null, lvl:0 };
-const micSel = $('micSel'), micStat = $('micStat');
-async function listMics(){
-  try {
-    const ds = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput'), cur = micSel.value;
-    micSel.innerHTML = '<option value="">既定のマイク</option>';
-    ds.forEach((d, i) => { const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || ('マイク ' + (i+1)); micSel.appendChild(o); });
-    if (cur) micSel.value = cur;
-    if (!mic.stream) micStat.textContent = ds.length + '台検出（名前は一度マイクを許可すると表示されます）';
-  } catch (e){ micStat.textContent = '一覧を取得できません'; }
-}
-function closeMic(){
-  if (mic.stream) mic.stream.getTracks().forEach(t => t.stop());
-  try { mic.actx && mic.actx.close(); } catch (e){}
-  mic.stream = mic.track = mic.an = mic.actx = null; mic.lvl = 0; $('micLvl').style.width = '0';
-}
-async function openMic(){
-  closeMic();
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ micStat.textContent = 'HTTPS か localhost で開いてください'; return; }
-  const id = micSel.value, a = { noiseSuppression:$('micNs').checked, echoCancellation:$('micEc').checked, autoGainControl:$('micAg').checked };
-  if (id) a.deviceId = { exact:id };
-  try { mic.stream = await navigator.mediaDevices.getUserMedia({ audio:a, video:false }); }
-  catch (e){ micStat.textContent = '起動失敗: ' + e.name + '（許可なし／他のアプリが使用中）'; dbg('マイク起動失敗: ' + e.name); return; }
-  mic.track = mic.stream.getAudioTracks()[0]; mic.label = mic.track.label || 'マイク';
-  try {
-    mic.actx = new AudioContext(); const src = mic.actx.createMediaStreamSource(mic.stream);
-    mic.an = mic.actx.createAnalyser(); mic.an.fftSize = 1024; mic.buf = new Uint8Array(mic.an.fftSize); src.connect(mic.an);
-    if (mic.actx.state === 'suspended') mic.actx.resume();
-  } catch (e){}
-  micStat.textContent = '使用中: ' + mic.label + (mic.pass ? '（認識にも指定）' : '（レベル確認のみ）');
-  dbg(`マイク: ${mic.label} / ノイズ抑制${+a.noiseSuppression} エコー除去${+a.echoCancellation} 自動ゲイン${+a.autoGainControl}`);
-  await listMics(); const st = mic.track.getSettings(); if (st.deviceId) micSel.value = st.deviceId;
-}
-function micMeter(){
-  if (!mic.an) return;
-  mic.an.getByteTimeDomainData(mic.buf); let s = 0; for (const v of mic.buf){ const d = (v - 128)/128; s += d*d; }
-  mic.lvl = Math.max(Math.min(1, Math.sqrt(s/mic.buf.length)*5), mic.lvl*.9); $('micLvl').style.width = (mic.lvl*100).toFixed(0) + '%';
-}
-let testing = false, testTm = 0;
-function stopTest(){ if (!testing) return; testing = false; clearTimeout(testTm); hold = false; try { rec && rec.stop(); } catch (e){} $('micTest').textContent = '🎙 音声認識テスト（15秒）'; dbg('音声認識テスト終了'); }
-$('micTest').onclick = () => {   // ゲーム外でも「聞き取り」欄に認識結果が出る。単語の点灯はプレイ中のみ
-  if (testing){ stopTest(); return; }
-  if (!SRc){ dbg('音声認識 非対応'); return; } if (hold) return;
-  testing = true; hold = true; clearTimeout(tailTm); $('micTest').textContent = '■ テスト中（押すと停止）'; dbg('🎙 音声認識テスト開始 → 何か話してください'); startRec();
-  testTm = setTimeout(stopTest, 15000);
-};
-$('micApply').onclick = openMic; $('micRefresh').onclick = listMics;
-$('micOff').onclick = () => { closeMic(); micStat.textContent = '指定解除（既定のマイクを使用）'; dbg('マイク指定を解除'); };
-$('micPass').onchange = e => { mic.pass = e.target.checked; if (mic.track) micStat.textContent = '使用中: ' + mic.label + (mic.pass ? '（認識にも指定）' : '（レベル確認のみ）'); };
-$('micTail').oninput = e => { mic.tail = +e.target.value; $('micTailV').textContent = mic.tail.toFixed(1); };
-if (navigator.mediaDevices) navigator.mediaDevices.addEventListener('devicechange', listMics);
-listMics();
-
-// ---- 音声認識（↓長押し中だけ聞く）----
-let hold = false, rec = null, sess = 0, colR = 0x8fe4ff, tailTm = 0, recAlive = false; const loggedFinal = new Set();
-function startRec(){
-  const r = rec = new SRc(), my = ++sess;
-  r.lang = 'ja-JP'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 3; voiceSt = '起動中…';
-  r.onstart = () => { voiceSt = '待機中（聞いています）'; dbg('🎙 認識開始'); };
-  r.onaudiostart = () => dbg('マイク入力 OK');
-  r.onspeechstart = () => { voiceSt = '音声を検出'; };
-  r.onspeechend = () => { voiceSt = '待機中（聞いています）'; };
-  r.onnomatch = () => dbg('聞き取れず(nomatch)');
-  r.onresult = e => { if (my === sess) onSpeech(e, my); };
-  r.onerror = e => {
-    voiceSt = 'エラー: ' + e.error; dbg('音声エラー: ' + e.error + (e.error === 'no-speech' ? '（無音）' : ''));
-    if (e.error === 'not-allowed' || e.error === 'service-not-allowed'){ r.fatal = true; $('castSay').textContent = 'マイクを許可してください'; }
-  };
-  r.onend = () => {
-    const again = hold && rec === r && !r.fatal; if (rec === r || !rec){ voiceSt = '停止'; recAlive = false; } dbg('認識終了' + (again ? ' → 再起動' : ''));
-    if (again) startRec();   // 無音などで切れても、押している間は聞き直す
-  };
-  recAlive = true; $('castSay').textContent = '🎙 聞いています…';
-  let usedTrack = false;
-  try { if (mic.track && mic.pass && mic.track.readyState === 'live'){ usedTrack = true; r.start(mic.track); } else r.start(); }
-  catch (e){ dbg('start失敗: ' + e.message + (usedTrack ? ' → 既定マイクで再試行' : '')); try { r.start(); usedTrack = false; } catch (e2){ dbg('start失敗: ' + e2.message); } }
-  if (usedTrack) dbg('指定マイクを認識に渡しました: ' + mic.label);
-}
-function restartRec(){   // 認識の履歴を捨てて聞き直す（発動後・リセット後に古い言葉で再点灯しないように）
-  sess++; const o = rec; rec = null; try { o && o.abort(); } catch (e){}
-  for (const k in wkTm) clearTimeout(wkTm[k]);
-  if (hold) setTimeout(() => { if (hold && !rec) startRec(); }, 250);
-}
-function castDown(){
-  if (hold || state !== 'play' || menuOn) return;
-  if (!SRc){ $('castSay').textContent = 'このブラウザは音声認識に未対応です（Chrome / Edge）'; dbg('音声認識 非対応'); return; }
-  hold = true; clearTimeout(tailTm);
-  if (rec && recAlive && !rec.fatal){ dbg('↓押下 → 認識は継続中（そのまま続行）'); return; }
-  dbg('↓押下 → 音声認識を開始'); startRec();
-}
-function castUp(){   // 離した直後は言い終わりを取りこぼさないよう、少し聞き続けてから止める
-  if (!hold) return; hold = false; dbg(`↓離した → ${mic.tail.toFixed(1)}秒後に認識を停止`);
-  clearTimeout(tailTm); tailTm = setTimeout(() => { if (!hold){ try { rec && rec.stop(); } catch (e){} } }, mic.tail*1000);
-}
-$('castBtn').onpointerdown = e => { e.preventDefault(); $('castBtn').setPointerCapture(e.pointerId); castDown(); $('castBtn').classList.add('on'); };
-$('castBtn').onpointerup = $('castBtn').onpointercancel = () => { castUp(); $('castBtn').classList.remove('on'); };
-
-function onSpeech(e, my){
-  let heard = '';
-  for (let i = 0; i < e.results.length; i++){
-    heard += e.results[i][0].transcript + ' ';
-    const key = my + ':' + i;
-    if (e.results[i].isFinal && !loggedFinal.has(key)){ loggedFinal.add(key); dbg('確定: ' + [...e.results[i]].map(a => a.transcript).join(' | ')); }
-  }
-  liveTxt = heard.trim(); liveNorm = norm(liveTxt); $('castSay').textContent = '🎙 ' + liveTxt;
-  if (state !== 'play') return;
-  for (let i = 0; i < e.results.length; i++){
-    const alts = [...e.results[i]].map(a => norm(a.transcript)), key = my + ':' + i;
-    if (!wkDone.has(key)){   // 弱攻撃: 確定した時、または 0.45秒 同じ内容のまま続いた時に判定
-      wkAlts[key] = alts;
-      if (e.results[i].isFinal) evalWeak(key); else { clearTimeout(wkTm[key]); wkTm[key] = setTimeout(() => evalWeak(key), 450); }
-    }
-    for (const sp of SP) for (let j = 0; j < sp.cps.length; j++)
-      if (!lit[sp.id][j] && alts.some(t => sp.cps[j][1].test(t)) && lightUp(sp, j)) return;   // 発動したら古い認識結果は無視
+  const texts = chantTexts(s);
+  if (!texts.length) return;
+  for (const u of ULTS){
+    if (CD[u.id] > 0) continue;   // 再詠唱待ちの間は光らない
+    let hit = false;
+    for (const c of u.cps) if (!c.lit && texts.some(t => c.rx.test(t))){ c.lit = hit = true; c.el.classList.add('lit'); }
+    if (hit){ burst(orbPos(), u.hex, 10, 2); ultDraw(u); }
+    if (u.cps.every(c => c.lit)){ chantCut(s); castUlt(u); return; }
   }
 }
+
+const CD = {}, pills = {}, projs = [], ufx = []; let colR = 0x8fe4ff, rec = null, hold = false, kick = 0;
+for (const x of SP){ const b = document.createElement('span'); b.className = 'sp'; b.style.borderColor = hx(x.hex); b.append(document.createElement('i'), x.n); $('spells').appendChild(b); pills[x.id] = b.firstChild; }
+const CDMAX = {}; for (const x of [...SP, ...ULTS]){ CD[x.id] = 0; CDMAX[x.id] = x.cd; }
 const orbPos = () => orb.getWorldPosition(new THREE.Vector3());
-function lightUp(sp, j){
-  const now = performance.now(); lit[sp.id][j] = now; chDirty = true; chAnimUntil = now + 700; colR = sp.hex;
-  const n = litN(sp), o = orbPos(); dbg(`★ ${sp.icon}${sp.n} 「${sp.cps[j][0]}」認識 ${n}/${sp.cps.length}`);
-  playTick(n); wiiRumble(40); burst(o, sp.hex, 14, 3); ring(o, 1.3, sp.hex, .3);
-  if (n >= sp.cps.length){ castSpell(sp); return true; }
-  return false;
-}
-function chantReset(){ for (const sp of SP) lit[sp.id].fill(0); chDirty = true; castFlash = null; liveTxt = liveNorm = ''; restartRec(); }
-function castSpell(sp){
-  const now = performance.now();
-  for (const s of SP) lit[s.id].fill(0);
-  chDirty = true; chAnimUntil = now + 900; castFlash = { id:sp.id, t:now }; colR = sp.hex; restartRec(); liveTxt = liveNorm = '';
-  dbg(`★★ 詠唱完成: ${sp.n}`);
-  playAtk(); wiiRumble(300); flash = .5; flashM.material.color.set(sp.flashC);
-  popCam(sp.n + '!!', hx(sp.hex), 1.3, 1.6);
-  const o = orbPos(); ring(o, 3.2, sp.hex, .5); burst(o, sp.hex, 50, 6);
-  let d = sp.dmg;
-  if (P.counter > 0){ d *= P.cMul; P.counter = 0; dbg('COUNTER! ×' + P.cMul); popup('COUNTER!!', '#ffd35a', new THREE.Vector3(0, -.4, -3), 1.1, 1, camera); }
-  sp.go(d);
-}
 
-// ---- 魔法の弾・世界樹 ----
-const projs = []; let tree = null;
 function fireSpell(sp, dmg){
   const n = sp.count || 1, from = orbPos();
   for (let i = 0; i < n; i++){
     const m = new THREE.Mesh(sp.blade ? new THREE.BoxGeometry(1, .14, .05) : new THREE.SphereGeometry(.22, 10, 8), new THREE.MeshBasicMaterial({ color:sp.hex, transparent:true, blending:THREE.AdditiveBlending, depthTest:false }));
-    m.scale.setScalar(sp.sc || 1); m.position.copy(from); m.renderOrder = 16; scene.add(m);
-    projs.push({ m, from:from.clone(), off:new THREE.Vector3(n > 1 ? (Math.random()-.5)*2.6 : 0, n > 1 ? (Math.random()-.5)*1.6 : 0, 0), t:-i*.08, dur:sp.dur || .5, dmg:dmg/n, sp });
+    m.scale.setScalar(sp.sc || 1); m.position.copy(from); m.renderOrder = 16; m.visible = false; scene.add(m);
+    projs.push({ m, from:from.clone(), off:new THREE.Vector3(n > 1 ? (Math.random()-.5)*2.6 : 0, n > 1 ? (Math.random()-.5)*1.6 : 0, 0), t:-i*.08, dur:.5, dmg:dmg/n, sp });
   }
 }
-function growTree(dmg){
-  if (state !== 'play') return;
-  const g = new THREE.Group(); g.position.set(bossG.position.x, 0, bossG.position.z);
-  g.add(mk(new THREE.CylinderGeometry(.5, .9, 9, 10), M(0x5a3a22), 0, 4.5, 0));
-  for (const [x, y, z, r] of [[0, 9.5, 0, 3], [-2, 8, .5, 2], [2, 8.5, -.5, 2.2]]) g.add(mk(new THREE.SphereGeometry(r, 12, 10), M(0x3fbf5a), x, y, z));
-  scene.add(g); tree = { g, t:0, hit:false, dmg }; ring(g.position, 8, 0x5fe07a, .8);
+function cast(sp){
+  if (state !== 'play' || menuOn) return;
+  if (CD[sp.id] > 0){ popCam(sp.n + ' 待機中', '#aaaaaa', .6, .6); return; }
+  CD[sp.id] = sp.cd; colR = sp.hex; kick = .25; popCam(sp.n, hx(sp.hex), sp.big ? 1.1 : .9, .9);
+  const o = orbPos(); ring(o, 2.2, sp.hex, .4); burst(o, sp.hex, 25, 4);
+  if (sp.heal){
+    const v = Math.round(PMAX*sp.heal); P.hp = Math.min(PMAX, P.hp + v);
+    burst(rig.localToWorld(new THREE.Vector3(0, -1, -2)), sp.hex, 60, 3); ring(rig.localToWorld(new THREE.Vector3(0, -.5, -2)), 3, sp.hex, .7);
+    popup('HP +' + v, '#9dffb0', new THREE.Vector3(0, -.4, -3), .8, 1.2, camera); return;
+  }
+  let d = sp.dmg; if (P.counter > 0){ d = Math.max(d, P.cBig); P.counter = 0; popup('COUNTER!!', '#ffd35a', new THREE.Vector3(0, -.4, -3), 1.1, 1, camera); }
+  fireSpell(sp, d); wiiRumble(sp.big ? 180 : 80);
 }
-function clearFx(){ for (const p of projs) scene.remove(p.m); projs.length = 0; if (tree){ scene.remove(tree.g); tree = null; } }
+
+// ---- 必殺の演出 ----
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const glowMat = (c, op) => new THREE.MeshBasicMaterial({ color:c, transparent:true, opacity:op, blending:THREE.AdditiveBlending, depthWrite:false });
+const bossAt = () => bossG.position.clone().add(V3(0, 1.2, 0));
+const ultHit = (d, at) => { if (state === 'play' && B.s !== 'dead') hurtBoss(d, at, true); };
+// o を dur 秒動かし、hitK(0〜1) の時点で onHit を1回呼ぶ
+function addUfx(o, dur, hitK, step, onHit){ scene.add(o); ufx.push({ o, t:0, dur, hitK, step, onHit, hit:false }); }
+const later = (ms, fn) => setTimeout(() => { if (state === 'play') fn(); }, ms);
+const ULT_FX = {
+  flare(d){   // 炎の連弾 → ボスを包む大爆炎
+    for (let i = 0; i < 3; i++) later(i*180, () => fireSpell({ ...SP[0], count:4, sc:1.5, big:1 }, d*.1));
+    later(750, () => {
+      const g = new THREE.Group(), c1 = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), glowMat(0xffd35a, .9)), c2 = new THREE.Mesh(new THREE.SphereGeometry(1.4, 24, 16), glowMat(0xff3a1a, .6));
+      g.add(c1, c2);
+      addUfx(g, 1.7, .4, (k, o) => {
+        o.position.copy(bossG.position); o.scale.setScalar(k < .4 ? .2 + k/.4*3.2 : 3.4 + (k - .4)*1.5);
+        const op = k < .4 ? 1 : Math.max(0, 1 - (k - .4)/.6); c1.material.opacity = .9*op; c2.material.opacity = .6*op;
+        if (Math.random() < .6) burst(bossG.position, Math.random() < .5 ? 0xff6a2a : 0xffd35a, 4, 9);
+      }, () => {
+        ultHit(d*.7, bossAt()); shake = .9; flash = .7; flashM.material.color.set(0xffb070); fovp = 14;
+        ring(bossG.position, 9, 0xff6a2a, .8); ring(bossG.position, 5, 0xffd35a, .5); burst(bossG.position, 0xff6a2a, 150, 14); wiiRumble(400);
+      });
+    });
+  },
+  sea(d){   // 大波が押し寄せてボスを押し流す
+    const g = new THREE.Group(), wall = new THREE.Mesh(new THREE.BoxGeometry(9, 3.2, .6), glowMat(0x4aa8ff, .5)), crest = new THREE.Mesh(new THREE.BoxGeometry(9.4, .35, .8), glowMat(0xdff6ff, .9));
+    crest.position.y = 1.6; g.add(wall, crest);
+    addUfx(g, 1.7, .65, (k, o) => {
+      const kk = Math.min(1, k/.65), e = kk*kk;
+      o.position.set(P.x + (bossG.position.x - P.x)*e, 1.6*Math.min(1, .3 + kk*2), -1.5 + (bossG.position.z + 1.5)*e);
+      o.scale.set(1, .3 + .9*Math.min(1, kk*2), 1);
+      const op = k < .65 ? 1 : Math.max(0, 1 - (k - .65)/.35); wall.material.opacity = .5*op; crest.material.opacity = .9*op;
+      if (k < .65) burst(o.position.clone().add(V3((Math.random()-.5)*8, 1.5, 0)), 0x7ad0ff, 3, 4);
+    }, () => {
+      ultHit(d, bossAt()); shake = .7; flash = .5; flashM.material.color.set(0x9fd8ff);
+      if (B.s === 'idle' || B.s === 'wind' || B.s === 'charge'){ B.s = 'knock'; B.stun = false; B.t = 1.2; B.vz = -14; lane.visible = false; }
+      ring(bossG.position, 8, 0x4aa8ff, .7); burst(bossG.position, 0x4aa8ff, 150, 12); wiiRumble(400);
+    });
+  },
+  ygg(d){   // 木の葉の刃 → 世界樹がボスを貫く
+    later(0, () => fireSpell({ ...SP[5], count:6, sc:1.6 }, d*.3));
+    later(900, () => {
+      const g = new THREE.Group(); g.position.set(bossG.position.x, 0, bossG.position.z);
+      g.add(mk(new THREE.CylinderGeometry(.5, .9, 9, 10), M(0x5a3a22), 0, 4.5, 0));
+      for (const [x, y, z, r] of [[0, 9.5, 0, 3], [-2, 8, .5, 2], [2, 8.5, -.5, 2.2]]) g.add(mk(new THREE.SphereGeometry(r, 12, 10), M(0x3fbf5a), x, y, z));
+      ring(g.position, 8, 0x5fe07a, .8);
+      addUfx(g, 2, .4, (k, o) => { o.scale.set(1, Math.min(1, k/.4) + .0001, 1); }, () => {
+        ultHit(d*.7, bossG.position.clone().add(V3(0, 1.5, 0))); shake = .8; burst(bossG.position, 0x5fe07a, 120, 10); ring(bossG.position, 7, 0xffd35a, .7); wiiRumble(400);
+      });
+    });
+  } };
+function castUlt(u){
+  CD[u.id] = u.cd; for (const c of u.cps){ c.lit = false; c.el.classList.remove('lit'); } ultDraw(u);
+  colR = u.hex; kick = .25; flash = .6; flashM.material.color.set(0xffffff);
+  popCam(u.n + '!!', hx(u.hex), 1.3, 2); popup(u.en, '#ffffff', V3(0, -.15, -3), .6, 1.8, camera);
+  ring(orbPos(), 4, u.hex, .6); burst(orbPos(), u.hex, 60, 6);
+  let d = u.dmg; if (P.counter > 0){ d += P.cBig; P.counter = 0; popup('COUNTER!!', '#ffd35a', V3(0, -.4, -3), 1.1, 1, camera); }
+  ULT_FX[u.id](d); wiiRumble(250);
+}
+function disposeObj(o){ o.traverse(c => { if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose(); }); }
+function clearFx(){
+  for (const p of projs){ scene.remove(p.m); p.m.geometry.dispose(); p.m.material.dispose(); } projs.length = 0;
+  for (const f of ufx){ scene.remove(f.o); disposeObj(f.o); } ufx.length = 0;
+}
+function wizReset(){
+  clearFx(); for (const k in CD) CD[k] = 0;
+  for (const u of ULTS){ for (const c of u.cps){ c.lit = false; c.el.classList.remove('lit'); } ultDraw(u); }
+}
 function wizUpdate(dt){
-  const on = state === 'play' && !menuOn, now = performance.now();
-  if (state !== 'play') clearFx();
-  if (wii.dev && now - Math.max(wii.rxT, wii.openT) > 2500 && now - wii.wdT > 2500 && wii.wdN < 5){ wii.wdT = now; wii.wdN++; dbg(`Wii: 入力が来ません → 再設定 ${wii.wdN}/5`); wiiEnableMP(); }
-  micMeter(); if (on) for (const w of WK) wkCD[w.id] = Math.max(0, wkCD[w.id] - dt);
-  let best = null, bn = 0;
-  for (const sp of SP){
-    const n = litN(sp); if (n > bn){ bn = n; best = sp; }
-    if (n && !on){ for (let j = 0; j < lit[sp.id].length; j++) if (lit[sp.id][j]) lit[sp.id][j] += dt*1000; }   // メニュー中は時間を止める
-    else if (n && now - lastLit(sp) > CHANT_KEEP){ lit[sp.id].fill(0); chDirty = true; dbg('詠唱が途切れた（' + sp.n + ' リセット）'); popCam('詠唱が途切れた…', '#aaaaaa', .6, .8); restartRec(); }
-  }
-  const c = P.counter > 0 ? 0xffd35a : best ? best.hex : colR; orb.material.color.setHex(c); orb.scale.setScalar(hold ? (1.3 + .2*Math.sin(now/100)) : 1);
+  const on = state === 'play' && !menuOn;
+  if (state !== 'play' && (projs.length || ufx.length)) clearFx();
+  for (const k in CD){ if (on) CD[k] = Math.max(0, CD[k] - dt); if (pills[k]) pills[k].style.width = (CD[k]/CDMAX[k]*100) + '%'; }
+  for (const u of ULTS){ u.cdb.style.width = (CD[u.id]/u.cd*100) + '%'; ultDraw(u); }
+  const c = P.counter > 0 ? 0xffd35a : colR; orb.material.color.setHex(c); orb.scale.setScalar(hold ? (1.3 + .2*Math.sin(performance.now()/100)) : 1);
   if (hold && Math.random() < .4) burst(orbPos(), c, 2, 1.5);
-  if (chDirty || now < chAnimUntil){ drawChants(now); chDirty = false; }
   if (!on) return;
-  const to = bossG.position.clone().add(new THREE.Vector3(0, 1.2, 0));
+  const to = bossAt();
   for (let i = projs.length - 1; i >= 0; i--){
     const p = projs[i]; p.t += dt; p.m.visible = p.t >= 0; if (p.t < 0) continue;
     const k = Math.min(1, p.t/p.dur); p.m.position.lerpVectors(p.from, to.clone().add(p.off), k); p.m.position.y += Math.sin(k*Math.PI);
-    if (p.sp.blade) p.m.rotation.z += dt*25; burst(p.m.position, p.sp.hex, p.sp.sc > 2 ? 4 : 1, 1);
+    if (p.sp.blade) p.m.rotation.z += dt*25; burst(p.m.position, p.sp.hex, 1, 1);
     if (k >= 1){
       scene.remove(p.m); p.m.geometry.dispose(); p.m.material.dispose(); projs.splice(i, 1);
-      if (B.s !== 'dead'){ const at = p.m.position.clone(); hurtBoss(p.dmg, at, !!p.sp.big); ring(at, p.sp.boom || 4, p.sp.hex, .45); burst(at, p.sp.hex, p.sp.big ? 40 : 18, 6); if (p.sp.sc > 2){ shake = Math.max(shake, .5); burst(at, 0xffd35a, 60, 10); ring(at, 4, 0xffffff, .3); } }
+      if (B.s !== 'dead'){ const at = p.m.position.clone(); hurtBoss(p.dmg, at, !!p.sp.big); ring(at, p.sp.big ? 4 : 2.2, p.sp.hex, .4); burst(at, p.sp.hex, p.sp.big ? 40 : 18, 6); }
     }
   }
-  if (tree){
-    tree.t += dt; const k = Math.min(1, tree.t/.8); tree.g.scale.set(1, k, 1);
-    if (!tree.hit && k >= 1){ tree.hit = true; hurtBoss(tree.dmg, bossG.position.clone().add(new THREE.Vector3(0, 1.5, 0)), true); shake = .8; burst(bossG.position, 0x5fe07a, 120, 10); ring(bossG.position, 7, 0xffd35a, .7); }
-    if (tree.t > 2){ scene.remove(tree.g); tree = null; }
+  for (let i = ufx.length - 1; i >= 0; i--){
+    const f = ufx[i]; f.t += dt; const k = Math.min(1, f.t/f.dur); f.step(k, f.o);
+    if (!f.hit && k >= f.hitK){ f.hit = true; f.onHit(); }
+    if (k >= 1){ scene.remove(f.o); disposeObj(f.o); ufx.splice(i, 1); }
   }
 }
-dbgDraw();
+
+// ===== マイク（カメラ設定パネル内）=====
+// 音声認識は選んだマイクの音声トラックを渡して開始する。ブラウザが未対応ならOS既定のマイクが使われる
+let micStream = null, micCtx = null, micSrc = null, micAn = null, micBuf = null;
+const micSel = $('micSel');
+async function listMics(){
+  try {
+    const ds = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput'), cur = micSel.value;
+    micSel.innerHTML = '<option value="">既定のマイク</option>';
+    ds.filter(d => d.deviceId && d.deviceId !== 'default').forEach((d, i) => { const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || ('マイク ' + (i+1)); micSel.appendChild(o); });
+    micSel.value = [...micSel.options].some(o => o.value === cur) ? cur : '';
+  } catch (e){ $('micStat').textContent = 'マイク一覧を取得できません'; }
+}
+async function openMic(id){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ $('micStat').textContent = 'HTTPS か localhost で開いてください'; return false; }
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  micStream = null; if (micSrc){ try { micSrc.disconnect(); } catch (e){} micSrc = null; }
+  try { micStream = await navigator.mediaDevices.getUserMedia({ audio:id ? { deviceId:{ exact:id } } : true, video:false }); }
+  catch (e){ $('micStat').textContent = 'マイク起動失敗: ' + e.name + '（許可なし／他アプリが使用中）'; return false; }
+  const tr = micStream.getAudioTracks()[0];
+  $('micStat').textContent = '使用中: ' + (tr.label || 'マイク') + (SRc ? '' : '（このブラウザは音声認識に未対応）');
+  try {
+    micCtx = micCtx || new AudioContext(); if (micCtx.state === 'suspended') micCtx.resume();
+    micSrc = micCtx.createMediaStreamSource(micStream); micAn = micCtx.createAnalyser(); micAn.fftSize = 512; micSrc.connect(micAn); micBuf = new Uint8Array(micAn.fftSize);
+  } catch (e){}
+  await listMics(); const did = tr.getSettings().deviceId; if (id && did) micSel.value = did;
+  if (hold){ castUp(); castDown(); }   // 詠唱中に切り替えたら新しいマイクで聞き直す
+  return true;
+}
+function micMeter(){
+  if (!micAn || $('camPanel').hidden) return;
+  micAn.getByteTimeDomainData(micBuf); let s = 0; for (const v of micBuf){ const x = (v - 128)/128; s += x*x; }
+  $('micLv').style.width = Math.min(100, Math.sqrt(s/micBuf.length)*400) + '%';
+}
+function recStart(r){
+  const tr = micStream && micStream.getAudioTracks()[0];
+  if (tr && tr.readyState === 'live'){ try { r.start(tr); return; } catch (e){} }
+  try { r.start(); } catch (e){}
+}
+$('micApply').onclick = () => openMic(micSel.value || null);
+$('micRefresh').onclick = () => micStream ? listMics() : openMic(null);
+{ const f = $('camBtn').onclick; $('camBtn').onclick = () => { f(); if (!$('camPanel').hidden) listMics(); }; }
+
+// ===== 詠唱（押している間だけ音声認識）=====
+// 通常魔法は区切りごとに照合。必殺のチェックポイントは途中経過(interim)でもすぐ光らせる
+function say(t){ $('castSay').textContent = t; $('micSay').textContent = t; }
+function castDown(){
+  if (hold) return;
+  if (!SRc){ say('このブラウザは音声認識に未対応です（Chrome / Edge を使用）'); return; }
+  hold = true; $('castJa').classList.add('on');
+  const s = { txt:[], done:{}, tm:{}, base:0, ign:0, pre:null }, r = rec = new SRc();
+  r.lang = 'ja-JP'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 3;
+  r.onresult = e => {
+    for (let i = e.resultIndex; i < e.results.length; i++){
+      const k = s.base + i; s.txt[k] = [...e.results[i]].map(a => a.transcript); clearTimeout(s.tm[k]);
+      if (e.results[i].isFinal) evalSeg(s, k); else s.tm[k] = setTimeout(() => evalSeg(s, k), 450);
+    }
+    chantCheck(s);
+    say('🎙 ' + s.txt.map(a => a && a[0]).filter(Boolean).join(' '));
+  };
+  r.onerror = e => {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') say('マイクを許可してください');
+    else if (e.error === 'audio-capture') say('マイクが見つかりません（📷カメラ設定 → マイク）');
+    else if (e.error === 'network') say('音声認識サーバーに接続できません（ネット接続を確認）');
+  };
+  r.onend = () => { if (hold && rec === r){ s.base = s.txt.length; recStart(r); } };
+  say('🎙 聞いています…'); recStart(r);
+}
+function evalSeg(s, k){
+  if (s.done[k] || !s.txt[k]) return; s.done[k] = 1;
+  if (k < s.ign) return;
+  const t = s.txt[k].map(norm);
+  if (t.some(y => ALLRX.some(rx => rx.test(y)))) return;   // 必殺の詠唱中の言葉は通常魔法にしない
+  const sp = SPm.find(x => t.some(y => x.rx.test(y))); if (sp) cast(sp);
+}
+function castUp(){ hold = false; $('castJa').classList.remove('on'); const r = rec; rec = null; try { r && r.stop(); } catch (e){} }
+for (const id of ['castJa', 'micTest']){
+  const b = $(id); b.onpointerdown = e => { e.preventDefault(); b.setPointerCapture(e.pointerId); castDown(); };
+  b.onpointerup = b.onpointercancel = () => castUp();
+}
+addEventListener('keydown', e => { if (e.repeat || menuOn) return; if (e.code === 'Space'){ e.preventDefault(); castDown(); } });
+addEventListener('keyup', e => { if (e.code === 'Space') castUp(); });
+// ボタンをクリックした後にフォーカスが残ると Space が効かなくなるので外す
+addEventListener('click', e => { const b = e.target.closest && e.target.closest('button'); if (b) b.blur(); });
 
 function startBattle(){ reset(); state = 'play'; setMsg(null); bgmPlay(true); }
 function startGame(){
-  (async () => { if (!camStream) await openCam(camSel.value || null); if (face.on && !face.stream) startFace(); else faceRecenter(); })();
+  (async () => { if (!camStream) await openCam(camSel.value || null); if (!micStream) await openMic(micSel.value || null); if (face.on && !face.stream) startFace(); else faceRecenter(); })();
   startBattle();
 }
 addEventListener('mousedown', e => {
@@ -1043,16 +1096,19 @@ addEventListener('mousedown', e => {
     if (state !== 'title' && performance.now() - endAt < 600) return;
     startGame(); return;
   }
-  if (e.button === 0) mdn.on = true;   // 左長押し = ガード
+  if (ctl.mode !== 'mouse') return;   // Wiiモード中はクリックで戦闘操作しない
+  if (e.button === 0){ mdn.on = true; mdn.t = performance.now(); }   // 長押し=ガード（魔法使いは左クリックで攻撃しない）
   else if (e.button === 2) parry();
 });
-addEventListener('mouseup', e => { if (e.button === 0) mdn.on = false; });
-addEventListener('blur', () => { mdn.on = false; castUp(); });
+addEventListener('mouseup', e => {
+  if (e.button !== 0 || !mdn.on) return;
+  mdn.on = false;
+});
 
 let last = performance.now();
 function loop(now){
   const dt = Math.min(.033, (now - last)/1000); last = now;
-  faceStep(now); handStep(now); faceDraw(); update(dt); render(); requestAnimationFrame(loop);
+  faceStep(now); handStep(now); hcStep(now, dt); palmUI(now); faceDraw(); micMeter(); update(dt); render(); requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 // タイトル画面(parytitle.html)から ?start=1 で来たら自動スタート
