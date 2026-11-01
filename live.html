@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VRM アバターカラオケライブ</title>
+<style>
+  html,body{margin:0;height:100%;background:#111;color:#eee;font-family:system-ui,sans-serif;overflow:hidden}
+  #c{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .bar{position:fixed;top:0;left:0;right:0;display:flex;flex-wrap:wrap;gap:6px;padding:8px;background:rgba(0,0,0,.55);z-index:5;align-items:center;font-size:13px}
+  button,label.btn{background:#2b2f3a;color:#fff;border:1px solid #555;border-radius:8px;padding:7px 12px;cursor:pointer;font-size:13px}
+  button:hover,label.btn:hover{background:#3a4050}
+  button:disabled{opacity:.4;cursor:default}
+  button:focus-visible,label.btn:focus-within{outline:2px solid #ff8fd0;outline-offset:2px}
+  #rec.on{background:#c0202a;border-color:#ff6b6b}
+  input[type=file]{display:none}
+  #panel{position:fixed;left:8px;bottom:8px;z-index:5;background:rgba(0,0,0,.55);padding:8px;border-radius:10px;font-size:12px;max-width:340px}
+  #video{width:240px;display:block;border-radius:6px;transform:scaleX(-1);background:#000}
+  #panel audio{width:240px;margin-top:6px}
+  #panel div{margin-top:4px}
+  #status{margin-left:auto;opacity:.85}
+  select{background:#2b2f3a;color:#fff;border:1px solid #555;border-radius:8px;padding:6px 8px;font-size:13px;max-width:220px}
+  .seg{display:inline-flex;gap:2px}
+  .seg button.act{background:#4a5bd0;border-color:#8fa0ff}
+  #vwrap{position:relative;width:240px}
+  #overlay{position:absolute;left:0;top:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none}
+  #legend{font-size:11px;opacity:.8}
+  #dl{display:none;color:#8fd;font-weight:bold}
+  input[type=text]{background:#2b2f3a;color:#fff;border:1px solid #555;border-radius:8px;padding:7px 10px;font-size:13px;width:260px}
+  #ytbox{margin-top:6px}
+  #panel{max-height:calc(100% - 80px);overflow:auto}
+  #panel .sec{border-top:1px solid rgba(255,255,255,.12);padding-top:6px;margin-top:8px}
+  #panel button.sm{padding:3px 8px}
+  #drop{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.7);z-index:9;font-size:24px}
+
+  /* 変身ポーズのガイド(録画には映らない) */
+  #guide{position:fixed;left:50%;top:70px;transform:translateX(-50%);z-index:6;display:none;
+    background:rgba(30,12,52,.8);border:1px solid rgba(255,143,208,.5);border-radius:16px;
+    padding:14px 22px 16px;text-align:center;width:min(440px,90vw);box-sizing:border-box;backdrop-filter:blur(6px)}
+  #guide.show{display:block}
+  #guide svg{width:76px;height:76px;display:block;margin:0 auto 4px}
+  #gTitle{font-size:18px;font-weight:700;color:#ffd6ee}
+  #gMsg{font-size:14px;margin-top:6px;line-height:1.5;min-height:2.6em}
+  .gbar{height:8px;background:rgba(255,255,255,.12);border-radius:4px;overflow:hidden;margin-top:10px}
+  #gProg{height:100%;width:0;background:linear-gradient(90deg,#ff6fb5,#ffd36e)}
+  #gSub{font-size:12px;opacity:.75;margin-top:8px}
+  #gSkip{margin-top:10px;font-size:12px;padding:5px 10px}
+  #count{position:fixed;inset:0;display:none;align-items:center;justify-content:center;font-size:140px;font-weight:800;z-index:8;pointer-events:none;color:#fff;text-shadow:0 0 30px #ff6fb5}
+  #modePill{position:fixed;right:10px;bottom:10px;z-index:5;background:rgba(0,0,0,.6);padding:6px 14px;border-radius:999px;font-size:13px;border:1px solid rgba(255,255,255,.15)}
+  #modePill.pop{animation:pop .6s ease-out}
+  @keyframes pop{from{transform:scale(1.25);background:rgba(255,111,181,.85)}}
+  @media (prefers-reduced-motion: reduce){#modePill.pop{animation:none}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="drop">VRMファイルをドロップ</div>
+<div id="count"></div>
+
+<div class="bar">
+  <label class="btn">① VRM選択<input type="file" id="vrmFile" accept=".vrm"></label>
+  <button id="camBtn">② カメラ＆マイク開始</button>
+  <select id="camSel" title="カメラ選択"><option value="">既定のカメラ</option></select>
+  <select id="micSel" title="マイク選択"><option value="">既定のマイク</option></select>
+  <label>負荷 <select id="perfSel" title="重いときは軽量に"><option value="high">高精度</option><option value="std" selected>標準</option><option value="low">軽量</option></select></label>
+  <label class="btn">③ 伴奏ファイル<input type="file" id="bgmFile" accept="audio/*"></label>
+  <input type="text" id="urlIn" placeholder="伴奏URL (mp3/ogg/mp4の直リンク or YouTube)">
+  <button id="urlBtn">URL読込</button>
+  <button id="tabAudio" style="display:none" title="YouTubeの音をマイクと一緒に録画へ入れます(Chrome/Edge)">🔊 YouTube音声を録画に入れる</button>
+  <button id="recal" disabled title="キャリブレーションからやり直します">✨ 変身し直す</button>
+  <button id="rec" disabled>● 録画開始</button>
+  <a id="dl" href="#">⬇ 録画を保存</a>
+  <label title="オンにすると鏡のように映ります"><input type="checkbox" id="mirror" checked> 左右反転(鏡)</label>
+  <span class="seg" title="トラッキング範囲"><button id="modeAuto" class="act">オート</button><button id="modeUpper">上半身</button><button id="modeFull">全身</button></span>
+  <label><input type="checkbox" id="showBones" checked> カメラ映像にボーン</label>
+  <label><input type="checkbox" id="showAvBones"> アバターのボーン</label>
+  <label><input type="checkbox" id="handTrack" checked> ハンドトラッキング</label>
+  <span id="status">VRMを読み込んでください</span>
+</div>
+
+<div id="guide" role="status" aria-live="polite">
+  <svg viewBox="0 0 100 100" aria-hidden="true"><g stroke="#ff9fd2" stroke-width="6" stroke-linecap="round" fill="none"><circle cx="50" cy="19" r="9"/><path d="M50 30v32M12 37h76M50 62l-11 28M50 62l11 28"/></g></svg>
+  <div id="gTitle">変身ポーズでキャリブレーション</div>
+  <div id="gMsg">カメラの前で両腕を真横に広げてください</div>
+  <div class="gbar"><div id="gProg"></div></div>
+  <div id="gSub">全身が映る位置だと、体の大きさをより正確に測れます</div>
+  <button id="gSkip">ポーズなしで変身</button>
+</div>
+
+<div id="modePill">オート: 全身</div>
+
+<div id="panel">
+  <div id="vwrap"><video id="video" playsinline muted></video><canvas id="overlay"></canvas></div>
+  <div id="legend">ボーンの色: 緑=信頼高 / 黄=中 / 赤=低 / 水色=手</div>
+  <div id="ytbox" style="display:none"><div id="ytplayer"></div></div>
+  <audio id="bgm" controls></audio>
+  <audio id="bgmPlain" controls style="display:none"></audio>
+  <div>伴奏音量 <input type="range" id="bgmVol" min="0" max="1" step="0.01" value="0.7"></div>
+  <div>マイク音量 <input type="range" id="micVol" min="0" max="2" step="0.01" value="1"></div>
+  <div>🎤 <span id="micInfo">未接続</span> <button id="micBtn" class="sm">マイク接続</button></div>
+  <div style="height:6px;background:#333;border-radius:3px;overflow:hidden;margin-top:3px"><div id="micLvl" style="height:100%;width:0;background:#4f8"></div></div>
+  <div><label><input type="checkbox" id="monitor"> マイクを自分で聞く(イヤホン必須)</label></div>
+  <div class="sec"><label><input type="checkbox" id="hideMe" checked> 自分の姿を隠す(アバターで上書き)</label></div>
+  <div><button id="plateBtn" class="sm" title="3秒後に撮影します。画面の外へ出てください">📷 誰もいない背景を撮る</button> <button id="plateClr" class="sm">背景を消す</button></div>
+  <div><label><input type="checkbox" id="autoBgm" checked> 変身したら伴奏を最初から再生</label></div>
+  <div><label><input type="checkbox" id="autoRec" checked> 変身シーンから自動で録画</label></div>
+  <div id="calInfo">体格: 未測定</div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/",
+  "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.1.0/lib/three-vrm.module.min.js"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+import { PoseLandmarker, FaceLandmarker, HandLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+
+const $ = id => document.getElementById(id);
+const statusEl = $('status');
+const say = t => statusEl.textContent = t;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const video = $('video');
+
+/* ---------- three.js ---------- */
+// 方式: Webカメラ映像を画面いっぱいに描き、その上の「人の位置・大きさ」にアバターを重ねる(AR合成)。
+// 3Dカメラは原点から -z を向いて固定 = Webカメラの位置。アバターを奥行き方向に動かして大きさを合わせる。
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.autoClear = false;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(30, 1, 0.03, 60);
+const CAM_HFOV = 62 * Math.PI / 180;   // 一般的なWebカメラの水平画角(だいたいでOK)
+scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+const dl = new THREE.DirectionalLight(0xffffff, 2.2); dl.position.set(1, 2, 3); scene.add(dl);
+
+// 背景: カメラ映像(+人物マスクで本人を隠す/変身中に光らせる)
+const vidTex = new THREE.VideoTexture(video);
+vidTex.minFilter = vidTex.magFilter = THREE.LinearFilter; vidTex.generateMipmaps = false;
+let maskTex = new THREE.DataTexture(new Uint8Array(1), 1, 1, THREE.RedFormat);
+maskTex.unpackAlignment = 1; maskTex.needsUpdate = true;
+const blankTex = new THREE.DataTexture(new Uint8Array(4), 1, 1); blankTex.needsUpdate = true;
+const U = {
+  uVideo: { value: vidTex }, uMask: { value: maskTex }, uPlate: { value: blankTex },
+  uCrop: { value: new THREE.Vector2(1, 1) }, uMirror: { value: 1 }, uHasVideo: { value: 0 },
+  uHide: { value: 0 }, uGlow: { value: 0 }, uHasPlate: { value: 0 }, uTime: { value: 0 }
+};
+const bgMat = new THREE.ShaderMaterial({
+  uniforms: U, depthTest: false, depthWrite: false,
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.99, 1.0); }`,
+  fragmentShader: `
+    uniform sampler2D uVideo, uMask, uPlate;
+    uniform vec2 uCrop; uniform float uMirror, uHasVideo, uHide, uGlow, uHasPlate, uTime;
+    varying vec2 vUv;
+    float maskAt(vec2 uv){ return texture2D(uMask, vec2(uv.x, 1.0 - uv.y)).r; }
+    void main(){
+      vec3 bg = mix(vec3(0.05, 0.03, 0.10), vec3(0.17, 0.08, 0.26), vUv.y);
+      if (uHasVideo < 0.5) { gl_FragColor = vec4(bg, 1.0); return; }
+      vec2 uv = vec2(0.5 + (vUv.x - 0.5) * uCrop.x, 0.5 + (vUv.y - 0.5) * uCrop.y);
+      if (uMirror > 0.5) uv.x = 1.0 - uv.x;
+      vec3 col = texture2D(uVideo, uv).rgb;
+      float m = 0.0;
+      if (uHide + uGlow > 0.001) {   // マスクを少し太らせて輪郭のはみ出しを抑える
+        vec2 o = vec2(0.012, 0.016);
+        m = max(maskAt(uv), max(max(maskAt(uv + vec2(o.x, 0.0)), maskAt(uv - vec2(o.x, 0.0))),
+                                max(maskAt(uv + vec2(0.0, o.y)), maskAt(uv - vec2(0.0, o.y)))));
+        m = smoothstep(0.2, 0.7, m);
+      }
+      if (uHide > 0.001) {
+        vec3 hid;
+        if (uHasPlate > 0.5) hid = texture2D(uPlate, uv).rgb;   // 撮影した無人の背景で埋める
+        else {   // 背景が無いときは、ぼかして暗い影にする
+          vec3 b = vec3(0.0); vec2 r = vec2(0.02, 0.027);
+          for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) b += texture2D(uVideo, uv + vec2(float(i), float(j)) * r).rgb;
+          b /= 9.0;
+          float l = dot(b, vec3(0.299, 0.587, 0.114));
+          hid = mix(vec3(l), b, 0.35) * 0.35 + vec3(0.06, 0.02, 0.10);
+        }
+        col = mix(col, hid, m * uHide);
+      }
+      float sh = 0.5 + 0.5 * sin(uTime * 9.0 + vUv.y * 30.0);
+      col += m * uGlow * mix(vec3(1.0, 0.55, 0.85), vec3(1.0, 0.95, 0.8), sh) * 1.2;
+      gl_FragColor = vec4(col, 1.0);
+    }`
+});
+const bgQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), bgMat);
+bgQuad.frustumCulled = false; bgQuad.renderOrder = -1000; scene.add(bgQuad);
+
+/* ---------- 演出用: パーティクル / 魔法陣 / フラッシュ / タイトル ---------- */
+function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; }
+function makeNoteTex() {
+  const [c, g] = makeCanvas(64, 64);
+  g.fillStyle = '#fff'; g.font = 'bold 54px serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('♪', 32, 34);
+  return new THREE.CanvasTexture(c);
+}
+function makeRingTex() {
+  const [c, g] = makeCanvas(512, 512);
+  g.translate(256, 256); g.strokeStyle = g.fillStyle = '#fff'; g.shadowColor = '#fff'; g.shadowBlur = 12;
+  for (const [r, w] of [[246, 6], [226, 3], [170, 4]]) { g.lineWidth = w; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.stroke(); }
+  g.lineWidth = 4;
+  for (let k = 0; k < 2; k++) {
+    g.beginPath();
+    for (let i = 0; i <= 3; i++) { const a = -Math.PI / 2 + k * Math.PI + i * 2 * Math.PI / 3; i ? g.lineTo(Math.cos(a) * 170, Math.sin(a) * 170) : g.moveTo(Math.cos(a) * 170, Math.sin(a) * 170); }
+    g.stroke();
+  }
+  for (let i = 0; i < 36; i++) { const a = i / 36 * Math.PI * 2; g.beginPath(); g.arc(Math.cos(a) * 236, Math.sin(a) * 236, i % 3 ? 2.5 : 5, 0, Math.PI * 2); g.fill(); }
+  for (let i = 0; i < 12; i++) {
+    const a = i / 12 * Math.PI * 2; g.save(); g.rotate(a); g.translate(0, -198);
+    g.beginPath(); g.moveTo(0, -9); g.lineTo(6, 0); g.lineTo(0, 9); g.lineTo(-6, 0); g.closePath(); g.stroke(); g.restore();
+  }
+  return new THREE.CanvasTexture(c);
+}
+function makeTitleTex() {
+  const [c, g] = makeCanvas(1024, 320);
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = 'italic 900 150px system-ui, "Hiragino Sans", sans-serif';
+  const gr = g.createLinearGradient(0, 80, 0, 230);
+  gr.addColorStop(0, '#fff6c8'); gr.addColorStop(0.5, '#ff8fd0'); gr.addColorStop(1, '#b98cff');
+  g.shadowColor = '#ff4fa8'; g.shadowBlur = 40; g.lineWidth = 10; g.strokeStyle = '#fff'; g.strokeText('LIVE START', 512, 150);
+  g.shadowBlur = 0; g.fillStyle = gr; g.fillText('LIVE START', 512, 150);
+  g.font = '700 44px system-ui, "Hiragino Sans", sans-serif'; g.fillStyle = '#fff'; g.fillText('♪  変身完了  ♪', 512, 272);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
+const NP = 900;
+const pPos = new Float32Array(NP * 3), pCol = new Float32Array(NP * 4), pSize = new Float32Array(NP), pShape = new Float32Array(NP);
+const pGeo = new THREE.BufferGeometry();
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3).setUsage(THREE.DynamicDrawUsage));
+pGeo.setAttribute('aColor', new THREE.BufferAttribute(pCol, 4).setUsage(THREE.DynamicDrawUsage));
+pGeo.setAttribute('aSize', new THREE.BufferAttribute(pSize, 1).setUsage(THREE.DynamicDrawUsage));
+pGeo.setAttribute('aShape', new THREE.BufferAttribute(pShape, 1).setUsage(THREE.DynamicDrawUsage));
+pGeo.setDrawRange(0, 0);
+const pMat = new THREE.ShaderMaterial({
+  uniforms: { uScale: { value: 300 }, uNote: { value: makeNoteTex() } },
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: `
+    uniform float uScale; attribute vec4 aColor; attribute float aSize; attribute float aShape;
+    varying vec4 vColor; varying float vShape;
+    void main(){ vColor = aColor; vShape = aShape; vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_Position = projectionMatrix * mv; gl_PointSize = aSize * uScale / max(0.05, -mv.z); }`,
+  fragmentShader: `
+    uniform sampler2D uNote; varying vec4 vColor; varying float vShape;
+    void main(){ vec2 p = gl_PointCoord - 0.5; float a;
+      if (vShape > 0.5) a = texture2D(uNote, vec2(gl_PointCoord.x, 1.0 - gl_PointCoord.y)).a;
+      else { float r = length(p);
+        a = exp(-r * r * 60.0) + (max(0.0, 1.0 - abs(p.x) * 14.0) * max(0.0, 1.0 - abs(p.y) * 2.2)
+                               + max(0.0, 1.0 - abs(p.y) * 14.0) * max(0.0, 1.0 - abs(p.x) * 2.2)) * 0.7; }
+      if (a < 0.01) discard;
+      gl_FragColor = vec4(vColor.rgb, min(1.0, a) * vColor.a); }`
+});
+const points = new THREE.Points(pGeo, pMat); points.frustumCulled = false; points.renderOrder = 10; scene.add(points);
+
+const ring = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
+  map: makeRingTex(), color: 0xff8fd0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+ring.rotation.x = -Math.PI / 2; ring.visible = false; ring.renderOrder = 5; scene.add(ring);
+
+const hud = new THREE.Scene(), hudCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 2); hudCam.position.z = 1;
+const flashMat = new THREE.MeshBasicMaterial({ color: 0xfff0fa, transparent: true, opacity: 0, depthTest: false, depthWrite: false });
+hud.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), flashMat));
+const titleMat = new THREE.MeshBasicMaterial({ map: makeTitleTex(), transparent: true, opacity: 0, depthTest: false, depthWrite: false });
+const titleQ = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), titleMat); titleQ.position.y = 0.2; hud.add(titleQ);
+
+function resize() {
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  pMat.uniforms.uScale.value = renderer.domElement.height / (2 * Math.tan(camera.fov * Math.PI / 360));
+  const pw = Math.min(innerWidth * 0.86, 820);
+  titleQ.userData.sx = pw / (innerWidth / 2); titleQ.userData.sy = pw * 0.3125 / (innerHeight / 2);
+}
+addEventListener('resize', resize); resize();
+
+// カメラ映像を「画面いっぱい(はみ出しは切る)」で表示するときの切り抜き量と、それに合う3Dカメラの画角
+const crop = { cx: 1, cy: 1 };
+function updateView() {
+  const vw = video.videoWidth, vh = video.videoHeight, sa = innerWidth / innerHeight;
+  const live = tracking && vw > 0;
+  let fov = 30;
+  if (live) {
+    const va = vw / vh;
+    crop.cx = Math.min(1, sa / va); crop.cy = Math.min(1, va / sa);
+    const vfov = 2 * Math.atan(Math.tan(CAM_HFOV / 2) / va);
+    fov = 2 * Math.atan(Math.tan(vfov / 2) * crop.cy) * 180 / Math.PI;
+  } else crop.cx = crop.cy = 1;
+  U.uCrop.value.set(crop.cx, crop.cy); U.uHasVideo.value = live ? 1 : 0; U.uMirror.value = mirror ? 1 : 0;
+  if (Math.abs(fov - camera.fov) > 1e-4) { camera.fov = fov; resize(); }
+}
+// ランドマーク(映像の正規化座標) → 画面の正規化座標
+const toScreenN = (x, y) => ({ x: 0.5 + ((mirror ? 1 - x : x) - 0.5) / crop.cx, y: 0.5 + (y - 0.5) / crop.cy });
+const pxScale = vw => innerWidth / (crop.cx * vw);   // 映像1pxが画面で何pxか
+
+/* ---------- 負荷プリセット ---------- */
+// dpr: 描画解像度の上限 / skip: Nフレームに1回だけ検出 / alt: ポーズと手を交互に検出 / frameMs: 描画FPS上限(0=無制限)
+const PERF = { high: { dpr: 2, skip: 1, alt: false, frameMs: 0 }, std: { dpr: 1.5, skip: 1, alt: true, frameMs: 0 }, low: { dpr: 1, skip: 2, alt: true, frameMs: 33 } };
+let P = PERF.std, lastRender = 0, detN = 0;
+function applyPerf(k) { P = PERF[k] || PERF.std; renderer.setPixelRatio(Math.min(devicePixelRatio, P.dpr)); resize(); }
+$('perfSel').onchange = e => applyPerf(e.target.value);
+applyPerf('std');
+
+/* ---------- VRM読み込み ---------- */
+let vrm = null;
+const AV = { L: 1.15, SW: 0.3, T: 0.45 };   // アバターの寸法(m): 肩〜足首 / 肩幅 / 肩〜股関節
+const loader = new GLTFLoader();
+loader.register(p => new VRMLoaderPlugin(p));
+function loadVRM(url, quiet) {
+  loader.load(url, gltf => {
+    if (vrm) { scene.remove(vrm.scene); VRMUtils.deepDispose(vrm.scene); }
+    vrm = gltf.userData.vrm;
+    VRMUtils.removeUnnecessaryVertices(gltf.scene); VRMUtils.combineSkeletons?.(gltf.scene);
+    VRMUtils.rotateVRM0(vrm);
+    scene.add(vrm.scene);
+    measureAvatar();
+    vrm.scene.visible = phase === 'idle';
+    buildAvatarBones();
+    say(tracking ? 'VRMを読み込みました' : 'VRM読み込み完了。カメラを開始してください');
+  }, undefined, err => { if (!quiet) say('VRM読み込み失敗'); console.warn(err); });
+}
+$('vrmFile').onchange = e => { const f = e.target.files[0]; if (f) loadVRM(URL.createObjectURL(f)); };
+loadVRM('avatar.vrm', true); // 同じフォルダに avatar.vrm があれば自動読み込み
+addEventListener('dragover', e => { e.preventDefault(); $('drop').style.display = 'flex'; });
+addEventListener('dragleave', () => $('drop').style.display = 'none');
+addEventListener('drop', e => {
+  e.preventDefault(); $('drop').style.display = 'none';
+  const f = e.dataTransfer.files[0]; if (f && /\.vrm$/i.test(f.name)) loadVRM(URL.createObjectURL(f));
+});
+
+const boneW = (n, out) => { const b = vrm?.humanoid.getNormalizedBoneNode(n); return b ? b.getWorldPosition(out) : null; };
+const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3();
+function shoulderMid(out) {
+  const l = boneW('leftUpperArm', _a), r = boneW('rightUpperArm', _b);
+  return l && r ? out.copy(l).add(r).multiplyScalar(0.5) : null;
+}
+function measureAvatar() {   // 読み込み直後(待機姿勢)の寸法を測る
+  vrm.scene.position.set(0, 0, 0); vrm.scene.updateMatrixWorld(true);
+  const g = n => boneW(n, new THREE.Vector3());
+  const la = g('leftUpperArm'), ra = g('rightUpperArm'), ll = g('leftUpperLeg'), rl = g('rightUpperLeg'), lf = g('leftFoot'), rf = g('rightFoot');
+  if (!(la && ra && ll && rl && lf && rf)) return;
+  const sh = la.clone().add(ra).multiplyScalar(0.5);
+  AV.SW = la.distanceTo(ra);
+  AV.L = sh.distanceTo(lf.clone().add(rf).multiplyScalar(0.5));
+  AV.T = sh.distanceTo(ll.clone().add(rl).multiplyScalar(0.5));
+  updateCalInfo();
+}
+
+/* ---------- モード切替(オート / 上半身 / 全身) / ボーン表示 ---------- */
+let showCamBones = true, showAvBones = false, avBones = null;
+const _p = new THREE.Vector3();
+let modePref = 'auto', mode = 'full', autoWant = null, autoSince = 0;
+const modeHint = () => modePref === 'auto'
+  ? 'オート: 近づくと上半身、離れると全身に切り替わります'
+  : mode === 'full' ? '全身モード。全身がカメラに映る位置に立ってください' : '上半身モード。腰から上が映っていればOKです';
+function refreshModeUI(pop) {
+  for (const [id, m] of [['modeAuto', 'auto'], ['modeUpper', 'upper'], ['modeFull', 'full']]) $(id).classList.toggle('act', modePref === m);
+  const pill = $('modePill');
+  pill.textContent = (modePref === 'auto' ? 'オート: ' : '固定: ') + (mode === 'full' ? '全身' : '上半身');
+  if (pop) { pill.classList.remove('pop'); void pill.offsetWidth; pill.classList.add('pop'); }
+}
+function setMode(m) {
+  modePref = m; if (m !== 'auto') mode = m; autoWant = null;
+  refreshModeUI(true);
+  if (tracking && phase === 'live' && !(recorder && recorder.state === 'recording')) say(modeHint());
+}
+$('modeAuto').onclick = () => setMode('auto');
+$('modeFull').onclick = () => setMode('full');
+$('modeUpper').onclick = () => setMode('upper');
+// オート: 両膝が画面内に映っていれば全身、近づいて膝が画面外に出たら上半身(0.7秒続いたら切替)
+function autoMode(now) {
+  if (modePref !== 'auto') return;
+  const L2 = poseRes?.landmarks?.[0]; if (!L2) return;
+  const onScreen = i => {
+    if ((L2[i].visibility ?? 0) < 0.6) return false;
+    const s = toScreenN(L2[i].x, L2[i].y); return s.x > 0 && s.x < 1 && s.y > 0 && s.y < 0.98;
+  };
+  const want = [23, 24, 25, 26].every(onScreen) ? 'full' : 'upper';
+  if (want === mode) { autoWant = null; return; }
+  if (autoWant !== want) { autoWant = want; autoSince = now; return; }
+  if (now - autoSince > 700) { mode = want; autoWant = null; refreshModeUI(true); }
+}
+
+// (1) カメラ映像に重ねるトラッキング結果の骨格
+const ov = $('overlay'), octx = ov.getContext('2d');
+const CONN_UP = [[11,12],[11,13],[13,15],[12,14],[14,16],[15,17],[15,19],[15,21],[17,19],[16,18],[16,20],[16,22],[18,20]];
+const CONN_LOW = [[11,23],[12,24],[23,24],[23,25],[25,27],[27,29],[29,31],[27,31],[24,26],[26,28],[28,30],[30,32],[28,32]];
+const visCol = v => v > 0.7 ? '#33ff88' : v > 0.4 ? '#ffdd33' : '#ff5555';
+const HAND_CONN = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+function drawHands(w, h) {
+  const H = handRes?.landmarks; if (!H) return;
+  const lw = Math.max(1.5, w / 260);
+  octx.lineWidth = lw; octx.strokeStyle = '#44ddff'; octx.fillStyle = '#ffffff';
+  for (const P of H) {
+    octx.beginPath();
+    for (const [a, b] of HAND_CONN) { octx.moveTo(P[a].x * w, P[a].y * h); octx.lineTo(P[b].x * w, P[b].y * h); }
+    octx.stroke();
+    for (const q of P) { octx.beginPath(); octx.arc(q.x * w, q.y * h, lw * 1.2, 0, Math.PI * 2); octx.fill(); }
+  }
+}
+function drawOverlay() {
+  const w = video.videoWidth, h = video.videoHeight; if (!w) return;
+  if (ov.width !== w || ov.height !== h) { ov.width = w; ov.height = h; }
+  octx.clearRect(0, 0, w, h);
+  const P = poseRes?.landmarks?.[0];
+  if (!showCamBones) return;
+  drawHands(w, h);
+  if (!P) return;
+  const conns = mode === 'full' ? CONN_UP.concat(CONN_LOW) : CONN_UP;   // 上半身モードでは下半身は描かない
+  const lw = Math.max(2, w / 150);
+  octx.lineWidth = lw; octx.lineCap = 'round';
+  for (const [a, b] of conns) {
+    octx.strokeStyle = visCol(Math.min(P[a].visibility ?? 0, P[b].visibility ?? 0));
+    octx.beginPath(); octx.moveTo(P[a].x * w, P[a].y * h); octx.lineTo(P[b].x * w, P[b].y * h); octx.stroke();
+  }
+  const ids = new Set(conns.flat()); ids.add(0);
+  for (const i of ids) {
+    octx.fillStyle = visCol(P[i].visibility ?? 0);
+    octx.beginPath(); octx.arc(P[i].x * w, P[i].y * h, lw * 1.4, 0, Math.PI * 2); octx.fill();
+  }
+}
+$('showBones').onchange = e => { showCamBones = e.target.checked; if (!showCamBones) octx.clearRect(0, 0, ov.width, ov.height); };
+
+// (2) 3D画面上のアバター側ボーン(録画には映らない)
+$('showAvBones').onchange = e => showAvBones = e.target.checked;
+function buildAvatarBones() {
+  if (avBones) { scene.remove(avBones.group); avBones.group.traverse(o => o.geometry?.dispose()); avBones = null; }
+  const g = n => n && vrm.humanoid.getNormalizedBoneNode(n);
+  const segs = [], link = (a, b) => { if (g(a) && g(b)) segs.push([g(a), g(b)]); };
+  const chain = ['hips', 'spine', 'chest', 'upperChest', 'neck', 'head'].filter(g);
+  chain.slice(1).forEach((n, i) => link(chain[i], n));
+  const top = ['upperChest', 'chest', 'spine'].find(g);
+  for (const s of ['left', 'right']) {
+    const arm = [s + 'Shoulder', s + 'UpperArm', s + 'LowerArm', s + 'Hand'].filter(g);
+    link(top, arm[0]); arm.slice(1).forEach((n, i) => link(arm[i], n));
+    const leg = [s + 'UpperLeg', s + 'LowerLeg', s + 'Foot', s + 'Toes'].filter(g);
+    link('hips', leg[0]); leg.slice(1).forEach((n, i) => link(leg[i], n));
+  }
+  const pos = new Float32Array(segs.length * 6);
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const line = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x00ff99, depthTest: false }));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffee33, size: 0.025, depthTest: false }));
+  line.renderOrder = pts.renderOrder = 999; line.frustumCulled = pts.frustumCulled = false;
+  const group = new THREE.Group(); group.add(line, pts); scene.add(group);
+  avBones = { group, segs, pos, geo };
+}
+function updateAvatarBones() {
+  if (!avBones) return;
+  const rec = recorder && recorder.state === 'recording';
+  avBones.group.visible = showAvBones && !rec && vrm.scene.visible;   // 録画中は非表示
+  if (!avBones.group.visible) return;
+  vrm.scene.updateMatrixWorld(true);
+  avBones.segs.forEach(([a, b], i) => {
+    a.getWorldPosition(_p); _p.toArray(avBones.pos, i * 6);
+    b.getWorldPosition(_p); _p.toArray(avBones.pos, i * 6 + 3);
+  });
+  avBones.geo.attributes.position.needsUpdate = true;
+}
+
+/* ---------- モーションキャプチャ ---------- */
+let pose = null, face = null, hand = null, tracking = false;
+let poseRes = null, faceRes = null, handRes = null, lastT = -1;
+
+async function initMediaPipe() {
+  say('AIモデル読み込み中…');
+  const fs = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  const base = 'https://storage.googleapis.com/mediapipe-models/';
+  pose = await PoseLandmarker.createFromOptions(fs, {
+    baseOptions: { modelAssetPath: base + 'pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task', delegate: 'GPU' },
+    runningMode: 'VIDEO', numPoses: 1, outputSegmentationMasks: $('hideMe').checked   // 人物マスク: 本人を隠す/光らせるのに使う
+  });
+  face = await FaceLandmarker.createFromOptions(fs, {
+    baseOptions: { modelAssetPath: base + 'face_landmarker/face_landmarker/float16/1/face_landmarker.task', delegate: 'GPU' },
+    runningMode: 'VIDEO', numFaces: 1, outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true
+  });
+  try {
+    hand = await HandLandmarker.createFromOptions(fs, {
+      baseOptions: { modelAssetPath: base + 'hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate: 'GPU' },
+      runningMode: 'VIDEO', numHands: 2
+    });
+  } catch (e) { console.warn(e); hand = null; }
+}
+
+/* ---------- 人物マスク / 背景プレート ---------- */
+let maskW = 0, maskH = 0;
+function clearMask() { if (maskW) { maskTex.image.data.fill(0); maskTex.needsUpdate = true; } }
+function grabMask() {
+  const ms = poseRes?.segmentationMasks;
+  if (!ms?.length) { if (!poseRes?.landmarks?.length) clearMask(); return; }
+  try {
+    const m = ms[0], f = m.getAsFloat32Array();
+    if (m.width !== maskW || m.height !== maskH) {
+      maskTex.dispose();
+      maskTex = new THREE.DataTexture(new Uint8Array(m.width * m.height), m.width, m.height, THREE.RedFormat);
+      maskTex.unpackAlignment = 1; maskTex.minFilter = maskTex.magFilter = THREE.LinearFilter;
+      U.uMask.value = maskTex; maskW = m.width; maskH = m.height;
+    }
+    const d = maskTex.image.data;
+    for (let i = 0; i < d.length; i++) d[i] = f[i] * 255;
+    maskTex.needsUpdate = true;
+  } catch (e) { console.warn(e); }
+  finally { for (const m of ms) try { m.close(); } catch {} }
+}
+$('hideMe').onchange = e => {
+  pose?.setOptions({ outputSegmentationMasks: e.target.checked }).catch?.(console.warn);
+  if (!e.target.checked) clearMask();
+};
+let plateTex = null;
+function clearPlate() { U.uHasPlate.value = 0; U.uPlate.value = blankTex; plateTex?.dispose(); plateTex = null; }
+$('plateBtn').onclick = async () => {
+  if (!tracking) return say('先にカメラを開始してください');
+  $('plateBtn').disabled = true;
+  say('3秒後に背景を撮影します。カメラに映らない位置へ移動してください');
+  for (let i = 3; i > 0; i--) { $('count').textContent = i; $('count').style.display = 'flex'; await sleep(1000); }
+  $('count').style.display = 'none';
+  const [c, g] = makeCanvas(video.videoWidth, video.videoHeight); g.drawImage(video, 0, 0);
+  clearPlate();
+  plateTex = new THREE.CanvasTexture(c); plateTex.minFilter = THREE.LinearFilter; plateTex.generateMipmaps = false;
+  U.uPlate.value = plateTex; U.uHasPlate.value = 1;
+  say(poseRes?.landmarks?.length ? '背景を撮影しました(人が映っていたようです。うまく消えなければ撮り直してください)' : '背景を撮影しました。アバターの周りが背景で埋まります');
+  $('plateBtn').disabled = false;
+};
+$('plateClr').onclick = () => { clearPlate(); say('背景をクリアしました'); };
+
+/* ---------- 音声(マイク＋伴奏をミックス) ---------- */
+let actx, dest, micGain, bgmGain, monGain;
+function initAudio() {
+  actx = new (window.AudioContext || window.webkitAudioContext)();
+  dest = actx.createMediaStreamDestination();
+  micGain = actx.createGain(); micGain.connect(dest);
+  monGain = actx.createGain(); monGain.gain.value = 0; micGain.connect(monGain); monGain.connect(actx.destination);
+  bgmGain = actx.createGain(); bgmGain.gain.value = +$('bgmVol').value;
+  const src = actx.createMediaElementSource($('bgm'));
+  src.connect(bgmGain); bgmGain.connect(dest); bgmGain.connect(actx.destination);
+}
+// 効果音(シンセで生成。録画にも入る)
+function sfx(kind) {
+  if (!actx) return;
+  const t = actx.currentTime, out = actx.createGain(); out.gain.value = 0.22;
+  out.connect(actx.destination); out.connect(dest);
+  const tone = (type, f0, f1, t0, dur, vol) => {
+    const o = actx.createOscillator(), g = actx.createGain(); o.type = type;
+    o.frequency.setValueAtTime(f0, t + t0); if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + t0 + dur);
+    g.gain.setValueAtTime(0.0001, t + t0); g.gain.exponentialRampToValueAtTime(vol, t + t0 + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + t0 + dur);
+    o.connect(g); g.connect(out); o.start(t + t0); o.stop(t + t0 + dur + 0.05);
+  };
+  if (kind === 'charge') {   // 上昇するキラキラ
+    tone('triangle', 200, 1200, 0, 1.7, 0.25);
+    for (let i = 0; i < 14; i++) tone('sine', 523.25 * 2 ** (i * 2 / 12), null, i * 0.115, 0.3, 0.28);
+  } else if (kind === 'boom') {   // 変身の瞬間
+    const n = actx.sampleRate, buf = actx.createBuffer(1, n, n), d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) ** 3;
+    const s = actx.createBufferSource(), f = actx.createBiquadFilter(); f.type = 'lowpass';
+    f.frequency.setValueAtTime(3000, t); f.frequency.exponentialRampToValueAtTime(120, t + 0.9);
+    s.buffer = buf; s.connect(f); f.connect(out); s.start(t);
+    tone('sine', 150, 40, 0, 0.8, 0.9);
+  } else if (kind === 'chime') {
+    [1046.5, 1318.5, 1568, 2093].forEach((f, i) => tone('sine', f, null, i * 0.08, 1.0, 0.35));
+  }
+}
+/* ---------- 伴奏: ファイル / URL / YouTube ---------- */
+const bgm = $('bgm'), bgmPlain = $('bgmPlain');
+let yt = null, ytApi = null, bgmKind = 'bgm';
+const bgmVolVal = () => +$('bgmVol').value;
+const playNow = () => phase === 'live' || !$('autoBgm').checked;   // 変身前に読み込んだ伴奏は変身まで待機
+function stopAllBgm() { bgm.pause(); bgmPlain.pause(); try { yt?.pauseVideo?.(); } catch {} }
+function showPlayer(which) {   // 'bgm' | 'plain' | 'yt'
+  bgmKind = which;
+  bgm.style.display = which === 'bgm' ? '' : 'none';
+  bgmPlain.style.display = which === 'plain' ? '' : 'none';
+  $('ytbox').style.display = which === 'yt' ? 'block' : 'none';
+  $('tabAudio').style.display = which === 'yt' ? '' : 'none';
+}
+$('bgmFile').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  stopAllBgm(); showPlayer('bgm'); bgm.onerror = null;
+  bgm.crossOrigin = 'anonymous'; bgm.src = URL.createObjectURL(f);
+  if (!playNow()) say('伴奏を準備しました。変身すると最初から再生されます');
+};
+function ytId(u) {
+  try {
+    const x = new URL(u);
+    if (x.hostname === 'youtu.be') return x.pathname.slice(1, 12);
+    if (/(^|\.)youtube\.com$/.test(x.hostname)) {
+      if (x.searchParams.get('v')) return x.searchParams.get('v');
+      const m = x.pathname.match(/\/(embed|shorts|live)\/([\w-]{11})/); if (m) return m[2];
+    }
+  } catch {}
+  return null;
+}
+function loadYTApi() {
+  return ytApi ||= new Promise(res => {
+    if (window.YT?.Player) return res();
+    window.onYouTubeIframeAPIReady = res;
+    const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s);
+  });
+}
+async function playYT(id) {
+  stopAllBgm(); showPlayer('yt'); say('YouTube読込中…');
+  await loadYTApi();
+  const auto = playNow();
+  if (yt) { auto ? yt.loadVideoById(id) : yt.cueVideoById(id); if (!auto) say('伴奏(YouTube)を準備しました。変身すると再生されます'); return; }
+  yt = new YT.Player('ytplayer', {
+    width: 320, height: 180, videoId: id, playerVars: { playsinline: 1, rel: 0, autoplay: auto ? 1 : 0 },
+    events: {
+      onReady: e => { e.target.setVolume(bgmVolVal() * 100); say(auto ? 'YouTube再生。録画に音を入れるには「YouTube音声を録画に入れる」を押してください' : '伴奏(YouTube)を準備しました。変身すると再生されます。録画に音を入れるには「YouTube音声を録画に入れる」を押してください'); },
+      onStateChange: e => { if (e.data === 1) try { e.target.setPlaybackQuality('hd720'); } catch {} },   // 小さい画面だと低画質/低ビットレートが選ばれがちなので高めを要求
+      onError: e => say('YouTube再生エラー(' + e.data + '): 埋め込み禁止の動画、または file:// で開いている可能性があります')
+    }
+  });
+}
+function playUrl(u) {
+  stopAllBgm();
+  const id = ytId(u); if (id) return playYT(id);
+  showPlayer('bgm');
+  const auto = playNow();
+  bgm.onerror = () => {   // CORS非対応など → 録画には入らない通常再生にフォールバック
+    bgm.onerror = null; bgm.pause(); showPlayer('plain');
+    bgmPlain.onerror = () => say('読み込めません。音声/動画ファイルへの直リンクか確認してください');
+    bgmPlain.volume = bgmVolVal(); bgmPlain.src = u; if (playNow()) bgmPlain.play().catch(() => {});
+    say('このURLはCORS非対応のため再生のみ(録画には伴奏が入りません)');
+  };
+  bgm.crossOrigin = 'anonymous'; bgm.src = u;
+  if (auto) bgm.play().catch(() => {}); else say('伴奏を準備しました。変身すると最初から再生されます');
+}
+$('urlBtn').onclick = () => { const u = $('urlIn').value.trim(); if (u) playUrl(u); };
+$('urlIn').onkeydown = e => { if (e.key === 'Enter') $('urlBtn').click(); };
+// YouTubeの音はWeb Audioに取り込めないので、タブ音声の共有で録画ミックスに入れる
+$('tabAudio').onclick = async () => {
+  try {
+    if (!actx) initAudio(); await actx.resume();
+    const ds = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, preferCurrentTab: true, selfBrowserSurface: 'include' });
+    const a = ds.getAudioTracks(); ds.getVideoTracks().forEach(t => t.stop());
+    if (!a.length) return say('音声が共有されていません(「タブの音声も共有」にチェックしてください)');
+    actx.createMediaStreamSource(new MediaStream(a)).connect(dest);
+    say('YouTubeの音声を録画に追加しました');
+  } catch (e) { say('タブ音声の取得に失敗: ' + e.message); }
+};
+$('bgmVol').oninput = e => {
+  const v = +e.target.value;
+  bgmGain && (bgmGain.gain.value = v); bgmPlain.volume = v;
+  try { yt?.setVolume?.(v * 100); } catch {}
+};
+$('micVol').oninput = e => micGain && (micGain.gain.value = +e.target.value);
+$('monitor').onchange = e => monGain && (monGain.gain.value = e.target.checked ? 1 : 0);
+$('bgm').addEventListener('play', () => actx && actx.resume());
+// 変身後: 読み込み済みの伴奏を頭から再生
+function startSinging() {
+  if (!$('autoBgm').checked) return say('♪ 変身完了! ライブスタート');
+  try {
+    if (bgmKind === 'yt' && yt?.playVideo) { yt.seekTo(0, true); yt.playVideo(); }
+    else if (bgmKind === 'bgm' && bgm.src) { actx?.resume(); bgm.currentTime = 0; bgm.play().catch(() => {}); }
+    else if (bgmKind === 'plain' && bgmPlain.src) { bgmPlain.currentTime = 0; bgmPlain.play().catch(() => {}); }
+    else return say('♪ 変身完了! 伴奏を読み込むと、次の変身から自動で流れます');
+  } catch (e) { console.warn(e); }
+  say('♪ ライブスタート!');
+}
+
+const camSel = $('camSel'), micSel = $('micSel');
+let camStream = null, micStream = null, micSrc = null;
+async function refreshCams(camKeep, micKeep) {
+  try {
+    const all = await navigator.mediaDevices.enumerateDevices();
+    const fill = (sel, kind, def, label, keep) => {
+      const devs = all.filter(d => d.kind === kind && d.deviceId), k = keep ?? sel.value;
+      sel.replaceChildren(new Option(def, ''));
+      devs.forEach((d, i) => sel.add(new Option(d.label || label + (i + 1), d.deviceId)));
+      sel.value = devs.some(d => d.deviceId === k) ? k : '';
+    };
+    fill(camSel, 'videoinput', '既定のカメラ', 'カメラ ', camKeep);
+    fill(micSel, 'audioinput', '既定のマイク', 'マイク ', micKeep);
+  } catch (e) { console.warn(e); }
+}
+async function startVideo(deviceId) {
+  if (camStream) camStream.getTracks().forEach(t => t.stop());   // 先に止める(同時に開けないカメラ対策)
+  clearPlate();   // 別のカメラ/画角では撮影済みの背景が合わない
+  const v = { width: 640, height: 480, frameRate: { ideal: 30, max: 30 } };
+  if (deviceId) v.deviceId = { exact: deviceId }; else v.facingMode = 'user';
+  const vs = await navigator.mediaDevices.getUserMedia({ video: v, audio: false });
+  camStream = vs; video.srcObject = vs; await video.play(); lastT = -1;
+  await refreshCams(vs.getVideoTracks()[0].getSettings().deviceId || '');   // 許可後はカメラ名が取れる
+}
+let micAn = null, micBuf = null;
+async function startMic(deviceId) {
+  if (micSrc) { micSrc.disconnect(); micSrc = null; }
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  micStream = null; micAn = null;
+  const base = { echoCancellation: true, noiseSuppression: false, autoGainControl: false };
+  const gum = c => navigator.mediaDevices.getUserMedia({ audio: c });
+  try { micStream = await gum(deviceId ? { ...base, deviceId: { exact: deviceId } } : base); }
+  catch (e) {
+    if (e.name === 'NotAllowedError' || e.name === 'SecurityError') throw e;   // 許可されていない場合はそのまま失敗
+    micStream = await gum(true);   // 制約が原因の可能性 → 最小条件で再挑戦
+  }
+  const tr = micStream.getAudioTracks()[0];
+  micSrc = actx.createMediaStreamSource(micStream); micSrc.connect(micGain);
+  micAn = actx.createAnalyser(); micAn.fftSize = 512; micBuf = new Uint8Array(micAn.fftSize); micSrc.connect(micAn);   // レベルメーター用
+  $('micInfo').textContent = tr.label || '接続中';
+  await refreshCams(undefined, tr.getSettings().deviceId || '');
+}
+function micRms() {
+  if (!micAn) return 0;
+  micAn.getByteTimeDomainData(micBuf);
+  let s = 0; for (const v of micBuf) { const x = (v - 128) / 128; s += x * x; }
+  return Math.sqrt(s / micBuf.length);
+}
+setInterval(() => {   // マイク入力レベル表示(音が来ていれば緑のバーが動く)
+  if (!micAn) return;
+  micAn.getByteTimeDomainData(micBuf);
+  let m = 0; for (const v of micBuf) m = Math.max(m, Math.abs(v - 128));
+  $('micLvl').style.width = Math.min(100, m / 128 * 150) + '%';
+}, 100);
+async function connectMic() {   // 失敗しても例外を投げず、理由を画面に残す
+  try {
+    if (!actx) initAudio(); await actx.resume();
+    await startMic(micSel.value); return true;
+  } catch (err) {
+    const why = err.name === 'NotAllowedError' ? '許可されていません(ブラウザのマイク許可を確認)'
+      : err.name === 'NotFoundError' ? 'マイクが見つかりません'
+      : err.name === 'NotReadableError' ? '他のアプリが使用中の可能性' : (err.message || err.name);
+    $('micInfo').textContent = '失敗: ' + why; console.warn(err); return false;
+  }
+}
+$('micBtn').onclick = async () => { say((await connectMic()) ? 'マイク接続OK' : 'マイク接続失敗(パネルの🎤表示を確認)'); };
+camSel.onchange = async () => {
+  if (!camStream) return;   // 開始前/停止中は選択だけ保持して、開始ボタンで使う
+  const want = camSel.value, prev = camStream.getVideoTracks()[0].getSettings().deviceId || '';
+  try { await startVideo(want); say('カメラを切り替えました'); }
+  catch (err) { say('カメラ切替失敗: ' + err.message); try { await startVideo(prev); } catch {} }
+};
+micSel.onchange = async () => {
+  if (!micStream) return;
+  const want = micSel.value, prev = micStream.getAudioTracks()[0].getSettings().deviceId || '';
+  try { await startMic(want); say('マイクを切り替えました'); }
+  catch (err) { say('マイク切替失敗: ' + (err.message || err.name)); try { await startMic(prev); } catch {} }
+};
+navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshCams());
+refreshCams();
+
+// カメラ停止: 映像とAI検出を止めて負荷を下げる(マイク・伴奏・録画は継続。AIモデルは読み込み済みのまま)
+function stopCamera() {
+  tracking = false;
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  video.srcObject = null; lastT = -1;
+  poseRes = faceRes = handRes = null; LM = null;
+  octx.clearRect(0, 0, ov.width, ov.height);
+  clearMask(); trk.has = false; trk.tgt = null;
+  phase = 'idle'; U.uHide.value = U.uGlow.value = 0; ring.visible = false;
+  $('guide').classList.remove('show'); $('recal').disabled = true;
+  if (vrm) vrm.scene.visible = true;
+  const em = vrm?.expressionManager;
+  if (em) for (const n of ['blinkLeft', 'blinkRight', 'aa', 'oh', 'ou', 'ee', 'happy']) if (em.getExpression(n)) em.setValue(n, 0);
+}
+$('camBtn').onclick = async () => {
+  if (tracking) {
+    stopCamera(); $('camBtn').textContent = '▶ カメラ再開';
+    say('カメラ停止中(マイクと伴奏は動作中)'); return;
+  }
+  $('camBtn').disabled = true;
+  try {
+    if (!actx) initAudio();
+    await actx.resume();
+    if (!micStream) await connectMic();
+    await startVideo(camSel.value);
+    if (!pose) await initMediaPipe();
+    tracking = true; $('rec').disabled = false; $('recal').disabled = false;
+    $('camBtn').textContent = '■ カメラ停止'; $('camBtn').disabled = false;
+    enterCalib();
+    say('変身ポーズ(両腕を真横)でキャリブレーションします' + (hand ? '' : ' ※ハンドモデルの読込に失敗(手指なし)') + (micStream ? '' : ' ※マイク未接続(🎤欄を確認)'));
+  } catch (err) { stopCamera(); say('カメラ開始失敗: ' + err.message); $('camBtn').disabled = false; }
+};
+
+/* ---------- リターゲット ---------- */
+const QI = new THREE.Quaternion(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
+const X = new THREE.Vector3(1, 0, 0), NX = new THREE.Vector3(-1, 0, 0), DOWN = new THREE.Vector3(0, -1, 0);
+// 映像を鏡のように表示するとき(既定)は、アバターも鏡写しで動かす。背景映像とアバターの左右がそろう
+let mirror = $('mirror').checked; $('mirror').onchange = e => mirror = e.target.checked;
+let LM = null;
+const lm = i => LM[mirror && i >= 11 ? (i % 2 ? i + 1 : i - 1) : i];
+const visOK = (t, ...ids) => ids.every(i => (lm(i).visibility ?? 0) > t);
+const dirOf = (a, b) => V.set((lm(b).x - lm(a).x) * (mirror ? -1 : 1), -(lm(b).y - lm(a).y), -(lm(b).z - lm(a).z)).normalize().clone();
+
+// 正規化ボーンの待機姿勢のワールド回転。VRM1なら単位回転、VRM0は rotateVRM0 により Y軸180°回転になっている。
+// 「ワールド基準の回転」をボーンのローカル回転に直すとき、この分を補正しないと上下・前後が反転する。
+const restQ = () => vrm.scene.getWorldQuaternion(new THREE.Quaternion());
+// ワールド基準の回転 Qw(待機姿勢からの回転)をボーンに適用
+function setWorldRot(name, Qw, k = 0.5) {
+  const n = vrm.humanoid.getNormalizedBoneNode(name); if (!n) return;
+  const parentW = n.parent.getWorldQuaternion(new THREE.Quaternion());
+  n.quaternion.slerp(parentW.invert().multiply(Qw).multiply(restQ()), k);
+  n.updateMatrixWorld(true);
+}
+// ボーンが rest 方向を向いている状態から dir 方向へ向ける
+function setDir(name, rest, dir, k = 0.5) { setWorldRot(name, new THREE.Quaternion().setFromUnitVectors(rest, dir), k); }
+// ワールド基準の累積回転 q をローカルに直して適用(hips→spine のように親子で使っても整合する)
+function setRot(name, q, k = 0.5) {
+  const n = vrm.humanoid.getNormalizedBoneNode(name); if (!n) return;
+  const R0 = restQ();
+  n.quaternion.slerp(R0.clone().invert().multiply(q).multiply(R0), k); n.updateMatrixWorld(true);
+}
+// ローカル回転をそのまま適用(指など)
+function setLocal(name, q, k = 0.5) {
+  const n = vrm.humanoid.getNormalizedBoneNode(name); if (n) n.quaternion.slerp(q, k);
+}
+
+function applyPose() {
+  const I = () => new THREE.Quaternion();
+  const armDown = (side) => {  // 未検出時は腕を下ろす
+    const s = side === 'left' ? 1 : -1, rest = side === 'left' ? X : NX;
+    const d = new THREE.Vector3(s * 0.18, -1, 0).normalize();
+    setDir(side + 'UpperArm', rest, d, 0.15); setDir(side + 'LowerArm', rest, d, 0.15);
+  };
+  const resetLegs = k => { for (const s of ['left', 'right']) { setRot(s + 'UpperLeg', I(), k); setRot(s + 'LowerLeg', I(), k); } };
+  // 肩が見えない → 待機姿勢(腰は判定に使わない: 上半身だけ映っていても腕を追従させるため)
+  if (!LM || !visOK(0.5, 11, 12)) {
+    setRot('hips', I(), 0.1); setRot('spine', I(), 0.1);
+    armDown('left'); armDown('right'); resetLegs(0.1);
+    return;
+  }
+  const useHips = mode === 'full' && visOK(0.5, 23, 24);
+  if (useHips) {
+    // 腰の向き(ヨー)
+    const hv = dirOf(24, 23);
+    const yaw = THREE.MathUtils.clamp(Math.atan2(-hv.z, hv.x), -1.2, 1.2);
+    const hipsQ = new THREE.Quaternion().setFromAxisAngle(UP, yaw);
+    setRot('hips', hipsQ, 0.4);
+    // 上半身の傾き
+    const mid = (a, b) => ({ x: (lm(a).x + lm(b).x) / 2, y: (lm(a).y + lm(b).y) / 2, z: (lm(a).z + lm(b).z) / 2 });
+    const sh = mid(11, 12), hp = mid(23, 24), mx = mirror ? -1 : 1;
+    const torso = new THREE.Vector3((sh.x - hp.x) * mx, -(sh.y - hp.y), -(sh.z - hp.z)).normalize();
+    const tilt = new THREE.Quaternion().setFromUnitVectors(UP, torso);
+    setRot('spine', hipsQ.clone().invert().multiply(tilt), 0.4);
+  } else {
+    // 上半身モード: 腰・脚は固定。肩のラインから胴体のひねり(ヨー)と傾き(ロール)だけ推定
+    const sv = dirOf(12, 11);
+    const yaw = THREE.MathUtils.clamp(Math.atan2(-sv.z, sv.x), -1.2, 1.2);
+    const roll = THREE.MathUtils.clamp(Math.atan2(sv.y, Math.hypot(sv.x, sv.z)), -0.5, 0.5);
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, roll, 'YXZ'));
+    setRot('hips', I(), 0.2);
+    setRot('spine', I().slerp(q, 0.7), 0.4);
+  }
+
+  // 腕
+  for (const [side, sh_, el, wr] of [['left', 11, 13, 15], ['right', 12, 14, 16]]) {
+    const rest = side === 'left' ? X : NX;
+    if (visOK(0.4, sh_, el)) setDir(side + 'UpperArm', rest, dirOf(sh_, el)); else armDown(side);
+    if (visOK(0.4, el, wr)) setDir(side + 'LowerArm', rest, dirOf(el, wr));
+  }
+  // 脚(全身モードで映っているときだけ。上半身モードは常に直立)
+  if (mode !== 'full') { resetLegs(0.2); return; }
+  for (const [side, hi, kn, an] of [['left', 23, 25, 27], ['right', 24, 26, 28]]) {
+    if (visOK(0.7, hi, kn, an)) {
+      setDir(side + 'UpperLeg', DOWN, dirOf(hi, kn)); setDir(side + 'LowerLeg', DOWN, dirOf(kn, an));
+    } else { setRot(side + 'UpperLeg', I(), .1); setRot(side + 'LowerLeg', I(), .1); }
+  }
+}
+
+/* ---------- ハンドトラッキング ---------- */
+// [指, 使うランドマーク(関節3つ), VRMのボーン名, 曲げの上限(rad)]
+const FINGERS = [
+  ['Thumb',  [1, 2, 3],    ['Metacarpal', 'Proximal', 'Distal'],      [0.8, 1.0, 1.3]],
+  ['Index',  [5, 6, 7],    ['Proximal', 'Intermediate', 'Distal'],    [1.5, 1.9, 1.4]],
+  ['Middle', [9, 10, 11],  ['Proximal', 'Intermediate', 'Distal'],    [1.5, 1.9, 1.4]],
+  ['Ring',   [13, 14, 15], ['Proximal', 'Intermediate', 'Distal'],    [1.5, 1.9, 1.4]],
+  ['Little', [17, 18, 19], ['Proximal', 'Intermediate', 'Distal'],    [1.5, 1.9, 1.4]]
+];
+const _s1 = new THREE.Vector3(), _s2 = new THREE.Vector3();
+const seg = (W, i, j, out) => out.set(W[j].x - W[i].x, W[j].y - W[i].y, W[j].z - W[i].z).normalize();
+const flexion = (W, p, a, b) => { seg(W, p, a, _s1); seg(W, a, b, _s2); return Math.acos(THREE.MathUtils.clamp(_s1.dot(_s2), -1, 1)); };
+
+// 検出した手 → アバターの左右 に割り当て(手首の位置がポーズの手首に近い方。取れなければ MediaPipe のラベル)
+function assignHands() {
+  const out = {}, H = handRes;
+  if (!H?.landmarks?.length) return out;
+  const P = poseRes?.landmarks?.[0];
+  H.landmarks.forEach((lmk, i) => {
+    let person = null, dist = 1;
+    if (P) {
+      const dl = P[15] && (P[15].visibility ?? 0) > 0.2 ? Math.hypot(lmk[0].x - P[15].x, lmk[0].y - P[15].y) : 9;
+      const dr = P[16] && (P[16].visibility ?? 0) > 0.2 ? Math.hypot(lmk[0].x - P[16].x, lmk[0].y - P[16].y) : 9;
+      if (Math.min(dl, dr) < 0.25) { person = dl < dr ? 'left' : 'right'; dist = Math.min(dl, dr); }
+    }
+    if (!person) {   // ラベルは「鏡像入力」前提なので、反転していない映像では左右が逆
+      const label = H.handedness?.[i]?.[0]?.categoryName;
+      if (!label) return;
+      person = label === 'Left' ? 'right' : 'left';
+    }
+    const side = mirror ? (person === 'left' ? 'right' : 'left') : person;
+    if (!out[side] || dist < out[side].dist) out[side] = { i, dist };
+  });
+  return out;
+}
+
+function restBasis(side) {
+  const f0 = side === 'left' ? X : NX, s0 = new THREE.Vector3(0, 0, -1);
+  return new THREE.Matrix4().makeBasis(f0, s0, f0.clone().cross(s0));
+}
+
+function applyHands() {
+  const assigned = (hand && $('handTrack').checked) ? assignHands() : {};
+  const mx = mirror ? -1 : 1, R0inv = restQ().invert();
+  for (const side of ['left', 'right']) {
+    const a = assigned[side];
+    if (!a) {   // 手が見えない → 手首と指をゆっくり戻す
+      setRot(side + 'Hand', QI, 0.1);
+      for (const [f, , bones] of FINGERS) for (const b of bones) setLocal(side + f + b, QI, 0.15);
+      continue;
+    }
+    const W = handRes.worldLandmarks[a.i];
+    // 手首の向き: 手首→中指の付け根(前方)と、人差し指側→小指側(横)から姿勢を作る
+    const v = i => new THREE.Vector3(W[i].x * mx, -W[i].y, -W[i].z);
+    const f = v(9).sub(v(0)).normalize();
+    const s = v(17).sub(v(5)); s.addScaledVector(f, -s.dot(f)).normalize();
+    const M = new THREE.Matrix4().makeBasis(f, s, f.clone().cross(s));
+    const Qw = new THREE.Quaternion().setFromRotationMatrix(M.multiply(restBasis(side).invert()));
+    setWorldRot(side + 'Hand', Qw, 0.4);
+    // 指の曲げ: 関節ごとの屈曲角(手の向きに依存しない)を、手のひら側へ曲がる軸まわりに適用
+    for (const [f_, js, bones, maxs] of FINGERS) {
+      const thumb = f_ === 'Thumb';
+      const axisW = thumb ? new THREE.Vector3(0, side === 'left' ? 0.8 : -0.8, side === 'left' ? -0.6 : 0.6)
+                          : new THREE.Vector3(0, 0, side === 'left' ? -1 : 1);
+      const axis = axisW.applyQuaternion(R0inv);
+      const pts = [0, js[0], js[1], js[2], js[2] + 1];
+      for (let k = 0; k < 3; k++) {
+        const ang = THREE.MathUtils.clamp(flexion(W, pts[k], pts[k + 1], pts[k + 2]), 0, maxs[k]);
+        setLocal(side + f_ + bones[k], new THREE.Quaternion().setFromAxisAngle(axis, ang), 0.5);
+      }
+    }
+  }
+}
+
+const bsMap = {};
+function applyFace() {
+  if (!faceRes || !faceRes.faceBlendshapes?.length) { setRot('neck', QI, 0.1); setRot('head', QI, 0.1); return; }
+  const m = new THREE.Matrix4().fromArray(faceRes.facialTransformationMatrixes[0].data);
+  const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+  m.decompose(p, q, s);
+  const e = new THREE.Euler().setFromQuaternion(q, 'YXZ');
+  const sg = mirror ? -1 : 1;
+  const hq = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+    THREE.MathUtils.clamp(e.x, -.7, .7), THREE.MathUtils.clamp(e.y * sg, -1, 1), THREE.MathUtils.clamp(e.z * sg, -.6, .6), 'YXZ'));
+  const n = new THREE.Quaternion().identity().slerp(hq, 0.35);
+  setRot('neck', n, 0.5);
+  setRot('head', new THREE.Quaternion().identity().slerp(hq, 0.65), 0.5);
+
+  for (const c of faceRes.faceBlendshapes[0].categories) bsMap[c.categoryName] = c.score;
+  const g = k => bsMap[k] || 0, em = vrm.expressionManager; if (!em) return;
+  const set = (n, v) => { if (em.getExpression(n)) em.setValue(n, THREE.MathUtils.clamp(v, 0, 1)); };
+  const bl = g(mirror ? 'eyeBlinkRight' : 'eyeBlinkLeft'), br = g(mirror ? 'eyeBlinkLeft' : 'eyeBlinkRight');
+  const bh = x => x > 0.5 ? 1 : x * 1.2;
+  set('blinkLeft', bh(bl)); set('blinkRight', bh(br));
+  const jaw = g('jawOpen');
+  set('aa', jaw * 1.4 * (1 - g('mouthFunnel')));
+  set('oh', g('mouthFunnel') * 1.2); set('ou', g('mouthPucker') * 1.2);
+  set('ee', g('mouthStretchLeft') * .6 + g('mouthStretchRight') * .6);
+  set('happy', (g('mouthSmileLeft') + g('mouthSmileRight')) * 0.7);
+}
+
+/* ---------- 録画 ---------- */
+let recorder = null, chunks = [], timer = null, t0 = 0;
+function pickMime() {
+  return ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+    .find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t));
+}
+function startRec() {
+  if (recorder && recorder.state === 'recording') return;
+  if (!window.MediaRecorder) return say('このブラウザは録画非対応です');
+  if (!actx) initAudio();
+  actx.resume();
+  const stream = new MediaStream([...canvas.captureStream(30).getVideoTracks(), ...dest.stream.getAudioTracks()]);
+  const mime = pickMime(); chunks = [];
+  recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6_000_000, audioBitsPerSecond: 192_000 });
+  recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
+  recorder.onstop = () => {
+    clearInterval(timer);
+    const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(chunks, { type: mime.split(';')[0] });
+    const a = $('dl'); a.href = URL.createObjectURL(blob);
+    a.download = 'karaoke-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.' + ext;
+    a.style.display = 'inline'; a.textContent = '⬇ 録画を保存(' + (blob.size / 1e6).toFixed(1) + 'MB)';
+    $('rec').textContent = '● 録画開始'; $('rec').classList.remove('on'); say('録画完了');
+  };
+  recorder.start(1000);
+  $('dl').style.display = 'none'; $('rec').textContent = '■ 録画停止'; $('rec').classList.add('on');
+  t0 = Date.now();
+  timer = setInterval(() => { const s = ((Date.now() - t0) / 1000) | 0; say('● REC ' + String((s / 60) | 0).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0')); }, 500);
+}
+$('rec').onclick = () => { if (recorder && recorder.state === 'recording') recorder.stop(); else startRec(); };
+
+/* ---------- 人の位置・大きさの推定 ---------- */
+// 大きさの基準 = 「肩の中点〜足首の中点」の長さ S(画面px)。
+// 近づくと足首は映らないので、キャリブレーションで測った「肩幅 / S」「胴の長さ / S」の比から S を推定する。
+let cal = null;   // { full:true, ksw, kt } 全身で測定 / { full:false, rt } 上半身のみ(肩幅をアバターに合わせる)
+function getK() {
+  if (cal?.full) return { ksw: cal.ksw, kt: cal.kt };
+  const ksw = AV.SW / AV.L;
+  return { ksw, kt: cal?.rt ? ksw * cal.rt : AV.T / AV.L };
+}
+function updateCalInfo() {
+  $('calInfo').textContent = !cal ? '体格: 未測定'
+    : cal.full ? '体格: 全身で測定済み(肩幅 ÷ 肩〜足首 = ' + cal.ksw.toFixed(2) + ')'
+    : '体格: 上半身で測定(肩幅をアバターに合わせます)';
+}
+const trk = { has: false, tgt: null, sx: 0, sy: 0, logS: 0, seenT: -1e9 };
+const cosOf = v => Math.hypot(v.x, v.y) / Math.max(1e-6, v.length());   // 画面に対する傾き(奥行き方向に向くと小さくなる)
+function measureFrame() {
+  const L2 = poseRes?.landmarks?.[0];
+  if (!L2 || !LM) return null;
+  const vw = video.videoWidth, vh = video.videoHeight; if (!vw) return null;
+  const vis = (i, t) => (L2[i].visibility ?? 0) > t;
+  const inV = i => L2[i].x > 0.01 && L2[i].x < 0.99 && L2[i].y > 0.01 && L2[i].y < 0.99;
+  if (!vis(11, 0.5) || !vis(12, 0.5)) return null;
+  const px = i => new THREE.Vector2(L2[i].x * vw, L2[i].y * vh);
+  const mid = (a, b) => px(a).add(px(b)).multiplyScalar(0.5);
+  const wv = i => new THREE.Vector3(LM[i].x, LM[i].y, LM[i].z);
+  const shM = mid(11, 12), sw = px(11).distanceTo(px(12)), swC = cosOf(wv(12).sub(wv(11)));
+  const hipsOK = vis(23, 0.5) && vis(24, 0.5) && inV(23) && inV(24);
+  const torso = hipsOK ? shM.distanceTo(mid(23, 24)) : 0;
+  const tC = hipsOK ? cosOf(wv(23).add(wv(24)).sub(wv(11)).sub(wv(12))) : 1;
+  const feetOK = [25, 26, 27, 28].every(i => vis(i, 0.6) && inV(i));
+  const L = feetOK ? shM.distanceTo(mid(27, 28)) : 0;
+  return { shM, sw, swC, torso, tC, hipsOK, feetOK, L, vw, vh };
+}
+function estimate(m) {
+  const k = getK();
+  let sum = m.sw / Math.max(0.55, m.swC) / k.ksw, wsum = 1;
+  if (m.hipsOK) { sum += 1.3 * m.torso / Math.max(0.6, m.tC) / k.kt; wsum += 1.3; }
+  const s = toScreenN(m.shM.x / m.vw, m.shM.y / m.vh);
+  return { sx: s.x * innerWidth, sy: s.y * innerHeight, S: sum / wsum * pxScale(m.vw) };
+}
+
+// アバターを「肩の中点が画面上の人の肩の中点に来て、大きさがSになる」奥行きに置く
+let placeIdle = true;
+const body = { cx: 0, cz: -3, sy: 0, y0: -1, y1: 0.5, rad: 0.4, hx: 0, hy: 0, hz: -3, ok: false };
+function placeAvatar(dt) {
+  let sx, sy, S, snap = false;
+  if ((phase === 'idle') !== placeIdle) { placeIdle = phase === 'idle'; snap = true; }
+  if (phase === 'idle') { sx = innerWidth / 2; sy = innerHeight * 0.27; S = innerHeight * 0.6; }   // カメラ前のプレビュー
+  else {
+    const t = trk.tgt; if (!t) return;
+    if (!trk.has) { trk.sx = t.sx; trk.sy = t.sy; trk.logS = Math.log(t.S); trk.has = true; snap = true; }
+    else {
+      const kp = 1 - Math.exp(-dt * 14), ks = 1 - Math.exp(-dt * 7);
+      trk.sx += (t.sx - trk.sx) * kp; trk.sy += (t.sy - trk.sy) * kp; trk.logS += (Math.log(t.S) - trk.logS) * ks;
+    }
+    sx = trk.sx; sy = trk.sy; S = Math.exp(trk.logS);
+  }
+  const tn = Math.tan(camera.fov * Math.PI / 360);
+  const d = Math.max(0.2, AV.L * innerHeight / (2 * tn * S));
+  const target = _c.set((sx / innerWidth * 2 - 1) * tn * camera.aspect * d, (1 - sy / innerHeight * 2) * tn * d, -d);
+  vrm.scene.updateMatrixWorld(true);
+  const cur = shoulderMid(_d); if (!cur) return;
+  vrm.scene.position.add(target.sub(cur));
+  vrm.scene.updateMatrixWorld(true);
+  if (snap) vrm.springBoneManager?.reset?.();   // 瞬間移動したときに髪などが暴れないように
+}
+function updateBody() {   // 演出用: アバターの体の範囲(ワールド座標)
+  const sh = shoulderMid(_c); if (!sh) return;
+  const lf = boneW('leftFoot', _a), rf = boneW('rightFoot', _b);
+  body.cx = sh.x; body.cz = sh.z; body.sy = sh.y;
+  body.y0 = lf && rf ? Math.min(lf.y, rf.y) : sh.y - AV.L;
+  const hd = boneW('head', _d);
+  if (hd) { body.hx = hd.x; body.hy = hd.y; body.hz = hd.z; body.y1 = hd.y + 0.14; } else body.y1 = sh.y + 0.3;
+  body.rad = AV.SW * 1.3 + 0.08; body.ok = true;
+}
+
+/* ---------- キャリブレーション(変身ポーズ) ---------- */
+let phase = 'idle', phaseT = 0, calProg = 0, calSamples = [], calLastT = 0;
+const guideMsg = (m, p) => { $('gMsg').textContent = m; $('gProg').style.width = Math.round(p * 100) + '%'; };
+function enterCalib() {
+  phase = 'calib'; calProg = 0; calSamples = []; calLastT = performance.now();
+  U.uGlow.value = 0; ring.visible = false;
+  $('guide').classList.add('show'); guideMsg('カメラの前で両腕を真横に広げてください', 0);
+}
+function tposeCheck(L2) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const vis = i => (L2[i].visibility ?? 0) > 0.5;
+  if (![11, 12].every(vis)) return 'カメラの前に立ってください(肩まで映る位置へ)';
+  if (![13, 14, 15, 16].every(vis)) return '両腕を真横に広げてください(手先まで映るよう少し下がって)';
+  const p = i => ({ x: L2[i].x * vw, y: L2[i].y * vh });
+  const sw = Math.hypot(p(11).x - p(12).x, p(11).y - p(12).y);
+  const flat = (s, e, w) => { const a = p(s), b = p(e), c = p(w);
+    return Math.abs(c.y - a.y) < Math.abs(c.x - a.x) * 0.45 && Math.abs(b.y - a.y) < Math.abs(b.x - a.x) * 0.6 + sw * 0.15; };
+  const out = Math.sign(p(15).x - p(11).x) === Math.sign(p(11).x - p(12).x) && Math.sign(p(16).x - p(12).x) === Math.sign(p(12).x - p(11).x);
+  const spread = Math.abs(p(15).x - p(16).x) > sw * 2.6;
+  if (!(flat(11, 13, 15) && flat(12, 14, 16) && out && spread)) return '両腕を肩の高さで、真横にまっすぐ伸ばしてください';
+  return null;
+}
+function calibStep(m, now) {
+  const dtc = Math.min(0.15, (now - calLastT) / 1000); calLastT = now;
+  const L2 = poseRes?.landmarks?.[0];
+  let why = !vrm ? 'VRMを読み込むと変身できます' : !L2 ? 'カメラの前に立ってください' : tposeCheck(L2);
+  if (!why && !m) why = '肩がはっきり映る位置に立ってください';
+  if (why) { calProg = Math.max(0, calProg - dtc * 1.5); if (calProg === 0) calSamples = []; guideMsg(why, calProg); return; }
+  calSamples.push({ sw: m.sw, torso: m.torso, L: m.L });
+  calProg = Math.min(1, calProg + dtc / 1.2);
+  guideMsg(m.feetOK ? 'そのまま…! 全身で体の大きさを測っています' : 'そのまま…!(足まで映ると、より正確になります)', calProg);
+  if (calProg >= 1) finishCalib();
+}
+function finishCalib() {
+  const med = arr => { const a = [...arr].sort((x, y) => x - y); return a[a.length >> 1]; };
+  const full = calSamples.filter(s => s.L > 0);
+  let c = null;
+  if (full.length >= calSamples.length * 0.6) {
+    const ksw = med(full.map(s => s.sw / s.L)), wt = full.filter(s => s.torso > 0);
+    const kt = wt.length ? med(wt.map(s => s.torso / s.L)) : AV.T / AV.L;
+    if (ksw > 0.12 && ksw < 0.5 && kt > 0.2 && kt < 0.8) c = { full: true, ksw, kt };
+  }
+  if (!c) { const wt = calSamples.filter(s => s.torso > 0); c = { full: false, rt: wt.length ? med(wt.map(s => s.torso / s.sw)) : null }; }
+  cal = c; trk.has = false;   // 新しい比率ですぐ合わせ直す
+  startTransform();
+}
+$('gSkip').onclick = () => {
+  if (!vrm) return guideMsg('VRMを読み込むと変身できます', 0);
+  if (performance.now() - trk.seenT > 1000) return guideMsg('肩が映る位置に立ってから押してください', 0);
+  if (!cal) cal = { full: false, rt: null };
+  startTransform();
+};
+$('recal').onclick = () => {
+  if (!tracking) return;
+  stopAllBgm();
+  if (vrm?.scene.visible && body.ok) poof();
+  enterCalib(); say('変身ポーズ(両腕を真横)でキャリブレーションします');
+};
+
+/* ---------- 変身演出 → ライブ ---------- */
+const TF = { flash: 1.7, title: 2.3 };
+let flashA = 0, titleT = -1, spiralAcc = 0, singAcc = 0, voice = 0;
+function startTransform() {
+  phase = 'transform'; phaseT = 0; spiralAcc = 0;
+  $('guide').classList.remove('show');
+  updateCalInfo();
+  if ($('autoRec').checked && dest) startRec();
+  sfx('charge'); say('✨ 変身中…');
+}
+const PAL = [[1, 0.45, 0.75], [0.75, 0.55, 1], [1, 0.85, 0.45], [0.5, 0.9, 1], [1, 1, 1]];
+const rnd = (a, b) => a + Math.random() * (b - a);
+const parts = [];
+function emit(o) {
+  if (parts.length >= NP) return;
+  const c = PAL[(Math.random() * PAL.length) | 0];
+  parts.push(Object.assign({ x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, life: 0, max: 1, size: 0.05, r: c[0], g: c[1], b: c[2],
+    shape: 0, orbit: false, drag: 1.5, grav: 0, tw: Math.random() * 6 }, o));
+}
+function emitOrbit() {
+  emit({ orbit: true, ang: rnd(0, Math.PI * 2), w: rnd(4, 7) * (Math.random() < 0.5 ? 1 : -1), f: rnd(-0.05, 0.15), vf: rnd(0.5, 0.9),
+    rad: body.rad * rnd(0.7, 1.3), size: rnd(0.03, 0.07), max: rnd(1.0, 1.6) });
+}
+function burst(n, soft) {
+  const s = AV.L / 1.2, cy = body.sy - AV.T * 0.3;
+  for (let i = 0; i < n; i++) {
+    const v = new THREE.Vector3(rnd(-1, 1), rnd(-0.6, 1), rnd(-1, 1)).normalize().multiplyScalar(rnd(1.2, soft ? 2 : 3.6) * s);
+    emit({ x: body.cx, y: cy + rnd(-0.2, 0.3) * s, z: body.cz, vx: v.x, vy: v.y, vz: v.z, drag: 2.4, grav: -0.4 * s,
+      size: rnd(0.04, 0.09) * s, max: rnd(0.9, 1.7) });
+  }
+}
+function poof() {
+  for (let i = 0; i < 40; i++) emit({ x: body.cx + rnd(-0.2, 0.2), y: body.sy + rnd(-0.3, 0.2), z: body.cz, vx: rnd(-0.8, 0.8), vy: rnd(0, 1.2), vz: rnd(-0.5, 0.5),
+    r: 0.8, g: 0.65, b: 1, drag: 2, size: rnd(0.05, 0.09), max: rnd(0.6, 1.1) });
+}
+function updateParticles(dt) {
+  for (let i = parts.length - 1; i >= 0; i--) { const p = parts[i]; p.life += dt; if (p.life >= p.max) { parts[i] = parts[parts.length - 1]; parts.pop(); } }
+  let n = 0;
+  for (const p of parts) {
+    if (p.orbit) {   // 体のまわりを回りながら上昇(人が動いても追従)
+      p.ang += p.w * dt; p.f += p.vf * dt;
+      p.x = body.cx + Math.cos(p.ang) * p.rad; p.z = body.cz + Math.sin(p.ang) * p.rad; p.y = body.y0 + p.f * (body.y1 - body.y0);
+    } else {
+      const k = Math.exp(-p.drag * dt);
+      p.vx *= k; p.vz *= k; p.vy = p.vy * k + p.grav * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+    }
+    const t = p.life / p.max, tw = p.shape ? 1 : 0.65 + 0.35 * Math.sin(p.life * 22 + p.tw);
+    const a = Math.min(1, t * 8) * (1 - t) * tw;
+    pPos[n * 3] = p.x; pPos[n * 3 + 1] = p.y; pPos[n * 3 + 2] = p.z;
+    pCol[n * 4] = p.r; pCol[n * 4 + 1] = p.g; pCol[n * 4 + 2] = p.b; pCol[n * 4 + 3] = a;
+    pSize[n] = p.size; pShape[n] = p.shape; n++;
+  }
+  pGeo.setDrawRange(0, n);
+  for (const k of ['position', 'aColor', 'aSize', 'aShape']) pGeo.attributes[k].needsUpdate = true;
+}
+// 歌っている間(声が出ていて口が開いている)は顔のまわりから音符とキラキラ
+function updateSinging(dt) {
+  voice += (micRms() - voice) * (1 - Math.exp(-dt * 10));
+  if (phase !== 'live' || !vrm?.scene.visible || !body.ok) return;
+  const mouth = (faceRes?.faceBlendshapes?.length ? bsMap.jawOpen ?? 0 : 0.2);
+  const rate = mouth > 0.12 ? THREE.MathUtils.clamp((voice - 0.03) * 120, 0, 14) : 0;
+  singAcc += rate * dt;
+  while (singAcc >= 1) {
+    singAcc--;
+    const side = Math.random() < 0.5 ? -1 : 1, note = Math.random() < 0.45;
+    emit({ x: body.hx + side * rnd(0.12, 0.28), y: body.hy + rnd(-0.08, 0.1), z: body.hz + 0.05,
+      vx: side * rnd(0.04, 0.12), vy: rnd(0.2, 0.4), vz: 0, drag: 0.3, shape: note ? 1 : 0,
+      size: note ? rnd(0.07, 0.1) : rnd(0.03, 0.05), max: rnd(1.4, 2.2) });
+  }
+}
+function updatePhase(dt, now) {
+  const present = trk.has && now - trk.seenT < 1200;
+  let wantVis = false;
+  if (phase === 'idle') wantVis = true;
+  else if (phase === 'transform') {
+    const prev = phaseT; phaseT += dt;
+    const c = Math.min(1, phaseT / TF.flash);
+    U.uGlow.value = phaseT < TF.flash ? c * c : Math.max(0, 1 - (phaseT - TF.flash) * 3);
+    if (phaseT < TF.flash && body.ok) {
+      spiralAcc += dt * (40 + 260 * c); while (spiralAcc >= 1) { spiralAcc--; emitOrbit(); }
+      const e = c * c * (3 - 2 * c);   // 魔法陣が足元から頭へ上がっていく
+      ring.visible = true; ring.position.set(body.cx, body.y0 + e * (body.y1 - body.y0), body.cz);
+      ring.scale.setScalar(body.rad * 2.6 * (1 + 0.08 * Math.sin(phaseT * 10)));
+      ring.rotation.z += dt * 2.5; ring.material.opacity = Math.min(1, phaseT * 4) * 0.9;
+    } else ring.visible = false;
+    if (prev < TF.flash && phaseT >= TF.flash) { flashA = 1; if (body.ok) burst(120); sfx('boom'); }
+    if (prev < TF.title && phaseT >= TF.title) { phase = 'live'; titleT = 0; sfx('chime'); startSinging(); if (body.ok) burst(40, true); }
+    wantVis = phaseT >= TF.flash;
+  } else if (phase === 'live') wantVis = present;
+  if (phase !== 'transform') { U.uGlow.value = 0; ring.visible = false; }
+  if (vrm && vrm.scene.visible !== wantVis) {
+    vrm.scene.visible = wantVis;
+    if (phase === 'live' && body.ok) wantVis ? burst(30, true) : poof();   // 見失った/戻ってきた
+  }
+  const hideTgt = wantVis && phase !== 'idle' && $('hideMe').checked ? 1 : 0;
+  U.uHide.value += (hideTgt - U.uHide.value) * (1 - Math.exp(-dt * 8));
+  // フラッシュとタイトル(録画にも映る)
+  flashA *= Math.exp(-dt * 3.2); flashMat.opacity = flashA > 0.003 ? flashA : 0;
+  if (titleT >= 0) {
+    titleT += dt;
+    const a = Math.min(1, titleT * 4) * (titleT > 1.9 ? Math.max(0, 1 - (titleT - 1.9) * 2.5) : 1);
+    const s = 1 + 0.35 * Math.exp(-titleT * 7);
+    titleMat.opacity = a; titleQ.scale.set(titleQ.userData.sx * s, titleQ.userData.sy * s, 1);
+    if (titleT > 2.4) { titleT = -1; titleMat.opacity = 0; }
+  }
+}
+function onDetect(now) {
+  grabMask();
+  const m = measureFrame();
+  if (m) { if (now - trk.seenT > 1500) trk.has = false; trk.tgt = estimate(m); trk.seenT = now; }
+  if (phase === 'calib') calibStep(m, now);
+  autoMode(now);
+}
+
+/* ---------- メインループ ---------- */
+const clock = new THREE.Clock();
+refreshModeUI();
+function loop() {
+  requestAnimationFrame(loop);
+  const now = performance.now();
+  if (P.frameMs && now - lastRender < P.frameMs - 1.5) return;   // 軽量モード: 描画を約30fpsに制限
+  lastRender = now;
+  const dt = Math.min(clock.getDelta(), 0.1);
+  updateView();
+  if (tracking && video.readyState >= 2 && video.currentTime !== lastT) {
+    lastT = video.currentTime;
+    if (++detN % P.skip === 0) {
+      const ts = performance.now(), turn = (detN / P.skip) | 0, useHand = hand && $('handTrack').checked;
+      try {
+        faceRes = face.detectForVideo(video, ts);   // 表情・口パクは毎回
+        // 標準/軽量: ポーズと手を交互に検出して1フレームあたりの負荷を半分に
+        let poseRan = false;
+        if (!P.alt || !useHand || (turn & 1) === 0) { poseRes = pose.detectForVideo(video, ts); LM = poseRes.worldLandmarks?.[0] || null; poseRan = true; }
+        if (useHand) { if (!P.alt || (turn & 1) === 1) handRes = hand.detectForVideo(video, ts); } else handRes = null;
+        drawOverlay();
+        if (poseRan) onDetect(now);
+      } catch (e) { console.warn(e); }
+    }
+  }
+  if (vrm) {
+    applyPose();
+    applyHands(); applyFace();   // 検出結果が無いときは手・頭が待機姿勢へ戻る
+    placeAvatar(dt);             // 映像の人の位置・大きさに合わせる
+    vrm.update(dt);
+    updateBody();
+    updateAvatarBones();
+  }
+  updatePhase(dt, now);
+  updateSinging(dt);
+  updateParticles(dt);
+  U.uTime.value = now / 1000;
+  renderer.clear();
+  renderer.render(scene, camera);
+  if (flashMat.opacity > 0 || titleMat.opacity > 0) { renderer.clearDepth(); renderer.render(hud, hudCam); }
+}
+loop();
+</script>
+</body>
+</html>
