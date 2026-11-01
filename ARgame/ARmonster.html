@@ -3,464 +3,367 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>ARモンスター配置</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&display=swap" rel="stylesheet">
+<title>QRスライム配置テスト</title>
 <style>
-  :root {
-    --bg: #F2EEFF;
-    --ink: #2A1B3D;
-    --sub: #5E4E78;
-    --accent: #FFD84D;
-    --mint: #6EE7C8;
-    --pill-bg: rgba(42, 27, 61, 0.78);
-    --pill-ink: #FFFFFF;
-    box-sizing: border-box;
-    padding-top: env(safe-area-inset-top, 0px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #1E1430;
-      --ink: #F2EEFF;
-      --sub: #BFB2D9;
-      color-scheme: dark;
-    }
-  }
-  *, *::before, *::after { box-sizing: inherit; }
-  html, body { height: 100%; margin: 0; }
-  body {
-    background: var(--bg);
-    color: var(--ink);
-    font-family: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Hiragino Sans", system-ui, sans-serif;
-    -webkit-tap-highlight-color: transparent;
-    overflow: hidden;
-  }
-
-  /* 開始画面 */
-  #intro {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1.25rem;
-    padding: 2rem 1.5rem;
-    text-align: center;
-  }
-  #intro svg { width: min(46vw, 200px); height: auto; }
-  #intro h1 { font-size: 1.75rem; font-weight: 800; margin: 0; line-height: 1.3; }
-  #intro p { margin: 0; color: var(--sub); line-height: 1.7; max-width: 22em; }
-  #startBtn {
-    font: inherit;
-    font-weight: 800;
-    font-size: 1.15rem;
-    padding: 1rem 2.5rem;
-    border: 3px solid var(--ink);
-    border-radius: 999px;
-    background: var(--accent);
-    color: #2A1B3D;
-    box-shadow: 0 5px 0 var(--ink);
-    cursor: pointer;
-  }
-  #startBtn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--ink); }
-  #startBtn:disabled { opacity: 0.45; cursor: not-allowed; }
-  #startBtn:focus-visible, .ui-btn:focus-visible { outline: 3px solid var(--mint); outline-offset: 3px; }
-  #notice { font-size: 0.9rem; color: var(--sub); }
-  #notice.error { color: #C2364A; font-weight: 500; }
-
-  /* AR中のオーバーレイ */
-  #overlay { display: none; position: fixed; inset: 0; pointer-events: none; }
-  #overlay.active { display: block; }
-  #status {
-    position: absolute;
-    top: calc(env(safe-area-inset-top, 0px) + 16px);
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--pill-bg);
-    color: var(--pill-ink);
-    padding: 0.7rem 1.2rem;
-    border-radius: 999px;
-    font-size: 0.95rem;
-    white-space: nowrap;
-    max-width: calc(100% - 32px);
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .controls {
-    position: absolute;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
-    left: 0; right: 0;
-    display: flex;
-    justify-content: center;
-    gap: 12px;
-  }
-  .ui-btn {
-    pointer-events: auto;
-    font: inherit;
-    font-weight: 800;
-    padding: 0.8rem 1.4rem;
-    border-radius: 999px;
-    border: 3px solid #2A1B3D;
-    background: #FFFFFF;
-    color: #2A1B3D;
-    cursor: pointer;
-  }
-  .ui-btn.primary { background: var(--accent); }
-  .ui-btn[hidden] { display: none; }
-  canvas { display: block; }
-  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  :root{ --bg:#0a1110; --cyan:#7ae7ff; --gold:#ffd35a; --panel:#000c; --btn:#0d2a30; color-scheme:dark; }
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:#fff;font:14px "Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif}
+  #stage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#000}
+  #stage video,#stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #ui{position:fixed;top:10px;right:10px;z-index:5;text-align:right}
+  button,select{font:inherit}
+  #ui>button,#start button{background:var(--btn);color:var(--cyan);border:1px solid #7ae7ff88;border-radius:6px;padding:6px 10px;cursor:pointer}
+  #panel{margin-top:6px;padding:10px;background:var(--panel);border:1px solid #7ae7ff55;border-radius:8px;width:270px;text-align:left;max-height:calc(100vh - 80px);overflow-y:auto;box-sizing:border-box}
+  #panel label{display:block;margin-top:8px}
+  #panel select,#panel input[type=range]{width:100%;margin-top:4px}
+  #panel small{display:block;color:#9fdcea;font-size:11px;margin-top:2px}
+  #panel b{color:var(--gold)}
+  #stat{position:fixed;left:10px;bottom:10px;z-index:5;padding:6px 10px;background:#000a;border:1px solid #7ae7ff44;border-radius:6px;font:12px/1.5 monospace;color:#9fffb0;white-space:pre}
+  #start{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:var(--bg);text-align:center;padding:20px}
+  #start h1{margin:0;color:var(--gold);font-size:26px}
+  #start p{margin:0;color:#9fdcea;line-height:1.7;max-width:30em}
+  #start button{font-size:18px;padding:12px 28px}
+  #start .err{color:#ff8a96}
+  button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 </style>
 </head>
 <body>
-
-<div id="intro">
-  <!-- オリジナルのモンスター「ぷにまる」 -->
-  <svg viewBox="0 0 200 200" aria-hidden="true">
-    <ellipse cx="100" cy="182" rx="56" ry="9" fill="#2A1B3D" opacity="0.18"/>
-    <path d="M58 70 L48 22 L84 52 Z" fill="#8B6CF0" stroke="#2A1B3D" stroke-width="5" stroke-linejoin="round"/>
-    <path d="M142 70 L152 22 L116 52 Z" fill="#8B6CF0" stroke="#2A1B3D" stroke-width="5" stroke-linejoin="round"/>
-    <ellipse cx="100" cy="115" rx="66" ry="64" fill="#8B6CF0" stroke="#2A1B3D" stroke-width="5"/>
-    <ellipse cx="100" cy="135" rx="38" ry="32" fill="#E9E1FF"/>
-    <circle cx="76" cy="100" r="13" fill="#fff" stroke="#2A1B3D" stroke-width="4"/>
-    <circle cx="124" cy="100" r="13" fill="#fff" stroke="#2A1B3D" stroke-width="4"/>
-    <circle cx="78" cy="102" r="6" fill="#2A1B3D"/>
-    <circle cx="122" cy="102" r="6" fill="#2A1B3D"/>
-    <path d="M90 124 Q100 133 110 124" fill="none" stroke="#2A1B3D" stroke-width="4" stroke-linecap="round"/>
-    <circle cx="62" cy="122" r="7" fill="#FF9EC0" opacity="0.8"/>
-    <circle cx="138" cy="122" r="7" fill="#FF9EC0" opacity="0.8"/>
-  </svg>
-  <h1>床にモンスターを置こう</h1>
-  <p>カメラで床を見つけて、タップした場所にモンスターを固定します。歩き回っても同じ場所にいます。</p>
-  <button id="startBtn" disabled>ARをはじめる</button>
-  <div id="notice" role="status">対応状況を確認中…</div>
+<div id="start">
+  <h1>QRスライム配置テスト</h1>
+  <p>印刷したQRコード（0〜3）をカメラに映すと、その上にスライムが乗ります。<br>PCのWebカメラ・USBカメラ・スマホのどれでも動きます。</p>
+  <button id="startBtn">カメラを開始</button>
+  <p id="startErr" class="err"></p>
 </div>
 
-<div id="overlay">
-  <div id="status">床にカメラを向けて、ゆっくり動かしてね</div>
-  <div class="controls">
-    <button class="ui-btn" id="resetBtn" hidden>置き直す</button>
-    <button class="ui-btn primary" id="exitBtn">終了</button>
+<div id="stage"><video id="vid" autoplay playsinline muted></video></div>
+
+<div id="ui">
+  <button id="panelBtn">⚙ 設定</button>
+  <div id="panel" hidden>
+    <label>カメラ <select id="camSel"></select></label>
+    <label>スライムを出すQR
+      <select id="target"><option value="*">すべてのQR</option><option value="0">QR 0</option><option value="1">QR 1</option><option value="2">QR 2</option><option value="3">QR 3</option></select>
+    </label>
+    <label>スライムの大きさ <b id="sizeV">1.4</b>×QR
+      <input type="range" id="size" min="0.4" max="4" step="0.1" value="1.4">
+    </label>
+    <label>カメラの画角 <b id="fovV">65</b>°
+      <input type="range" id="fov" min="35" max="110" step="1" value="65">
+      <small>スライムが傾く・浮く・沈むときに調整（一般的なWebカメラは60〜78°）</small>
+    </label>
+    <label><input type="checkbox" id="dbg" checked> 検出枠と番号を表示</label>
   </div>
 </div>
+<div id="stat">待機中</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script>
-(() => {
-  const startBtn = document.getElementById('startBtn');
-  const notice = document.getElementById('notice');
-  const overlay = document.getElementById('overlay');
-  const statusEl = document.getElementById('status');
-  const resetBtn = document.getElementById('resetBtn');
-  const exitBtn = document.getElementById('exitBtn');
-
-  // ---------- 対応チェック ----------
-  function showError(msg) {
-    notice.textContent = msg;
-    notice.classList.add('error');
-    startBtn.disabled = true;
-  }
-  if (!window.isSecureContext) {
-    showError('HTTPSで開いてください（カメラを使うために必要です）。');
-  } else if (!navigator.xr) {
-    showError('このブラウザはWebXRに対応していません。AndroidのChromeで開いてください。');
-  } else {
-    navigator.xr.isSessionSupported('immersive-ar').then((ok) => {
-      if (ok) {
-        startBtn.disabled = false;
-        notice.textContent = 'カメラへのアクセスを許可してください';
-      } else {
-        showError('この端末はAR（床の認識）に対応していません。ARCore対応のAndroid＋Chromeで開いてください。');
-      }
-    }).catch(() => showError('ARの対応状況を確認できませんでした。'));
-  }
-
-  // ---------- three.js 基本セットアップ ----------
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.outputEncoding = THREE.sRGBEncoding;
-  renderer.xr.enabled = true;
-  renderer.domElement.style.display = 'none';
-  document.body.appendChild(renderer.domElement);
-
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 30);
-
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x8877aa, 1.0));
-  const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-  sun.position.set(0.5, 1, 0.3);
-  scene.add(sun);
-
-  // ---------- 床検出のレティクル（ねらいマーク） ----------
-  const reticle = new THREE.Group();
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.09, 0.11, 40).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ color: 0xFFD84D, transparent: true, opacity: 0.95 })
-  );
-  const dot = new THREE.Mesh(
-    new THREE.CircleGeometry(0.02, 24).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
-  );
-  reticle.add(ring, dot);
-  reticle.matrixAutoUpdate = false;
-  reticle.visible = false;
-  scene.add(reticle);
-
-  // ---------- モンスター（プリミティブで組み立て） ----------
-  function createMonster() {
-    const root = new THREE.Group();     // 床に固定する位置
-    const body = new THREE.Group();     // アニメーション用
-    root.add(body);
-
-    const purple = new THREE.MeshStandardMaterial({ color: 0x8B6CF0, roughness: 0.55 });
-    const belly = new THREE.MeshStandardMaterial({ color: 0xE9E1FF, roughness: 0.7 });
-    const white = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.3 });
-    const dark = new THREE.MeshStandardMaterial({ color: 0x2A1B3D, roughness: 0.4 });
-    const pink = new THREE.MeshStandardMaterial({ color: 0xFF9EC0, roughness: 0.8 });
-
-    // 胴体（高さ約30cm）
-    const torso = new THREE.Mesh(new THREE.SphereGeometry(0.14, 32, 24), purple);
-    torso.scale.set(1, 1.05, 0.95);
-    torso.position.y = 0.15;
-    body.add(torso);
-
-    const bellyMesh = new THREE.Mesh(new THREE.SphereGeometry(0.09, 24, 16), belly);
-    bellyMesh.scale.set(1, 0.95, 0.5);
-    bellyMesh.position.set(0, 0.12, 0.095);
-    body.add(bellyMesh);
-
-    // 耳
-    [-1, 1].forEach((s) => {
-      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.11, 16), purple);
-      ear.position.set(0.075 * s, 0.3, 0);
-      ear.rotation.z = -0.35 * s;
-      body.add(ear);
-    });
-
-    // 目（まばたき用に保持）
-    const eyes = [];
-    [-1, 1].forEach((s) => {
-      const eye = new THREE.Group();
-      const ball = new THREE.Mesh(new THREE.SphereGeometry(0.028, 20, 16), white);
-      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.014, 16, 12), dark);
-      pupil.position.z = 0.02;
-      const shine = new THREE.Mesh(new THREE.SphereGeometry(0.005, 8, 8), white);
-      shine.position.set(0.006, 0.007, 0.032);
-      eye.add(ball, pupil, shine);
-      eye.position.set(0.05 * s, 0.2, 0.115);
-      body.add(eye);
-      eyes.push(eye);
-    });
-
-    // ほっぺ
-    [-1, 1].forEach((s) => {
-      const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 10), pink);
-      cheek.scale.set(1, 0.6, 0.4);
-      cheek.position.set(0.085 * s, 0.165, 0.105);
-      body.add(cheek);
-    });
-
-    // 足
-    [-1, 1].forEach((s) => {
-      const foot = new THREE.Mesh(new THREE.SphereGeometry(0.035, 16, 12), purple);
-      foot.scale.set(1, 0.55, 1.3);
-      foot.position.set(0.065 * s, 0.018, 0.03);
-      body.add(foot);
-    });
-
-    // 床に落ちる影（ぼかした円）
-    const c = document.createElement('canvas');
-    c.width = c.height = 128;
-    const g = c.getContext('2d');
-    const grad = g.createRadialGradient(64, 64, 4, 64, 64, 64);
-    grad.addColorStop(0, 'rgba(0,0,0,0.45)');
-    grad.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = grad;
-    g.fillRect(0, 0, 128, 128);
-    const shadow = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.36, 0.36).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false })
-    );
-    shadow.position.y = 0.002;
-    root.add(shadow);
-
-    root.userData = { body, eyes, shadow };
-    return root;
-  }
-
-  const monster = createMonster();
-  monster.visible = false;
-  scene.add(monster);
-
-  // ---------- AR セッション ----------
-  let session = null;
-  let refSpace = null;
-  let hitTestSource = null;
-  let lastHit = null;
-  let anchor = null;          // 対応端末ではアンカーで空間に固定
-  let placed = false;
-  let spawnTime = 0;
-  let nextBlink = 0;
-
-  function setStatus(text) { statusEl.textContent = text; }
-
-  // オーバーレイのボタンを押したときに「床をタップ」扱いにしない
-  [resetBtn, exitBtn].forEach((b) => b.addEventListener('beforexrselect', (e) => e.preventDefault()));
-
-  startBtn.addEventListener('click', async () => {
-    try {
-      session = await navigator.xr.requestSession('immersive-ar', {
-        requiredFeatures: ['hit-test'],
-        optionalFeatures: ['dom-overlay', 'anchors', 'local-floor'],
-        domOverlay: { root: overlay }
-      });
-    } catch (err) {
-      showError('ARを開始できませんでした：' + err.message);
-      return;
-    }
-
-    overlay.classList.add('active');
-    renderer.domElement.style.display = 'block';
-    renderer.xr.setReferenceSpaceType('local');
-    await renderer.xr.setSession(session);
-
-    refSpace = renderer.xr.getReferenceSpace();
-    const viewerSpace = await session.requestReferenceSpace('viewer');
-    hitTestSource = await session.requestHitTestSource({ space: viewerSpace });
-
-    session.addEventListener('select', onSelect);
-    session.addEventListener('end', onSessionEnd);
-
-    setStatus('床にカメラを向けて、ゆっくり動かしてね');
-    renderer.setAnimationLoop(render);
-  });
-
-  exitBtn.addEventListener('click', () => { if (session) session.end(); });
-
-  resetBtn.addEventListener('click', () => {
-    clearPlacement();
-    setStatus('置きたい場所をタップしてね');
-  });
-
-  function clearPlacement() {
-    if (anchor && anchor.delete) anchor.delete();
-    anchor = null;
-    placed = false;
-    monster.visible = false;
-    resetBtn.hidden = true;
-  }
-
-  function onSessionEnd() {
-    renderer.setAnimationLoop(null);
-    if (hitTestSource) hitTestSource.cancel();
-    hitTestSource = null;
-    lastHit = null;
-    clearPlacement();
-    reticle.visible = false;
-    session = null;
-    overlay.classList.remove('active');
-    renderer.domElement.style.display = 'none';
-  }
-
-  // 画面タップ → レティクルの位置に配置
-  function onSelect() {
-    if (!reticle.visible || placed) return;
-
-    // 位置：検出した床の点
-    monster.position.setFromMatrixPosition(reticle.matrix);
-
-    // 向き：カメラのほうを向かせる（水平方向のみ）
-    const xrCam = renderer.xr.getCamera(camera);
-    const camPos = new THREE.Vector3().setFromMatrixPosition(xrCam.matrixWorld);
-    monster.rotation.set(0, Math.atan2(camPos.x - monster.position.x, camPos.z - monster.position.z), 0);
-
-    monster.visible = true;
-    placed = true;
-    spawnTime = performance.now();
-    reticle.visible = false;
-    resetBtn.hidden = false;
-    setStatus('固定したよ。まわりを歩いて見てみて');
-
-    // アンカー対応ならアンカーを作成（トラッキング補正に追従してズレにくくなる）
-    if (lastHit && typeof lastHit.createAnchor === 'function') {
-      lastHit.createAnchor().then((a) => {
-        if (placed) anchor = a; else a.delete();
-      }).catch(() => { /* アンカー非対応でもヒット位置で固定済み */ });
-    }
-  }
-
-  const upVec = new THREE.Vector3();
-
-  function render(time, frame) {
-    if (frame && hitTestSource) {
-      // 床の検出
-      if (!placed) {
-        const results = frame.getHitTestResults(hitTestSource);
-        lastHit = null;
-        reticle.visible = false;
-        if (results.length) {
-          const pose = results[0].getPose(refSpace);
-          if (pose) {
-            reticle.matrix.fromArray(pose.transform.matrix);
-            // 面の向きを確認：上向きの面（床・テーブル）だけ受け付ける
-            upVec.setFromMatrixColumn(reticle.matrix, 1);
-            if (upVec.y > 0.85) {
-              reticle.visible = true;
-              lastHit = results[0];
-            }
-          }
-        }
-        setStatus(reticle.visible ? '床を見つけたよ。タップして置こう' : '床にカメラを向けて、ゆっくり動かしてね');
-      }
-
-      // アンカーの最新位置に追従
-      if (placed && anchor && frame.trackedAnchors && frame.trackedAnchors.has(anchor)) {
-        const aPose = frame.getPose(anchor.anchorSpace, refSpace);
-        if (aPose) {
-          const p = aPose.transform.position;
-          monster.position.set(p.x, p.y, p.z);
-        }
-      }
-    }
-
-    // レティクルのゆっくり回転
-    if (reticle.visible) ring.rotation.y = time * 0.0015;
-
-    // モンスターのアニメーション
-    if (placed) {
-      const { body, eyes, shadow } = monster.userData;
-      const t = (performance.now() - spawnTime) / 1000;
-
-      // 出現：ぽよんと弾むスケール
-      const s = t < 0.6 ? easeOutBack(Math.min(t / 0.6, 1)) : 1;
-      // 待機：呼吸
-      const breathe = 1 + Math.sin(t * 2.4) * 0.025;
-      body.scale.set(s * (2 - breathe), s * breathe, s * (2 - breathe));
-      shadow.scale.setScalar(Math.max(s, 0.01));
-
-      // まばたき
-      const now = performance.now();
-      if (now > nextBlink) nextBlink = now + 2000 + Math.random() * 3000;
-      const blinking = nextBlink - now < 120;
-      eyes.forEach((e) => { e.scale.y = blinking ? 0.1 : 1; });
-    }
-
-    renderer.render(scene, camera);
-  }
-
-  function easeOutBack(x) {
-    const c1 = 1.70158, c3 = c1 + 1;
-    return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
-  }
-
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
+<script id="scanSrc" type="text/plain">
+importScripts('https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js');
+// ===== QRスキャナ（Workerでもnodeでも使う）=====
+const TILES = (() => {
+  const t = [[0, 0, 1, 1]];
+  for (const y of [0, .4]) for (const x of [0, .4]) t.push([x, y, .6, .6]);
+  for (const y of [0, .275, .55]) for (const x of [0, .275, .55]) t.push([x, y, .45, .45]);
+  return t;
 })();
+function crop(d, w, h, x0, y0, cw, ch){
+  const c = new Uint8ClampedArray(cw*ch*4);
+  for (let y = 0; y < ch; y++) c.set(d.subarray(((y0+y)*w + x0)*4, ((y0+y)*w + x0 + cw)*4), y*cw*4);
+  return c;
+}
+function maskQuad(d, w, h, c, grow){
+  const cx = (c[0].x+c[1].x+c[2].x+c[3].x)/4, cy = (c[0].y+c[1].y+c[2].y+c[3].y)/4;
+  const p = c.map(q => ({ x:cx + (q.x-cx)*grow, y:cy + (q.y-cy)*grow }));
+  const x0 = Math.max(0, Math.floor(Math.min(...p.map(q => q.x)))), x1 = Math.min(w-1, Math.ceil(Math.max(...p.map(q => q.x))));
+  const y0 = Math.max(0, Math.floor(Math.min(...p.map(q => q.y)))), y1 = Math.min(h-1, Math.ceil(Math.max(...p.map(q => q.y))));
+  const sg = Math.sign((p[1].x-p[0].x)*(p[2].y-p[0].y) - (p[1].y-p[0].y)*(p[2].x-p[0].x)) || 1;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++){
+    let ok = true;
+    for (let i = 0; i < 4; i++){ const a = p[i], b = p[(i+1)%4]; if (sg*((b.x-a.x)*(y-a.y) - (b.y-a.y)*(x-a.x)) < 0){ ok = false; break; } }
+    if (ok){ const i = (y*w + x)*4; d[i] = d[i+1] = d[i+2] = 255; }
+  }
+}
+function readRect(jsQR, d, w, h, x0, y0, cw, ch){
+  x0 = Math.max(0, Math.floor(x0)); y0 = Math.max(0, Math.floor(y0));
+  cw = Math.min(w - x0, Math.floor(cw)); ch = Math.min(h - y0, Math.floor(ch));
+  if (cw < 40 || ch < 40) return null;
+  const r = jsQR(crop(d, w, h, x0, y0, cw, ch), cw, ch, { inversionAttempts:'dontInvert' });
+  if (!r) return null;
+  const L = r.location;
+  return { data:r.data, c:[L.topLeftCorner, L.topRightCorner, L.bottomRightCorner, L.bottomLeftCorner].map(p => ({ x:p.x + x0, y:p.y + y0 })) };
+}
+// rois: 追跡中のQRの4隅 / tile: 今回探す新規発見用タイル番号
+function scanFrame(jsQR, d, w, h, rois, tile){
+  const found = [], seen = new Set();
+  for (const c of rois){
+    const xs = c.map(p => p.x), ys = c.map(p => p.y);
+    const mx = Math.min(...xs), Mx = Math.max(...xs), my = Math.min(...ys), My = Math.max(...ys);
+    const s = Math.max(Mx - mx, My - my), cx = (mx+Mx)/2, cy = (my+My)/2, half = s*1.1;
+    const r = readRect(jsQR, d, w, h, cx - half, cy - half, half*2, half*2);
+    if (r && !seen.has(r.data)){ seen.add(r.data); found.push(r); }
+  }
+  // 見つけ済みのQRを白く塗りつぶしてから、新規発見用のタイルを探す
+  for (const r of found) maskQuad(d, w, h, r.c, 1.3);
+  const [tx, ty, tw, th] = TILES[tile % TILES.length];
+  for (let k = 0; k < 2; k++){
+    const r = readRect(jsQR, d, w, h, tx*w, ty*h, tw*w, th*h);
+    if (!r || seen.has(r.data)) break;
+    seen.add(r.data); found.push(r); maskQuad(d, w, h, r.c, 1.3);
+  }
+  return found;
+}
+onmessage = e => {
+  const { buf, w, h, rois, tile, id } = e.data;
+  const found = scanFrame(jsQR, new Uint8ClampedArray(buf), w, h, rois, tile);
+  postMessage({ found, id });
+};
+</script>
+<script>
+// ===== QRスライム配置テスト =====
+// 流れ: カメラ映像 → Worker(jsQR)でQRの4隅を検出 → 4隅からQRの傾き・距離を計算 → その上にスライムを立たせる
+const $ = id => document.getElementById(id);
+const vid = $('vid'), stage = $('stage');
+const DET_MAX = 960;          // 検出に使う映像の最大幅（大きいほど遠くのQRも読めるが重い）
+const LOST_MS = 600;          // この時間見失ったらスライムを引っ込める
+
+// ---------- three.js ----------
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+stage.appendChild(renderer.domElement);
+const dbgCv = document.createElement('canvas'); stage.appendChild(dbgCv);
+const dbg = dbgCv.getContext('2d');
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, 16/9, .01, 500);   // 原点に固定（実カメラと同じ位置）
+scene.add(new THREE.HemisphereLight(0xcfeaff, 0x203020, 1.0));
+const sun = new THREE.DirectionalLight(0xffffff, .9); sun.position.set(2, 6, 3); scene.add(sun);
+
+function canvasTex(w, h, fn){ const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), w, h); return new THREE.CanvasTexture(c); }
+const shadowTex = canvasTex(128, 128, (x, w, h) => { const g = x.createRadialGradient(64,64,0,64,64,64); g.addColorStop(0,'rgba(0,0,0,.6)'); g.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0,0,w,h); });
+function mkLabel(text){
+  const t = canvasTex(256, 96, (x, w, h) => {
+    x.font = 'bold 56px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.lineWidth = 10; x.strokeStyle = '#000c'; x.strokeText(text, w/2, h/2); x.fillStyle = '#ffd35a'; x.fillText(text, w/2, h/2);
+  });
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:t, transparent:true, depthTest:false }));
+  s.scale.set(.8, .3, 1); s.renderOrder = 20; return s;
+}
+
+// ---------- スライム（Connectworld_sord.html のジャイアントスライムと同じ作り）----------
+function createSlime(){
+  const root = new THREE.Group();                 // QRの面に沿った座標（+Yが床から上）
+  const body = new THREE.Group(); root.add(body); // 向き・弾み用
+  const geo = new THREE.SphereGeometry(1, 40, 28), base = geo.attributes.position.array.slice();
+  const mat = new THREE.MeshStandardMaterial({ color:0x5fe07a, roughness:.12, transparent:true, opacity:.86, emissive:0x0a3a18 });
+  body.add(new THREE.Mesh(geo, mat));
+  const core = new THREE.Mesh(new THREE.SphereGeometry(.32, 16, 12), new THREE.MeshStandardMaterial({ color:0x1d9a44, emissive:0x0a5a20 }));
+  core.position.set(0, -.1, -.1); body.add(core);
+  const eyes = [];
+  for (const s of [-1, 1]){
+    const w = new THREE.Mesh(new THREE.SphereGeometry(.15, 12, 10), new THREE.MeshBasicMaterial({ color:0xffffff }));
+    w.position.set(s*.33, .22, .86);
+    const p = new THREE.Mesh(new THREE.SphereGeometry(.07, 10, 8), new THREE.MeshBasicMaterial({ color:0x111111 }));
+    p.position.set(0, 0, .12); w.add(p); body.add(w); eyes.push(w);
+  }
+  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4).rotateX(-Math.PI/2), new THREE.MeshBasicMaterial({ map:shadowTex, transparent:true, depthWrite:false }));
+  shadow.position.y = .01; root.add(shadow);
+  const jiggle = (t, amp) => {
+    const p = geo.attributes.position.array;
+    for (let i = 0; i < p.length; i += 3){
+      const x = base[i], y = base[i+1], z = base[i+2], k = 1 + amp*Math.sin(t*7 + x*4 + y*3)*Math.cos(t*5 + z*4);
+      p[i] = x*k; p[i+1] = y*k; p[i+2] = z*k;
+    }
+    geo.attributes.position.needsUpdate = true; geo.computeVertexNormals();
+  };
+  return { root, body, eyes, shadow, jiggle };
+}
+
+// ---------- QRごとの追跡データ ----------
+// marker: QRの位置・傾き（カメラ座標）/ stand: QRの面を床として+Yを上に向けた座標
+const tracks = new Map();
+function getTrack(id){
+  if (tracks.has(id)) return tracks.get(id);
+  const marker = new THREE.Group(); marker.matrixAutoUpdate = false; scene.add(marker);
+  const stand = new THREE.Group(); stand.rotation.x = -Math.PI/2; marker.add(stand);
+  const slime = createSlime(); stand.add(slime.root);
+  const label = mkLabel('QR ' + id); stand.add(label);
+  const t = { id, marker, stand, slime, label, corners:null, seen:-1e9, pos:new THREE.Vector3(), quat:new THREE.Quaternion(),
+              tPos:new THREE.Vector3(), tQuat:new THREE.Quaternion(), fresh:true, appear:0, yaw:0, time:Math.random()*10, blinkAt:0 };
+  tracks.set(id, t); return t;
+}
+
+// ---------- 4隅 → 姿勢（ホモグラフィ分解）----------
+function solve(A, b){
+  const n = b.length;
+  for (let i = 0; i < n; i++){
+    let m = i; for (let k = i+1; k < n; k++) if (Math.abs(A[k][i]) > Math.abs(A[m][i])) m = k;
+    [A[i], A[m]] = [A[m], A[i]]; [b[i], b[m]] = [b[m], b[i]];
+    const p = A[i][i]; if (Math.abs(p) < 1e-12) return null;
+    for (let k = i+1; k < n; k++){ const f = A[k][i]/p; for (let j = i; j < n; j++) A[k][j] -= f*A[i][j]; b[k] -= f*b[i]; }
+  }
+  const x = new Array(n);
+  for (let i = n-1; i >= 0; i--){ let s = b[i]; for (let j = i+1; j < n; j++) s -= A[i][j]*x[j]; x[i] = s/A[i][i]; }
+  return x;
+}
+const MODEL = [[-.5,-.5], [.5,-.5], [.5,.5], [-.5,.5]];   // QRの1辺 = 1 として扱う
+function homography(dst){
+  const A = [], b = [];
+  for (let i = 0; i < 4; i++){
+    const [x, y] = MODEL[i], [u, v] = dst[i];
+    A.push([x, y, 1, 0, 0, 0, -u*x, -u*y]); b.push(u);
+    A.push([0, 0, 0, x, y, 1, -v*x, -v*y]); b.push(v);
+  }
+  const h = solve(A, b); return h && [...h, 1];
+}
+const vlen = v => Math.hypot(v[0], v[1], v[2]), vnorm = v => { const m = vlen(v); return v.map(x => x/m); };
+const vdot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+const vcross = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+// 戻り値: three.js のカメラ座標でのQRの行列（null=計算不能）
+function poseFromCorners(c, w, h, f, retry = true){
+  const H = homography(c.map(p => [p.x, p.y])); if (!H) return null;
+  const cx = w/2, cy = h/2, k = (a, b, cc) => [(a - cx*cc)/f, (b - cy*cc)/f, cc];
+  const k1 = k(H[0], H[3], H[6]), k2 = k(H[1], H[4], H[7]), k3 = k(H[2], H[5], H[8]);
+  let l = 2/(vlen(k1) + vlen(k2)); if (k3[2]*l < 0) l = -l;
+  let r1 = vnorm(k1.map(v => v*l)), r2 = vnorm(k2.map(v => v*l)); const t = k3.map(v => v*l);
+  // r1, r2 を対称に直交化
+  const bis = vnorm(r1.map((v, i) => v + r2[i])), n0 = vnorm(vcross(r1, r2)), perp = vnorm(vcross(n0, bis)), s = Math.SQRT1_2;
+  r1 = bis.map((v, i) => s*(v - perp[i])); r2 = bis.map((v, i) => s*(v + perp[i]));
+  const r3 = vcross(r1, r2);
+  // QRの「上」(-r3) がカメラ側を向いていなければ、4隅の並びが鏡像なので並べ替えて再計算
+  if (vdot(r3, t) < 0 && retry) return poseFromCorners([c[0], c[3], c[2], c[1]], w, h, f, false);
+  // OpenCV系(x右,y下,z前) → three.js系(x右,y上,z後ろ)
+  return new THREE.Matrix4().set(
+     r1[0],  r2[0],  r3[0],  t[0],
+    -r1[1], -r2[1], -r3[1], -t[1],
+    -r1[2], -r2[2], -r3[2], -t[2],
+     0, 0, 0, 1);
+}
+
+// ---------- 設定 ----------
+const cfg = { target:'*', size:1.4, hfov:65, dbg:true };
+$('panelBtn').onclick = () => { $('panel').hidden = !$('panel').hidden; };
+$('target').onchange = e => cfg.target = e.target.value;
+$('size').oninput = e => { cfg.size = +e.target.value; $('sizeV').textContent = cfg.size.toFixed(1); };
+$('fov').oninput = e => { cfg.hfov = +e.target.value; $('fovV').textContent = cfg.hfov; layout(); };
+$('dbg').onchange = e => cfg.dbg = e.target.checked;
+
+// ---------- カメラ ----------
+let stream = null;
+async function openCam(deviceId){
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  const video = deviceId ? { deviceId:{ exact:deviceId }, width:{ ideal:1280 }, height:{ ideal:720 } }
+                         : { facingMode:{ ideal:'environment' }, width:{ ideal:1280 }, height:{ ideal:720 } };
+  stream = await navigator.mediaDevices.getUserMedia({ video, audio:false });
+  vid.srcObject = stream; await vid.play();
+  layout(); listCams();
+}
+async function listCams(){
+  const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+  const cur = stream && stream.getVideoTracks()[0].getSettings().deviceId, sel = $('camSel');
+  sel.innerHTML = '';
+  devs.forEach((d, i) => { const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || 'カメラ ' + (i+1); o.selected = d.deviceId === cur; sel.appendChild(o); });
+}
+$('camSel').onchange = e => openCam(e.target.value).catch(err => $('stat').textContent = 'カメラを開けません: ' + err.name);
+$('startBtn').onclick = async () => {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ $('startErr').textContent = 'このブラウザはカメラに対応していません。HTTPS か localhost で開いてください。'; return; }
+  try { await openCam(); $('start').hidden = true; requestAnimationFrame(loop); }
+  catch (err){ $('startErr').textContent = 'カメラを開けませんでした（' + err.name + '）。カメラの許可を確認してください。'; }
+};
+
+// ---------- 画面サイズ（映像と3Dのズレを防ぐため、映像と同じ縦横比で表示）----------
+const det = document.createElement('canvas'), dctx = det.getContext('2d', { willReadFrequently:true });
+let focal = 1;
+function layout(){
+  const vw = vid.videoWidth, vh = vid.videoHeight; if (!vw) return;
+  const sc = Math.min(innerWidth/vw, innerHeight/vh), W = Math.round(vw*sc), H = Math.round(vh*sc);
+  stage.style.width = W + 'px'; stage.style.height = H + 'px';
+  renderer.setSize(W, H, false); dbgCv.width = W; dbgCv.height = H;
+  const ds = Math.min(1, DET_MAX/vw); det.width = Math.round(vw*ds); det.height = Math.round(vh*ds);
+  focal = (det.width/2)/Math.tan(cfg.hfov*Math.PI/360);
+  camera.aspect = det.width/det.height;
+  camera.fov = 2*Math.atan((det.height/2)/focal)*180/Math.PI;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', layout);
+vid.addEventListener('loadedmetadata', layout);
+
+// ---------- 検出Worker ----------
+const worker = new Worker(URL.createObjectURL(new Blob([$('scanSrc').textContent], { type:'text/javascript' })));
+let busy = false, tile = 0, detFps = 0, detN = 0, detT = performance.now(), workerErr = '';
+worker.onerror = e => { workerErr = 'QR検出の読み込みに失敗: ' + (e.message || 'ネットワークを確認'); busy = false; };
+function pump(){
+  if (busy || !vid.videoWidth || vid.readyState < 2) return;
+  dctx.drawImage(vid, 0, 0, det.width, det.height);
+  const img = dctx.getImageData(0, 0, det.width, det.height), now = performance.now();
+  const rois = [...tracks.values()].filter(t => now - t.seen < LOST_MS && t.corners).map(t => t.corners);
+  // 追跡中は重い「全画面」タイル(0番)を飛ばす
+  tile = (tile + 1) % 14; if (rois.length && tile === 0) tile = 1;
+  busy = true;
+  worker.postMessage({ buf:img.data.buffer, w:det.width, h:det.height, rois, tile }, [img.data.buffer]);
+}
+worker.onmessage = e => {
+  busy = false; detN++;
+  const now = performance.now();
+  for (const f of e.data.found){
+    const m = poseFromCorners(f.c, det.width, det.height, focal); if (!m) continue;
+    const t = getTrack(f.data);
+    t.corners = f.c; t.seen = now;
+    m.decompose(t.tPos, t.tQuat, new THREE.Vector3());
+    if (t.fresh){ t.pos.copy(t.tPos); t.quat.copy(t.tQuat); t.fresh = false; }
+  }
+};
+
+// ---------- 描画ループ ----------
+const easeOutBack = x => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3*Math.pow(x-1, 3) + c1*Math.pow(x-1, 2); };
+const ONE = new THREE.Vector3(1, 1, 1), ORIGIN = new THREE.Vector3();
+let last = performance.now();
+function loop(){
+  requestAnimationFrame(loop);
+  const now = performance.now(), dt = Math.min(.1, (now - last)/1000); last = now;
+  pump();
+
+  const a = 1 - Math.exp(-dt*14);   // 揺れを抑える平滑化
+  for (const t of tracks.values()){
+    const visible = now - t.seen < LOST_MS && (cfg.target === '*' || cfg.target === t.id);
+    t.appear = Math.max(0, Math.min(1, t.appear + (visible ? dt/.5 : -dt/.2)));
+    if (!visible && t.appear === 0){ t.marker.visible = false; t.fresh = true; continue; }
+    t.marker.visible = true;
+    t.pos.lerp(t.tPos, a); t.quat.slerp(t.tQuat, a);
+    t.marker.matrix.compose(t.pos, t.quat, ONE); t.marker.matrixWorldNeedsUpdate = true;
+
+    // スライムの動き（待機中のぷるぷる＋カメラの方を向く）
+    const s = t.slime, R = cfg.size/2, k = Math.max(.001, easeOutBack(t.appear));
+    t.time += dt;
+    const sy = 1 + Math.sin(t.time*3)*.06, sx = 1/Math.sqrt(sy);
+    s.jiggle(t.time, .035);
+    s.body.scale.set(R*sx*k, R*sy*k, R*sx*k);
+    s.body.position.y = R*sy*k;
+    s.shadow.scale.setScalar(R*k);
+    t.stand.updateWorldMatrix(true, false);
+    const cam = t.stand.worldToLocal(ORIGIN.clone());
+    const want = Math.atan2(cam.x, cam.z);
+    let d = want - t.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); t.yaw += d*Math.min(1, dt*6);
+    s.body.rotation.y = t.yaw;
+    if (now > t.blinkAt) t.blinkAt = now + 2000 + Math.random()*3000;
+    const blink = t.blinkAt - now < 110 ? .15 : 1; s.eyes.forEach(e => e.scale.y = blink);
+    t.label.visible = cfg.dbg; t.label.position.y = R*2*k + .35;
+  }
+  renderer.render(scene, camera);
+
+  // デバッグ: 検出したQRの枠
+  dbg.clearRect(0, 0, dbgCv.width, dbgCv.height);
+  if (cfg.dbg){
+    const sc = dbgCv.width/det.width;
+    for (const t of tracks.values()){
+      if (now - t.seen > LOST_MS || !t.corners) continue;
+      dbg.strokeStyle = '#7ae7ff'; dbg.lineWidth = 3; dbg.beginPath();
+      t.corners.forEach((p, i) => i ? dbg.lineTo(p.x*sc, p.y*sc) : dbg.moveTo(p.x*sc, p.y*sc)); dbg.closePath(); dbg.stroke();
+      dbg.fillStyle = '#ffd35a'; dbg.beginPath(); dbg.arc(t.corners[0].x*sc, t.corners[0].y*sc, 5, 0, 7); dbg.fill();
+    }
+  }
+
+  if (now - detT > 1000){ detFps = detN*1000/(now - detT); detN = 0; detT = now; }
+  const live = [...tracks.values()].filter(t => now - t.seen < LOST_MS).map(t => t.id).sort();
+  $('stat').textContent = workerErr || `検出中のQR: ${live.length ? live.join(', ') : 'なし'}\n検出 ${detFps.toFixed(1)} 回/秒  解析 ${det.width}×${det.height}`;
+}
 </script>
 </body>
 </html>
