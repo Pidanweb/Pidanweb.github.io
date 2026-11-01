@@ -7,9 +7,9 @@
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#0a1110}
   canvas{display:block;cursor:crosshair;touch-action:none}
-  #ui{position:fixed;top:10px;right:10px;z-index:5;font:14px sans-serif;color:#fff;text-align:right}
+  #ui{position:fixed;top:10px;right:10px;z-index:8;font:14px sans-serif;color:#fff;text-align:right}
   #ui button{background:#0d2a30cc;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer}
-  #camPanel{margin-top:6px;padding:10px;background:#000c;border:1px solid #7ae7ff55;border-radius:8px;width:280px;text-align:left}
+  #camPanel{max-height:calc(100vh - 90px);overflow-y:auto;overscroll-behavior:contain;margin-top:6px;padding:10px;background:#000c;border:1px solid #7ae7ff55;border-radius:8px;width:280px;text-align:left}
   #camPanel select{width:100%;margin:4px 0 8px;padding:4px;font:inherit}
   #camPanel div{margin-top:6px}
   #camStat{font-size:12px;color:#ffd35a;word-break:break-all}
@@ -45,9 +45,10 @@
     <b>🎙 マイク設定（音声認識）</b>
     <label>使うマイク<select id="micSel"><option value="">既定のマイク</option></select></label>
     <label><input type="checkbox" id="micNs"> ノイズ抑制</label> <label><input type="checkbox" id="micEc"> エコー除去</label> <label><input type="checkbox" id="micAg" checked> 自動ゲイン</label>
-    <label><input type="checkbox" id="micPass" checked> 認識にもこのマイクを指定する</label>
+    <label><input type="checkbox" id="micPass"> 認識にもこのマイクを指定する（実験的）</label>
     <label>↓を離した後も聞く <b id="micTailV">0.7</b>秒 <input type="range" id="micTail" min="0" max="2" step=".1" value=".7"></label>
     <div><button id="micApply">このマイクを使う / テスト</button> <button id="micOff">指定解除</button> <button id="micRefresh">一覧を更新</button></div>
+    <div><button id="micTest">🎙 音声認識テスト（15秒）</button></div>
     <div style="height:8px;background:#223;border-radius:4px;overflow:hidden"><div id="micLvl" style="height:100%;width:0;background:#5ee08a"></div></div>
     <div id="micStat" style="font-size:12px;color:#ffd35a">「このマイクを使う」で入力レベルを確認できます（声でバーが動けばOK）</div>
     <small style="color:#9fdcea">※ 認識に使われるマイクは、ブラウザが「指定」に対応していない場合は OS / ブラウザ既定のマイクになります（判定ログに表示）</small>
@@ -613,7 +614,7 @@ function update(dt){
   flashM.material.opacity = flash;
   if (state === 'play' && !menuOn){
     const mv = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
-    const gIn = ctl.mode === 'mouse' ? mdn.on : wii.a;   // ガード: マウス左長押し or Wii A長押し（魔法使いは斬らないので即ガード）
+    const gIn = mdn.on || wii.a;   // ガード: マウス左長押し or Wii A長押し（魔法使いは斬らないので即ガード）
     P.guard = gIn && P.par <= 0 && !P.armed && P.swing <= 0;
     P.x = Math.max(-3.2, Math.min(3.2, P.x + mv*(P.par > 0 || P.guard ? 3 : 6)*dt));
     P.counter -= dt; P.swing -= dt; P.swingCd -= dt; P.inv -= dt; P.parCd -= dt;
@@ -662,7 +663,7 @@ addEventListener('mousemove', setMouse);
 const dbgLines = [], DBG_T0 = performance.now(); let dbgOn = true, dbgHead = '', voiceSt = '停止', liveTxt = '', liveNorm = '';
 function dbg(t){ dbgLines.push(((performance.now() - DBG_T0)/1000).toFixed(1) + ' ' + t); if (dbgLines.length > 12) dbgLines.shift(); dbgDraw(); try { console.log('[wiz] ' + t); } catch (e){} }
 function headText(){
-  const w = !wii.dev ? 'Wii未接続' : 'Wii接続' + (wii.pDn ? ' [↓]' : '') + (wii.a ? ' [A]' : '') + (wii.b ? ' [B]' : '');
+  const w = !wii.dev ? 'Wii未接続' : 'Wii接続' + (performance.now() - wii.rxT < 800 && wii.rx ? '(受信中 0x' + wii.rxId.toString(16) + ')' : '(入力なし!)') + (wii.pDn ? ' [↓]' : '') + (wii.a ? ' [A]' : '') + (wii.b ? ' [B]' : '');
   const sp = SP.map(s => `${s.icon}${s.n} ${litN(s)}/${s.cps.length}: ` + s.cps.map((c, j) => lit[s.id][j] ? '【' + c[0] + '】' : '・').join(' ')).join('\n');
   return `${w} / 操作:${ctl.mode} / 詠唱キー:${hold ? '押下中' : '—'}\n音声認識: ${voiceSt}${SRc ? '' : '（非対応）'} / マイク: ${mic.track ? mic.label + (mic.pass ? '(指定)' : '(確認のみ)') : '既定'}${mic.an ? ' Lv' + Math.round(mic.lvl*20)*5 : ''}\n聞き取り: ${liveTxt || '—'}\n判定用  : ${liveNorm || '—'}\n${sp}\n弱攻撃(単語1つ): ${WK.map(w => w.icon + w.n + (wkCD[w.id] > 0 ? '(' + wkCD[w.id].toFixed(1) + 's)' : '')).join(' ')}` + (P.counter > 0 ? `\n反撃ボーナス ×${P.cMul} 残り${P.counter.toFixed(1)}s` : '');
 }
@@ -673,7 +674,7 @@ $('dbgOn').onchange = e => { dbgOn = e.target.checked; dbgDraw(); };
 // ===== 操作切替（マウス / Wiiリモコン）=====
 const ctl = { mode:'mouse' }, mdn = { on:false };
 const WVID = 0x057e, WPIDS = [0x0306, 0x0330];
-const wii = { dev:null, leds:1, a:false, b:false, pA:false, pPlus:false, pHome:false, pDn:false, pB:false, gx:0, gy:0, gz:1, gok:false, lastSw:0, lastNeg:-1e9, th:2.2, rt:0 };
+const wii = { dev:null, leds:1, a:false, b:false, pA:false, pPlus:false, pHome:false, pDn:false, pB:false, gx:0, gy:0, gz:1, gok:false, lastSw:0, lastNeg:-1e9, th:2.2, rt:0, mode:0x35, modeT:0, mpOk:false, mpTo:0, rx:0, rxT:0, rxId:0, openT:0, wdT:0, wdN:0 };
 function wiiMsg(t){ $('wiiStat').textContent = t; }
 function setCtl(m){
   ctl.mode = m; mdn.on = false; wii.a = wii.b = false;
@@ -688,10 +689,20 @@ function wiiRumble(ms){ if (!wii.dev) return; wLed(1); clearTimeout(wii.rt); wii
 async function openWii(d){
   wii.dev = d; if (!d.opened) await d.open();
   d.oninputreport = onWii;   // 再接続しても二重登録にならないよう代入式にする
-  wii.gok = false;
-  await wsend(0x12, [0x04, 0x31]);   // 連続送信 / ボタン＋加速度（魔法使いはジャイロ不要）
+  wii.gok = false; wii.rx = 0; wii.rxT = 0; wii.openT = performance.now(); wii.wdN = 0;
+  await wiiEnableMP();
   await wLed();
-  setCtl('wii'); wiiMsg('🎮 Wii: 接続中（十字キー↓=詠唱 / A=ガード / B+振り上げ=パリィ）'); dbg('Wii接続OK');
+  setCtl('wii'); wiiMsg('🎮 Wii: 接続中（十字キー↓=詠唱 / A=ガード / B+振り上げ=パリィ）'); dbg('Wii接続OK（入力を待っています）');
+}
+// Swordと同じ手順: レポートモード0x35 → MotionPlus有効化 → ステータス要求(0x20応答でモード再設定)。3秒データが来なければ0x31(加速度のみ)へ
+async function wiiEnableMP(){
+  clearTimeout(wii.mpTo); wii.mpOk = false; wii.mode = 0x35;
+  await wsend(0x12, [0x04, 0x35]);
+  const b = new Array(21).fill(0); b[0] = 0x04; b[1] = 0xA6; b[2] = 0x00; b[3] = 0xFE; b[4] = 1; b[5] = 0x04;
+  await wsend(0x16, b);
+  await new Promise(r => setTimeout(r, 150));
+  await wsend(0x15, [0x00]);
+  wii.mpTo = setTimeout(() => { if (wii.mpOk || !wii.dev) return; wii.mode = 0x31; wsend(0x12, [0x04, 0x31]); dbg('MotionPlus未検出 → 0x31(加速度のみ)で動作'); }, 3000);
 }
 async function connectWii(){
   if (!('hid' in navigator)){ wiiMsg('🎮 WebHID非対応です（Chrome / Edge を使用）'); return false; }
@@ -713,8 +724,10 @@ if ('hid' in navigator){
 }
 function onWii(e){
   const d = e.data, id = e.reportId, now = performance.now();
-  if (id === 0x20){ wsend(0x12, [0x04, 0x31]); return; }   // ステータス応答でモードが戻るので再設定
-  if (id !== 0x31 || d.byteLength < 5) return;
+  wii.rx++; wii.rxT = now; if (id !== wii.rxId){ wii.rxId = id; dbg('Wii受信レポート 0x' + id.toString(16)); }
+  if (id === 0x20){ wsend(0x12, [0x04, wii.mode]); return; }   // ステータス応答(MotionPlus有効化後にも来る)でモードが戻るので再設定
+  if (id < 0x30 || id > 0x3f || d.byteLength < 2) return;     // ボタンは 0x30〜0x3f すべての先頭2バイトにある
+  if (id !== wii.mode && now - wii.modeT > 1000){ wii.modeT = now; wsend(0x12, [0x04, wii.mode]); }
   const b0 = d.getUint8(0), b1 = d.getUint8(1);
   const A = !!(b1 & 0x08), Bb = !!(b1 & 0x04), plus = !!(b0 & 0x10), home = !!(b1 & 0x80), dn = !!(b0 & 0x04);
   const pressStart = (A && !wii.pA) || (plus && !wii.pPlus), pressHome = home && !wii.pHome;
@@ -724,6 +737,11 @@ function onWii(e){
   if (pressHome) toggleMenu();
   if (pressStart && state !== 'play' && !menuOn && !(state !== 'title' && now - endAt < 600)) startGame();
   if (dn !== wii.pDn){ wii.pDn = dn; dbg('Wii 十字キー↓ ' + (dn ? '押' : '離')); if (dn) castDown(); else castUp(); }   // 十字キー↓長押し = 詠唱
+  if ((id !== 0x31 && id !== 0x35) || d.byteLength < 5) return;
+  if (id === 0x35 && d.byteLength >= 11 && !wii.mpOk){   // MotionPlusのデータが来たら 0x31 へのフォールバックを止める
+    const ex = []; for (let i = 0; i < 6; i++) ex.push(d.getUint8(5 + i));
+    if (!ex.every(v => v === 0xff) && !ex.every(v => v === 0) && (ex[5] & 3) === 2){ wii.mpOk = true; clearTimeout(wii.mpTo); dbg('MotionPlus検出'); }
+  }
   // 加速度（0g=128, 1g≒26）
   const x = (d.getUint8(2) - 128)/26, y = (d.getUint8(3) - 128)/26, z = (d.getUint8(4) - 128)/26, m = Math.hypot(x, y, z);
   if (Math.abs(m - 1) < .12){   // ほぼ静止している時だけ重力方向を更新
@@ -823,7 +841,7 @@ function drawChants(now){
 }
 
 // ---- マイク設定（カメラ・マイク設定パネル内）----
-const mic = { stream:null, track:null, label:'', pass:true, tail:.7, an:null, buf:null, actx:null, lvl:0 };
+const mic = { stream:null, track:null, label:'', pass:false, tail:.7, an:null, buf:null, actx:null, lvl:0 };
 const micSel = $('micSel'), micStat = $('micStat');
 async function listMics(){
   try {
@@ -861,6 +879,14 @@ function micMeter(){
   mic.an.getByteTimeDomainData(mic.buf); let s = 0; for (const v of mic.buf){ const d = (v - 128)/128; s += d*d; }
   mic.lvl = Math.max(Math.min(1, Math.sqrt(s/mic.buf.length)*5), mic.lvl*.9); $('micLvl').style.width = (mic.lvl*100).toFixed(0) + '%';
 }
+let testing = false, testTm = 0;
+function stopTest(){ if (!testing) return; testing = false; clearTimeout(testTm); hold = false; try { rec && rec.stop(); } catch (e){} $('micTest').textContent = '🎙 音声認識テスト（15秒）'; dbg('音声認識テスト終了'); }
+$('micTest').onclick = () => {   // ゲーム外でも「聞き取り」欄に認識結果が出る。単語の点灯はプレイ中のみ
+  if (testing){ stopTest(); return; }
+  if (!SRc){ dbg('音声認識 非対応'); return; } if (hold) return;
+  testing = true; hold = true; clearTimeout(tailTm); $('micTest').textContent = '■ テスト中（押すと停止）'; dbg('🎙 音声認識テスト開始 → 何か話してください'); startRec();
+  testTm = setTimeout(stopTest, 15000);
+};
 $('micApply').onclick = openMic; $('micRefresh').onclick = listMics;
 $('micOff').onclick = () => { closeMic(); micStat.textContent = '指定解除（既定のマイクを使用）'; dbg('マイク指定を解除'); };
 $('micPass').onchange = e => { mic.pass = e.target.checked; if (mic.track) micStat.textContent = '使用中: ' + mic.label + (mic.pass ? '（認識にも指定）' : '（レベル確認のみ）'); };
@@ -974,6 +1000,7 @@ function clearFx(){ for (const p of projs) scene.remove(p.m); projs.length = 0; 
 function wizUpdate(dt){
   const on = state === 'play' && !menuOn, now = performance.now();
   if (state !== 'play') clearFx();
+  if (wii.dev && now - Math.max(wii.rxT, wii.openT) > 2500 && now - wii.wdT > 2500 && wii.wdN < 5){ wii.wdT = now; wii.wdN++; dbg(`Wii: 入力が来ません → 再設定 ${wii.wdN}/5`); wiiEnableMP(); }
   micMeter(); if (on) for (const w of WK) wkCD[w.id] = Math.max(0, wkCD[w.id] - dt);
   let best = null, bn = 0;
   for (const sp of SP){
@@ -1016,7 +1043,6 @@ addEventListener('mousedown', e => {
     if (state !== 'title' && performance.now() - endAt < 600) return;
     startGame(); return;
   }
-  if (ctl.mode !== 'mouse') return;   // Wiiモード中はクリックで戦闘操作しない
   if (e.button === 0) mdn.on = true;   // 左長押し = ガード
   else if (e.button === 2) parry();
 });
