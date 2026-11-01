@@ -53,11 +53,14 @@
     <label>斬りの最小速度 <b id="skPkV">600</b>°/s<input type="range" id="skPk" min="300" max="1200" step="50" value="600"><small>これ未満は構え直しとして無視</small></label>
     <label>ダメージ倍率 ×<b id="skMulV">5</b><input type="range" id="skMul" min="2" max="10" step="0.5" value="5"><small>5が標準（全スキルに掛かる）</small></label>
     <label>四角切りの継続受付 <b id="skSqV">1.1</b>秒<input type="range" id="skSq" min="0.6" max="2" step="0.1" value="1.1"><small>縦横縦横の各斬りの間隔</small></label>
-    <label>縦重撃(ソニックリープ) ∫縦 <b id="skHVV">800</b>°<input type="range" id="skHV" min="400" max="1500" step="50" value="800"></label>
-    <label>横重撃(ロータス) ∫横 <b id="skHHV">260</b>°<input type="range" id="skHH" min="150" max="500" step="10" value="260"></label>
-    <label>一回転(メテオブレイク) ∫横 <b id="skSpV">360</b>°<input type="range" id="skSp" min="200" max="700" step="10" value="360"></label>
-    <label>突き(ヴォーパル) 加速度 <b id="skTAV">4.5</b>g<input type="range" id="skTA" min="3" max="8" step="0.1" value="4.5"><small>回転が小さく加速度が大きい動き</small></label>
-    <label>突きの回転上限 <b id="skTRV">100</b>°<input type="range" id="skTR" min="30" max="250" step="10" value="100"></label>
+    <label>縦重撃(ソニックリープ) ∫縦 <b id="skHVV">650</b>°<input type="range" id="skHV" min="200" max="1500" step="10" value="650"></label>
+    <label>横重撃(ロータス) ∫横 <b id="skHHV">260</b>°<input type="range" id="skHH" min="100" max="500" step="10" value="260"></label>
+    <label>一回転(メテオブレイク) ∫横 <b id="skSpV">360</b>°<input type="range" id="skSp" min="150" max="700" step="10" value="360"></label>
+    <label>突き(ヴォーパル) 加速度 <b id="skTAV">4.0</b>g<input type="range" id="skTA" min="2.5" max="8" step="0.1" value="4.0"><small>回転が小さく加速度が大きい動き</small></label>
+    <label>突きの回転上限 <b id="skTRV">150</b>°<input type="range" id="skTR" min="30" max="400" step="10" value="150"></label>
+    <label>突きの最大速度 <b id="skTPV">800</b>°/s<input type="range" id="skTP" min="300" max="1500" step="50" value="800"></label>
+    <small style="display:block;margin-top:6px;color:#ffd35a">▼ 反応しない時: その動きを1回だけ行い、直後に押す（キー1〜4）。直近の斬りを基準にしきい値を自動設定</small>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px"><button id="skL1">①縦重撃を登録</button><button id="skL2">②突きを登録</button><button id="skL3">③横重撃を登録</button><button id="skL4">④一回転を登録</button></div>
     <label><input type="checkbox" id="skDbg" checked> 判定ログを表示</label>
     <small style="display:block;margin-top:6px">バーチカル:縦→横 / ヴォーパル:突き / ソニックリープ:縦重 / ロータス:横重 / スクエア:縦横縦横 / メテオ:一回転 / スターバースト:被ダメ0で16ヒット→READY→振る</small>
     <button id="skCal" style="margin-top:6px;width:100%">ジャイロ再キャリブ（−ボタンでも可）</button>
@@ -811,7 +814,7 @@ function onWii(e){
 // ジャイロ積分で「上向きベクトル」を追い、角速度を 水平軸まわり(=縦斬り成分) と 鉛直軸まわり(=横斬り成分) に分解する。
 // 握りが回っても縦/横を判定できる（センサー軸 yaw/roll/pitch は縦横に一対一対応しないため）。
 const sk = { on:true, win:1.5, sqWin:1.1, rB:.18, rA:.30, minPk:600, mult:5, dbg:true, st:0, last:null, armedAt:0, lastHead:'',
-             heavyV:800, heavyH:260, spin:360, thrustA:4.5, thrustRot:100, thrustPk:450 };
+             heavyV:650, heavyH:260, spin:360, thrustA:4.0, thrustRot:150, thrustPk:800, lastR:null };
 const GY = { SLOW:440/8192, FAST:2000/440, PRE:120, HOLD:150, MAXSW:1500, CAL_MS:1000, CAL_STD:80, UP_GAIN:.03, UP_TOL:.15 };
 // ==== MP-BEGIN ====
 function calStart(){
@@ -894,10 +897,12 @@ function gyFinish(o, tEnd){
   if (o.held){ dbg(`斬り除外(A/B押下中) pk${f(pk)}`); return; }
   const r = { t0:o.t0, t1:tEnd, pk, ratio, iv:o.iv, ih:o.ih, dur, pa:o.pa, rot, kind:'' };
   if (Math.abs(o.iv) >= sk.spin && ratio >= .5) r.kind = '回転';                                                                  // 水平に一回転
-  else if (pk < sk.minPk) r.kind = (o.pa >= sk.thrustA && pk < sk.thrustPk && rot < sk.thrustRot) ? '突' : '小';              // 回転が小さく加速度が大きい=突き
+  else if (o.pa >= sk.thrustA && pk < sk.thrustPk && rot < sk.thrustRot) r.kind = '突';                                        // 回転が小さく加速度が大きい=突き（minPk未満に限らない）
+  else if (pk < sk.minPk) r.kind = '小';
   else if (ratio >= sk.rB) r.kind = Math.abs(o.iv) >= sk.heavyH ? '横重' : '横';
   else r.kind = o.ih >= sk.heavyV ? '縦重' : '縦';
-  dbg(`斬り[${r.kind}] 横度${ratio.toFixed(2)} ∫縦${f(o.ih)} ∫横${f(Math.abs(o.iv))} pk${f(pk)}°/s ${o.pa.toFixed(1)}g ${dur.toFixed(2)}s`);
+  sk.lastR = r;   // 「基準を登録」用に直近の斬りを保持
+  dbg(`斬り[${r.kind}] 横度${ratio.toFixed(2)} ∫縦${f(o.ih)} ∫横${f(Math.abs(o.iv))} 計${f(rot)}° pk${f(pk)}°/s ${o.pa.toFixed(1)}g ${dur.toFixed(2)}s`);
   skStroke(r);
 }
 // 単発系(突き/回転/重撃)は即発動。縦横は連携: st1=縦待ち→横で「バーチカル」 / st2=バーチカル後 / st3=縦横+縦→横で「ホリゾンタルスクエア」
@@ -1030,11 +1035,25 @@ function startStarburst(){
   seq.push({ type:'idle', d:.25, on:() => { sb.active = false; } });
   startAnim(seq);
 }
-// メニュー設定
-const skBind = (id, key, vid, fmt) => { $(id).oninput = e => { sk[key] = +e.target.value; $(vid).textContent = fmt ? fmt(sk[key]) : sk[key]; }; };
-skBind('skWin', 'win', 'skWinV'); skBind('skRB', 'rB', 'skRBV', v => v.toFixed(2)); skBind('skRA', 'rA', 'skRAV', v => v.toFixed(2));
-skBind('skPk', 'minPk', 'skPkV'); skBind('skMul', 'mult', 'skMulV'); skBind('skSq', 'sqWin', 'skSqV'); skBind('skHV', 'heavyV', 'skHVV'); skBind('skHH', 'heavyH', 'skHHV');
-skBind('skSp', 'spin', 'skSpV'); skBind('skTA', 'thrustA', 'skTAV', v => v.toFixed(1)); skBind('skTR', 'thrustRot', 'skTRV');
+// メニュー設定（sk[key] ⇔ スライダー ⇔ 表示ラベル）
+const f2 = v => v.toFixed(2), f1 = v => v.toFixed(1);
+const SK_UI = { win:['skWin','skWinV'], rB:['skRB','skRBV',f2], rA:['skRA','skRAV',f2], minPk:['skPk','skPkV'], mult:['skMul','skMulV'], sqWin:['skSq','skSqV'],
+  heavyV:['skHV','skHVV'], heavyH:['skHH','skHHV'], spin:['skSp','skSpV'], thrustA:['skTA','skTAV',f1], thrustRot:['skTR','skTRV'], thrustPk:['skTP','skTPV'] };
+function skSet(key, v){ const [i, l, fm] = SK_UI[key], el = $(i); el.value = v; sk[key] = +el.value; $(l).textContent = fm ? fm(sk[key]) : sk[key]; }
+for (const key in SK_UI) $(SK_UI[key][0]).oninput = e => skSet(key, +e.target.value);
+// 直近の斬りを基準にしきい値を登録（実際の動きに合わせる）
+function skLearn(n){
+  const r = sk.lastR, f = Math.round;
+  if (!r){ dbg('登録できる斬りがありません（先に1回振ってください）'); return; }
+  if (n === 1){ skSet('heavyV', Math.round(r.ih*.85/10)*10); dbg(`①縦重撃を登録: ∫縦${f(r.ih)}° → しきい値${sk.heavyV}°（これ以上の縦斬りで発動）`); }
+  else if (n === 2){
+    skSet('thrustA', Math.max(2.5, Math.floor(r.pa*.85*10)/10)); skSet('thrustRot', Math.max(60, Math.ceil(r.rot*1.4/10)*10)); skSet('thrustPk', Math.max(400, Math.ceil(r.pk*1.4/50)*50));
+    dbg(`②突きを登録: ${r.pa.toFixed(1)}g/回転${f(r.rot)}°/pk${f(r.pk)} → 加速度≥${sk.thrustA}g 回転<${sk.thrustRot}° 速度<${sk.thrustPk}`); }
+  else if (n === 3){ skSet('heavyH', Math.max(100, Math.round(Math.abs(r.iv)*.85/10)*10)); dbg(`③横重撃を登録: ∫横${f(Math.abs(r.iv))}° → しきい値${sk.heavyH}°`); }
+  else if (n === 4){ skSet('spin', Math.max(150, Math.round(Math.abs(r.iv)*.85/10)*10)); dbg(`④一回転を登録: ∫横${f(Math.abs(r.iv))}° → しきい値${sk.spin}°`); }
+}
+for (let n = 1; n <= 4; n++) $('skL' + n).onclick = () => skLearn(n);
+addEventListener('keydown', e => { if (e.key >= '1' && e.key <= '4') skLearn(+e.key); });
 $('skOn').onchange = e => { sk.on = e.target.checked; dbgDraw(); };
 $('skDbg').onchange = e => { sk.dbg = e.target.checked; dbgDraw(); };
 $('skCal').onclick = wiiRecal;
