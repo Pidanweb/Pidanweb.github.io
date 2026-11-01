@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0818">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>VRM アバターカラオケライブ</title>
+<style>
+  :root{
+    --bg:#0d0818; --glass:rgba(22,14,44,.8); --line:rgba(255,255,255,.14);
+    --ink:#f3eefc; --dim:#b9b0cf; --amber:#ffb547; --rec:#ff3b5c; --ok:#4fe39a;
+    --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px);
+    --sl:env(safe-area-inset-left,0px); --sr:env(safe-area-inset-right,0px);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);overflow:hidden;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;
+    font-family:"Hiragino Maru Gothic ProN","Hiragino Sans","Noto Sans JP",system-ui,sans-serif}
+  /* 描画キャンバス = 録画される画面。縦持ち9:16 / 横持ち16:9 で画面内に収める */
+  #c{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);display:block;touch-action:none}
+  button,.btn,select,input{font:inherit}
+  button,.btn{touch-action:manipulation;background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--line);border-radius:12px;
+    min-height:42px;padding:0 14px;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;text-decoration:none}
+  button:active,.btn:active{background:rgba(255,255,255,.2)}
+  button:disabled{opacity:.35;cursor:default}
+  .primary{background:var(--amber);color:#2a1600;border-color:transparent;font-weight:700}
+  .primary:active{background:#ffc979}
+  input[type=file]{display:none}
+  :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+  /* 上のバー */
+  #top{position:fixed;z-index:5;top:0;left:0;right:0;display:flex;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none;
+    padding:calc(var(--st) + 8px) calc(var(--sr) + 8px) 8px calc(var(--sl) + 8px);background:linear-gradient(var(--glass),rgba(22,14,44,0))}
+  #top::-webkit-scrollbar{display:none}
+  #top .grow{flex:1}
+  #status{position:fixed;z-index:5;top:calc(var(--st) + 60px);left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);
+    background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:12.5px;line-height:1.5;color:var(--dim);text-align:center;pointer-events:none}
+  #status.rec{color:#fff;background:rgba(255,59,92,.88);border-color:transparent;font-variant-numeric:tabular-nums;font-weight:700}
+
+  /* 左下: カメラ映像のプレビュー */
+  #preview{position:fixed;z-index:4;left:calc(var(--sl) + 10px);bottom:calc(var(--sb) + 108px);width:min(28vw,170px)}
+  #vwrap{position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#000}
+  #video{width:100%;display:block}
+  #overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  #vwrap.selfie #video,#vwrap.selfie #overlay{transform:scaleX(-1)}
+  /* 非表示でも映像は止めない(display:noneだとiOSで止まることがある) */
+  #preview.hide #vwrap{position:absolute;width:2px;height:2px;opacity:0;pointer-events:none}
+  #lvl{height:4px;background:rgba(255,255,255,.14);border-radius:2px;overflow:hidden;margin-top:5px}
+  #micLvl{height:100%;width:0;background:var(--ok)}
+  #pvToggle{margin-top:6px;min-height:32px;font-size:12px;padding:0 10px}
+
+  /* 右下: 伴奏プレーヤー */
+  #dock{position:fixed;z-index:4;right:calc(var(--sr) + 10px);bottom:calc(var(--sb) + 108px);display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+  #dock audio{width:min(58vw,300px);height:40px}
+  #ytbox{border-radius:10px;overflow:hidden}
+  #ytbox iframe{display:block;width:min(46vw,240px);height:auto;aspect-ratio:16/9}
+
+  /* 下: 録画ボタンの列 */
+  #recRow{position:fixed;z-index:5;left:0;right:0;bottom:0;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;
+    padding:12px calc(var(--sr) + 12px) calc(var(--sb) + 14px) calc(var(--sl) + 12px);background:linear-gradient(rgba(22,14,44,0),var(--glass))}
+  #recRow .l{justify-self:start}
+  #recRow .r{justify-self:end;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  #rec{position:relative;width:76px;height:76px;border-radius:50%;padding:0;border:4px solid #fff;background:transparent}
+  #rec::before{content:"";width:56px;height:56px;border-radius:50%;background:var(--rec);transition:all .2s ease}
+  #rec.on::before{width:30px;height:30px;border-radius:7px}
+  #rec:disabled{opacity:.4}
+  #share,#dl{display:none}
+  #share{background:#fff;color:#1a1130;border-color:transparent;font-weight:700}
+  .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* 設定シート(スマホ: 下から / PC: 右から) */
+  #scrim{position:fixed;inset:0;z-index:8;background:rgba(0,0,0,.45);display:none}
+  #sheet{position:fixed;z-index:9;left:0;right:0;bottom:0;max-height:80%;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+    background:#1a1130;border-top:1px solid var(--line);border-radius:18px 18px 0 0;
+    padding:14px calc(var(--sr) + 16px) calc(var(--sb) + 24px) calc(var(--sl) + 16px);transform:translateY(105%);transition:transform .25s ease}
+  @media (min-width:760px){
+    #sheet{left:auto;top:0;width:400px;max-height:none;border-radius:0;border-top:0;border-left:1px solid var(--line);transform:translateX(105%);padding-top:calc(var(--st) + 14px)}
+  }
+  body.sheet #sheet{transform:none}
+  body.sheet #scrim{display:block}
+  @media (prefers-reduced-motion:reduce){#sheet,#rec::before{transition:none}}
+  #sheet .head{display:flex;justify-content:space-between;align-items:center;position:sticky;top:-14px;background:#1a1130;padding:4px 0 8px;margin-top:-4px}
+  #sheet .head strong{font-size:17px}
+  #sheet h2{font-size:13px;font-weight:600;color:var(--amber);margin:20px 0 6px}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0;font-size:14px}
+  .row label{display:flex;align-items:center;gap:10px;min-height:32px}
+  .row label.fill{flex:1}
+  /* 16px未満だとiOSが入力時に拡大してしまう */
+  .row select,.row input[type=text]{flex:1;min-width:0;min-height:42px;background:rgba(255,255,255,.06);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:0 10px;font-size:16px}
+  .row input[type=range]{flex:1;min-width:120px;accent-color:var(--amber)}
+  .row input[type=checkbox]{width:22px;height:22px;margin:0;accent-color:var(--amber);flex:none}
+  .row input[type=color]{width:48px;height:36px;border:0;background:none;padding:0}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .seg button{border:0;border-radius:0}
+  .seg button.act{background:var(--amber);color:#2a1600;font-weight:700}
+  .note{font-size:12.5px;color:var(--dim);line-height:1.7;margin:6px 0}
+  #micInfo{color:var(--dim);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #drop{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.7);z-index:20;font-size:24px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="drop">VRMファイルをドロップ</div>
+
+<div id="top">
+  <label class="btn">アバター<input type="file" id="vrmFile"></label>
+  <button id="camBtn" class="primary">カメラ開始</button>
+  <label class="btn">伴奏<input type="file" id="bgmFile" accept="audio/*,video/mp4"></label>
+  <span class="grow"></span>
+  <button id="setBtn">⚙ 設定</button>
+</div>
+<div id="status">アバター(VRM)を選んでください</div>
+
+<div id="preview">
+  <div id="vwrap" class="selfie"><video id="video" playsinline muted></video><canvas id="overlay"></canvas></div>
+  <div id="lvl" title="マイク入力レベル"><div id="micLvl"></div></div>
+  <button id="pvToggle">映像を隠す</button>
+</div>
+
+<div id="dock">
+  <div id="ytbox" style="display:none"><div id="ytplayer"></div></div>
+  <audio id="bgm" controls style="display:none"></audio>
+  <audio id="bgmPlain" controls style="display:none"></audio>
+</div>
+
+<div id="recRow">
+  <div class="l"><button id="flipBtn" title="前後のカメラを切り替え">🔄 切替</button></div>
+  <button id="rec" disabled><span class="vh" id="recLabel">録画開始</span></button>
+  <div class="r"><button id="share">共有・保存</button><a id="dl" class="btn" href="#">保存</a></div>
+</div>
+
+<div id="scrim"></div>
+<div id="sheet" role="dialog" aria-label="設定">
+  <div class="head"><strong>設定</strong><button id="setClose">閉じる</button></div>
+
+  <h2>カメラとマイク</h2>
+  <div class="row"><select id="camSel" title="カメラ選択"><option value="">既定のカメラ</option></select></div>
+  <div class="row"><select id="micSel" title="マイク選択"><option value="">既定のマイク</option></select></div>
+  <div class="row">🎤 <span id="micInfo">未接続</span><button id="micBtn">マイク接続</button></div>
+  <div class="row"><label><input type="checkbox" id="monitor"> マイクを自分で聞く(イヤホン必須)</label></div>
+  <div class="row">マイク音量 <input type="range" id="micVol" min="0" max="2" step="0.01" value="1"></div>
+
+  <h2>伴奏</h2>
+  <div class="row"><input type="text" id="urlIn" placeholder="伴奏URL(直リンク or YouTube)" inputmode="url" autocapitalize="off" autocorrect="off"><button id="urlBtn">読込</button></div>
+  <div class="row"><button id="tabAudio" style="display:none" title="YouTubeの音をマイクと一緒に録画へ入れます(PCのChrome/Edge)">🔊 YouTubeの音を録画に入れる</button></div>
+  <div class="row"><label><input type="checkbox" id="bgmLink" checked> 録画開始で伴奏を頭から再生し、曲が終わったら録画も止める</label></div>
+  <div class="row">伴奏音量 <input type="range" id="bgmVol" min="0" max="1" step="0.01" value="0.7"></div>
+
+  <h2>トラッキング</h2>
+  <div class="row"><span class="seg" title="トラッキング範囲"><button id="modeUpper">上半身</button><button id="modeFull" class="act">全身</button></span></div>
+  <div class="row"><label class="fill">画質と負荷 <select id="perfSel" title="重いときは軽量に"><option value="high">高精度(1080p)</option><option value="std" selected>標準(720p)</option><option value="low">軽量(540p)</option></select></label></div>
+  <div class="row"><label><input type="checkbox" id="handTrack" checked> ハンドトラッキング(重い)</label></div>
+  <div class="row"><label><input type="checkbox" id="mirror"> 左右反転</label></div>
+  <div class="row"><label><input type="checkbox" id="showBones" checked> カメラ映像にボーン</label></div>
+  <div class="note" id="legend">ボーンの色: 緑=信頼高 / 黄=中 / 赤=低 / 水色=手</div>
+  <div class="row"><label><input type="checkbox" id="showAvBones"> アバターのボーン(録画には映りません)</label></div>
+
+  <h2>カメラワーク</h2>
+  <div class="row"><label><input type="checkbox" id="zoomOn" checked> 近づくとアバターがアップ</label></div>
+  <div class="row">寄り感度 <input type="range" id="zoomGain" min="0.5" max="3" step="0.1" value="1.5"></div>
+  <div class="row"><button id="zoomCal">基準位置を今に</button> <span id="zoomInfo" class="note">距離: -</span></div>
+
+  <h2>背景</h2>
+  <div class="row"><label>背景色 <input type="color" id="bgColor" value="#1b1030"></label><label class="btn">背景画像<input type="file" id="bgImg" accept="image/*"></label></div>
+
+  <h2>スマホで使うときのコツ</h2>
+  <p class="note">カメラとマイクは https:// で開いたページでしか使えません。スピーカーで伴奏を流すとiPhoneでは音が小さくなることがあるので、イヤホン推奨です。録画中に別のアプリへ切り替えると録画は自動で止まります。重いときは「軽量」にしてハンドトラッキングを外してください。</p>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/",
+  "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.1.0/lib/three-vrm.module.min.js"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+import { PoseLandmarker, FaceLandmarker, HandLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+
+const $ = id => document.getElementById(id);
+const statusEl = $('status');
+const say = t => statusEl.textContent = t;
+const isMobile = matchMedia('(pointer:coarse)').matches || /iPhone|iPad|Android/i.test(navigator.userAgent);
+let recorder = null, wakeLock = null;
+
+/* ---------- three.js ---------- */
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(1);   // 解像度は下の outW/outH で直接決める
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color($('bgColor').value);
+const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
+// フレーミング(全身 / 上半身)
+const FRAME = { full: { pos: [0, 0.95, 4.4], look: [0, 0.85, 0] }, upper: { pos: [0, 1.3, 2.2], look: [0, 1.25, 0] } };
+let mode = 'full';
+const camPos = new THREE.Vector3(...FRAME.full.pos), camLook = new THREE.Vector3(...FRAME.full.look);
+const tgtPos = camPos.clone(), tgtLook = camLook.clone();
+camera.position.copy(camPos); camera.lookAt(camLook);
+scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+const dl = new THREE.DirectionalLight(0xffffff, 2.2); dl.position.set(1, 2, 3); scene.add(dl);
+const stage = new THREE.Mesh(new THREE.CircleGeometry(1.1, 48),
+  new THREE.MeshStandardMaterial({ color: 0x3a2a6a, emissive: 0x2a1a5a, roughness: .5 }));
+stage.rotation.x = -Math.PI / 2; stage.position.y = -0.005; scene.add(stage);
+
+/* ---------- 負荷プリセット ---------- */
+// long: 録画/描画の長辺px / skip: Nフレームに1回だけ検出 / alt: ポーズと手を交互に検出 / frameMs: 描画FPS上限(0=無制限)
+const PERF = { high: { long: 1920, skip: 1, alt: false, frameMs: 0 }, std: { long: 1280, skip: 1, alt: true, frameMs: 0 }, low: { long: 960, skip: 2, alt: true, frameMs: 33 } };
+let P = PERF.std, lastRender = 0, detN = 0;
+// 描画サイズ = 録画される動画のサイズ。縦持ちなら9:16、横持ちなら16:9(X等の推奨比率)。録画中は変えない
+let outW = 720, outH = 1280;
+function resize() {
+  const recNow = recorder && recorder.state === 'recording';
+  if (!recNow) {
+    const L = P.long, S = Math.round(L * 9 / 16 / 2) * 2;
+    [outW, outH] = innerWidth >= innerHeight ? [L, S] : [S, L];
+    renderer.setSize(outW, outH, false);
+    camera.aspect = outW / outH;
+    // 横長でも縦長でも全身が収まるようにFOV調整
+    camera.fov = camera.aspect < 0.7 ? 2 * Math.atan(Math.tan(15 * Math.PI / 180) * 0.7 / camera.aspect) * 180 / Math.PI : 30;
+    camera.updateProjectionMatrix();
+  }
+  const k = Math.min(innerWidth / outW, innerHeight / outH);   // 画面内に収める
+  canvas.style.width = Math.floor(outW * k) + 'px'; canvas.style.height = Math.floor(outH * k) + 'px';
+}
+addEventListener('resize', resize);
+addEventListener('orientationchange', () => setTimeout(resize, 300));
+function applyPerf(k) { P = PERF[k] || PERF.std; resize(); }
+$('perfSel').onchange = e => applyPerf(e.target.value);
+// スマホは軽め・手指なしで開始(設定から変更可)
+if (isMobile) { $('perfSel').value = 'low'; $('handTrack').checked = false; }
+applyPerf($('perfSel').value);
+
+$('bgColor').oninput = e => scene.background = new THREE.Color(e.target.value);
+$('bgImg').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  new THREE.TextureLoader().load(URL.createObjectURL(f), t => { t.colorSpace = THREE.SRGBColorSpace; scene.background = t; });
+};
+
+/* ---------- VRM読み込み ---------- */
+let vrm = null;
+const loader = new GLTFLoader();
+loader.register(p => new VRMLoaderPlugin(p));
+function loadVRM(url, quiet) {
+  loader.load(url, gltf => {
+    if (vrm) { scene.remove(vrm.scene); VRMUtils.deepDispose(vrm.scene); }
+    vrm = gltf.userData.vrm;
+    VRMUtils.removeUnnecessaryVertices(gltf.scene); VRMUtils.combineSkeletons?.(gltf.scene);
+    VRMUtils.rotateVRM0(vrm);
+    scene.add(vrm.scene);
+    buildAvatarBones();
+    say('VRM読み込み完了。カメラを開始してください');
+  }, undefined, err => { if (!quiet) say('VRM読み込み失敗'); console.warn(err); });
+}
+$('vrmFile').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  if (!/\.vrm$/i.test(f.name)) say('VRMファイル(.vrm)を選んでください。読み込みを試します…');
+  else say('VRM読み込み中…');
+  loadVRM(URL.createObjectURL(f));
+};
+loadVRM('avatar.vrm', true); // 同じフォルダに avatar.vrm があれば自動読み込み
+addEventListener('dragover', e => { e.preventDefault(); $('drop').style.display = 'flex'; });
+addEventListener('dragleave', () => $('drop').style.display = 'none');
+addEventListener('drop', e => {
+  e.preventDefault(); $('drop').style.display = 'none';
+  const f = e.dataTransfer.files[0]; if (f && /\.vrm$/i.test(f.name)) loadVRM(URL.createObjectURL(f));
+});
+
+/* ---------- モード切替 / ボーン表示 ---------- */
+let showCamBones = true, showAvBones = false, avBones = null;
+const _p = new THREE.Vector3();
+const modeHint = () => mode === 'full'
+  ? 'トラッキング中。全身がカメラに映る位置に立ってください'
+  : 'トラッキング中(上半身モード)。腰から上が映っていればOKです';
+function setMode(m) {
+  mode = m;
+  $('modeFull').classList.toggle('act', m === 'full'); $('modeUpper').classList.toggle('act', m === 'upper');
+  if (tracking && !(recorder && recorder.state === 'recording')) say(modeHint());
+}
+$('modeFull').onclick = () => setMode('full');
+$('modeUpper').onclick = () => setMode('upper');
+
+// (1) カメラ映像に重ねるトラッキング結果の骨格
+const ov = $('overlay'), octx = ov.getContext('2d');
+const CONN_UP = [[11,12],[11,13],[13,15],[12,14],[14,16],[15,17],[15,19],[15,21],[17,19],[16,18],[16,20],[16,22],[18,20]];
+const CONN_LOW = [[11,23],[12,24],[23,24],[23,25],[25,27],[27,29],[29,31],[27,31],[24,26],[26,28],[28,30],[30,32],[28,32]];
+const visCol = v => v > 0.7 ? '#33ff88' : v > 0.4 ? '#ffdd33' : '#ff5555';
+const HAND_CONN = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+function drawHands(w, h) {
+  const H = handRes?.landmarks; if (!H) return;
+  const lw = Math.max(1.5, w / 260);
+  octx.lineWidth = lw; octx.strokeStyle = '#44ddff'; octx.fillStyle = '#ffffff';
+  for (const P of H) {
+    octx.beginPath();
+    for (const [a, b] of HAND_CONN) { octx.moveTo(P[a].x * w, P[a].y * h); octx.lineTo(P[b].x * w, P[b].y * h); }
+    octx.stroke();
+    for (const q of P) { octx.beginPath(); octx.arc(q.x * w, q.y * h, lw * 1.2, 0, Math.PI * 2); octx.fill(); }
+  }
+}
+function drawOverlay() {
+  const w = $('video').videoWidth, h = $('video').videoHeight; if (!w) return;
+  if (ov.width !== w || ov.height !== h) { ov.width = w; ov.height = h; }
+  octx.clearRect(0, 0, w, h);
+  const P = poseRes?.landmarks?.[0];
+  if (!showCamBones) return;
+  drawHands(w, h);
+  if (!P) return;
+  const conns = mode === 'full' ? CONN_UP.concat(CONN_LOW) : CONN_UP;   // 上半身モードでは下半身は描かない
+  const lw = Math.max(2, w / 150);
+  octx.lineWidth = lw; octx.lineCap = 'round';
+  for (const [a, b] of conns) {
+    octx.strokeStyle = visCol(Math.min(P[a].visibility ?? 0, P[b].visibility ?? 0));
+    octx.beginPath(); octx.moveTo(P[a].x * w, P[a].y * h); octx.lineTo(P[b].x * w, P[b].y * h); octx.stroke();
+  }
+  const ids = new Set(conns.flat()); ids.add(0);
+  for (const i of ids) {
+    octx.fillStyle = visCol(P[i].visibility ?? 0);
+    octx.beginPath(); octx.arc(P[i].x * w, P[i].y * h, lw * 1.4, 0, Math.PI * 2); octx.fill();
+  }
+}
+$('showBones').onchange = e => { showCamBones = e.target.checked; if (!showCamBones) octx.clearRect(0, 0, ov.width, ov.height); };
+
+// (2) 3D画面上のアバター側ボーン(録画には映らない)
+$('showAvBones').onchange = e => showAvBones = e.target.checked;
+function buildAvatarBones() {
+  if (avBones) { scene.remove(avBones.group); avBones.group.traverse(o => o.geometry?.dispose()); avBones = null; }
+  const g = n => n && vrm.humanoid.getNormalizedBoneNode(n);
+  const segs = [], link = (a, b) => { if (g(a) && g(b)) segs.push([g(a), g(b)]); };
+  const chain = ['hips', 'spine', 'chest', 'upperChest', 'neck', 'head'].filter(g);
+  chain.slice(1).forEach((n, i) => link(chain[i], n));
+  const top = ['upperChest', 'chest', 'spine'].find(g);
+  for (const s of ['left', 'right']) {
+    const arm = [s + 'Shoulder', s + 'UpperArm', s + 'LowerArm', s + 'Hand'].filter(g);
+    link(top, arm[0]); arm.slice(1).forEach((n, i) => link(arm[i], n));
+    const leg = [s + 'UpperLeg', s + 'LowerLeg', s + 'Foot', s + 'Toes'].filter(g);
+    link('hips', leg[0]); leg.slice(1).forEach((n, i) => link(leg[i], n));
+  }
+  const pos = new Float32Array(segs.length * 6);
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const line = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x00ff99, depthTest: false }));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffee33, size: 0.025, depthTest: false }));
+  line.renderOrder = pts.renderOrder = 999; line.frustumCulled = pts.frustumCulled = false;
+  const group = new THREE.Group(); group.add(line, pts); scene.add(group);
+  avBones = { group, segs, pos, geo };
+}
+function updateAvatarBones() {
+  if (!avBones) return;
+  const rec = recorder && recorder.state === 'recording';
+  avBones.group.visible = showAvBones && !rec;   // 録画中は非表示
+  if (!avBones.group.visible) return;
+  vrm.scene.updateMatrixWorld(true);
+  avBones.segs.forEach(([a, b], i) => {
+    a.getWorldPosition(_p); _p.toArray(avBones.pos, i * 6);
+    b.getWorldPosition(_p); _p.toArray(avBones.pos, i * 6 + 3);
+  });
+  avBones.geo.attributes.position.needsUpdate = true;
+}
+
+/* ---------- モーションキャプチャ ---------- */
+const video = $('video');
+let pose = null, face = null, hand = null, tracking = false;
+let poseRes = null, faceRes = null, handRes = null, lastT = -1;
+
+async function initMediaPipe() {
+  say('AIモデル読み込み中…(1/3)');
+  const fs = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  const base = 'https://storage.googleapis.com/mediapipe-models/';
+  const make = async (Cls, path, opts) => {
+    try { return await Cls.createFromOptions(fs, { baseOptions: { modelAssetPath: base + path, delegate: 'GPU' }, runningMode: 'VIDEO', ...opts }); }
+    catch (e) { console.warn('GPU不可のためCPUで実行', e); return await Cls.createFromOptions(fs, { baseOptions: { modelAssetPath: base + path, delegate: 'CPU' }, runningMode: 'VIDEO', ...opts }); }
+  };
+  pose = await make(PoseLandmarker, 'pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task', { numPoses: 1 });
+  say('AIモデル読み込み中…(2/3)');
+  face = await make(FaceLandmarker, 'face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+    { numFaces: 1, outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true });
+  say('AIモデル読み込み中…(3/3)');
+  try { hand = await make(HandLandmarker, 'hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', { numHands: 2 }); }
+  catch (e) { console.warn(e); hand = null; }
+}
+
+/* ---------- 音声(マイク＋伴奏をミックス) ---------- */
+let actx, dest, micGain, bgmGain, monGain;
+function initAudio() {
+  actx = new (window.AudioContext || window.webkitAudioContext)();
+  dest = actx.createMediaStreamDestination();
+  micGain = actx.createGain(); micGain.connect(dest);
+  monGain = actx.createGain(); monGain.gain.value = 0; micGain.connect(monGain); monGain.connect(actx.destination);
+  bgmGain = actx.createGain(); bgmGain.gain.value = +$('bgmVol').value;
+  const src = actx.createMediaElementSource($('bgm'));
+  src.connect(bgmGain); bgmGain.connect(dest); bgmGain.connect(actx.destination);
+}
+/* ---------- 伴奏: ファイル / URL / YouTube ---------- */
+const bgm = $('bgm'), bgmPlain = $('bgmPlain');
+let yt = null, ytApi = null;
+const bgmVolVal = () => +$('bgmVol').value;
+function stopAllBgm() { bgm.pause(); bgmPlain.pause(); try { yt?.pauseVideo?.(); } catch {} }
+function showPlayer(which) {   // 'bgm' | 'plain' | 'yt'
+  bgm.style.display = which === 'bgm' ? '' : 'none';
+  bgmPlain.style.display = which === 'plain' ? '' : 'none';
+  $('ytbox').style.display = which === 'yt' ? 'block' : 'none';
+  $('tabAudio').style.display = which === 'yt' && navigator.mediaDevices?.getDisplayMedia && !isMobile ? '' : 'none';
+}
+$('bgmFile').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  stopAllBgm(); showPlayer('bgm'); bgm.onerror = null;
+  bgm.crossOrigin = 'anonymous'; bgm.src = URL.createObjectURL(f);
+  say('伴奏を読み込みました' + ($('bgmLink').checked ? '。録画開始で頭から流れます' : ''));
+};
+function ytId(u) {
+  try {
+    const x = new URL(u);
+    if (x.hostname === 'youtu.be') return x.pathname.slice(1, 12);
+    if (/(^|\.)youtube\.com$/.test(x.hostname)) {
+      if (x.searchParams.get('v')) return x.searchParams.get('v');
+      const m = x.pathname.match(/\/(embed|shorts|live)\/([\w-]{11})/); if (m) return m[2];
+    }
+  } catch {}
+  return null;
+}
+function loadYTApi() {
+  return ytApi ||= new Promise(res => {
+    if (window.YT?.Player) return res();
+    window.onYouTubeIframeAPIReady = res;
+    const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s);
+  });
+}
+async function playYT(id) {
+  stopAllBgm(); showPlayer('yt'); say('YouTube読込中…');
+  await loadYTApi();
+  if (yt) { yt.loadVideoById(id); return; }
+  yt = new YT.Player('ytplayer', {
+    width: 320, height: 180, videoId: id, playerVars: { playsinline: 1, rel: 0, autoplay: 1 },
+    events: {
+      onReady: e => { e.target.setVolume(bgmVolVal() * 100); say(isMobile || !navigator.mediaDevices?.getDisplayMedia ? 'YouTubeの音はスマホでは録画に入りません。伴奏は音声ファイルがおすすめです' : 'YouTube再生。録画に音を入れるには設定の「YouTubeの音を録画に入れる」を押してください'); },
+      onStateChange: e => { if (e.data === 1) try { e.target.setPlaybackQuality('hd720'); } catch {} if (e.data === 0 && $('bgmLink').checked) setTimeout(stopRec, 800); },   // 小さい画面だと低画質/低ビットレートが選ばれがちなので高めを要求
+      onError: e => say('YouTube再生エラー(' + e.data + '): 埋め込み禁止の動画、または file:// で開いている可能性があります')
+    }
+  });
+}
+function playUrl(u) {
+  stopAllBgm();
+  const id = ytId(u); if (id) return playYT(id);
+  showPlayer('bgm');
+  bgm.onerror = () => {   // CORS非対応など → 録画には入らない通常再生にフォールバック
+    bgm.onerror = null; bgm.pause(); showPlayer('plain');
+    bgmPlain.onerror = () => say('読み込めません。音声/動画ファイルへの直リンクか確認してください');
+    bgmPlain.volume = bgmVolVal(); bgmPlain.src = u; bgmPlain.play().catch(() => {});
+    say('このURLはCORS非対応のため再生のみ(録画には伴奏が入りません)');
+  };
+  bgm.crossOrigin = 'anonymous'; bgm.src = u; bgm.play().catch(() => {});
+}
+$('urlBtn').onclick = () => { const u = $('urlIn').value.trim(); if (u) playUrl(u); };
+$('urlIn').onkeydown = e => { if (e.key === 'Enter') $('urlBtn').click(); };
+// YouTubeの音はWeb Audioに取り込めないので、タブ音声の共有で録画ミックスに入れる
+$('tabAudio').onclick = async () => {
+  try {
+    if (!actx) initAudio(); await actx.resume();
+    const ds = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, preferCurrentTab: true, selfBrowserSurface: 'include' });
+    const a = ds.getAudioTracks(); ds.getVideoTracks().forEach(t => t.stop());
+    if (!a.length) return say('音声が共有されていません(「タブの音声も共有」にチェックしてください)');
+    actx.createMediaStreamSource(new MediaStream(a)).connect(dest);
+    say('YouTubeの音声を録画に追加しました');
+  } catch (e) { say('タブ音声の取得に失敗: ' + e.message); }
+};
+$('bgmVol').oninput = e => {
+  const v = +e.target.value;
+  bgmGain && (bgmGain.gain.value = v); bgmPlain.volume = v;
+  try { yt?.setVolume?.(v * 100); } catch {}
+};
+$('micVol').oninput = e => micGain && (micGain.gain.value = +e.target.value);
+$('monitor').onchange = e => monGain && (monGain.gain.value = e.target.checked ? 1 : 0);
+$('bgm').addEventListener('play', () => actx && actx.resume());
+
+const camSel = $('camSel'), micSel = $('micSel');
+let camStream = null, micStream = null, micSrc = null;
+async function refreshCams(camKeep, micKeep) {
+  try {
+    const all = await navigator.mediaDevices.enumerateDevices();
+    const fill = (sel, kind, def, label, keep) => {
+      const devs = all.filter(d => d.kind === kind && d.deviceId), k = keep ?? sel.value;
+      sel.replaceChildren(new Option(def, ''));
+      devs.forEach((d, i) => sel.add(new Option(d.label || label + (i + 1), d.deviceId)));
+      sel.value = devs.some(d => d.deviceId === k) ? k : '';
+    };
+    fill(camSel, 'videoinput', '既定のカメラ', 'カメラ ', camKeep);
+    fill(micSel, 'audioinput', '既定のマイク', 'マイク ', micKeep);
+  } catch (e) { console.warn(e); }
+}
+let facing = 'user';
+async function startVideo(deviceId) {
+  if (camStream) camStream.getTracks().forEach(t => t.stop());   // 先に止める(同時に開けないカメラ対策)
+  const v = { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30, max: 30 } };
+  if (deviceId) v.deviceId = { exact: deviceId }; else v.facingMode = facing;
+  const vs = await navigator.mediaDevices.getUserMedia({ video: v, audio: false });
+  camStream = vs; video.srcObject = vs; await video.play(); lastT = -1;
+  const st = vs.getVideoTracks()[0].getSettings();
+  const fm = st.facingMode || (deviceId ? 'user' : facing);
+  $('vwrap').classList.toggle('selfie', fm !== 'environment');   // 外カメラは鏡像にしない
+  await refreshCams(st.deviceId || '');   // 許可後はカメラ名が取れる
+}
+let micAn = null, micBuf = null;
+async function startMic(deviceId) {
+  if (micSrc) { micSrc.disconnect(); micSrc = null; }
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  micStream = null; micAn = null;
+  const base = { echoCancellation: true, noiseSuppression: false, autoGainControl: false };
+  const gum = c => navigator.mediaDevices.getUserMedia({ audio: c });
+  try { micStream = await gum(deviceId ? { ...base, deviceId: { exact: deviceId } } : base); }
+  catch (e) {
+    if (e.name === 'NotAllowedError' || e.name === 'SecurityError') throw e;   // 許可されていない場合はそのまま失敗
+    micStream = await gum(true);   // 制約が原因の可能性 → 最小条件で再挑戦
+  }
+  const tr = micStream.getAudioTracks()[0];
+  micSrc = actx.createMediaStreamSource(micStream); micSrc.connect(micGain);
+  micAn = actx.createAnalyser(); micAn.fftSize = 512; micBuf = new Uint8Array(micAn.fftSize); micSrc.connect(micAn);   // レベルメーター用
+  $('micInfo').textContent = tr.label || '接続中';
+  await refreshCams(undefined, tr.getSettings().deviceId || '');
+}
+setInterval(() => {   // マイク入力レベル表示(音が来ていれば緑のバーが動く)
+  if (!micAn) return;
+  micAn.getByteTimeDomainData(micBuf);
+  let m = 0; for (const v of micBuf) m = Math.max(m, Math.abs(v - 128));
+  $('micLvl').style.width = Math.min(100, m / 128 * 150) + '%';
+}, 100);
+async function connectMic() {   // 失敗しても例外を投げず、理由を画面に残す
+  try {
+    if (!actx) initAudio(); await actx.resume();
+    await startMic(micSel.value); return true;
+  } catch (err) {
+    const why = err.name === 'NotAllowedError' ? '許可されていません(ブラウザのマイク許可を確認)'
+      : err.name === 'NotFoundError' ? 'マイクが見つかりません'
+      : err.name === 'NotReadableError' ? '他のアプリが使用中の可能性' : (err.message || err.name);
+    $('micInfo').textContent = '失敗: ' + why; console.warn(err); return false;
+  }
+}
+$('micBtn').onclick = async () => { say((await connectMic()) ? 'マイク接続OK' : 'マイク接続失敗(パネルの🎤表示を確認)'); };
+camSel.onchange = async () => {
+  if (!camStream) return;   // 開始前/停止中は選択だけ保持して、開始ボタンで使う
+  const want = camSel.value, prev = camStream.getVideoTracks()[0].getSettings().deviceId || '';
+  try { await startVideo(want); say('カメラを切り替えました'); }
+  catch (err) { say('カメラ切替失敗: ' + err.message); try { await startVideo(prev); } catch {} }
+};
+micSel.onchange = async () => {
+  if (!micStream) return;
+  const want = micSel.value, prev = micStream.getAudioTracks()[0].getSettings().deviceId || '';
+  try { await startMic(want); say('マイクを切り替えました'); }
+  catch (err) { say('マイク切替失敗: ' + (err.message || err.name)); try { await startMic(prev); } catch {} }
+};
+navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshCams());
+refreshCams();
+
+// カメラ停止: 映像とAI検出を止めて負荷を下げる(マイク・伴奏・録画は継続。AIモデルは読み込み済みのまま)
+function stopCamera() {
+  tracking = false; keepAwake(false);
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  video.srcObject = null; lastT = -1;
+  poseRes = faceRes = handRes = null; LM = null;
+  octx.clearRect(0, 0, ov.width, ov.height);
+  distCur = distBase = null; calBuf = []; zoomT = 0;
+  const em = vrm?.expressionManager;
+  if (em) for (const n of ['blinkLeft', 'blinkRight', 'aa', 'oh', 'ou', 'ee', 'happy']) if (em.getExpression(n)) em.setValue(n, 0);
+}
+$('camBtn').onclick = async () => {
+  if (tracking) {
+    stopCamera(); $('camBtn').textContent = 'カメラ再開'; $('camBtn').classList.add('primary');
+    say('カメラ停止中(マイクと伴奏は動作中)'); return;
+  }
+  if (!navigator.mediaDevices?.getUserMedia)
+    return say(location.protocol === 'https:' || location.hostname === 'localhost' ? 'このブラウザはカメラに対応していません' : 'カメラは https:// で開いたページでしか使えません');
+  $('camBtn').disabled = true;
+  try {
+    if (!actx) initAudio();
+    await actx.resume();
+    if (!micStream) await connectMic();
+    await startVideo(camSel.value);
+    if (!pose) await initMediaPipe();
+    tracking = true; $('rec').disabled = false; keepAwake(true);
+    $('camBtn').textContent = 'カメラ停止'; $('camBtn').classList.remove('primary'); $('camBtn').disabled = false;
+    say((hand || !$('handTrack').checked ? modeHint() : modeHint() + ' ※ハンドモデルの読込に失敗(手指なし)') + (micStream ? '' : ' ※マイク未接続(設定の🎤欄を確認)'));
+  } catch (err) {
+    stopCamera(); $('camBtn').disabled = false;
+    say(err.name === 'NotAllowedError' ? 'カメラが許可されていません(ブラウザの設定でカメラを許可してください)' : 'カメラ開始失敗: ' + err.message);
+  }
+};
+$('flipBtn').onclick = async () => {
+  facing = facing === 'user' ? 'environment' : 'user'; camSel.value = '';
+  if (!camStream) return say(facing === 'user' ? '内カメラを使います' : '外カメラを使います');
+  try { await startVideo(''); say(facing === 'user' ? '内カメラに切り替えました' : '外カメラに切り替えました'); }
+  catch (err) { facing = facing === 'user' ? 'environment' : 'user'; say('カメラ切替失敗: ' + err.message); try { await startVideo(''); } catch {} }
+};
+
+/* ---------- 画面操作(設定シート / プレビュー) ---------- */
+$('setBtn').onclick = () => document.body.classList.add('sheet');
+$('setClose').onclick = $('scrim').onclick = () => document.body.classList.remove('sheet');
+addEventListener('keydown', e => { if (e.key === 'Escape') document.body.classList.remove('sheet'); });
+$('pvToggle').onclick = () => { const h = $('preview').classList.toggle('hide'); $('pvToggle').textContent = h ? '映像を表示' : '映像を隠す'; };
+
+/* ---------- 画面スリープ防止 ---------- */
+async function keepAwake(on) {
+  try {
+    if (on && !wakeLock && navigator.wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => wakeLock = null); }
+    if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch (e) { console.warn(e); }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') { if (tracking) keepAwake(true); actx?.resume(); }
+  else if (recorder && recorder.state === 'recording') stopRec();   // バックグラウンドでは録画が壊れやすいので止める
+});
+
+/* ---------- リターゲット ---------- */
+const QI = new THREE.Quaternion(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
+const X = new THREE.Vector3(1, 0, 0), NX = new THREE.Vector3(-1, 0, 0), DOWN = new THREE.Vector3(0, -1, 0);
+let mirror = false; $('mirror').onchange = e => mirror = e.target.checked;
+let LM = null;
+const lm = i => LM[mirror && i >= 11 ? (i % 2 ? i + 1 : i - 1) : i];
+const visOK = (t, ...ids) => ids.every(i => (lm(i).visibility ?? 0) > t);
+const dirOf = (a, b) => V.set((lm(b).x - lm(a).x) * (mirror ? -1 : 1), -(lm(b).y - lm(a).y), -(lm(b).z - lm(a).z)).normalize().clone();
+
+// 正規化ボーンの待機姿勢のワールド回転。VRM1なら単位回転、VRM0は rotateVRM0 により Y軸180°回転になっている。
+// 「ワールド基準の回転」をボーンのローカル回転に直すとき、この分を補正しないと上下・前後が反転する。
+const restQ = () => vrm.scene.getWorldQuaternion(new THREE.Quaternion());
+// ワールド基準の回転 Qw(待機姿勢からの回転)をボーンに適用
+function setWorldRot(name, Qw, k = 0.5) {
+  const n = vrm.humanoid.getNormalizedBoneNode(name); if (!n) return;
+  const parentW = n.parent.getWorldQuaternion(new THREE.Quaternion());
+  n.quaternion.slerp(parentW.invert().multiply(Qw).multiply(restQ()), k);
+  n.updateMatrixWorld(true);
+}
+// ボーンが rest 方向を向いている状態から dir 方向へ向ける
+function setDir(name, rest, dir, k = 0.5) { setWorldRot(name, new THREE.Quaternion().setFromUnitVectors(rest, dir), k); }
+// ワールド基準の累積回転 q をローカルに直して適用(hips→spine のように親子で使っても整合する)
+function setRot(name, q, k = 0.5) {
+  const n = vrm.humanoid.getNormalizedBoneNode(name); if (!n) return;
+  const R0 = restQ();
+  n.quaternion.slerp(R0.clone().invert().multiply(q).multiply(R0), k); n.updateMatrixWorld(true);
+}
+// ローカル回転をそのまま適用(指など)
+function setLocal(name, q, k = 0.5) {
+  const n = vrm.humanoid.getNormalizedBoneNode(name); if (n) n.quaternion.slerp(q, k);
+}
+
+function applyPose() {
+  const I = () => new THREE.Quaternion();
+  const armDown = (side) => {  // 未検出時は腕を下ろす
+    const s = side === 'left' ? 1 : -1, rest = side === 'left' ? X : NX;
+    const d = new THREE.Vector3(s * 0.18, -1, 0).normalize();
+    setDir(side + 'UpperArm', rest, d, 0.15); setDir(side + 'LowerArm', rest, d, 0.15);
+  };
+  const resetLegs = k => { for (const s of ['left', 'right']) { setRot(s + 'UpperLeg', I(), k); setRot(s + 'LowerLeg', I(), k); } };
+  // 肩が見えない → 待機姿勢(腰は判定に使わない: 上半身だけ映っていても腕を追従させるため)
+  if (!LM || !visOK(0.5, 11, 12)) {
+    setRot('hips', I(), 0.1); setRot('spine', I(), 0.1);
+    armDown('left'); armDown('right'); resetLegs(0.1);
+    return;
+  }
+  const useHips = mode === 'full' && visOK(0.5, 23, 24);
+  if (useHips) {
+    // 腰の向き(ヨー)
+    const hv = dirOf(24, 23);
+    const yaw = THREE.MathUtils.clamp(Math.atan2(-hv.z, hv.x), -1.2, 1.2);
+    const hipsQ = new THREE.Quaternion().setFromAxisAngle(UP, yaw);
+    setRot('hips', hipsQ, 0.4);
+    // 上半身の傾き
+    const mid = (a, b) => ({ x: (lm(a).x + lm(b).x) / 2, y: (lm(a).y + lm(b).y) / 2, z: (lm(a).z + lm(b).z) / 2 });
+    const sh = mid(11, 12), hp = mid(23, 24), mx = mirror ? -1 : 1;
+    const torso = new THREE.Vector3((sh.x - hp.x) * mx, -(sh.y - hp.y), -(sh.z - hp.z)).normalize();
+    const tilt = new THREE.Quaternion().setFromUnitVectors(UP, torso);
+    setRot('spine', hipsQ.clone().invert().multiply(tilt), 0.4);
+  } else {
+    // 上半身モード: 腰・脚は固定。肩のラインから胴体のひねり(ヨー)と傾き(ロール)だけ推定
+    const sv = dirOf(12, 11);
+    const yaw = THREE.MathUtils.clamp(Math.atan2(-sv.z, sv.x), -1.2, 1.2);
+    const roll = THREE.MathUtils.clamp(Math.atan2(sv.y, Math.hypot(sv.x, sv.z)), -0.5, 0.5);
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, roll, 'YXZ'));
+    setRot('hips', I(), 0.2);
+    setRot('spine', I().slerp(q, 0.7), 0.4);
+  }
+
+  // 腕
+  for (const [side, sh_, el, wr] of [['left', 11, 13, 15], ['right', 12, 14, 16]]) {
+    const rest = side === 'left' ? X : NX;
+    if (visOK(0.4, sh_, el)) setDir(side + 'UpperArm', rest, dirOf(sh_, el)); else armDown(side);
+    if (visOK(0.4, el, wr)) setDir(side + 'LowerArm', rest, dirOf(el, wr)); else if (!visOK(0.4, sh_, el)) {}
+  }
+  // 脚(全身モードで映っているときだけ。上半身モードは常に直立)
+  if (mode !== 'full') { resetLegs(0.2); return; }
+  for (const [side, hi, kn, an] of [['left', 23, 25, 27], ['right', 24, 26, 28]]) {
+    if (visOK(0.7, hi, kn, an)) {
+      setDir(side + 'UpperLeg', DOWN, dirOf(hi, kn)); setDir(side + 'LowerLeg', DOWN, dirOf(kn, an));
+    } else { setRot(side + 'UpperLeg', I(), .1); setRot(side + 'LowerLeg', I(), .1); }
+  }
+}
+
+/* ---------- ハンドトラッキング ---------- */
+// [指, 使うランドマーク(関節3つ), VRMのボーン名, 曲げの上限(rad)]
+const FINGERS = [
+  ['Thumb',  [1, 2, 3],    ['Metacarpal', 'Proximal', 'Distal'],      [0.8, 1.0, 1.3]],
+  ['Index',  [5, 6, 7],    ['Proximal', 'Intermediate', 'Distal'],    [1.5, 1.9, 1.4]],
+  ['Middle', [9, 10, 11],  ['Proximal', 'Intermediate', 'Distal'],    [1.5, 1.9, 1.4]],
+  ['Ring',   [13, 14, 15], ['Proximal', 'Intermediate', 'Distal'],    [1.5, 1.9, 1.4]],
+  ['Little', [17, 18, 19], ['Proximal', 'Intermediate', 'Distal'],    [1.5, 1.9, 1.4]]
+];
+const _s1 = new THREE.Vector3(), _s2 = new THREE.Vector3();
+const seg = (W, i, j, out) => out.set(W[j].x - W[i].x, W[j].y - W[i].y, W[j].z - W[i].z).normalize();
+const flexion = (W, p, a, b) => { seg(W, p, a, _s1); seg(W, a, b, _s2); return Math.acos(THREE.MathUtils.clamp(_s1.dot(_s2), -1, 1)); };
+
+// 検出した手 → アバターの左右 に割り当て(手首の位置がポーズの手首に近い方。取れなければ MediaPipe のラベル)
+function assignHands() {
+  const out = {}, H = handRes;
+  if (!H?.landmarks?.length) return out;
+  const P = poseRes?.landmarks?.[0];
+  H.landmarks.forEach((lmk, i) => {
+    let person = null, dist = 1;
+    if (P) {
+      const dl = P[15] && (P[15].visibility ?? 0) > 0.2 ? Math.hypot(lmk[0].x - P[15].x, lmk[0].y - P[15].y) : 9;
+      const dr = P[16] && (P[16].visibility ?? 0) > 0.2 ? Math.hypot(lmk[0].x - P[16].x, lmk[0].y - P[16].y) : 9;
+      if (Math.min(dl, dr) < 0.25) { person = dl < dr ? 'left' : 'right'; dist = Math.min(dl, dr); }
+    }
+    if (!person) {   // ラベルは「鏡像入力」前提なので、反転していない映像では左右が逆
+      const label = H.handedness?.[i]?.[0]?.categoryName;
+      if (!label) return;
+      person = label === 'Left' ? 'right' : 'left';
+    }
+    const side = mirror ? (person === 'left' ? 'right' : 'left') : person;
+    if (!out[side] || dist < out[side].dist) out[side] = { i, dist };
+  });
+  return out;
+}
+
+function restBasis(side) {
+  const f0 = side === 'left' ? X : NX, s0 = new THREE.Vector3(0, 0, -1);
+  return new THREE.Matrix4().makeBasis(f0, s0, f0.clone().cross(s0));
+}
+
+function applyHands() {
+  const assigned = (hand && $('handTrack').checked) ? assignHands() : {};
+  const mx = mirror ? -1 : 1, R0inv = restQ().invert();
+  for (const side of ['left', 'right']) {
+    const a = assigned[side];
+    if (!a) {   // 手が見えない → 手首と指をゆっくり戻す
+      setRot(side + 'Hand', QI, 0.1);
+      for (const [f, , bones] of FINGERS) for (const b of bones) setLocal(side + f + b, QI, 0.15);
+      continue;
+    }
+    const W = handRes.worldLandmarks[a.i];
+    // 手首の向き: 手首→中指の付け根(前方)と、人差し指側→小指側(横)から姿勢を作る
+    const v = i => new THREE.Vector3(W[i].x * mx, -W[i].y, -W[i].z);
+    const f = v(9).sub(v(0)).normalize();
+    const s = v(17).sub(v(5)); s.addScaledVector(f, -s.dot(f)).normalize();
+    const M = new THREE.Matrix4().makeBasis(f, s, f.clone().cross(s));
+    const Qw = new THREE.Quaternion().setFromRotationMatrix(M.multiply(restBasis(side).invert()));
+    setWorldRot(side + 'Hand', Qw, 0.4);
+    // 指の曲げ: 関節ごとの屈曲角(手の向きに依存しない)を、手のひら側へ曲がる軸まわりに適用
+    for (const [f_, js, bones, maxs] of FINGERS) {
+      const thumb = f_ === 'Thumb';
+      const axisW = thumb ? new THREE.Vector3(0, side === 'left' ? 0.8 : -0.8, side === 'left' ? -0.6 : 0.6)
+                          : new THREE.Vector3(0, 0, side === 'left' ? -1 : 1);
+      const axis = axisW.applyQuaternion(R0inv);
+      const pts = [0, js[0], js[1], js[2], js[2] + 1];
+      for (let k = 0; k < 3; k++) {
+        const ang = THREE.MathUtils.clamp(flexion(W, pts[k], pts[k + 1], pts[k + 2]), 0, maxs[k]);
+        setLocal(side + f_ + bones[k], new THREE.Quaternion().setFromAxisAngle(axis, ang), 0.5);
+      }
+    }
+  }
+}
+
+const bsMap = {};
+function applyFace() {
+  if (!faceRes || !faceRes.faceBlendshapes?.length) { setRot('neck', QI, 0.1); setRot('head', QI, 0.1); return; }
+  const m = new THREE.Matrix4().fromArray(faceRes.facialTransformationMatrixes[0].data);
+  const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+  m.decompose(p, q, s);
+  const e = new THREE.Euler().setFromQuaternion(q, 'YXZ');
+  const sg = mirror ? -1 : 1;
+  const hq = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+    THREE.MathUtils.clamp(e.x, -.7, .7), THREE.MathUtils.clamp(e.y * sg, -1, 1), THREE.MathUtils.clamp(e.z * sg, -.6, .6), 'YXZ'));
+  const n = new THREE.Quaternion().identity().slerp(hq, 0.35);
+  setRot('neck', n, 0.5);
+  setRot('head', new THREE.Quaternion().identity().slerp(hq, 0.65), 0.5);
+
+  for (const c of faceRes.faceBlendshapes[0].categories) bsMap[c.categoryName] = c.score;
+  const g = k => bsMap[k] || 0, em = vrm.expressionManager; if (!em) return;
+  const set = (n, v) => { if (em.getExpression(n)) em.setValue(n, THREE.MathUtils.clamp(v, 0, 1)); };
+  const bl = g(mirror ? 'eyeBlinkRight' : 'eyeBlinkLeft'), br = g(mirror ? 'eyeBlinkLeft' : 'eyeBlinkRight');
+  const bh = x => x > 0.5 ? 1 : x * 1.2;
+  set('blinkLeft', bh(bl)); set('blinkRight', bh(br));
+  const jaw = g('jawOpen');
+  set('aa', jaw * 1.4 * (1 - g('mouthFunnel')));
+  set('oh', g('mouthFunnel') * 1.2); set('ou', g('mouthPucker') * 1.2);
+  set('ee', g('mouthStretchLeft') * .6 + g('mouthStretchRight') * .6);
+  set('happy', (g('mouthSmileLeft') + g('mouthSmileRight')) * 0.7);
+}
+
+/* ---------- 録画 ---------- */
+let chunks = [], timer = null, t0 = 0, recFile = null;
+const mmss = s => String((s / 60) | 0).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+function pickMime() {
+  return ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+    .find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t));
+}
+// 伴奏を頭から再生/停止(ファイル・URL・YouTubeのうち表示中のもの)
+function bgmFromTop(play) {
+  try {
+    if ($('ytbox').style.display !== 'none') { if (!yt?.seekTo) return; if (play) { yt.seekTo(0, true); yt.playVideo(); } else yt.pauseVideo(); return; }
+    const a = bgmPlain.style.display !== 'none' ? bgmPlain : bgm.style.display !== 'none' ? bgm : null;
+    if (!a || !a.src) return;
+    if (play) { a.currentTime = 0; a.play().catch(() => {}); } else a.pause();
+  } catch (e) { console.warn(e); }
+}
+function stopRec() { if (recorder && recorder.state === 'recording') recorder.stop(); }
+for (const a of [bgm, bgmPlain]) a.addEventListener('ended', () => { if ($('bgmLink').checked) setTimeout(stopRec, 800); });
+function setRecUI(on) {
+  $('rec').classList.toggle('on', on); $('recLabel').textContent = on ? '録画停止' : '録画開始';
+  statusEl.classList.toggle('rec', on);
+  for (const id of ['camBtn', 'flipBtn', 'perfSel']) $(id).disabled = on;   // 録画中は切替操作をロック
+}
+$('rec').onclick = () => {
+  if (recorder && recorder.state === 'recording') { stopRec(); return; }
+  const mime = pickMime();
+  if (!mime) return say('このブラウザは録画非対応です');
+  actx.resume();
+  const stream = new MediaStream([...canvas.captureStream(30).getVideoTracks(), ...dest.stream.getAudioTracks()]);
+  chunks = [];
+  const vbps = Math.round(outW * outH * 30 * 0.1);   // 解像度に合わせたビットレート(720pで約2.8Mbps)
+  recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: Math.min(8_000_000, Math.max(2_000_000, vbps)), audioBitsPerSecond: 192_000 });
+  recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
+  recorder.onstop = () => {
+    clearInterval(timer); setRecUI(false);
+    if ($('bgmLink').checked) bgmFromTop(false);
+    const sec = ((Date.now() - t0) / 1000) | 0;
+    const ext = mime.includes('mp4') ? 'mp4' : 'webm', type = mime.split(';')[0];
+    const name = 'karaoke-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.' + ext;
+    const blob = new Blob(chunks, { type });
+    recFile = new File([blob], name, { type });
+    const a = $('dl'); if (a.href.startsWith('blob:')) URL.revokeObjectURL(a.href);
+    a.href = URL.createObjectURL(blob); a.download = name;
+    a.textContent = '保存 ' + (blob.size / 1e6).toFixed(0) + 'MB';
+    let canShare = false; try { canShare = !!navigator.canShare?.({ files: [recFile] }); } catch {}
+    $('share').style.display = canShare ? 'inline-flex' : 'none';
+    a.style.display = canShare && isMobile ? 'none' : 'inline-flex';   // スマホは共有シートから写真に保存できる
+    resize();   // 録画中に画面を回していたらここで反映
+    say('録画完了 ' + mmss(sec) + (canShare ? '。「共有・保存」から写真やXに送れます' : '。「保存」でダウンロードできます') + (ext === 'webm' ? ' ※WebM形式はXに直接は上げられません' : ''));
+  };
+  recorder.start(1000);
+  if ($('bgmLink').checked) bgmFromTop(true);
+  $('dl').style.display = 'none'; $('share').style.display = 'none';
+  setRecUI(true); document.body.classList.remove('sheet');
+  t0 = Date.now(); say('● REC 00:00');
+  timer = setInterval(() => say('● REC ' + mmss(((Date.now() - t0) / 1000) | 0)), 500);
+};
+$('share').onclick = async () => {
+  if (!recFile) return;
+  try { await navigator.share({ files: [recFile] }); }
+  catch (e) { if (e.name !== 'AbortError') say('共有できませんでした: ' + e.message); }
+};
+
+/* ---------- 接近ズーム ---------- */
+// 顔の姿勢行列のz平行移動(カメラまでの距離, cm相当)から「近づいた倍率」を出し、カメラをアバターの顔に寄せる
+let distBase = null, distCur = null, calBuf = [], zoomT = 0, lastFaceT = 0, lastInfo = '';
+const closePos = new THREE.Vector3(0, 1.5, 1.4), closeLook = new THREE.Vector3(0, 1.45, 0);
+function updateDist() {
+  const M = faceRes?.facialTransformationMatrixes?.[0]; if (!M) return;
+  const d = Math.abs(M.data[14]); if (!(d > 5)) return;
+  lastFaceT = performance.now();
+  distCur = distCur == null ? d : distCur + (d - distCur) * 0.3;
+  if (distBase == null) {   // 最初の30フレームの中央値を基準位置にする
+    calBuf.push(d);
+    if (calBuf.length >= 30) { calBuf.sort((a, b) => a - b); distBase = calBuf[15]; calBuf = []; }
+  }
+}
+$('zoomCal').onclick = () => { if (distCur != null) { distBase = distCur; zoomT = 0; } };
+function stepZoom(dt) {
+  let target = 0, info = '距離: -';
+  if (distCur != null && distBase != null) {
+    const near = distBase / distCur;   // 1.0=基準位置、大きいほど近い
+    const raw = THREE.MathUtils.clamp((near - 1.12) * +$('zoomGain').value, 0, 1);
+    target = raw * raw * (3 - 2 * raw);
+    info = '近さ ×' + near.toFixed(2) + ' / アップ ' + Math.round(zoomT * 100) + '%';
+  } else if (distCur != null) info = '基準位置を測定中…(離れた位置で静止)';
+  if (!$('zoomOn').checked || performance.now() - lastFaceT > 2000) target = 0;   // 顔を見失ったら2秒後に引く
+  zoomT += (target - zoomT) * (1 - Math.exp(-dt * 4));
+  if (info !== lastInfo) { lastInfo = info; $('zoomInfo').textContent = info; }
+}
+function updateCloseTargets() {
+  const h = vrm.humanoid.getNormalizedBoneNode('head'); if (!h) return;
+  h.getWorldPosition(_p);
+  closePos.set(0, _p.y + 0.03, 1.4); closeLook.set(0, _p.y - 0.04, 0);
+}
+
+/* ---------- メインループ ---------- */
+const clock = new THREE.Clock();
+function loop() {
+  requestAnimationFrame(loop);
+  const now = performance.now();
+  if (P.frameMs && now - lastRender < P.frameMs - 1.5) return;   // 軽量モード: 描画を約30fpsに制限
+  lastRender = now;
+  const dt = Math.min(clock.getDelta(), 0.1);
+  if (vrm) updateCloseTargets();
+  stepZoom(dt);
+  const fr = FRAME[mode];   // 全身/上半身の基本フレーミング → 接近ズームでアップ位置へ合成
+  tgtPos.set(...fr.pos).lerp(closePos, zoomT); tgtLook.set(...fr.look).lerp(closeLook, zoomT);
+  const kc = 1 - Math.exp(-dt * 6);   // カメラ移動を滑らかに
+  camPos.lerp(tgtPos, kc); camLook.lerp(tgtLook, kc);
+  camera.position.copy(camPos); camera.lookAt(camLook);
+  if (vrm) {
+    if (tracking && video.readyState >= 2 && video.currentTime !== lastT) {
+      lastT = video.currentTime;
+      if (++detN % P.skip === 0) {
+        const ts = performance.now(), turn = (detN / P.skip) | 0, useHand = hand && $('handTrack').checked;
+        try {
+          faceRes = face.detectForVideo(video, ts);   // 表情・口パクは毎回
+          // 標準/軽量: ポーズと手を交互に検出して1フレームあたりの負荷を半分に
+          if (!P.alt || !useHand || (turn & 1) === 0) { poseRes = pose.detectForVideo(video, ts); LM = poseRes.worldLandmarks?.[0] || null; }
+          if (useHand) { if (!P.alt || (turn & 1) === 1) handRes = hand.detectForVideo(video, ts); } else handRes = null;
+          drawOverlay(); updateDist();
+        } catch (e) { console.warn(e); }
+      }
+    }
+    applyPose();
+    applyHands(); applyFace();   // 検出結果が無いときは手・頭が待機姿勢へ戻る
+    vrm.update(dt);
+    updateAvatarBones();
+  }
+  renderer.render(scene, camera);
+}
+loop();
+</script>
+</body>
+</html>
