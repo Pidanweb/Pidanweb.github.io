@@ -27,7 +27,7 @@
 </style>
 </head>
 <body>
-<div id="ui"><button id="camBtn">📷 カメラ設定</button> <button id="viewBtn">👁 一人称</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰</button>
+<div id="ui"><button id="camBtn">📷 カメラ・マイク設定</button> <button id="viewBtn">👁 一人称</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰</button>
   <div id="camPanel" hidden>
     <label>使うカメラ<select id="camSel"></select></label>
     <label><input type="checkbox" id="mir"> 左右反転</label>
@@ -41,6 +41,16 @@
     <label><input type="checkbox" id="facePrevOn" checked> 認識プレビューを表示</label>
     <div><button id="faceStart">顔認識を開始/再起動</button> <button id="faceCal">中心リセット (C)</button></div>
     <div id="faceStat" style="font-size:12px;color:#ffd35a"></div>
+    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <b>🎙 マイク設定（音声認識）</b>
+    <label>使うマイク<select id="micSel"><option value="">既定のマイク</option></select></label>
+    <label><input type="checkbox" id="micNs"> ノイズ抑制</label> <label><input type="checkbox" id="micEc"> エコー除去</label> <label><input type="checkbox" id="micAg" checked> 自動ゲイン</label>
+    <label><input type="checkbox" id="micPass" checked> 認識にもこのマイクを指定する</label>
+    <label>↓を離した後も聞く <b id="micTailV">0.7</b>秒 <input type="range" id="micTail" min="0" max="2" step=".1" value=".7"></label>
+    <div><button id="micApply">このマイクを使う / テスト</button> <button id="micOff">指定解除</button> <button id="micRefresh">一覧を更新</button></div>
+    <div style="height:8px;background:#223;border-radius:4px;overflow:hidden"><div id="micLvl" style="height:100%;width:0;background:#5ee08a"></div></div>
+    <div id="micStat" style="font-size:12px;color:#ffd35a">「このマイクを使う」で入力レベルを確認できます（声でバーが動けばOK）</div>
+    <small style="color:#9fdcea">※ 認識に使われるマイクは、ブラウザが「指定」に対応していない場合は OS / ブラウザ既定のマイクになります（判定ログに表示）</small>
   </div>
   <div id="faceBadge"></div><div id="wiiStat" style="margin-top:4px;font-size:12px;color:#ffd35a;text-shadow:0 0 4px #000"></div></div>
 <div id="menu"><h3 style="margin:0">MENU</h3>
@@ -52,7 +62,7 @@
   <button id="mRestart">↻ リスタート</button><button id="mTitle">⌂ タイトルへ</button>
   <small style="color:#9fdcea">✋ 人差し指で「1」を描く / M キーで開閉</small></div>
 <pre id="wiiDbg"></pre>
-<div id="castUI"><div id="castSay">↓キー / Wii十字キー下 を長押しして詠唱</div><button id="castBtn">🎙 詠唱（↓長押し）</button></div>
+<div id="castUI"><div id="castSay">↓長押し: 詠唱 ／ 弱攻撃は「ファイヤ」「ウォーター」「リーフ」</div><button id="castBtn">🎙 詠唱（↓長押し）</button></div>
 <canvas id="facePrev" width="320" height="240"></canvas>
 <video id="v" autoplay playsinline muted></video>
 <video id="fv" autoplay playsinline muted></video>
@@ -468,7 +478,7 @@ function reset(){
 }
 function titleMsg(){
   setMsg([['WIZARD MODE', '#ffd35a', 72], ['↓キー / Wii十字キー下 を押しながら詠唱', '#fff', 30],
-          ['光る言葉を全部言えば発動 / 被弾しても続きからOK', '#fff', 28], ['赤 = パリィ（右クリック / B+振り上げ）', '#ffd35a', 26],
+          ['光る言葉を全部言えば発動 / 被弾しても続きからOK', '#fff', 28], ['弱攻撃: 「ファイヤ」「ウォーター」「リーフ」と言うだけ', '#9dffb0', 26], ['赤 = パリィ（右クリック / B+振り上げ）', '#ffd35a', 26],
           ['紫 = パリィ不可 → ガード（左長押し / A長押し）', '#c06bff', 26], ['顔を動かして狙う　C:中心リセット　V:VR　T:視点　M:メニュー', '#7ae7ff', 24],
           ['クリック / Wii A でスタート（Webカメラ・マイクを使います）', '#7ae7ff', 28]]);
 }
@@ -654,7 +664,7 @@ function dbg(t){ dbgLines.push(((performance.now() - DBG_T0)/1000).toFixed(1) + 
 function headText(){
   const w = !wii.dev ? 'Wii未接続' : 'Wii接続' + (wii.pDn ? ' [↓]' : '') + (wii.a ? ' [A]' : '') + (wii.b ? ' [B]' : '');
   const sp = SP.map(s => `${s.icon}${s.n} ${litN(s)}/${s.cps.length}: ` + s.cps.map((c, j) => lit[s.id][j] ? '【' + c[0] + '】' : '・').join(' ')).join('\n');
-  return `${w} / 操作:${ctl.mode} / 詠唱キー:${hold ? '押下中' : '—'}\n音声認識: ${voiceSt}${SRc ? '' : '（非対応）'}\n聞き取り: ${liveTxt || '—'}\n判定用  : ${liveNorm || '—'}\n${sp}` + (P.counter > 0 ? `\n反撃ボーナス ×${P.cMul} 残り${P.counter.toFixed(1)}s` : '');
+  return `${w} / 操作:${ctl.mode} / 詠唱キー:${hold ? '押下中' : '—'}\n音声認識: ${voiceSt}${SRc ? '' : '（非対応）'} / マイク: ${mic.track ? mic.label + (mic.pass ? '(指定)' : '(確認のみ)') : '既定'}${mic.an ? ' Lv' + Math.round(mic.lvl*20)*5 : ''}\n聞き取り: ${liveTxt || '—'}\n判定用  : ${liveNorm || '—'}\n${sp}\n弱攻撃(単語1つ): ${WK.map(w => w.icon + w.n + (wkCD[w.id] > 0 ? '(' + wkCD[w.id].toFixed(1) + 's)' : '')).join(' ')}` + (P.counter > 0 ? `\n反撃ボーナス ×${P.cMul} 残り${P.counter.toFixed(1)}s` : '');
 }
 function dbgDraw(){ const el = $('wiiDbg'); el.style.display = dbgOn ? '' : 'none'; if (dbgOn) el.textContent = (dbgHead = headText()) + '\n--------\n' + dbgLines.join('\n'); }
 function dbgTick(){ if (dbgOn && headText() !== dbgHead) dbgDraw(); }
@@ -748,6 +758,25 @@ const SP = [
     parts:[['生命', /生命|せいめい|命|いのち/], 'の', ['緑', /緑|みどり/], 'よ、', ['今ここ', /今|いま|ここ/], 'に', ['咲け', /咲|裂け|さけ|さく|さか|さき/], '、', ['ユグドラシル', /ゆぐ|どらし|どらじ|drasil|drazil|yggdr|igdra|ゆくど/]],
     go(d){ fireSpell({ ...this, count:3, sc:1.4, blade:1, big:1, boom:4 }, d*.25); setTimeout(() => growTree(d*.75), 700); } }];
 for (const sp of SP) sp.cps = sp.parts.filter(Array.isArray);
+// 弱攻撃: 単語1つで即発動（クールダウン各1秒・反撃ボーナスは消費しない）。詠唱とは別に判定
+const WK = [
+  { id:'wfire', n:'ファイヤ', icon:'🔥', hex:0xff6a2a, cd:1, dmg:8, rx:/ふぁい[やあ]|ふあい[やあ]|fire/ },
+  { id:'wwater', n:'ウォーター', icon:'💧', hex:0x4aa8ff, cd:1, dmg:8, rx:/う[ぉお]た|water/ },
+  { id:'wleaf', n:'リーフ', icon:'🌿', hex:0x5fe07a, cd:1, dmg:8, rx:/りふ|leaf|leave/ }];
+const wkCD = {}; for (const w of WK) wkCD[w.id] = 0;
+const wkDone = new Set(), wkTm = {}, wkAlts = {};
+const chantHits = alts => { let n = 0; for (const sp of SP) for (const c of sp.cps) if (alts.some(t => c[1].test(t))) n++; return n; };
+function evalWeak(key){
+  if (wkDone.has(key)) return; wkDone.add(key); clearTimeout(wkTm[key]);
+  const alts = wkAlts[key] || []; if (chantHits(alts) >= 2) return;   // 詠唱の最中は弱攻撃として扱わない
+  const w = WK.find(x => alts.some(t => x.rx.test(t))); if (w) castWeak(w);
+}
+function castWeak(w){
+  if (state !== 'play' || menuOn) return;
+  if (wkCD[w.id] > 0){ dbg(`弱攻撃 ${w.n} はCD中`); popCam(w.n + ' 待機中', '#aaaaaa', .6, .6); return; }
+  wkCD[w.id] = w.cd; colR = w.hex; dbg(`弱攻撃: ${w.icon}${w.n}`); popCam(w.n, hx(w.hex), .9, .9);
+  const o = orbPos(); ring(o, 2.2, w.hex, .4); burst(o, w.hex, 25, 4); fireSpell({ hex:w.hex, sc:1 }, w.dmg);
+}
 const lit = {}; for (const sp of SP) lit[sp.id] = sp.cps.map(() => 0);   // 0=未点灯 / 数値=点灯した時刻
 const litN = sp => lit[sp.id].filter(Boolean).length, lastLit = sp => Math.max(0, ...lit[sp.id]);
 function playTick(n){ try {
@@ -793,8 +822,54 @@ function drawChants(now){
   chTex.needsUpdate = true;
 }
 
+// ---- マイク設定（カメラ・マイク設定パネル内）----
+const mic = { stream:null, track:null, label:'', pass:true, tail:.7, an:null, buf:null, actx:null, lvl:0 };
+const micSel = $('micSel'), micStat = $('micStat');
+async function listMics(){
+  try {
+    const ds = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput'), cur = micSel.value;
+    micSel.innerHTML = '<option value="">既定のマイク</option>';
+    ds.forEach((d, i) => { const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || ('マイク ' + (i+1)); micSel.appendChild(o); });
+    if (cur) micSel.value = cur;
+    if (!mic.stream) micStat.textContent = ds.length + '台検出（名前は一度マイクを許可すると表示されます）';
+  } catch (e){ micStat.textContent = '一覧を取得できません'; }
+}
+function closeMic(){
+  if (mic.stream) mic.stream.getTracks().forEach(t => t.stop());
+  try { mic.actx && mic.actx.close(); } catch (e){}
+  mic.stream = mic.track = mic.an = mic.actx = null; mic.lvl = 0; $('micLvl').style.width = '0';
+}
+async function openMic(){
+  closeMic();
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ micStat.textContent = 'HTTPS か localhost で開いてください'; return; }
+  const id = micSel.value, a = { noiseSuppression:$('micNs').checked, echoCancellation:$('micEc').checked, autoGainControl:$('micAg').checked };
+  if (id) a.deviceId = { exact:id };
+  try { mic.stream = await navigator.mediaDevices.getUserMedia({ audio:a, video:false }); }
+  catch (e){ micStat.textContent = '起動失敗: ' + e.name + '（許可なし／他のアプリが使用中）'; dbg('マイク起動失敗: ' + e.name); return; }
+  mic.track = mic.stream.getAudioTracks()[0]; mic.label = mic.track.label || 'マイク';
+  try {
+    mic.actx = new AudioContext(); const src = mic.actx.createMediaStreamSource(mic.stream);
+    mic.an = mic.actx.createAnalyser(); mic.an.fftSize = 1024; mic.buf = new Uint8Array(mic.an.fftSize); src.connect(mic.an);
+    if (mic.actx.state === 'suspended') mic.actx.resume();
+  } catch (e){}
+  micStat.textContent = '使用中: ' + mic.label + (mic.pass ? '（認識にも指定）' : '（レベル確認のみ）');
+  dbg(`マイク: ${mic.label} / ノイズ抑制${+a.noiseSuppression} エコー除去${+a.echoCancellation} 自動ゲイン${+a.autoGainControl}`);
+  await listMics(); const st = mic.track.getSettings(); if (st.deviceId) micSel.value = st.deviceId;
+}
+function micMeter(){
+  if (!mic.an) return;
+  mic.an.getByteTimeDomainData(mic.buf); let s = 0; for (const v of mic.buf){ const d = (v - 128)/128; s += d*d; }
+  mic.lvl = Math.max(Math.min(1, Math.sqrt(s/mic.buf.length)*5), mic.lvl*.9); $('micLvl').style.width = (mic.lvl*100).toFixed(0) + '%';
+}
+$('micApply').onclick = openMic; $('micRefresh').onclick = listMics;
+$('micOff').onclick = () => { closeMic(); micStat.textContent = '指定解除（既定のマイクを使用）'; dbg('マイク指定を解除'); };
+$('micPass').onchange = e => { mic.pass = e.target.checked; if (mic.track) micStat.textContent = '使用中: ' + mic.label + (mic.pass ? '（認識にも指定）' : '（レベル確認のみ）'); };
+$('micTail').oninput = e => { mic.tail = +e.target.value; $('micTailV').textContent = mic.tail.toFixed(1); };
+if (navigator.mediaDevices) navigator.mediaDevices.addEventListener('devicechange', listMics);
+listMics();
+
 // ---- 音声認識（↓長押し中だけ聞く）----
-let hold = false, rec = null, sess = 0, colR = 0x8fe4ff; const loggedFinal = new Set();
+let hold = false, rec = null, sess = 0, colR = 0x8fe4ff, tailTm = 0, recAlive = false; const loggedFinal = new Set();
 function startRec(){
   const r = rec = new SRc(), my = ++sess;
   r.lang = 'ja-JP'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 3; voiceSt = '起動中…';
@@ -809,21 +884,31 @@ function startRec(){
     if (e.error === 'not-allowed' || e.error === 'service-not-allowed'){ r.fatal = true; $('castSay').textContent = 'マイクを許可してください'; }
   };
   r.onend = () => {
-    const again = hold && rec === r && !r.fatal; if (rec === r || !rec) voiceSt = '停止'; dbg('認識終了' + (again ? ' → 再起動' : ''));
+    const again = hold && rec === r && !r.fatal; if (rec === r || !rec){ voiceSt = '停止'; recAlive = false; } dbg('認識終了' + (again ? ' → 再起動' : ''));
     if (again) startRec();   // 無音などで切れても、押している間は聞き直す
   };
-  $('castSay').textContent = '🎙 聞いています…'; try { r.start(); } catch (e){ dbg('start失敗: ' + e.message); }
+  recAlive = true; $('castSay').textContent = '🎙 聞いています…';
+  let usedTrack = false;
+  try { if (mic.track && mic.pass && mic.track.readyState === 'live'){ usedTrack = true; r.start(mic.track); } else r.start(); }
+  catch (e){ dbg('start失敗: ' + e.message + (usedTrack ? ' → 既定マイクで再試行' : '')); try { r.start(); usedTrack = false; } catch (e2){ dbg('start失敗: ' + e2.message); } }
+  if (usedTrack) dbg('指定マイクを認識に渡しました: ' + mic.label);
 }
 function restartRec(){   // 認識の履歴を捨てて聞き直す（発動後・リセット後に古い言葉で再点灯しないように）
   sess++; const o = rec; rec = null; try { o && o.abort(); } catch (e){}
+  for (const k in wkTm) clearTimeout(wkTm[k]);
   if (hold) setTimeout(() => { if (hold && !rec) startRec(); }, 250);
 }
 function castDown(){
   if (hold || state !== 'play' || menuOn) return;
   if (!SRc){ $('castSay').textContent = 'このブラウザは音声認識に未対応です（Chrome / Edge）'; dbg('音声認識 非対応'); return; }
-  hold = true; dbg('↓押下 → 音声認識を開始'); startRec();
+  hold = true; clearTimeout(tailTm);
+  if (rec && recAlive && !rec.fatal){ dbg('↓押下 → 認識は継続中（そのまま続行）'); return; }
+  dbg('↓押下 → 音声認識を開始'); startRec();
 }
-function castUp(){ if (!hold) return; hold = false; dbg('↓離した → 認識を停止'); try { rec && rec.stop(); } catch (e){} }
+function castUp(){   // 離した直後は言い終わりを取りこぼさないよう、少し聞き続けてから止める
+  if (!hold) return; hold = false; dbg(`↓離した → ${mic.tail.toFixed(1)}秒後に認識を停止`);
+  clearTimeout(tailTm); tailTm = setTimeout(() => { if (!hold){ try { rec && rec.stop(); } catch (e){} } }, mic.tail*1000);
+}
 $('castBtn').onpointerdown = e => { e.preventDefault(); $('castBtn').setPointerCapture(e.pointerId); castDown(); $('castBtn').classList.add('on'); };
 $('castBtn').onpointerup = $('castBtn').onpointercancel = () => { castUp(); $('castBtn').classList.remove('on'); };
 
@@ -837,7 +922,11 @@ function onSpeech(e, my){
   liveTxt = heard.trim(); liveNorm = norm(liveTxt); $('castSay').textContent = '🎙 ' + liveTxt;
   if (state !== 'play') return;
   for (let i = 0; i < e.results.length; i++){
-    const alts = [...e.results[i]].map(a => norm(a.transcript));
+    const alts = [...e.results[i]].map(a => norm(a.transcript)), key = my + ':' + i;
+    if (!wkDone.has(key)){   // 弱攻撃: 確定した時、または 0.45秒 同じ内容のまま続いた時に判定
+      wkAlts[key] = alts;
+      if (e.results[i].isFinal) evalWeak(key); else { clearTimeout(wkTm[key]); wkTm[key] = setTimeout(() => evalWeak(key), 450); }
+    }
     for (const sp of SP) for (let j = 0; j < sp.cps.length; j++)
       if (!lit[sp.id][j] && alts.some(t => sp.cps[j][1].test(t)) && lightUp(sp, j)) return;   // 発動したら古い認識結果は無視
   }
@@ -885,6 +974,7 @@ function clearFx(){ for (const p of projs) scene.remove(p.m); projs.length = 0; 
 function wizUpdate(dt){
   const on = state === 'play' && !menuOn, now = performance.now();
   if (state !== 'play') clearFx();
+  micMeter(); if (on) for (const w of WK) wkCD[w.id] = Math.max(0, wkCD[w.id] - dt);
   let best = null, bn = 0;
   for (const sp of SP){
     const n = litN(sp); if (n > bn){ bn = n; best = sp; }
