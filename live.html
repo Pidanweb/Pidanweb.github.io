@@ -100,8 +100,12 @@
   <div>🎤 <span id="micInfo">未接続</span> <button id="micBtn" class="sm">マイク接続</button></div>
   <div style="height:6px;background:#333;border-radius:3px;overflow:hidden;margin-top:3px"><div id="micLvl" style="height:100%;width:0;background:#4f8"></div></div>
   <div><label><input type="checkbox" id="monitor"> マイクを自分で聞く(イヤホン必須)</label></div>
-  <div class="sec"><label><input type="checkbox" id="hideMe" checked> 自分の姿を隠す(アバターで上書き)</label></div>
-  <div><button id="plateBtn" class="sm" title="3秒後に撮影します。画面の外へ出てください">📷 誰もいない背景を撮る</button> <button id="plateClr" class="sm">背景を消す</button></div>
+  <div class="sec">重ね方 <select id="ovMode" title="生身の自分をどう扱うか">
+    <option value="avatar" selected>アバターになる(全身を隠す)</option>
+    <option value="costume">衣装だけ着る(顔は自分のまま)</option>
+    <option value="none">重ねるだけ(隠さない)</option></select></div>
+  <div>アバターの大きさ <input type="range" id="avSize" min="0.9" max="1.4" step="0.01" value="1.1"> <span id="avSizeV">×1.10</span></div>
+  <div><button id="plateBtn" class="sm" title="背景は自動で覚えますが、3秒後に画面の外へ出て撮るとすぐ完全になります">📷 背景を撮り直す</button> <button id="plateClr" class="sm">背景を消す</button></div>
   <div><label><input type="checkbox" id="autoBgm" checked> 変身したら伴奏を最初から再生</label></div>
   <div><label><input type="checkbox" id="autoRec" checked> 変身シーンから自動で録画</label></div>
   <div id="calInfo">体格: 未測定</div>
@@ -149,14 +153,16 @@ const blankTex = new THREE.DataTexture(new Uint8Array(4), 1, 1); blankTex.needsU
 const U = {
   uVideo: { value: vidTex }, uMask: { value: maskTex }, uPlate: { value: blankTex },
   uCrop: { value: new THREE.Vector2(1, 1) }, uMirror: { value: 1 }, uHasVideo: { value: 0 },
-  uHide: { value: 0 }, uGlow: { value: 0 }, uHasPlate: { value: 0 }, uTime: { value: 0 }
+  uHide: { value: 0 }, uGlow: { value: 0 }, uHasPlate: { value: 0 }, uTime: { value: 0 },
+  uLearn: { value: blankTex }, uHasLearn: { value: 0 }, uFace: { value: new THREE.Vector4(0.5, 0.8, 0.1, 0.1) }, uFaceOn: { value: 0 }
 };
 const bgMat = new THREE.ShaderMaterial({
   uniforms: U, depthTest: false, depthWrite: false,
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.99, 1.0); }`,
   fragmentShader: `
-    uniform sampler2D uVideo, uMask, uPlate;
-    uniform vec2 uCrop; uniform float uMirror, uHasVideo, uHide, uGlow, uHasPlate, uTime;
+    uniform sampler2D uVideo, uMask, uPlate, uLearn;
+    uniform vec2 uCrop; uniform float uMirror, uHasVideo, uHide, uGlow, uHasPlate, uTime, uHasLearn, uFaceOn;
+    uniform vec4 uFace;
     varying vec2 vUv;
     float maskAt(vec2 uv){ return texture2D(uMask, vec2(uv.x, 1.0 - uv.y)).r; }
     void main(){
@@ -175,14 +181,19 @@ const bgMat = new THREE.ShaderMaterial({
       if (uHide > 0.001) {
         vec3 hid;
         if (uHasPlate > 0.5) hid = texture2D(uPlate, uv).rgb;   // 撮影した無人の背景で埋める
-        else {   // 背景が無いときは、ぼかして暗い影にする
+        else {
+          // 自動で覚えた背景(人がいなかった瞬間の画素)。まだ一度も見えていない所だけ、ぼかした暗い影にする
           vec3 b = vec3(0.0); vec2 r = vec2(0.02, 0.027);
           for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) b += texture2D(uVideo, uv + vec2(float(i), float(j)) * r).rgb;
           b /= 9.0;
           float l = dot(b, vec3(0.299, 0.587, 0.114));
-          hid = mix(vec3(l), b, 0.35) * 0.35 + vec3(0.06, 0.02, 0.10);
+          vec3 shadow = mix(vec3(l), b, 0.35) * 0.35 + vec3(0.06, 0.02, 0.10);
+          vec4 lp = texture2D(uLearn, uv);
+          hid = mix(shadow, lp.rgb, uHasLearn * lp.a);
         }
-        col = mix(col, hid, m * uHide);
+        float h = m * uHide;
+        if (uFaceOn > 0.5) { vec2 q = (vUv - uFace.xy) / uFace.zw; h *= smoothstep(0.75, 1.15, length(q)); }   // 衣装モード: 顔は本人のまま
+        col = mix(col, hid, h);
       }
       float sh = 0.5 + 0.5 * sin(uTime * 9.0 + vUv.y * 30.0);
       col += m * uGlow * mix(vec3(1.0, 0.55, 0.85), vec3(1.0, 0.95, 0.8), sh) * 1.2;
@@ -316,6 +327,7 @@ function loadVRM(url, quiet) {
     VRMUtils.rotateVRM0(vrm);
     scene.add(vrm.scene);
     measureAvatar();
+    setupCostume();
     vrm.scene.visible = phase === 'idle';
     buildAvatarBones();
     say(tracking ? 'VRMを読み込みました' : 'VRM読み込み完了。カメラを開始してください');
@@ -469,7 +481,7 @@ async function initMediaPipe() {
   const base = 'https://storage.googleapis.com/mediapipe-models/';
   pose = await PoseLandmarker.createFromOptions(fs, {
     baseOptions: { modelAssetPath: base + 'pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task', delegate: 'GPU' },
-    runningMode: 'VIDEO', numPoses: 1, outputSegmentationMasks: $('hideMe').checked   // 人物マスク: 本人を隠す/光らせるのに使う
+    runningMode: 'VIDEO', numPoses: 1, outputSegmentationMasks: hideOn()   // 人物マスク: 本人を隠す/光らせるのに使う
   });
   face = await FaceLandmarker.createFromOptions(fs, {
     baseOptions: { modelAssetPath: base + 'face_landmarker/face_landmarker/float16/1/face_landmarker.task', delegate: 'GPU' },
@@ -488,7 +500,8 @@ let maskW = 0, maskH = 0;
 function clearMask() { if (maskW) { maskTex.image.data.fill(0); maskTex.needsUpdate = true; } }
 function grabMask() {
   const ms = poseRes?.segmentationMasks;
-  if (!ms?.length) { if (!poseRes?.landmarks?.length) clearMask(); return; }
+  if (!ms?.length) { if (!poseRes?.landmarks?.length) clearMask(); return false; }
+  let ok = false;
   try {
     const m = ms[0], f = m.getAsFloat32Array();
     if (m.width !== maskW || m.height !== maskH) {
@@ -499,14 +512,85 @@ function grabMask() {
     }
     const d = maskTex.image.data;
     for (let i = 0; i < d.length; i++) d[i] = f[i] * 255;
-    maskTex.needsUpdate = true;
+    maskTex.needsUpdate = true; ok = true;
   } catch (e) { console.warn(e); }
   finally { for (const m of ms) try { m.close(); } catch {} }
+  return ok;
 }
-$('hideMe').onchange = e => {
-  pose?.setOptions({ outputSegmentationMasks: e.target.checked }).catch?.(console.warn);
-  if (!e.target.checked) clearMask();
+const ovMode = () => $('ovMode').value;   // 'avatar' | 'costume' | 'none'
+const hideOn = () => ovMode() !== 'none';
+$('ovMode').onchange = () => {
+  pose?.setOptions({ outputSegmentationMasks: hideOn() }).catch?.(console.warn);
+  if (!hideOn()) clearMask();
+  trk.has = false;   // 衣装モードは肩幅ぴったりに合わせ直す
+  updateCalInfo();
 };
+$('avSize').oninput = e => $('avSizeV').textContent = '×' + (+e.target.value).toFixed(2);
+
+// 背景の自動学習: 人物マスクの外側(=背景が見えている所)の画素を少しずつ覚えていく。
+// 人が動けば、その後ろの背景もだんだん埋まる。アルファ = その画素の背景を一度でも見たか
+const learnScene = new THREE.Scene(), learnCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 2); learnCam.position.z = 1;
+const learnMat = new THREE.ShaderMaterial({
+  uniforms: { uVideo: { value: vidTex }, uMask: { value: maskTex }, uPrev: { value: blankTex }, uEmpty: { value: 0 } },
+  depthTest: false, depthWrite: false,
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+  fragmentShader: `
+    uniform sampler2D uVideo, uMask, uPrev; uniform float uEmpty; varying vec2 vUv;
+    float mk(vec2 uv){ return texture2D(uMask, vec2(uv.x, 1.0 - uv.y)).r; }
+    void main(){
+      vec4 prev = texture2D(uPrev, vUv);
+      float m = 0.0;
+      if (uEmpty < 0.5) for (int i = -2; i <= 2; i++) for (int j = -2; j <= 2; j++) m = max(m, mk(vUv + vec2(float(i) * 0.015, float(j) * 0.02)));
+      if (m > 0.15) { gl_FragColor = prev; return; }   // 人の近くは覚えない(輪郭の映り込み防止)
+      vec3 v = texture2D(uVideo, vUv).rgb;
+      gl_FragColor = vec4(prev.a < 0.5 ? v : mix(prev.rgb, v, 0.15), 1.0);
+    }`
+});
+const learnQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), learnMat); learnQuad.frustumCulled = false; learnScene.add(learnQuad);
+let rtA = null, rtB = null;
+function clearRT(rt) { renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.setRenderTarget(null); renderer.setClearColor(0x000000, 1); }
+function resetLearn() { if (rtA) { clearRT(rtA); clearRT(rtB); } U.uHasLearn.value = 0; }
+function learnBg(empty) {
+  const vw = video.videoWidth, vh = video.videoHeight; if (!vw) return;
+  if (!rtA || rtA.width !== vw || rtA.height !== vh) {
+    rtA?.dispose(); rtB?.dispose();
+    const o = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false };
+    rtA = new THREE.WebGLRenderTarget(vw, vh, o); rtB = new THREE.WebGLRenderTarget(vw, vh, o); clearRT(rtA); clearRT(rtB);
+  }
+  learnMat.uniforms.uMask.value = maskTex; learnMat.uniforms.uPrev.value = rtA.texture; learnMat.uniforms.uEmpty.value = empty ? 1 : 0;
+  renderer.setRenderTarget(rtB); renderer.render(learnScene, learnCam); renderer.setRenderTarget(null);
+  [rtA, rtB] = [rtB, rtA];
+  U.uLearn.value = rtA.texture; U.uHasLearn.value = 1;
+}
+
+// 衣装モード: アバターの頭を消して、首から下だけを重ねる(VRMの一人称設定を利用。無ければ頭ボーンを縮める)
+let fpReady = false, costumeOn = null;
+function setupCostume() {
+  fpReady = false; costumeOn = null;
+  try { if (vrm.firstPerson?.meshAnnotations?.length) { vrm.firstPerson.setup(); fpReady = true; } } catch (e) { console.warn(e); }
+}
+function applyCostume(on) {
+  costumeOn = on;
+  camera.layers.set(0);
+  if (fpReady) camera.layers.enable(on ? vrm.firstPerson.firstPersonOnlyLayer : vrm.firstPerson.thirdPersonOnlyLayer);
+  else { const h = vrm.humanoid.getRawBoneNode('head'); if (h) h.scale.setScalar(on ? 0.001 : 1); }
+  U.uFaceOn.value = on ? 1 : 0;
+}
+// 顔の範囲(画面上の楕円)。衣装モードではここを隠さない
+function updateFace() {
+  const L2 = poseRes?.landmarks?.[0]; if (!L2) return;
+  const vis = i => (L2[i].visibility ?? 0) > 0.5;
+  if (!vis(0)) return;
+  const s = i => { const n = toScreenN(L2[i].x, L2[i].y); return { x: n.x * innerWidth, y: n.y * innerHeight }; };
+  const n = s(0);
+  let w;
+  if (vis(7) && vis(8)) { const a = s(7), b = s(8); w = Math.hypot(a.x - b.x, a.y - b.y); }
+  else if (vis(2) && vis(5)) { const a = s(2), b = s(5); w = Math.hypot(a.x - b.x, a.y - b.y) * 2.4; }
+  else return;
+  const r = w * 0.85, f = U.uFace.value, k = 0.5;
+  f.x += (n.x / innerWidth - f.x) * k; f.y += (1 - (n.y - w * 0.15) / innerHeight - f.y) * k;
+  f.z += (r / innerWidth - f.z) * k; f.w += (r * 1.35 / innerHeight - f.w) * k;
+}
 let plateTex = null;
 function clearPlate() { U.uHasPlate.value = 0; U.uPlate.value = blankTex; plateTex?.dispose(); plateTex = null; }
 $('plateBtn').onclick = async () => {
@@ -676,7 +760,7 @@ async function refreshCams(camKeep, micKeep) {
 }
 async function startVideo(deviceId) {
   if (camStream) camStream.getTracks().forEach(t => t.stop());   // 先に止める(同時に開けないカメラ対策)
-  clearPlate();   // 別のカメラ/画角では撮影済みの背景が合わない
+  clearPlate(); resetLearn();   // 別のカメラ/画角では覚えた背景が合わない
   const v = { width: 640, height: 480, frameRate: { ideal: 30, max: 30 } };
   if (deviceId) v.deviceId = { exact: deviceId }; else v.facingMode = 'user';
   const vs = await navigator.mediaDevices.getUserMedia({ video: v, audio: false });
@@ -995,12 +1079,12 @@ $('rec').onclick = () => { if (recorder && recorder.state === 'recording') recor
 // 近づくと足首は映らないので、キャリブレーションで測った「肩幅 / S」「胴の長さ / S」の比から S を推定する。
 let cal = null;   // { full:true, ksw, kt } 全身で測定 / { full:false, rt } 上半身のみ(肩幅をアバターに合わせる)
 function getK() {
-  if (cal?.full) return { ksw: cal.ksw, kt: cal.kt };
+  if (cal?.full && ovMode() !== 'costume') return { ksw: cal.ksw, kt: cal.kt };   // 衣装モードは肩幅ぴったり
   const ksw = AV.SW / AV.L;
   return { ksw, kt: cal?.rt ? ksw * cal.rt : AV.T / AV.L };
 }
 function updateCalInfo() {
-  $('calInfo').textContent = !cal ? '体格: 未測定'
+  $('calInfo').textContent = ovMode() === 'costume' ? '体格: 衣装モード(肩幅に合わせて着せます)' : !cal ? '体格: 未測定'
     : cal.full ? '体格: 全身で測定済み(肩幅 ÷ 肩〜足首 = ' + cal.ksw.toFixed(2) + ')'
     : '体格: 上半身で測定(肩幅をアバターに合わせます)';
 }
@@ -1046,7 +1130,7 @@ function placeAvatar(dt) {
       const kp = 1 - Math.exp(-dt * 14), ks = 1 - Math.exp(-dt * 7);
       trk.sx += (t.sx - trk.sx) * kp; trk.sy += (t.sy - trk.sy) * kp; trk.logS += (Math.log(t.S) - trk.logS) * ks;
     }
-    sx = trk.sx; sy = trk.sy; S = Math.exp(trk.logS);
+    sx = trk.sx; sy = trk.sy; S = Math.exp(trk.logS) * +$('avSize').value;   // 少し大きめにすると生身がはみ出しにくい
   }
   const tn = Math.tan(camera.fov * Math.PI / 360);
   const d = Math.max(0.2, AV.L * innerHeight / (2 * tn * S));
@@ -1221,7 +1305,9 @@ function updatePhase(dt, now) {
     vrm.scene.visible = wantVis;
     if (phase === 'live' && body.ok) wantVis ? burst(30, true) : poof();   // 見失った/戻ってきた
   }
-  const hideTgt = wantVis && phase !== 'idle' && $('hideMe').checked ? 1 : 0;
+  const hideTgt = wantVis && phase !== 'idle' && hideOn() ? 1 : 0;
+  const wantCostume = ovMode() === 'costume' && phase !== 'idle';
+  if (vrm && wantCostume !== costumeOn) applyCostume(wantCostume);
   U.uHide.value += (hideTgt - U.uHide.value) * (1 - Math.exp(-dt * 8));
   // フラッシュとタイトル(録画にも映る)
   flashA *= Math.exp(-dt * 3.2); flashMat.opacity = flashA > 0.003 ? flashA : 0;
@@ -1234,7 +1320,12 @@ function updatePhase(dt, now) {
   }
 }
 function onDetect(now) {
-  grabMask();
+  const fresh = grabMask();
+  if (hideOn()) {   // 人が映っていればマスクの外を、誰もいなければ(1秒以上)画面全体を背景として覚える
+    if (poseRes?.landmarks?.length) { if (fresh) learnBg(false); }
+    else if (now - trk.seenT > 1000) learnBg(true);
+  }
+  updateFace();
   const m = measureFrame();
   if (m) { if (now - trk.seenT > 1500) trk.has = false; trk.tgt = estimate(m); trk.seenT = now; }
   if (phase === 'calib') calibStep(m, now);
