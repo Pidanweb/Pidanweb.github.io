@@ -22,6 +22,9 @@
   #wiiDbg{position:fixed;left:10px;top:10px;z-index:6;margin:0;padding:6px 8px;max-width:46vw;font:11px/1.35 monospace;color:#9fffb0;background:#000a;border:1px solid #7ae7ff44;border-radius:6px;pointer-events:none;white-space:pre-wrap}
   #skMenu{border:1px solid #7ae7ff44;border-radius:8px;padding:6px 8px;font-size:13px;text-align:left} #skMenu summary{cursor:pointer;color:#ffd35a;font-weight:bold} #skMenu label{display:block;margin-top:6px} #skMenu input[type=range]{width:100%} #skMenu small{color:#9fdcea}
   #hCur{position:fixed;left:0;top:0;z-index:20;width:22px;height:22px;margin:-11px 0 0 -11px;border:3px solid #ffd35a;border-radius:50%;background:#ffd35a33;box-shadow:0 0 10px #ffd35a;pointer-events:none;display:none}
+  #palmRing{position:fixed;left:50%;top:50%;z-index:19;width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:50%;display:none;place-items:center;font-size:40px;pointer-events:none;
+    background:radial-gradient(#061418dd 58%,transparent 60%),conic-gradient(#ffd35a var(--p,0deg),#7ae7ff33 0);box-shadow:0 0 16px #ffd35a66}
+  #palmRing.on{display:grid}
   #hCur.on{display:block} #hCur.down{background:#ffd35acc;border-color:#fff}
   #menu .hHover{outline:2px solid #ffd35a;outline-offset:2px;box-shadow:0 0 12px #ffd35a88}
 </style>
@@ -69,8 +72,8 @@
     <button id="skCal" style="margin-top:6px;width:100%">ジャイロ再キャリブ（−ボタンでも可）</button>
   </details>
   <button id="mRestart">↻ リスタート</button><button id="mTitle">⌂ タイトルへ</button>
-  <small style="color:#9fdcea">✋ 人差し指で「1」を描いて開く / 指先でカーソル → Aで決定（スライダーはAを押したまま左右）/ M キーで開閉</small></div>
-<div id="hCur"></div>
+  <small style="color:#9fdcea">✋ 手のひらを約1秒見せて開く / 指先でカーソル → Aで決定（スライダーはAを押したまま左右）/ M キーで開閉</small></div>
+<div id="hCur"></div><div id="palmRing">✋</div>
 <pre id="wiiDbg"></pre>
 <canvas id="facePrev" width="320" height="240"></canvas>
 <video id="v" autoplay playsinline muted></video>
@@ -395,7 +398,7 @@ function faceDraw(){
     pctx.beginPath(); pctx.moveTo(cx - 12, cy); pctx.lineTo(cx + 12, cy); pctx.moveTo(cx, cy - 12); pctx.lineTo(cx, cy + 12); pctx.stroke();
     if (face.seen){ pctx.strokeStyle = '#ff4d5e'; pctx.beginPath(); pctx.moveTo(cx, cy); pctx.lineTo(X(face.x), Y(face.y)); pctx.stroke(); }
   }
-  if (hand.trail.length > 1){ pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 3; pctx.beginPath(); hand.trail.forEach((q, i) => i ? pctx.lineTo(X(q.x), Y(q.y)) : pctx.moveTo(X(q.x), Y(q.y))); pctx.stroke(); }
+  if (hand.palm && hand.prog > 0){ pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 4; pctx.beginPath(); pctx.arc(X(hand.palm.x), Y(hand.palm.y), 22, -Math.PI/2, -Math.PI/2 + hand.prog*Math.PI*2); pctx.stroke(); }
   pctx.font = 'bold 16px sans-serif'; pctx.textAlign = 'left';
   pctx.fillStyle = !face.lm ? '#ffd35a' : face.seen ? '#5ee08a' : '#ff4d5e';
   pctx.fillText(!face.lm ? 'モデル読み込み中…' : face.seen ? (face.cx === null ? '顔を中心に構えて…' : '● 追跡中') : '× 顔が見つかりません', 8, 22);
@@ -411,8 +414,10 @@ $('faceCal').onclick = faceRecenter;
 $('faceStart').onclick = () => { if (!face.on){ $('faceOn').checked = face.on = true; } startFace(); };
 let prevOn = true; $('facePrevOn').onchange = e => prevOn = e.target.checked;
 
-// ===== 指ジェスチャー(人差し指で縦に「1」)でメニュー開閉 =====
-const hand = { lm:null, loading:false, trail:[], last:-1, cool:0 };
+// ===== 手のひらを約1秒見せるとメニューを開く =====
+const hand = { lm:null, loading:false, trail:[], last:-1, cool:0, pt0:null, px:0, py:0, prog:0, lastOk:-1e9, needRelease:false, palm:null };
+// HOLD = 手のひらを見せ続ける時間(ms) / MOVE = これ以上動いたら数え直し(映像幅比) / GRACE = 認識が途切れても許す時間(ms)
+const PALM = { HOLD:1000, MOVE:.08, GRACE:250 };
 async function loadHandModel(){
   if (hand.lm || hand.loading) return; hand.loading = true;
   try {
@@ -425,19 +430,29 @@ async function loadHandModel(){
 function handStep(now){
   const v = face.src; if (!hand.lm || !v || v.readyState < 2 || !v.videoWidth || now - hand.last < 50) return; hand.last = now;
   let r; try { r = hand.lm.detectForVideo(v, now); } catch (e){ return; }
-  const p = r.landmarks && r.landmarks[0]; if (!p){ hand.trail = []; return; }
-  if (menuOn){   // メニュー中は人差し指の先(8)をカーソルに使う。下方向へ動かしても閉じないよう「1」判定は止める
-    hand.trail = []; hc.seen = now;
+  const p = r.landmarks && r.landmarks[0]; if (!p){ palmLost(now); return; }
+  if (menuOn){   // メニュー中は人差し指の先(8)をカーソルに使う
+    hand.needRelease = true; hand.pt0 = null; hand.prog = 0; hc.seen = now;
     const cl = v => Math.max(0, Math.min(1, v)), x = faceMirror() ? 1 - p[8].x : p[8].x;
     hc.tx = cl((x - HC.X0)/(1 - HC.X0*2)); hc.ty = cl((p[8].y - HC.Y0)/(1 - HC.Y0*2)); return;
   }
   const d = (a, b) => Math.hypot(p[a].x - p[b].x, p[a].y - p[b].y);
-  // 人差し指だけ伸ばし、他の指は曲げている形
-  if (!(d(8, 0) > d(6, 0)*1.1 && d(12, 0) < d(10, 0) && d(16, 0) < d(14, 0) && d(20, 0) < d(18, 0))){ hand.trail = []; return; }
-  const T = hand.trail; T.push({ x:p[8].x, y:p[8].y, t:now }); while (T.length && now - T[0].t > 900) T.shift();
-  if (T.length < 5 || now < hand.cool) return;
-  const dy = T[T.length-1].y - T[0].y, xs = T.map(q => q.x), wd = Math.max(...xs) - Math.min(...xs);
-  if (dy > .22 && wd < dy*.35 && now - T[0].t > 250){ hand.cool = now + 1500; hand.trail = []; toggleMenu(); }   // 上→下へ縦一線
+  // 手のひらを開いた形: 4本の指先が第2関節より手首から遠く、親指も外に開いている
+  const open = [[8, 6], [12, 10], [16, 14], [20, 18]].every(([t, j]) => d(t, 0) > d(j, 0)*1.15) && d(4, 17) > d(3, 17)*1.05;
+  if (!open){ palmLost(now); return; }
+  hand.lastOk = now; if (hand.needRelease) return;   // 一度開いた後は、手を下ろす(開いた手をやめる)まで再判定しない
+  const cx = p[9].x, cy = p[9].y; hand.palm = { x:cx, y:cy };   // 9 = 中指の付け根(手のひらの中心付近)
+  if (hand.pt0 == null || Math.hypot(cx - hand.px, cy - hand.py) > PALM.MOVE){ hand.pt0 = now; hand.px = cx; hand.py = cy; }   // 大きく動いたら数え直し
+  hand.prog = Math.min(1, (now - hand.pt0)/PALM.HOLD);
+  if (hand.prog >= 1){ hand.pt0 = null; hand.prog = 0; hand.needRelease = true; toggleMenu(true); }
+}
+function palmLost(now){   // 一瞬の認識漏れでは途切れないよう少し猶予を持たせる
+  if (now - hand.lastOk < PALM.GRACE) return;
+  hand.pt0 = null; hand.prog = 0; hand.needRelease = false; hand.palm = null;
+}
+function palmUI(now){
+  const el = $('palmRing'), on = !menuOn && hand.prog > .08 && now - hand.lastOk < 300;
+  el.classList.toggle('on', on); if (on) el.style.setProperty('--p', (hand.prog*360).toFixed(0) + 'deg');
 }
 function toggleMenu(f){ menuOn = f === undefined ? !menuOn : f; $('menu').classList.toggle('on', menuOn); }
 
@@ -1134,7 +1149,7 @@ addEventListener('mouseup', e => {
 let last = performance.now();
 function loop(now){
   const dt = Math.min(.033, (now - last)/1000); last = now;
-  faceStep(now); handStep(now); hcStep(now, dt); faceDraw(); update(dt); render(); requestAnimationFrame(loop);
+  faceStep(now); handStep(now); hcStep(now, dt); palmUI(now); faceDraw(); update(dt); render(); requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 // タイトル画面(parytitle.html)から ?start=1 で来たら自動スタート
