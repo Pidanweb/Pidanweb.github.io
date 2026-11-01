@@ -49,7 +49,7 @@
   <details id="gnMenu" open><summary>🔫 ガンナー設定</summary>
     <label><input type="checkbox" id="hbOn" checked> 当たり判定（四角）を表示</label>
     <label>当たり判定の濃さ<input type="range" id="hbOp" min="0.05" max="1" step="0.05" value="0.25"></label>
-    <small>Wii: A=射撃（押しっぱなしで連射）/ B=ガード / B+振り上げ=パリィ<br>十字 ↑=グレネード / ↓=時限地雷（3秒で爆発）/ ←→=回り込み弾<br>−=照準の中心リセット / HOME=メニュー<br>照準が四角に重なると赤くなり、その時だけ射撃が当たります</small>
+    <small>Wii: A=射撃（1回押すと1発・装弾数8）/ B=ガード / B+振り上げ=パリィ<br>リモコンを縦に立てる=リロード（ゲージの黄色でA→パーフェクト・強化弾）<br>十字 ↑=グレネード / ↓=時限地雷（3秒で爆発）/ ←→=回り込み弾<br>−=照準の中心リセット / HOME=メニュー<br>照準が四角に重なると赤くなり、その時だけ射撃が当たります<br>黄色い小さい四角=弱点（回避直後・スタン中だけ開く／3倍ダメージ）</small>
   </details>
   <button id="mRestart">↻ リスタート</button><button id="mTitle">⌂ タイトルへ</button>
   <small style="color:#9fdcea">✋ 人差し指で「1」を描く / M キーで開閉</small></div>
@@ -233,7 +233,7 @@ const retTex = col => canvasTex(128, 128, (x, w, h) => {
   }
   x.fillStyle = col; x.beginPath(); x.arc(64, 64, 4, 0, 7); x.fill();
 });
-const RET_N = retTex('#7ae7ff'), RET_L = retTex('#ff4d5e');
+const RET_N = retTex('#7ae7ff'), RET_L = retTex('#ff4d5e'), RET_C = retTex('#ffd35a');
 const reticle = new THREE.Sprite(new THREE.SpriteMaterial({ transparent:true, depthTest:false, map:RET_N }));
 reticle.renderOrder = 35; reticle.visible = false; camera.add(reticle);
 function setMsg(L){
@@ -458,6 +458,9 @@ const playBoom = () => sfx((a, t) => { noise(a, t, .7, 'lowpass', 500, .9); tone
 const playCurve = () => sfx((a, t) => tone(a, t, 'sawtooth', 260, 1100, .28, .12));
 const playBeep = hi => sfx((a, t) => tone(a, t, 'square', hi ? 1600 : 1100, hi ? 1600 : 1100, .06, .1));
 const playThrow = () => sfx((a, t) => noise(a, t, .18, 'bandpass', 900, .25));
+const playEmpty = () => sfx((a, t) => tone(a, t, 'square', 2400, 1800, .03, .08));
+const playReload = done => sfx((a, t) => { noise(a, t, .05, 'bandpass', done ? 2500 : 1500, .4); if (done) noise(a, t + .08, .05, 'bandpass', 3200, .4); });
+const playPerfect = () => sfx((a, t) => { tone(a, t, 'triangle', 700, 1400, .12, .2); tone(a, t + .1, 'triangle', 1400, 2100, .15, .2); });
 $('viewBtn').onclick = () => setView(!tp); $('mView').onclick = () => setView(!tp); $('menuBtn').onclick = () => toggleMenu();
 $('mClose').onclick = () => toggleMenu(false); $('mFace').onclick = $('faceFlip').onclick = flipFaceCam;
 $('mVol').oninput = e => vol = +e.target.value; $('mBgm').oninput = e => bgm.volume = +e.target.value;
@@ -473,22 +476,26 @@ $('jobBtn').onclick = () => $('jobs').classList.toggle('on');
 // ===== ゲーム状態 =====
 const keys = {}, mouse = { nx:0, ny:0 }, ray = new THREE.Raycaster(), tmp = new THREE.Vector3(), mv2 = new THREE.Vector2();
 const PMAX = 250;
-const CD = { G:3, M:5, C:1.2 }, FIRE_CD = .16;   // クールタイム: グレネード / 地雷 / 回り込み弾、射撃間隔
-const P = { armed:false, x:0, hp:PMAX, inv:0, par:0, parAge:0, parCd:0, counter:0, cBig:0, guard:false, fireCd:0, cdG:0, cdM:0, cdC:0, recoil:0, lock:false };
+const CD = { G:3, M:5, C:1.2 }, FIRE_CD = .1;   // クールタイム: グレネード / 地雷 / 回り込み弾、射撃の最短間隔
+const MAG = 8, RELOAD_T = 1.1, AR_ZONE = [.5, .68], DMG = 5, CRIT = 3;   // 装弾数 / リロード時間 / パーフェクトの範囲(割合) / 1発のダメージ / 弱点倍率
+const P = { armed:false, x:0, hp:PMAX, inv:0, par:0, parAge:0, parCd:0, counter:0, cBig:0, guard:false, fireCd:0, cdG:0, cdM:0, cdC:0, recoil:0, lock:false,
+            ammo:MAG, power:0, rl:null, vt:0, crit:false, hintT:0, weakWas:false };
 const B = { x:0, z:-16, vz:0, s:'enter', t:1, wt:1, hp:800, max:800, hit:false, weak:0, flash:0, combo:0, stun:false, phase:1, wob:0, time:0, unp:false };
 let state = 'title', hitstop = 0, shake = 0, fovp = 0, flash = 0, vr = false, endAt = 0;
 function reset(){
-  Object.assign(P, { armed:false, x:0, hp:PMAX, inv:0, par:0, parAge:0, parCd:0, counter:0, guard:false, fireCd:0, cdG:0, cdM:0, cdC:0, recoil:0, lock:false });
+  Object.assign(P, { armed:false, x:0, hp:PMAX, inv:0, par:0, parAge:0, parCd:0, counter:0, guard:false, fireCd:0, cdG:0, cdM:0, cdC:0, recoil:0, lock:false, ammo:MAG, power:0, rl:null, vt:0, crit:false, weakWas:false });
   Object.assign(B, { x:0, z:-16, vz:0, s:'enter', t:1, hp:800, hit:false, weak:0, combo:0, stun:false, phase:1, unp:false });
   bossG.visible = true; clearProj();
 }
 function titleMsg(){
   setMsg([['GIANT SLIME RAID : GUNNER', '#ffd35a', 64],
-          ['顔の動きで照準 → 敵の四角に重なったら A で射撃', '#fff', 28],
+          ['顔の動きで照準 → 四角に重なったら A で射撃（8発）', '#fff', 28],
+          ['リモコンを縦に立ててリロード　黄色い所で A → 強化弾', '#9fe870', 24],
+          ['回避直後・スタン中は黄色い弱点が開く → 3倍ダメージ', '#ffd35a', 24],
           ['B 長押し: ガード　B + 振り上げ: パリィ（赤く光る間）', '#fff', 26],
           ['紫に光る攻撃はパリィ不可 → ガードで防ぐ', '#c06bff', 26],
           ['十字 ↑ グレネード　↓ 時限地雷　← → 回り込み弾', '#ffd35a', 26],
-          ['マウス: 左=射撃 右=パリィ Space=ガード 矢印=サブ武器 A/D=回避', '#7ae7ff', 22],
+          ['マウス: 左=射撃 R=リロード 右=パリィ Space=ガード 矢印=サブ A/D=回避', '#7ae7ff', 22],
           ['C / −: 照準の中心リセット　V:VR　T:視点　M:メニュー', '#7ae7ff', 22],
           ['クリック / A でスタート（Webカメラを使います）', '#7ae7ff', 30]]);
 }
@@ -501,6 +508,13 @@ const hbLineM = new THREE.LineBasicMaterial({ color:0xff4d5e, transparent:true, 
 const hbBox = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), hbFillM); hbBox.renderOrder = 6;
 hbBox.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), hbLineM)); scene.add(hbBox);
 let hbShow = true, hbOp = .25;
+// 弱点（目とコアのあたり）。ボスの子にして一緒に動かす。回避直後(B.weak)とスタン中だけ開く
+const WB = new THREE.Box3(), wkGeo = new THREE.BoxGeometry(1.1, .6, .5);
+const wkFillM = new THREE.MeshBasicMaterial({ color:0xffd35a, transparent:true, opacity:.1, depthTest:false, depthWrite:false });
+const wkLineM = new THREE.LineBasicMaterial({ color:0xffd35a, transparent:true, opacity:.4, depthTest:false, depthWrite:false });
+const wkBox = new THREE.Mesh(wkGeo, wkFillM); wkBox.position.set(0, .15, .8); wkBox.renderOrder = 7;
+const wkLine = new THREE.LineSegments(new THREE.EdgesGeometry(wkGeo), wkLineM); wkLine.renderOrder = 7; wkBox.add(wkLine); bossG.add(wkBox);
+const weakOpen = () => bossAlive() && state === 'play' && (B.weak > 0 || (B.s === 'knock' && B.stun));
 $('hbOn').onchange = e => hbShow = e.target.checked; $('hbOp').oninput = e => hbOp = +e.target.value;
 const bossAlive = () => bossG.visible && B.s !== 'dead';
 function updHitbox(){
@@ -509,9 +523,15 @@ function updHitbox(){
   hbBox.position.copy(p); hbBox.scale.set(s.x*2, s.y*2, s.z*2); hbBox.visible = hbShow && bossG.visible;
   const c = P.lock ? 0xffd35a : 0xff4d5e; hbFillM.color.setHex(c); hbLineM.color.setHex(c);
   hbFillM.opacity = hbOp*(P.lock ? .5 : .28); hbLineM.opacity = Math.min(1, hbOp*(P.lock ? 2.4 : 1));
+  bossG.updateMatrixWorld(true); WB.setFromObject(wkBox);
+  const open = weakOpen(), pul = .5 + .5*Math.sin(performance.now()/90);
+  wkBox.visible = hbShow && bossG.visible;
+  wkFillM.color.setHex(open ? 0xffd35a : 0x8a8f99); wkLineM.color.setHex(open ? (P.crit ? 0xffffff : 0xffd35a) : 0x8a8f99);
+  wkFillM.opacity = open ? Math.min(.8, hbOp*(.6 + .6*pul)) : hbOp*.15; wkLineM.opacity = Math.min(1, open ? hbOp*3 + .2 : hbOp*.8);
 }
 function aimRay(){ ray.setFromCamera(mv2.set(mouse.nx, mouse.ny), camera); return ray.ray; }
 function aimOnBoss(out){ const r = aimRay(); return bossAlive() && !!r.intersectBox(HB, out) && r.origin.distanceTo(out) < 40; }
+function aimOnWeak(out){ const r = aimRay(); return weakOpen() && !!r.intersectBox(WB, out) && r.origin.distanceTo(out) < 40; }
 
 function hurtBoss(d, at, big, small){
   if (!bossAlive() || state !== 'play') return;
@@ -545,15 +565,40 @@ function updFX2(dt){
 }
 const canAct = () => state === 'play' && !menuOn && !P.guard && P.par <= 0 && !P.armed;
 function shoot(){
-  if (P.fireCd > 0 || !canAct()) return;
-  P.fireCd = FIRE_CD; P.recoil = 1; mFlash.material.opacity = 1; mFlash.material.rotation = Math.random()*6.28; playShot();
-  const from = muzzleWorld(), hit = aimOnBoss(aimHit), cnt = P.counter > 0;
+  if (P.fireCd > 0 || P.rl || !canAct()) return;
+  if (P.ammo <= 0){   // 弾切れ：空撃ち
+    P.fireCd = .2; playEmpty(); wiiPattern([25, 60, 25]);
+    if (performance.now() > P.hintT){ P.hintT = performance.now() + 1500; popCam(ctl.mode === 'wii' ? '弾切れ！ 縦に立ててリロード' : '弾切れ！ R でリロード', '#ff4d5e', .7, 1); }
+    return;
+  }
+  P.ammo--; const pw = P.power > 0; if (pw) P.power--;
+  P.fireCd = FIRE_CD; P.recoil = 1; mFlash.material.opacity = 1; mFlash.material.rotation = Math.random()*6.28; playShot(); wiiPattern([pw ? 50 : 35]);
+  const from = muzzleWorld(), crit = aimOnWeak(aimHit), hit = crit || aimOnBoss(aimHit), cnt = P.counter > 0;
   const to = hit ? aimHit.clone() : ray.ray.at(30, new THREE.Vector3());
-  tracer(from, to, cnt ? 0xffd35a : 0x9ff3ff);
+  tracer(from, to, cnt || pw ? 0xffd35a : crit ? 0xfff2b0 : 0x9ff3ff);
   if (!hit) return;
-  if (cnt){ P.counter = 0; hurtBoss(P.cBig, to, true); shake = .5; hitstop = .15; popCam('COUNTER!!', '#ffd35a', 1.2, 1); wiiRumble(200); }
-  else hurtBoss(B.weak > 0 ? 5 : 3, to, false, true);
+  const d = DMG*(crit ? CRIT : 1)*(pw ? 2 : 1);
+  if (cnt){ P.counter = 0; hurtBoss(P.cBig + d, to, true); shake = .5; hitstop = .15; popCam('COUNTER!!', '#ffd35a', 1.2, 1); wiiPattern([200]); }
+  else if (crit){ hurtBoss(d, to, true, true); popup('CRITICAL', '#ffd35a', to.clone().add(new THREE.Vector3(0, 1.1, 0)), .45, .45); wiiPattern([70]); hitstop = Math.max(hitstop, .03); }
+  else hurtBoss(d, to, pw, true);
 }
+// リロード：Wiiは縦に立てている間だけゲージが進む（マウスはRで自動進行）。黄色の範囲でA/クリック → 即完了＋強化弾(2倍)、外すとジャムで遅くなる
+function startReload(){
+  if (P.rl || P.ammo >= MAG || state !== 'play' || menuOn) return;
+  P.rl = { t:0, jam:false }; playReload(false); wiiPattern([30]);
+}
+function activeReload(){
+  const r = P.rl; if (!r || r.jam) return;
+  const k = r.t/RELOAD_T;
+  if (k >= AR_ZONE[0] && k <= AR_ZONE[1]) finishReload(true);
+  else { r.jam = true; playEmpty(); wiiPattern([25, 40, 25]); popCam('ジャム！', '#ff4d5e', .8, .8); }
+}
+function finishReload(perfect){
+  P.rl = null; P.ammo = MAG; P.power = perfect ? MAG : 0; P.fireCd = .1;
+  if (perfect){ playPerfect(); wiiPattern([60, 50, 120]); popCam('PERFECT RELOAD! 強化弾', '#ffd35a', 1, 1); }
+  else { playReload(true); wiiPattern([150]); }
+}
+function trigger(){ if (P.rl) activeReload(); else shoot(); }
 
 // ===== サブ武器（十字キー）=====
 const proj = [];
@@ -712,7 +757,7 @@ function bossAI(dt){
       }
       else if (P.inv <= 0) popCam('回避!', '#7ae7ff', .9, .8);
     }
-    if (B.s === 'charge' && B.z > 3){ B.combo++; B.s = 'enter'; B.z = -16; B.x = (Math.random()-.5)*5; B.weak = 2.5; P.armed = false; }
+    if (B.s === 'charge' && B.z > 3){ B.combo++; B.s = 'enter'; B.z = -16; B.x = (Math.random()-.5)*5; B.weak = 3; P.armed = false; }
   } else if (B.s === 'knock'){
     B.z += B.vz*dt; B.vz *= Math.pow(.04, dt);
     if (B.stun) B.z += (HOVER - B.z)*dt*.5;
@@ -748,14 +793,14 @@ function bossAnim(dt){
 // ===== 銃の追従（照準の方向へ銃口を向ける）=====
 function updGun(dt){
   const asp = vr ? W/2/H : W/H, hh = Math.tan((70 - fovp)*Math.PI/360)*3, rx = mouse.nx*hh*asp, ry = mouse.ny*hh;
-  reticle.visible = state === 'play'; reticle.position.set(rx, ry, -3); reticle.scale.setScalar(P.lock ? .46 : .4);
-  const want = P.lock ? RET_L : RET_N; if (reticle.material.map !== want){ reticle.material.map = want; reticle.material.needsUpdate = true; }
+  reticle.visible = state === 'play'; reticle.position.set(rx, ry, -3); reticle.scale.setScalar(P.crit ? .54 : P.lock ? .46 : .4);
+  const want = P.crit ? RET_C : P.lock ? RET_L : RET_N; if (reticle.material.map !== want){ reticle.material.map = want; reticle.material.needsUpdate = true; }
   const low = P.guard || P.par > 0 || P.armed, k = Math.min(1, dt*16);
   const tx = low ? .3 : .5, ty = low ? -.8 : -.5, tz = (low ? -1.2 : -1.4) + P.recoil*.12;
   gun.position.x += (tx - gun.position.x)*k; gun.position.y += (ty - gun.position.y)*k; gun.position.z += (tz - gun.position.z)*k;
   const dx = rx*8/3 - gun.position.x, dy = ry*8/3 - gun.position.y, dz = -8 - gun.position.z;
   gun.rotation.y = Math.atan2(-dx, -dz); gun.rotation.x = Math.atan2(dy, Math.hypot(dx, dz)) + P.recoil*.22 + (low ? -.5 : 0);
-  gunAcc.emissive.setHex(P.counter > 0 ? 0xffa020 : P.lock ? 0xff4d5e : 0x2a8fb0);
+  gunAcc.emissive.setHex(P.counter > 0 || P.power > 0 ? 0xffa020 : P.lock ? 0xff4d5e : 0x2a8fb0);
   gShield.visible = P.guard; shield.visible = P.par > 0 || P.armed;
   if (shield.visible) shield.scale.setScalar(.6 + .5*Math.min(1, P.parAge/.1));
 }
@@ -773,6 +818,31 @@ function hudSkills(){
   skS.scale.set(.17*1024/96, .17, 1); skS.position.set(0, -1.32, -3); hud.add(skS);
 }
 
+// 残弾(8発)とリロードゲージ
+const ammoPips = [];
+for (let i = 0; i < MAG; i++){ const m = new THREE.Mesh(new THREE.PlaneGeometry(.06, .2), new THREE.MeshBasicMaterial({ color:0x7ae7ff, depthTest:false })); m.position.set(-1.7 + i*.085, -1.3, -3); m.renderOrder = 11; hud.add(m); ammoPips.push(m); }
+const rlW = 1.6, rlG = new THREE.Group(); rlG.position.set(-.3, -.95, -3); rlG.visible = false; hud.add(rlG);
+const rlPl = (w, h, c, o, ro) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color:c, transparent:true, opacity:o, depthTest:false })); m.renderOrder = ro; rlG.add(m); return m; };
+rlPl(rlW + .06, .16, 0x000000, .6, 11);
+const rlZone = rlPl(rlW*(AR_ZONE[1] - AR_ZONE[0]), .12, 0xffd35a, .8, 12); rlZone.position.x = -rlW/2 + rlW*(AR_ZONE[0] + AR_ZONE[1])/2;
+const rlFillGeo = new THREE.PlaneGeometry(rlW, .06); rlFillGeo.translate(rlW/2, 0, 0);
+const rlFill = new THREE.Mesh(rlFillGeo, new THREE.MeshBasicMaterial({ color:0x7ae7ff, transparent:true, opacity:.9, depthTest:false })); rlFill.position.x = -rlW/2; rlFill.renderOrder = 13; rlG.add(rlFill);
+const rlMark = rlPl(.04, .22, 0xffffff, 1, 14);
+const rlLab = mkSprite('RELOAD', '#7ae7ff', .2); rlLab.position.y = .2; rlG.add(rlLab);
+let rlHint = null, rlHintStr = '';
+function hudAmmo(){
+  for (let i = 0; i < MAG; i++) ammoPips[i].material.color.setHex(i < P.ammo ? (P.power > 0 ? 0xffd35a : 0x7ae7ff) : 0x333a40);
+  rlG.visible = !!P.rl && state === 'play'; if (!P.rl) return;
+  const k = Math.min(1, P.rl.t/RELOAD_T), paused = ctl.mode === 'wii' && !wii.vert;
+  rlFill.scale.x = Math.max(.001, k); rlMark.position.x = -rlW/2 + rlW*k;
+  rlFill.material.color.setHex(P.rl.jam ? 0xff4d5e : paused ? 0x556070 : 0x7ae7ff); rlZone.material.opacity = P.rl.jam ? .2 : .8;
+  const hs = P.rl.jam ? 'ジャム… 待って' : paused ? '縦に立てて！' : ctl.mode === 'wii' ? '黄色の所で A' : '黄色の所でクリック';
+  if (hs !== rlHintStr){
+    rlHintStr = hs; if (rlHint){ rlG.remove(rlHint); rlHint.material.map.dispose(); rlHint.material.dispose(); }
+    rlHint = mkSprite(hs, '#ffd35a', .2); rlHint.position.y = -.22; rlG.add(rlHint);
+  }
+}
+
 function update(dt){
   if (hitstop > 0){ hitstop -= dt; dt *= .05; }
   shake *= Math.pow(.002, dt); fovp *= Math.pow(.001, dt); flash = Math.max(0, flash - dt*2.5);
@@ -786,7 +856,10 @@ function update(dt){
     for (const k of ['counter', 'inv', 'parCd', 'fireCd', 'cdG', 'cdM', 'cdC']) P[k] -= dt;
     if (P.par > 0 || P.armed) P.parAge += dt;
     if (P.par > 0) P.par -= dt;
-    if (ctl.mode === 'mouse' ? mdn.on : wii.a) shoot();   // 押しっぱなしで連射
+    // リロード：Wiiは縦向きを0.25秒保つと開始、縦向きの間だけ進む
+    P.vt = ctl.mode === 'wii' && wii.vert ? P.vt + dt : 0;
+    if (P.rl){ if (ctl.mode === 'mouse' || wii.vert){ P.rl.t += dt*(P.rl.jam ? .5 : 1); if (P.rl.t >= RELOAD_T) finishReload(false); } }
+    else if (P.vt > .25 && P.ammo < MAG) startReload();
     bossAI(dt);
   } else if (state === 'title'){ B.z += (HOVER - B.z)*Math.min(1, dt*2); B.s = 'enter'; }
   if (!playing) P.guard = false;
@@ -799,11 +872,12 @@ function update(dt){
   if (tp){ camera.rotation.set(mouse.ny*.12 - .22, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + 1.5 + sh*.6, 4.2); }
   else { camera.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + sh*.6, 0); }
   camera.updateMatrixWorld();
-  updHitbox(); P.lock = state === 'play' && aimOnBoss(aimHit);
+  updHitbox(); P.lock = state === 'play' && aimOnBoss(aimHit); P.crit = P.lock && aimOnWeak(aimHit);
+  { const wo = weakOpen(); if (wo && !P.weakWas) popCam('弱点露出！ 黄色を狙え', '#ffd35a', .8, 1); P.weakWas = wo; }
   updGun(dt); if (playing) updProj(dt); updFX2(dt); updFX(dt);
   bossBar.scale.x = Math.max(.0001, B.hp/B.max); pBar.scale.x = Math.max(.0001, P.hp/PMAX);
   parBar.scale.x = Math.max(.0001, P.parCd > 0 ? 1 - P.parCd/.7 : 1);
-  hud.visible = state === 'play'; hudSkills(); $('ui').style.display = vr ? 'none' : '';
+  hud.visible = state === 'play'; hudSkills(); hudAmmo(); $('ui').style.display = vr ? 'none' : '';
   const asp = vr ? W/2/H : W/H, mw = Math.min(7, 5.3*asp); msg.scale.set(mw, mw/2, 1);
 }
 
@@ -827,6 +901,7 @@ addEventListener('keydown', e => {
   if (e.repeat || state !== 'play' || menuOn) return;
   if (k === 'arrowup') throwGrenade(); else if (k === 'arrowdown') placeMine();
   else if (k === 'arrowleft') curveShot(-1); else if (k === 'arrowright') curveShot(1);
+  else if (k === 'r') startReload();
 });
 addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 function setMouse(e){
@@ -837,7 +912,7 @@ addEventListener('mousemove', setMouse);
 // ===== 操作切替（マウス / Wiiリモコン）=====
 const ctl = { mode:'mouse' }, mdn = { on:false };
 const wii = { dev:null, leds:1, a:false, b:false, aBlock:false, pA:false, pPlus:false, pHome:false, pMinus:false, pPad:0,
-              gx:0, gy:0, gz:1, gok:false, lastSw:0, lastNeg:-1e9, th:2.2, rt:0, modeT:0 };
+              gx:0, gy:0, gz:1, gok:false, vert:false, lastSw:0, lastNeg:-1e9, th:2.2, rt:0, modeT:0 };
 const WVID = 0x057e, WPIDS = [0x0306, 0x0330];
 function wiiMsg(t){ $('wiiStat').textContent = t; }
 function setCtl(m){
@@ -848,7 +923,9 @@ function setCtl(m){
 }
 const wsend = async (id, bytes) => { if (!wii.dev) return; try { await wii.dev.sendReport(id, new Uint8Array(bytes)); } catch (e){} };
 const wLed = (r = 0) => wsend(0x11, [(wii.leds << 4) | r]);
-function wiiRumble(ms){ if (!wii.dev) return; wLed(1); clearTimeout(wii.rt); wii.rt = setTimeout(() => wLed(0), ms); }
+// 振動はON/OFFしかないので、[ON,OFF,ON,...](ms) のパルス列で使い分ける
+function wiiPattern(seq){ if (!wii.dev) return; clearTimeout(wii.rt); let i = 0; const step = () => { if (i >= seq.length){ wLed(0); return; } wLed(i % 2 ? 0 : 1); wii.rt = setTimeout(step, seq[i++]); }; step(); }
+const wiiRumble = ms => wiiPattern([ms]);
 // ガンナーはジャイロ不要なので、ボタン+加速度(0x31)レポートだけを使う
 async function openWii(d){
   wii.dev = d; if (!d.opened) await d.open();
@@ -883,6 +960,7 @@ function onWii(e){
   const b0 = d.getUint8(0), b1 = d.getUint8(1);
   const A = !!(b1 & 0x08), Bb = !!(b1 & 0x04), plus = !!(b0 & 0x10), home = !!(b1 & 0x80), minus = !!(b1 & 0x10);
   const pad = b0 & 0x0f, padDown = pad & ~wii.pPad;   // 十字: 0x01=左 0x02=右 0x04=下 0x08=上
+  const firing = A && !wii.pA && !wii.aBlock && state === 'play' && !menuOn;   // Aを押した瞬間に1発
   const pressStart = (A && !wii.pA) || (plus && !wii.pPlus), pressHome = home && !wii.pHome, pressMinus = minus && !wii.pMinus;
   wii.pA = A; wii.pPlus = plus; wii.pHome = home; wii.pMinus = minus; wii.pPad = pad; wii.b = Bb;
   if (!A) wii.aBlock = false;
@@ -896,7 +974,10 @@ function onWii(e){
     if (!wii.gok){ wii.gx = x; wii.gy = y; wii.gz = z; wii.gok = true; }
     else { wii.gx += (x - wii.gx)*.2; wii.gy += (y - wii.gy)*.2; wii.gz += (z - wii.gz)*.2; }
   }
+  // 縦向き判定：重力がリモコンの長手方向(Y軸)に沿っている = 先端を上(または下)に向けて立てている
+  { const gL = Math.hypot(wii.gx, wii.gy, wii.gz) || 1; wii.vert = wii.gok && Math.abs(wii.gy)/gL > .8; }
   if (ctl.mode !== 'wii' || state !== 'play' || menuOn) return;
+  if (firing) trigger();
   if (padDown & 0x08) throwGrenade();
   if (padDown & 0x04) placeMine();
   if (padDown & 0x01) curveShot(-1);
@@ -923,7 +1004,7 @@ addEventListener('mousedown', e => {
     startGame(); return;
   }
   if (ctl.mode !== 'mouse') return;   // Wiiモード中はクリックで戦闘操作しない
-  if (e.button === 0){ mdn.on = true; shoot(); }
+  if (e.button === 0){ mdn.on = true; trigger(); }   // 1クリック = 1発（リロード中はパーフェクト狙い）
   else if (e.button === 2) parry();
 });
 addEventListener('mouseup', e => { if (e.button === 0) mdn.on = false; });
