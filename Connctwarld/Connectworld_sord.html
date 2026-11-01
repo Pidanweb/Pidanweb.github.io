@@ -9,7 +9,7 @@
   canvas{display:block;cursor:crosshair;touch-action:none}
   #ui{position:fixed;top:10px;right:10px;z-index:5;font:14px sans-serif;color:#fff;text-align:right}
   #ui button{background:#0d2a30cc;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer}
-  #camPanel{margin-top:6px;padding:10px;background:#000c;border:1px solid #7ae7ff55;border-radius:8px;width:280px;text-align:left}
+  #camPanel{max-height:calc(100vh - 70px);overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;margin-top:6px;padding:10px;background:#000c;border:1px solid #7ae7ff55;border-radius:8px;width:280px;text-align:left}
   #camPanel select{width:100%;margin:4px 0 8px;padding:4px;font:inherit}
   #camPanel div{margin-top:6px}
   #camStat{font-size:12px;color:#ffd35a;word-break:break-all}
@@ -35,22 +35,29 @@
 <body>
 <div id="ui"><button id="camBtn">📷 カメラ設定</button> <button id="viewBtn">👁 一人称</button> <button id="aimBtn">🎯 視点操作 ON</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰</button>
   <div id="camPanel" hidden>
-    <label>使うカメラ<select id="camSel"></select></label>
-    <label><input type="checkbox" id="mir"> 左右反転</label>
-    <div><button id="camApply">このカメラを使う</button> <button id="camRefresh">一覧を更新</button></div>
-    <div id="camStat">USBカメラは接続後「一覧を更新」</div>
+    <label>⚙ 負荷モード <select id="qMode"><option value="high">高画質（重い）</option><option value="std">標準</option><option value="light" selected>軽量（ノートPC推奨）</option></select></label>
+    <small>軽量: 描画解像度を下げ、顔認識20回/秒・手認識5回/秒に間引き、背景カメラを640×360で取得</small>
+    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <b style="color:#ffd35a">📷 カメラの割り当て</b>
+    <label>フロント（顔・手の認識）<select id="faceSel"></select></label>
+    <label>バック（背景の映像）<select id="camSel"></select></label>
+    <div><button id="camApply">▶ この割り当てで開く</button> <button id="camRefresh">🔄 カメラを再検出</button> <button id="faceFlip">⇄ 入れ替え</button></div>
+    <div id="camStat">「カメラを再検出」で一覧に名前が出ます</div>
+    <small>自動: 内蔵カメラ＝フロント、USBカメラ＝バック。違うときは手で選んでください。</small>
     <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
     <b style="color:#ffd35a">🖼 敵の背景</b>
-    <label>背景に使う映像 <select id="bgMode"><option value="cam">カメラのライブ映像（バック）</option><option value="video">動画ファイル</option><option value="image">画像ファイル</option><option value="none">なし（単色）</option></select></label>
-    <label id="bgFileRow" style="display:none"><span id="bgFileLbl">ファイル</span><input type="file" id="bgFile" accept="video/*"></label>
-    <label><input type="checkbox" id="bgFlip"> 背景を左右反転</label>
+    <label>背景の種類 <select id="bgMode"><option value="cam">📷 バックカメラの映像</option><option value="video">🎞 動画ファイル</option><option value="image">🖼 画像ファイル</option><option value="none">なし（単色）</option></select></label>
+    <div id="bgCamRow"><label><input type="checkbox" id="mir"> 左右反転</label></div>
+    <div id="bgFileRow" style="display:none">
+      <label><span id="bgFileLbl">ファイル</span><input type="file" id="bgFile" accept="video/*"></label>
+      <label><input type="checkbox" id="bgFlip"> 左右反転</label>
+    </div>
     <label><input type="checkbox" id="bgTP"> 俯瞰モードでも背景に表示</label>
     <div id="bgStat" style="font-size:12px;color:#ffd35a"></div>
-    <small>既定: バックカメラ＝背景 / フロントカメラ＝顔・手の認識。動画・画像にすると背景用カメラは開きません。</small>
     <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <b style="color:#ffd35a">👤 顔認識</b>
     <label><input type="checkbox" id="faceOn" checked> 顔の動きで視点・照準を操作</label>
-    <label>顔認識に使うカメラ<select id="faceSel"><option value="">自動（インカメラ）</option><option value="user">フロント</option><option value="environment">バック</option></select></label>
-    <label>カメラの種類 <select id="faceType"><option value="auto">自動判定</option><option value="front">フロント（鏡像）</option><option value="back">バック（非鏡像）</option></select></label> <button id="faceFlip">🔄 前/後 切替</button>
+    <label>カメラの種類 <select id="faceType"><option value="auto">自動判定</option><option value="front">フロント（鏡像）</option><option value="back">バック（非鏡像）</option></select></label>
     <label>感度 <input type="range" id="faceGain" min="0.5" max="3" step="0.1" value="1.5"></label>
     <label><input type="checkbox" id="facePrevOn" checked> 認識プレビューを表示</label>
     <div><button id="faceStart">顔認識を開始/再起動</button> <button id="faceCal">中心リセット (C)</button></div>
@@ -62,11 +69,11 @@
     <label>カメラの置き方 <select id="poseCam"><option value="front">プレイヤーを正面から撮る（推奨）</option><option value="back">プレイヤーを背後から撮る</option></select></label>
     <label><input type="checkbox" id="poseOn" checked> 映像の動きをアバターに反映</label>
     <label><input type="checkbox" id="poseMove" checked> 体の左右移動で回避</label>
-    <small>俯瞰モードでは上の「使うカメラ」1台（既定はバックカメラ）だけで全身を認識します。顔用カメラは止めます。全身が映る位置に置いてください。</small>
+    <small>俯瞰モードでは「バック」のカメラ1台（既定はバックカメラ）だけで全身を認識します。顔用カメラは止めます。全身が映る位置に置いてください。</small>
   </div>
   <div id="faceBadge"></div><div id="perfStat" style="margin-top:4px;font:12px monospace;color:#9fffb0;text-shadow:0 0 4px #000"></div><div id="wiiStat" style="margin-top:4px;font-size:12px;color:#ffd35a;text-shadow:0 0 4px #000"></div></div>
 <div id="menu"><h3 style="margin:0">MENU</h3>
-  <button id="mClose">▶ 再開</button><button id="mView">👁 視点: 一人称</button><button id="mAim">🎯 視点操作: ON</button><button id="mFace">🔄 顔カメラ: フロント</button><button id="mCtrl">🖱 操作: マウス</button>
+  <button id="mClose">▶ 再開</button><button id="mView">👁 視点: 一人称</button><button id="mAim">🎯 視点操作: ON</button><button id="mFace">⇄ カメラ入れ替え</button><button id="mCtrl">🖱 操作: マウス</button>
   <button id="jobBtn">🔁 ジョブチェンジ</button>
   <div id="jobs"><button id="jSword">⚔ 剣士</button><button id="jWiz">🪄 魔法使い</button><button id="jGun" disabled>🔫 ガンナー（準備中）</button></div>
   <label>効果音 <input type="range" id="mVol" min="0" max="1" step=".1" value=".8"></label><label>BGM <input type="range" id="mBgm" min="0" max="1" step=".05" value=".5"></label><label>Wii振り感度 <input type="range" id="mWiiTh" min="1.2" max="4" step=".1" value="2.2"><br><small style="color:#9fdcea">左ほど敏感</small></label>
@@ -105,7 +112,15 @@
 const FONT = '"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif';
 const vid = document.getElementById('v');
 const renderer = new THREE.WebGLRenderer({ antialias:true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+// ===== 負荷モード =====
+// pr = 描画解像度の倍率上限 / faceMs,handMs,poseMs = 認識の最短間隔 / bgW,bgH = 背景カメラの取得解像度 / prevMs = 認識プレビューの描画間隔
+const QP = {
+  high:  { pr:2,    faceMs:0,  handMs:50,  poseMs:0,  bgW:1280, bgH:720, prevMs:0 },
+  std:   { pr:1.25, faceMs:33, handMs:100, poseMs:33, bgW:960,  bgH:540, prevMs:33 },
+  light: { pr:1,    faceMs:50, handMs:200, poseMs:50, bgW:640,  bgH:360, prevMs:100 },
+};
+let Q = QP.light;
+renderer.setPixelRatio(Math.min(devicePixelRatio, Q.pr));
 renderer.setScissorTest(true);
 document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(70, 1, .05, 100);
@@ -298,23 +313,46 @@ function setMsg(L){
 // ===== Webカメラ =====
 let camTex = null, camMirror = true, camStream = null;
 const $ = id => document.getElementById(id), camSel = $('camSel'), camStat = $('camStat'), faceSel = $('faceSel');
+// ===== カメラ一覧と自動割り当て（内蔵=フロント/顔、USB=バック/背景）=====
+let camList = [];
+const isBuiltin = l => /integrated|built-?in|内蔵|facetime|user[- ]?facing|front|フロント/i.test(l || '');
+const isExt = l => /usb|logi|c9\d\d|c270|brio|external|rear|back|environment|world[- ]?facing|バック/i.test(l || '');
+const camName = id => { const d = camList.find(d => d.deviceId === id); return d ? (d.label || 'カメラ') : '自動'; };
+function autoIds(){
+  const L = camList.filter(d => d.deviceId); if (!L.length) return {};
+  const f = L.find(d => isBuiltin(d.label) && !isExt(d.label)) || L.find(d => !isExt(d.label)) || L[0];
+  const b = L.find(d => d !== f && isExt(d.label)) || L.find(d => d !== f) || null;
+  return { front: f.deviceId, back: b ? b.deviceId : null };
+}
+const frontId = () => faceSel.value || autoIds().front || null;
+const backId = () => camSel.value || autoIds().back || null;
+async function ensureCamPerm(){   // 一度許可を取らないとカメラ名・IDが取れない
+  if (camList.some(d => d.label) || camStream || face.stream || !navigator.mediaDevices) return;
+  try { const s = await navigator.mediaDevices.getUserMedia({ video:true, audio:false }); s.getTracks().forEach(t => t.stop()); } catch (e){}
+}
 async function listCams(){
   try {
-    const ds = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'), cur = camSel.value;
-    camSel.innerHTML = '<option value="">自動（バックカメラ）</option>';
-    ds.forEach((d, i) => { const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || ('カメラ ' + (i+1)); camSel.appendChild(o); });
-    if (cur) camSel.value = cur;
-    const fcur = faceSel.value; faceSel.innerHTML = '<option value="">自動（インカメラ）</option><option value="user">フロント</option><option value="environment">バック</option>';
-    ds.forEach((d, i) => { const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || ('カメラ ' + (i+1)); faceSel.appendChild(o); });
-    if (fcur) faceSel.value = fcur;
-    if (!camStream) camStat.textContent = ds.length ? ds.length + '台検出（名前は一度カメラを許可すると表示されます）' : 'カメラが見つかりません';
+    camList = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+    const a = autoIds(), fill = (sel, autoTxt) => {
+      const cur = sel.value; sel.innerHTML = '';
+      const o0 = document.createElement('option'); o0.value = ''; o0.textContent = autoTxt; sel.appendChild(o0);
+      camList.forEach((d, i) => { if (!d.deviceId) return; const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || ('カメラ ' + (i+1)); sel.appendChild(o); });
+      if (cur && camList.some(d => d.deviceId === cur)) sel.value = cur;
+    };
+    fill(faceSel, '自動: ' + (a.front ? camName(a.front) : '内蔵カメラ'));
+    fill(camSel, '自動: ' + (a.back ? camName(a.back) : (camList.length < 2 ? '（1台のみ→フロントと共用）' : 'USBカメラ')));
+    const same = frontId() && frontId() === backId();
+    camStat.textContent = !camList.length ? 'カメラが見つかりません'
+      : `${camList.length}台検出 / フロント: ${camName(frontId())} / バック: ${camName(backId())}` + (same ? '　⚠ 同じカメラです' : '');
   } catch (e){ camStat.textContent = '一覧を取得できません'; }
 }
 async function openCam(id){
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ camStat.textContent = 'HTTPS か localhost で開いてください'; return false; }
+  if (!id){ await ensureCamPerm(); await listCams(); id = backId(); }
   if (camStream) camStream.getTracks().forEach(t => t.stop());
   camStream = null;
-  const tries = id ? [{ video:{ deviceId:{ exact:id } }, audio:false }] : [{ video:{ facingMode:'environment' }, audio:false }, { video:true, audio:false }];
+  const sz = { width:{ ideal:Q.bgW }, height:{ ideal:Q.bgH } };
+  const tries = id ? [{ video:{ deviceId:{ exact:id }, ...sz }, audio:false }, { video:{ deviceId:{ exact:id } }, audio:false }] : [{ video:{ facingMode:'environment', ...sz }, audio:false }, { video:sz, audio:false }, { video:true, audio:false }];
   let err;
   for (const c of tries){ try { camStream = await navigator.mediaDevices.getUserMedia(c); break; } catch (e){ err = e; } }
   if (!camStream){ camStat.textContent = '起動失敗: ' + (err && err.name) + '（他のアプリが使用中、または許可なし）'; popCam('カメラ起動失敗', '#ff4d5e', .6, 3); return false; }
@@ -324,13 +362,14 @@ async function openCam(id){
   try { await vid.play(); } catch (e){}
   if (!camTex){ camTex = new THREE.VideoTexture(vid); camTex.minFilter = THREE.LinearFilter; }
   applyBg();
-  camStat.textContent = '使用中: ' + (tr.label || 'カメラ'); if (typeof bgStatus === 'function') bgStatus();
-  await listCams(); if (st.deviceId) camSel.value = st.deviceId;
+  if (typeof bgStatus === 'function') bgStatus();
+  await listCams();
   return true;
 }
 $('camBtn').onclick = () => { const p = $('camPanel'); p.hidden = !p.hidden; if (!p.hidden) listCams(); };
-$('camApply').onclick = () => openCam(camSel.value || null);
-$('camRefresh').onclick = () => camStream ? listCams() : openCam(null);
+$('camApply').onclick = async () => { if (bgMode === 'cam' || tp) await openCam(camSel.value || null); if (face.on && !tp) await startFace(); listCams(); };
+camSel.onchange = () => { listCams(); if (bgMode === 'cam' || tp) openCam(camSel.value || null); };
+$('camRefresh').onclick = async () => { camStat.textContent = '検出中…'; await ensureCamPerm(); await listCams(); };
 $('mir').onchange = e => camMirror = e.target.checked;
 for (const ev of ['mousedown', 'keydown', 'keyup']) for (const el of ['ui', 'menu']) $(el).addEventListener(ev, e => e.stopPropagation());
 if (navigator.mediaDevices) navigator.mediaDevices.addEventListener('devicechange', listCams);
@@ -353,9 +392,9 @@ function bgStatus(){
 $('bgMode').onchange = e => {
   bgMode = e.target.value;
   const isFile = bgMode === 'video' || bgMode === 'image';
-  $('bgFileRow').style.display = isFile ? '' : 'none';
+  $('bgFileRow').style.display = isFile ? '' : 'none'; $('bgCamRow').style.display = bgMode === 'cam' ? '' : 'none';
   if (isFile){ $('bgFile').accept = bgMode + '/*'; $('bgFileLbl').textContent = bgMode === 'video' ? '動画ファイル' : '画像ファイル'; }
-  if (bgMode === 'cam' && !camStream && state !== 'title') openCam(camSel.value || null);
+  if (bgMode === 'cam' && !camStream) openCam(camSel.value || null);
   if (bgMode !== 'cam' && camStream && !tp && face.src !== vid){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }   // 背景に使わないならバックカメラは止めて軽くする
   bgStatus(); applyBg();
 };
@@ -415,12 +454,13 @@ async function loadFaceModel(){
 async function openFaceCam(){
   if (face.stream) face.stream.getTracks().forEach(t => t.stop());
   face.stream = null; face.src = null; faceRecenter();
-  const id = faceSel.value, sz = { width:{ ideal:640 }, height:{ ideal:480 } };
-  const tries = (id === 'user' || id === 'environment') ? [{ video:{ facingMode:{ ideal:id }, ...sz }, audio:false }, { video:true, audio:false }] : id ? [{ video:{ deviceId:{ exact:id }, ...sz }, audio:false }]
+  await ensureCamPerm(); await listCams();
+  const id = frontId(), sz = { width:{ ideal:640 }, height:{ ideal:480 } };
+  const tries = id ? [{ video:{ deviceId:{ exact:id }, ...sz }, audio:false }, { video:{ facingMode:'user', ...sz }, audio:false }]
                    : [{ video:{ facingMode:'user', ...sz }, audio:false }, { video:true, audio:false }];
   for (const c of tries){ try { face.stream = await navigator.mediaDevices.getUserMedia(c); break; } catch (e){} }
   if (face.stream){
-    face.fm = (face.stream.getVideoTracks()[0].getSettings().facingMode || (id === 'environment' ? 'environment' : 'user')) !== 'environment'; fv.srcObject = face.stream; try { await fv.play(); } catch (e){}
+    face.fm = (face.stream.getVideoTracks()[0].getSettings().facingMode || 'user') !== 'environment'; fv.srcObject = face.stream; try { await fv.play(); } catch (e){}
     face.src = fv;
   } else if (camStream){ face.src = vid; setBadge('👤 顔用カメラを開けず、背景カメラで認識します'); }
   else setBadge('👤 顔認識用カメラを開けません');
@@ -436,7 +476,9 @@ function faceStep(now){
   const v = face.src;
   if (!face.on || !face.lm || !v || v.readyState < 2 || !v.videoWidth || v.currentTime === face.lastT) return;
   face.lastT = v.currentTime;
-  let r; try { r = face.lm.detectForVideo(v, now); } catch (e){ console.error(e); return; }
+  if (now - (face.lastRun || 0) < Q.faceMs) return;
+  face.lastRun = now; mlFrame = true; const _t = performance.now();
+  let r; try { r = face.lm.detectForVideo(v, now); } catch (e){ console.error(e); return; } finally { perf.face += performance.now() - _t; }
   const p = r.faceLandmarks && r.faceLandmarks[0]; face.pts = p || null;
   if (!p){ face.seen = false; setBadge('👤 顔が見つかりません'); return; }
   face.seen = true; face.x = p[1].x; face.y = p[1].y;           // 1 = 鼻先
@@ -459,9 +501,11 @@ function faceUpdate(dt){
   mouse.nx = face.sx; mouse.ny = face.sy;
 }
 const prevC = $('facePrev'), pctx = prevC.getContext('2d');
+let prevLast = 0;
 function faceDraw(){
   const show = prevOn && (tp || face.on) && !vr && state !== undefined;
   prevC.style.display = show ? 'block' : 'none'; if (!show) return;
+  const now = performance.now(); if (now - prevLast < Q.prevMs) return; prevLast = now;
   if (tp){ poseDraw(); return; }
   const w = prevC.width, h = prevC.height, v = face.src;
   pctx.fillStyle = '#000'; pctx.fillRect(0, 0, w, h);
@@ -493,7 +537,7 @@ $('faceOn').onchange = e => {
   else { if (face.stream) face.stream.getTracks().forEach(t => t.stop()); face.stream = face.src = null; faceRecenter(); setBadge(''); }
 };
 $('faceGain').oninput = e => face.gain = +e.target.value;
-faceSel.onchange = () => { if (face.on) openFaceCam(); };
+faceSel.onchange = () => { listCams(); if (face.on && !tp) openFaceCam(); };
 $('faceCal').onclick = () => { faceRecenter(); poseRecenter(); };
 $('faceStart').onclick = () => { if (!face.on){ $('faceOn').checked = face.on = true; } startFace(); };
 let prevOn = true; $('facePrevOn').onchange = e => prevOn = e.target.checked;
@@ -512,8 +556,11 @@ async function loadHandModel(){
   hand.loading = false;
 }
 function handStep(now){
-  const v = tp ? vid : face.src; if (!hand.lm || !v || v.readyState < 2 || !v.videoWidth || now - hand.last < 50) return; hand.last = now;
-  let r; try { r = hand.lm.detectForVideo(v, now); } catch (e){ return; }
+  const hms = menuOn ? Math.min(Q.handMs, 66) : Q.handMs;   // メニュー中は指カーソルなので速めに
+  const v = tp ? vid : face.src; if (!hand.lm || !v || v.readyState < 2 || !v.videoWidth || now - hand.last < hms) return;
+  if (mlFrame && !menuOn) return;   // 同じフレームで顔と手を両方走らせない（次のフレームに回す）
+  hand.last = now; const _t = performance.now();
+  let r; try { r = hand.lm.detectForVideo(v, now); } catch (e){ return; } finally { perf.hand += performance.now() - _t; }
   const p = r.landmarks && r.landmarks[0]; if (!p){ palmLost(now); return; }
   if (menuOn){   // メニュー中は人差し指の先(8)をカーソルに使う
     hand.needRelease = true; hand.pt0 = null; hand.prog = 0; hc.seen = now;
@@ -571,8 +618,9 @@ async function enterTP(){
 function leaveTP(){ pose.seen = false; if (face.on && !face.stream) startFace(); }
 function poseStep(now){
   if (!tp || !pose.on || !pose.lm || !camStream){ pose.seen = false; return; }
-  const v = vid; if (v.readyState < 2 || !v.videoWidth || v.currentTime === pose.last) return; pose.last = v.currentTime;
-  let r; try { r = pose.lm.detectForVideo(v, now); } catch (e){ console.error(e); return; }
+  const v = vid; if (v.readyState < 2 || !v.videoWidth || v.currentTime === pose.last || now - (pose.lastRun || 0) < Q.poseMs) return; pose.last = v.currentTime; pose.lastRun = now; mlFrame = true;
+  const _t = performance.now();
+  let r; try { r = pose.lm.detectForVideo(v, now); } catch (e){ console.error(e); return; } finally { perf.pose += performance.now() - _t; }
   const n = r.landmarks && r.landmarks[0], w = r.worldLandmarks && r.worldLandmarks[0];
   if (!n || !w){ pose.seen = false; setBadge('🧍 全身が見つかりません（カメラから離れて全身を映す）'); return; }
   pose.seen = true; pose.n = n; pose.w = w;
@@ -763,10 +811,14 @@ function hcClick(){
   if (rg){ hc.drag = rg; hcSetRange(rg); return; }   // ラベルの文字部分を指していてもスライダー操作にする
   t.click();
 }
-function flipFaceCam(){
-  faceSel.value = faceSel.value === 'environment' ? 'user' : 'environment';
-  $('mFace').textContent = '🔄 顔カメラ: ' + (faceSel.value === 'environment' ? 'バック' : 'フロント');
-  if (face.on) openFaceCam();
+async function flipFaceCam(){   // フロント(顔)とバック(背景)のカメラを入れ替える
+  const f = frontId(), b = backId(); if (!f || !b || f === b) return;
+  if (face.stream){ face.stream.getTracks().forEach(t => t.stop()); face.stream = null; }
+  if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  faceSel.value = b; camSel.value = f;
+  if (bgMode === 'cam' || tp) await openCam(f);
+  if (face.on && !tp) await openFaceCam();
+  listCams();
 }
 function faceMirror(){ const t = $('faceType').value; return t === 'auto' ? (face.src === vid ? camMirror : face.fm !== false) : t === 'front'; }
 const sPary = new Audio('sound/pary.mp3'); let vol = .8; sPary.preload = 'auto';
@@ -1420,20 +1472,28 @@ addEventListener('mouseup', e => {
   if (performance.now() - mdn.t < GUARD_MS && state === 'play' && !menuOn) attack();
 });
 
-// ===== 処理負荷の目安（FPS / 認識にかかった時間 / 開いているカメラ数）=====
-const perf = { n:0, t0:performance.now(), ml:0, mlMax:0 };
-function perfTick(now, ms){
-  perf.n++; perf.ml += ms; perf.mlMax = Math.max(perf.mlMax, ms);
+// ===== 処理負荷の目安（FPS / 各処理の時間 / 開いているカメラ数）=====
+let mlFrame = false;
+const perf = { n:0, t0:performance.now(), face:0, hand:0, pose:0, rend:0 };
+function perfTick(now){
+  perf.n++;
   if (now - perf.t0 < 1000) return;
-  const fps = perf.n*1000/(now - perf.t0), cams = (camStream ? 1 : 0) + (face.stream ? 1 : 0);
-  $('perfStat').textContent = `FPS ${fps.toFixed(0)} | 認識 平均${(perf.ml/perf.n).toFixed(1)}ms 最大${perf.mlMax.toFixed(0)}ms | カメラ${cams}台` + (bgMode === 'video' && bgVidTex ? '+背景動画' : bgMode === 'image' && bgImgTex ? '+背景画像' : '');
+  const n = perf.n, fps = n*1000/(now - perf.t0), cams = (camStream ? 1 : 0) + (face.stream ? 1 : 0), f = v => (v/n).toFixed(1);
+  $('perfStat').textContent = `FPS ${fps.toFixed(0)} | 顔${f(perf.face)} 手${f(perf.hand)}` + (tp ? ` 全身${f(perf.pose)}` : '') + ` 描画${f(perf.rend)}ms/フレーム | カメラ${cams}台`
+    + (bgMode === 'video' && bgVidTex ? '+背景動画' : bgMode === 'image' && bgImgTex ? '+背景画像' : '');
   $('perfStat').style.color = fps < 30 ? '#ff4d5e' : fps < 50 ? '#ffd35a' : '#9fffb0';
-  perf.n = 0; perf.ml = 0; perf.mlMax = 0; perf.t0 = now;
+  perf.n = perf.face = perf.hand = perf.pose = perf.rend = 0; perf.t0 = now;
 }
+function setQuality(k){
+  Q = QP[k] || QP.std; renderer.setPixelRatio(Math.min(devicePixelRatio, Q.pr)); resize();
+  if (camStream) camStream.getVideoTracks()[0].applyConstraints({ width:{ ideal:Q.bgW }, height:{ ideal:Q.bgH } }).catch(() => {});
+}
+$('qMode').onchange = e => setQuality(e.target.value);
 let last = performance.now();
 function loop(now){
   const dt = Math.min(.033, (now - last)/1000); last = now;
-  const t0 = performance.now(); faceStep(now); poseStep(now); handStep(now); perfTick(now, performance.now() - t0); hcStep(now, dt); palmUI(now); faceDraw(); update(dt); render(); requestAnimationFrame(loop);
+  mlFrame = false; faceStep(now); poseStep(now); handStep(now); perfTick(now); hcStep(now, dt); palmUI(now); faceDraw(); update(dt);
+  const _t = performance.now(); render(); perf.rend += performance.now() - _t; requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 // タイトル画面(parytitle.html)から ?start=1 で来たら自動スタート
