@@ -51,8 +51,15 @@
     <label>横と見なす度合 <b id="skRBV">0.18</b><input type="range" id="skRB" min="0.05" max="0.5" step="0.01" value="0.18"><small>小さいほど甘い（横になりやすい）</small></label>
     <label>縦と見なす上限 <b id="skRAV">0.30</b><input type="range" id="skRA" min="0.1" max="0.8" step="0.01" value="0.30"><small>大きいほど甘い（縦になりやすい）</small></label>
     <label>斬りの最小速度 <b id="skPkV">600</b>°/s<input type="range" id="skPk" min="300" max="1200" step="50" value="600"><small>これ未満は構え直しとして無視</small></label>
-    <label>ダメージ倍率 ×<b id="skMulV">5</b><input type="range" id="skMul" min="2" max="10" step="0.5" value="5"></label>
+    <label>ダメージ倍率 ×<b id="skMulV">5</b><input type="range" id="skMul" min="2" max="10" step="0.5" value="5"><small>5が標準（全スキルに掛かる）</small></label>
+    <label>四角切りの継続受付 <b id="skSqV">1.1</b>秒<input type="range" id="skSq" min="0.6" max="2" step="0.1" value="1.1"><small>縦横縦横の各斬りの間隔</small></label>
+    <label>縦重撃(ソニックリープ) ∫縦 <b id="skHVV">800</b>°<input type="range" id="skHV" min="400" max="1500" step="50" value="800"></label>
+    <label>横重撃(ロータス) ∫横 <b id="skHHV">260</b>°<input type="range" id="skHH" min="150" max="500" step="10" value="260"></label>
+    <label>一回転(メテオブレイク) ∫横 <b id="skSpV">360</b>°<input type="range" id="skSp" min="200" max="700" step="10" value="360"></label>
+    <label>突き(ヴォーパル) 加速度 <b id="skTAV">4.5</b>g<input type="range" id="skTA" min="3" max="8" step="0.1" value="4.5"><small>回転が小さく加速度が大きい動き</small></label>
+    <label>突きの回転上限 <b id="skTRV">100</b>°<input type="range" id="skTR" min="30" max="250" step="10" value="100"></label>
     <label><input type="checkbox" id="skDbg" checked> 判定ログを表示</label>
+    <small style="display:block;margin-top:6px">バーチカル:縦→横 / ヴォーパル:突き / ソニックリープ:縦重 / ロータス:横重 / スクエア:縦横縦横 / メテオ:一回転 / スターバースト:被ダメ0で16ヒット→READY→振る</small>
     <button id="skCal" style="margin-top:6px;width:100%">ジャイロ再キャリブ（−ボタンでも可）</button>
   </details>
   <button id="mRestart">↻ リスタート</button><button id="mTitle">⌂ タイトルへ</button>
@@ -457,26 +464,28 @@ $('jobBtn').onclick = () => $('jobs').classList.toggle('on');
 
 // ===== ゲーム状態 =====
 const keys = {}, mouse = { nx:0, ny:0 }, ray = new THREE.Raycaster(), tmp = new THREE.Vector3();
-const P = { armed:false, x:0, hp:100, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, dir:1, counter:0, cBig:0, guard:false };
+const PMAX = 250;   // プレイヤー最大HP（旧100）
+const P = { armed:false, x:0, hp:PMAX, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, dir:1, counter:0, cBig:0, guard:false };
 const B = { x:0, z:-16, vz:0, s:'enter', t:1, wt:1, hp:800, max:800, hit:false, weak:0, flash:0, combo:0, stun:false, phase:1, wob:0, time:0, unp:false };
 let state = 'title', hitstop = 0, shake = 0, fovp = 0, flash = 0, vr = false, endAt = 0;
 function reset(){
-  Object.assign(P, { armed:false, x:0, hp:100, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, counter:0, guard:false });
+  Object.assign(P, { armed:false, x:0, hp:PMAX, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, counter:0, guard:false });
   Object.assign(B, { x:0, z:-16, vz:0, s:'enter', t:1, hp:800, hit:false, weak:0, combo:0, stun:false, phase:1, unp:false });
-  bossG.visible = true;
+  bossG.visible = true; sb.n = 0; sb.ready = false; sb.active = false; anim = null; sk.st = 0; sbDraw();
 }
 function titleMsg(){
   setMsg([['GIANT SLIME RAID', '#ffd35a', 72], ['左クリック: 斬る / 長押し: ガード　右クリック: パリィ', '#fff', 30],
           ['紫に光る攻撃はパリィ不可 → ガードで防ぐ　A / D: 回避', '#c06bff', 28],
           ['赤く光っている間に右クリック → 弾き返してスタン → 大ダメージ', '#fff', 28],
           ['Wii: 振る=斬る / B+振り上げ=パリィ / A長押し=ガード', '#ffd35a', 26],
-          ['Wii: 縦に斬る→横に斬る = SWORD SKILL（−ボタン: ジャイロ再調整）', '#ffd35a', 24],
+          ['Wii: 縦→横=バーチカル / 突き / 縦横縦横 / 一回転 など（−:ジャイロ再調整）', '#ffd35a', 22],
           ['顔を動かして狙う　C:中心リセット　V:VR　T:視点　M:メニュー', '#7ae7ff', 26],
           ['クリックでスタート（Webカメラを使います）', '#7ae7ff', 34]]);
 }
 titleMsg();
 
 function hurtBoss(d, at, big){
+  if (!sb.active) sbHit();
   B.hp -= d; B.flash = .12; B.wob = .25;
   burst(at, big ? 0xffd35a : 0xffffff, big ? 40 : 22, 6);
   popup(String(Math.round(d)), big ? '#ffd35a' : '#ffffff', tmp.copy(at).add(new THREE.Vector3(0, .6, 0)).clone(), big ? 1.1 : .8);
@@ -487,15 +496,18 @@ function hurtBoss(d, at, big){
     setMsg([['VICTORY!', '#ffd35a', 80], ['ジャイアントスライムを倒した', '#fff', 34], ['クリックでもう一度', '#7ae7ff', 32]]);
   }
 }
+const SW_T = .32;   // 斬りモーションの長さ（旧.22。長く・大きくして見やすく）
 function attack(){
-  if (P.swingCd > 0 || P.par > 0 || P.armed || P.guard) return;
+  if (P.swingCd > 0 || P.par > 0 || P.armed || P.guard || sb.active) return;
+  if (sb.ready){ startStarburst(); return; }
   playAtk();
-  P.swingCd = .4; P.swing = .22; P.dir *= -1;
+  P.swingCd = .4; P.swing = SW_T; P.dir *= -1;
   arc.position.x = mouse.nx*1.5; arc.position.y = mouse.ny*1.0;
   ray.setFromCamera(new THREE.Vector2(mouse.nx, mouse.ny), camera);
-  const hit = ray.ray.intersectSphere(new THREE.Sphere(bossG.position.clone(), R*1.4), new THREE.Vector3());
+  const cnt = P.counter > 0;   // パリィ後の1撃だけ大ダメージ（当たったら消費）
+  let hit = ray.ray.intersectSphere(new THREE.Sphere(bossG.position.clone(), R*1.4), new THREE.Vector3());
+  if (!hit && cnt && B.s !== 'dead') hit = bossG.position.clone();   // カウンター中は目線が外れていても振れば命中（パリィ成功で視線が外れるため）
   if (hit && B.s !== 'dead' && ray.ray.origin.distanceTo(hit) < 25){
-    const cnt = P.counter > 0;   // パリィ後の1撃だけ大ダメージ（当たったら消費）
     hurtBoss(cnt ? P.cBig : B.weak > 0 ? 9 : 6, hit, cnt);
     if (cnt){ P.counter = 0; shake = .5; hitstop = .15; popCam('COUNTER!!', '#ffd35a', 1.2, 1); }
   }
@@ -523,6 +535,7 @@ function guarded(){
   B.s = 'knock'; B.stun = false; B.t = 1.0; B.vz = -12;
 }
 function hurtPlayer(mult = 1){
+  if (sb.n > 0 || sb.ready){ sb.n = 0; sb.ready = false; sbDraw(); }   // 被ダメでスターバーストの連撃カウントがリセット
   P.hp -= [20, 25, 30][B.phase-1]*mult; P.inv = 1.2; P.counter = 0; P.armed = false; shake = .8*mult; flash = .6*mult; flashM.material.color.set(0xff2a3a);
   burst(rig.localToWorld(new THREE.Vector3(0, 0, -2)), 0xff4d5e, 60, 8);
   B.s = 'knock'; B.stun = false; B.t = 1.2; B.vz = -10;
@@ -598,18 +611,54 @@ function bossAnim(dt){
   jiggle(B.time, B.s === 'knock' && B.stun ? .08 : .04);
 }
 
+sword.rotation.order = 'YXZ';   // 一回転(メテオブレイク)用にY軸回転を最後に適用
+let anim = null;   // ソードスキルのモーション列 { seq:[{type,d,on,...}], i, t }
+function startAnim(seq){ anim = { seq, i:0, t:0 }; if (seq[0].on) seq[0].on(); }
+function stepAnim(dt){
+  if (!anim) return null;
+  anim.t += dt;
+  while (anim && anim.t >= anim.seq[anim.i].d){
+    anim.t -= anim.seq[anim.i].d; anim.i++;
+    if (anim.i >= anim.seq.length){ anim = null; return null; }
+    if (anim.seq[anim.i].on) anim.seq[anim.i].on();
+  }
+  return anim ? { seg:anim.seq[anim.i], k:Math.min(1, anim.t/anim.seq[anim.i].d) } : null;
+}
+// スキル用ポーズ（カメラ座標。blade は +Y 方向、rx<0 で切っ先が前へ、rz>0 で左へ）
+function skPose(seg, k){
+  const e = 1 - Math.pow(1 - k, 3), P0 = { tx:.9, ty:-1.1, tz:-1.9, rx:-.95, rz:.3, ry:0 };
+  switch (seg.type){
+    case 'chopWind':  return { tx:.9 - .3*e, ty:-1.1 + .9*e, tz:-1.9, rx:-.95 + 1.85*e, rz:.3 - .2*e, ry:0 };         // 振りかぶる
+    case 'chop':      return { tx:.6 - .1*e, ty:-.2 - 1.1*e, tz:-1.9 + .2*e, rx:.9 - 2.8*e, rz:.1, ry:0 };           // 縦に振り下ろす
+    case 'sweepWind': return { tx:.9 - 2.2*e, ty:-1.0, tz:-1.9, rx:-1.1, rz:.3 + 1.7*e, ry:0 };                      // 左へ構える(居合)
+    case 'sweepR':    return { tx:-1.5 + 3.1*e, ty:-1.0, tz:-1.9, rx:-1.1 + .4*Math.sin(k*Math.PI), rz:2.2 - 4.4*e, ry:0 };  // 左→右
+    case 'sweepL':    return { tx:1.5 - 3.1*e, ty:-1.0, tz:-1.9, rx:-1.1 + .4*Math.sin(k*Math.PI), rz:-2.2 + 4.4*e, ry:0 }; // 右→左
+    case 'thrustWind':return { tx:.9 - .7*e, ty:-1.1 + .4*e, tz:-1.9 + 1.1*e, rx:-.95 - .55*e, rz:.3 - .3*e, ry:0 };   // 引く
+    case 'thrustOut': return { tx:.2, ty:-.7, tz:-.8 - 3.0*e, rx:-1.5, rz:0, ry:0 };                                  // 突き出す
+    case 'thrustBack':return { tx:.2, ty:-.7, tz:-3.8 + 1.9*e, rx:-1.5 + .55*e, rz:0, ry:0 };                         // 戻す
+    case 'spin':      return { tx:0, ty:-.9, tz:-1.6, rx:0, rz:1.57, ry:Math.PI*2*(seg.k0 + (seg.k1 - seg.k0)*k) };    // 一回転
+    case 'flurry':    return { tx:seg.x0 + (seg.x1 - seg.x0)*e, ty:-1.0 + seg.dy, tz:-1.9, rx:-1.0 + seg.rv, rz:seg.a0 + (seg.a1 - seg.a0)*e, ry:0 };
+  }
+  return P0;
+}
 function updSword(dt){
-  steel.emissive.setHex(P.counter > 0 ? 0xff9a20 : 0x2a6f88);
-  let tx = .9 + mouse.nx*.3, ty = -1.1 + mouse.ny*.2, tz = -1.9, rx = -.95, rz = .3, rate = 14;
-  if (P.swing > 0){
-    const t = 1 - P.swing/.22, a = 1 - Math.pow(1 - t, 3);
-    rz = P.dir*(1.5 - 3.0*a); rx = -1.15 + .35*Math.sin(t*Math.PI); tx = .5; ty = -1.0; rate = 60;
-    const kk = P.swing/.22, base = P.dir > 0 ? .2 : Math.PI + .2;
-    arc.material.opacity = kk*.9; arc.rotation.z = base - P.dir*(1 - kk)*.9;
+  steel.emissive.setHex(sb.ready ? 0xffd35a : P.counter > 0 ? 0xff9a20 : 0x2a6f88);
+  let tx = .9 + mouse.nx*.3, ty = -1.1 + mouse.ny*.2, tz = -1.9, rx = -.95, rz = .3, ry = 0, rate = 14, sc = 1;
+  const an = stepAnim(dt);
+  if (an){
+    const p = skPose(an.seg, an.k); tx = p.tx; ty = p.ty; tz = p.tz; rx = p.rx; rz = p.rz; ry = p.ry; rate = 60; sc = 1.3;
+    arc.material.opacity = 0;
+  } else if (P.swing > 0){
+    const t = 1 - P.swing/SW_T, a = 1 - Math.pow(1 - t, 3);
+    rz = P.dir*(2.1 - 4.2*a); rx = -1.0 + .5*Math.sin(t*Math.PI); tx = .2 + P.dir*(-1.5 + 3.0*a); ty = -1.0; rate = 60; sc = 1.3;   // 旧: 回転±1.5rad・位置固定 → 大きく横に払う
+    const kk = P.swing/SW_T, base = P.dir > 0 ? .2 : Math.PI + .2;
+    arc.material.opacity = kk*.9; arc.rotation.z = base - P.dir*(1 - kk)*.9; arc.scale.setScalar(1.5);
   } else { arc.material.opacity = 0; if (P.par > 0 || P.armed || P.guard){ tx = .1; ty = -.8; tz = -1.7; rx = -.2; rz = .1; rate = 40; } }
   const k = Math.min(1, dt*rate);
   sword.position.x += (tx - sword.position.x)*k; sword.position.y += (ty - sword.position.y)*k; sword.position.z += (tz - sword.position.z)*k;
   sword.rotation.x += (rx - sword.rotation.x)*k; sword.rotation.z += (rz - sword.rotation.z)*k;
+  sword.rotation.y = ry;   // スピン角はそのまま適用（2πで元に戻る）
+  sword.scale.setScalar(sword.scale.x + (sc - sword.scale.x)*Math.min(1, dt*20));
   gShield.visible = P.guard; shield.visible = P.par > 0 || P.armed; if (shield.visible){ const s = .6 + .5*Math.min(1, P.parAge/.1); shield.scale.setScalar(s); }
 }
 
@@ -639,7 +688,7 @@ function update(dt){
   av.position.x = P.x; av.rotation.y = -mouse.nx*.3; headM.rotation.y = -mouse.nx*.5;   // 顔の向きにアバターも向く
   if (tp){ camera.rotation.set(mouse.ny*.12 - .22, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + 1.5 + sh*.6, 4.2); }
   else { camera.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + sh*.6, 0); }
-  bossBar.scale.x = Math.max(.0001, B.hp/B.max); pBar.scale.x = Math.max(.0001, P.hp/100);
+  bossBar.scale.x = Math.max(.0001, B.hp/B.max); pBar.scale.x = Math.max(.0001, P.hp/PMAX);
   parBar.scale.x = Math.max(.0001, P.parCd > 0 ? 1 - P.parCd/.7 : 1);
   hud.visible = state === 'play'; $('ui').style.display = vr ? 'none' : '';
   const asp = vr ? W/2/H : W/H, mw = Math.min(7, 5.3*asp); msg.scale.set(mw, mw/2, 1);
@@ -761,7 +810,8 @@ function onWii(e){
 // ===== ソードスキル（MotionPlusのジャイロで 縦斬り→横斬り を判定）=====
 // ジャイロ積分で「上向きベクトル」を追い、角速度を 水平軸まわり(=縦斬り成分) と 鉛直軸まわり(=横斬り成分) に分解する。
 // 握りが回っても縦/横を判定できる（センサー軸 yaw/roll/pitch は縦横に一対一対応しないため）。
-const sk = { on:true, win:1.5, rB:.18, rA:.30, minPk:600, mult:5, dbg:true, A:null, armedAt:0, lastHead:'' };
+const sk = { on:true, win:1.5, sqWin:1.1, rB:.18, rA:.30, minPk:600, mult:5, dbg:true, st:0, last:null, armedAt:0, lastHead:'',
+             heavyV:800, heavyH:260, spin:360, thrustA:4.5, thrustRot:100, thrustPk:450 };
 const GY = { SLOW:440/8192, FAST:2000/440, PRE:120, HOLD:150, MAXSW:1500, CAL_MS:1000, CAL_STD:80, UP_GAIN:.03, UP_TOL:.15 };
 // ==== MP-BEGIN ====
 function calStart(){
@@ -840,74 +890,157 @@ function gySwing(s, held){
 }
 function gyFinish(o, tEnd){
   const pk = Math.max(Math.abs(o.pv), o.ph), tot = Math.abs(o.iv) + o.ih, ratio = tot > 0 ? Math.abs(o.iv)/tot : 0, dur = (tEnd - o.t0)/1000;
-  const f = v => Math.round(v);
+  const f = v => Math.round(v), rot = o.ih + Math.abs(o.iv);
   if (o.held){ dbg(`斬り除外(A/B押下中) pk${f(pk)}`); return; }
-  const r = { t0:o.t0, t1:tEnd, pk, ratio, iv:o.iv, ih:o.ih, dur, kind: pk < sk.minPk ? '小' : ratio >= sk.rB ? '横' : '縦' };
-  dbg(`斬り[${r.kind}] 横度=${ratio.toFixed(2)} ∫縦${f(o.ih)} ∫横${f(Math.abs(o.iv))} pk${f(pk)}°/s ${dur.toFixed(2)}s`);
+  const r = { t0:o.t0, t1:tEnd, pk, ratio, iv:o.iv, ih:o.ih, dur, pa:o.pa, rot, kind:'' };
+  if (Math.abs(o.iv) >= sk.spin && ratio >= .5) r.kind = '回転';                                                                  // 水平に一回転
+  else if (pk < sk.minPk) r.kind = (o.pa >= sk.thrustA && pk < sk.thrustPk && rot < sk.thrustRot) ? '突' : '小';              // 回転が小さく加速度が大きい=突き
+  else if (ratio >= sk.rB) r.kind = Math.abs(o.iv) >= sk.heavyH ? '横重' : '横';
+  else r.kind = o.ih >= sk.heavyV ? '縦重' : '縦';
+  dbg(`斬り[${r.kind}] 横度${ratio.toFixed(2)} ∫縦${f(o.ih)} ∫横${f(Math.abs(o.iv))} pk${f(pk)}°/s ${o.pa.toFixed(1)}g ${dur.toFixed(2)}s`);
   skStroke(r);
 }
-// 縦(甘め: 横度が上限未満なら何でも縦候補) → 受付時間内に横 で発動。構え直しの「小」は無視して縦候補を保持
+// 単発系(突き/回転/重撃)は即発動。縦横は連携: st1=縦待ち→横で「バーチカル」 / st2=バーチカル後 / st3=縦横+縦→横で「ホリゾンタルスクエア」
+// 構え直しの「小」は無視して状態を保持。縦候補は横度が rA 未満なら何でもOK（甘め）
 function skStroke(r){
-  if (r.kind === '小') return;
-  const A = sk.A;
-  if (A && r.kind === '横' && r.t0 - A.t1 <= sk.win*1000){
-    sk.A = null;
-    if (sk.on) fireSkill(r, A); else dbg('（スキル無効設定のため発動せず）');
-    return;
-  }
-  sk.A = r.ratio < sk.rA ? r : null; sk.armedAt = performance.now();
-  if (sk.A) dbg(`縦OK → ${sk.win}秒以内に横を`);
+  const k = r.kind;
+  if (k === '小') return;
+  if (k === '突'){ sk.st = 0; cast('vorpal', r); return; }
+  if (k === '回転'){ sk.st = 0; cast('meteor', r); return; }
+  if (k === '縦重'){ sk.st = 0; cast('sonic', r); return; }
+  if (k === '横重'){ sk.st = 0; cast('lotus', r); return; }
+  const gap = sk.last ? (r.t0 - sk.last.t1)/1000 : 1e9;
+  if (sk.st === 1 && gap > sk.win) sk.st = 0;
+  if ((sk.st === 2 || sk.st === 3) && gap > sk.sqWin) sk.st = 0;
+  const isA = r.ratio < sk.rA, isB = k === '横';
+  if (sk.st === 1){ if (isB){ sk.st = 2; cast('vertical', r); } else sk.st = isA ? 1 : 0; }
+  else if (sk.st === 2) sk.st = isA ? 3 : 0;
+  else if (sk.st === 3){ if (isB){ sk.st = 0; cast('square', r); } else sk.st = isA ? 3 : 0; }
+  else sk.st = isA ? 1 : 0;
+  sk.last = r; sk.armedAt = performance.now();
+  if (sk.st === 1 || sk.st === 3) dbg(`${sk.st === 3 ? '縦横+縦' : '縦'}OK → 横を`);
 }
 // ==== MP-END ====
 const dbgLines = [], SK_T0 = performance.now();
 function dbg(t){ dbgLines.push(((performance.now() - SK_T0)/1000).toFixed(1) + ' ' + t); if (dbgLines.length > 9) dbgLines.shift(); dbgDraw(); try { console.log('[wii] ' + t); } catch (e){} }
 function skHead(){
   const m = wii.mp;
-  let s = !wii.dev ? 'Wii未接続' : m.state === 'none' ? 'ジャイロ: なし（加速度のみ）' : m.state === 'cal' ? 'ジャイロ: 静止して調整中 ' + m.calPct + '%'
-        : m.state === 'ready' ? 'ジャイロ: 有効' + (m.sw ? ' / 斬り中' : '') + (sk.A ? ' / 縦OK→横を！' : ' / 待機')
+  let t = !wii.dev ? 'Wii未接続' : m.state === 'none' ? 'ジャイロ: なし（加速度のみ）' : m.state === 'cal' ? 'ジャイロ: 静止して調整中 ' + m.calPct + '%'
+        : m.state === 'ready' ? 'ジャイロ: 有効' + (m.sw ? ' / 斬り中' : '') + (sk.st === 1 || sk.st === 3 ? ' / 縦OK→横を！' : sk.st === 2 ? ' / 続けて縦横でスクエア' : ' / 待機')
         : m.state === 'lost' ? 'ジャイロ: データ停止' : 'ジャイロ: 有効化中…';
-  return s + (sk.on ? '' : '（スキルOFF）');
+  return t + (sk.on ? '' : '（スキルOFF）') + (sb.ready ? ' / STARBURST READY' : sb.n ? ' / CHAIN ' + sb.n + '/16' : '');
 }
 function dbgDraw(){ const el = $('wiiDbg'); el.style.display = sk.dbg ? '' : 'none'; if (sk.dbg) el.textContent = (sk.lastHead = skHead()) + '\n' + dbgLines.join('\n'); }
 function skTick(){
-  if (sk.A && !wii.mp.sw && performance.now() - sk.armedAt > sk.win*1000 + 100) sk.A = null;
+  if (sk.st && !wii.mp.sw && performance.now() - sk.armedAt > sk.win*1000 + 100) sk.st = 0;
   if (sk.dbg && skHead() !== sk.lastHead) dbgDraw();
 }
-// 斬撃エフェクト（縦線→横線）
+// ---- 斬撃エフェクト（カメラ前の光る線）----
 const skMat = c => new THREE.MeshBasicMaterial({ color:c, transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthTest:false, depthWrite:false });
-const skGV = new THREE.PlaneGeometry(.22, 6); skGV.translate(0, -3, 0);
-const skGH = new THREE.PlaneGeometry(6, .22); skGH.translate(3, 0, 0);
-const skV = new THREE.Mesh(skGV, skMat(0xdff6ff)), skH = new THREE.Mesh(skGH, skMat(0xffd35a)), skFx = { t:0 };
-skV.position.set(0, 2.2, -3); skH.position.set(-3, 0, -3); skV.renderOrder = skH.renderOrder = 12; skV.visible = skH.visible = false; camera.add(skV, skH);
-function updSkillFx(dt){
-  if (skFx.t <= 0){ skV.visible = skH.visible = false; return; }
-  skFx.t = Math.max(0, skFx.t - dt);
-  const k = 1 - skFx.t/.5, kv = Math.min(1, k*4), kh = Math.max(0, Math.min(1, (k - .25)*4)), fade = Math.min(1, (1 - k)*2.2);
-  skV.visible = true; skV.scale.y = Math.max(.001, kv); skV.material.opacity = fade;
-  skH.visible = kh > 0; skH.scale.x = Math.max(.001, kh); skH.material.opacity = fade;
+const skFxList = [];
+function fxLine(ang, sx, sy, len, hex, dur = .35, th = .22, delay = 0){
+  const g = new THREE.PlaneGeometry(len, th); g.translate(len/2, 0, 0);
+  const m = new THREE.Mesh(g, skMat(hex)); m.position.set(sx, sy, -3); m.rotation.z = ang; m.renderOrder = 12; m.scale.x = .001; m.visible = false; camera.add(m);
+  skFxList.push({ m, t:0, dur, delay });
 }
-function fireSkill(r, A){
+function updSkillFx(dt){
+  for (let i = skFxList.length - 1; i >= 0; i--){
+    const f = skFxList[i]; f.t += dt; const k = (f.t - f.delay)/f.dur;
+    if (k < 0) continue;
+    if (k >= 1){ camera.remove(f.m); f.m.geometry.dispose(); f.m.material.dispose(); skFxList.splice(i, 1); continue; }
+    f.m.visible = true; f.m.scale.x = Math.min(1, k*4) + .001; f.m.material.opacity = k < .35 ? 1 : (1 - k)/.65;
+  }
+}
+const fxDown = hex => fxLine(-Math.PI/2, 0, 3.2, 6.4, hex), fxRight = hex => fxLine(0, -3.2, 0, 6.4, hex), fxLeft = hex => fxLine(Math.PI, 3.2, 0, 6.4, hex);
+// ---- スキル定義 ----
+const SKD = {
+  vertical:{ en:'VERTICAL', jp:'バーチカル', c:'#7ae7ff' }, vorpal:{ en:'VORPAL STRIKE', jp:'ヴォーパルストライク', c:'#b8f0ff' },
+  sonic:{ en:'SONIC LEAP', jp:'ソニックリープ', c:'#ffd35a' }, lotus:{ en:'LOTUS SLASH', jp:'ロータススラッシュ', c:'#ff9ae0' },
+  square:{ en:'HORIZONTAL SQUARE', jp:'ホリゾンタルスクエア', c:'#7ae7ff' }, meteor:{ en:'METEOR BREAK', jp:'メテオブレイク', c:'#ff9a20' },
+  starburst:{ en:'STARBURST STREAM', jp:'スターバーストストライク', c:'#ffd35a' } };
+function skBanner(k){ const d = SKD[k]; popCam(d.en, d.c, 1.4, 1.5); popup(d.jp, '#ffffff', new THREE.Vector3(0, -.15, -3), .6, 1.5, camera); }
+// 倍率mのダメージ（通常攻撃6/弱点9 × m × 設定倍率/5）。照準に関わらずボスへ命中（オートロック）
+const skHit = (m, big = true) => { if (state !== 'play' || B.s === 'dead') return; hurtBoss((B.weak > 0 ? 9 : 6)*m*sk.mult/5, bossG.position.clone(), big); playAtk(); };
+function skImpact(fl, sh, fov, col){ flash = Math.max(flash, fl); flashM.material.color.set(col || 0xbfefff); shake = Math.max(shake, sh); hitstop = Math.max(hitstop, .12); fovp = Math.max(fovp, fov); }
+function cast(name, r){
+  const d = SKD[name];
+  if (!sk.on){ dbg('（スキルOFFのため ' + d.jp + ' は発動せず）'); return; }
+  if (state !== 'play' || B.s === 'dead' || sb.active) return;
+  if (sb.ready){ startStarburst(); return; }
+  const at = () => bossG.position, ring2 = (rr, hex) => { ring(at(), rr, hex, .5); ring(at(), rr*.5, 0xffffff, .3); };
+  dbg(`★ ${d.jp}（${d.en}）` + (name === 'vertical' || name === 'square' ? ` 間隔${sk.last ? ((r.t0 - sk.last.t1)/1000).toFixed(2) : '-'}s` : ''));
+  skBanner(name); P.swing = 0; P.swingCd = Math.max(P.swingCd, .5);
+  let seq;
+  if (name === 'vertical') seq = [
+    { type:'chop', d:.2, on:() => { skHit(2.5); fxDown(0xdff6ff); skImpact(.3, .3, 4); } },
+    { type:'sweepR', d:.22, on:() => { skHit(2.5); fxRight(0xffd35a); skImpact(.3, .3, 4); burst(at(), 0x7ae7ff, 50, 8); } } ];
+  else if (name === 'square') seq = [
+    { type:'chop', d:.2, on:() => { skHit(3); fxDown(0xdff6ff); skImpact(.3, .3, 3); } },
+    { type:'sweepR', d:.2, on:() => { skHit(3); fxRight(0xffd35a); skImpact(.3, .3, 3); } },
+    { type:'chop', d:.2, on:() => { skHit(3); fxDown(0xdff6ff); skImpact(.3, .3, 3); } },
+    { type:'sweepL', d:.24, on:() => { skHit(3); fxLeft(0xffd35a); skImpact(.6, .6, 10); ring2(6, 0x7ae7ff); burst(at(), 0xffd35a, 90, 10); } } ];
+  else if (name === 'vorpal') seq = [
+    { type:'thrustWind', d:.14 }, { type:'thrustOut', d:.1 },
+    { type:'thrustBack', d:.3, on:() => { skHit(6); skImpact(.6, .5, 12); ring2(5, 0xb8f0ff); burst(at(), 0xb8f0ff, 80, 12); for (let i = 0; i < 3; i++){ const a = i*Math.PI/3 + .2; fxLine(a, -Math.cos(a)*2, -Math.sin(a)*2, 4, 0xb8f0ff, .3, .14); } } } ];
+  else if (name === 'sonic') seq = [
+    { type:'chopWind', d:.24 },
+    { type:'chop', d:.22, on:() => { skHit(5); skImpact(.6, .7, 14, 0xfff2b0); fxDown(0xffd35a); fxLine(-Math.PI/2, -.5, 3.2, 6.4, 0xffffff, .3, .12); ring2(6, 0xffd35a); burst(at(), 0xffd35a, 90, 10); } } ];
+  else if (name === 'lotus') seq = [
+    { type:'sweepWind', d:.26 },
+    { type:'sweepR', d:.16, on:() => { skHit(5); skImpact(.6, .6, 10, 0xffd0f0); fxRight(0xff9ae0); fxLine(0, -3.2, .5, 6.4, 0xffffff, .3, .12); ring2(6, 0xff9ae0); burst(at(), 0xff9ae0, 90, 10); } } ];
+  else seq = [   // meteor: 3ヒットで一回転
+    { type:'spin', k0:0, k1:.34, d:.2, on:() => { skHit(2.3); skImpact(.4, .4, 6, 0xffd0a0); ring2(6, 0xff9a20); burst(at(), 0xff9a20, 50, 9); } },
+    { type:'spin', k0:.34, k1:.67, d:.2, on:() => { skHit(2.3); skImpact(.4, .4, 6, 0xffd0a0); ring2(7, 0xff9a20); } },
+    { type:'spin', k0:.67, k1:1, d:.2, on:() => { skHit(2.4); skImpact(.7, .7, 12, 0xffd0a0); ring2(9, 0xffd35a); burst(at(), 0xff9a20, 110, 12); } } ];
+  startAnim(seq); wiiRumble(380);
+}
+// ---- スターバーストストライク: 被ダメ0で16ヒット → READY → 次に振ると16連撃 ----
+const sb = { n:0, ready:false, active:false };
+let chainS = null;
+function sbDraw(){
+  if (chainS){ hud.remove(chainS); chainS.material.map.dispose(); chainS.material.dispose(); chainS = null; }
+  if (sb.n <= 0 && !sb.ready) return;
+  chainS = mkSprite(sb.ready ? 'STARBURST READY! 振って発動' : 'CHAIN ' + sb.n + ' / 16', sb.ready ? '#ffd35a' : '#7ae7ff', .32);
+  chainS.position.set(0, 1.28, -3); hud.add(chainS);
+}
+function sbHit(){
+  if (sb.ready || sb.active || state !== 'play') return;
+  sb.n++; sbDraw();
+  if (sb.n >= 16){ sb.ready = true; sbDraw(); popCam('STARBURST READY!', '#ffd35a', 1.2, 1.4); dbg('★ 16連撃達成 → STARBURST READY（次の斬りで発動）'); wiiRumble(200); }
+}
+function startStarburst(){
   if (state !== 'play' || B.s === 'dead') return;
-  const base = B.weak > 0 ? 9 : 6, dmg = base*sk.mult, at = bossG.position.clone();   // 照準に関わらずボスに命中（オートロック）
-  dbg(`★ SWORD SKILL! 縦→横 間隔${((r.t0 - A.t1)/1000).toFixed(2)}s ダメージ${dmg}`);
-  hurtBoss(dmg, at, true);
-  popCam('SWORD SKILL!', '#ffd35a', 1.5, 1.4);
-  flash = .7; flashM.material.color.set(0xbfefff); shake = Math.max(shake, .6); hitstop = Math.max(hitstop, .18); fovp = Math.max(fovp, 10);
-  ring(at, 6, 0x7ae7ff, .6); ring(at, 3, 0xffffff, .35); burst(at, 0x7ae7ff, 90, 10);
-  skFx.t = .5; P.swing = .22; P.dir *= -1;
-  playAtk(); setTimeout(playAtk, 110); setTimeout(playAtk, 220);   // 効果音(atack.mp3)を連続再生
-  wiiRumble(380);
+  sb.ready = false; sb.active = true; sb.n = 0; sbDraw();
+  P.inv = Math.max(P.inv, 2.2); P.swingCd = 2; P.swing = 0;
+  dbg('★ スターバーストストライク 16連撃！'); skBanner('starburst');
+  skImpact(.6, .3, 8, 0xfff2b0);
+  const seq = [];
+  for (let i = 0; i < 16; i++){
+    const sg = i % 2 ? -1 : 1, a0 = sg*(1.2 + Math.random()), last = i === 15;
+    seq.push({ type:'flurry', d:.1, a0, a1:-a0, x0:-sg*1.3, x1:sg*1.3, dy:(Math.random() - .5)*.6, rv:(Math.random() - .5)*.8,
+      on:() => {
+        skHit(1.5, false); hitstop = 0;
+        const ang = Math.random()*Math.PI, len = 6.4, cx = (Math.random() - .5)*1.6, cy = (Math.random() - .5)*1.2;
+        fxLine(ang, cx - Math.cos(ang)*len/2, cy - Math.sin(ang)*len/2, len, i % 2 ? 0xffd35a : 0xdff6ff, .25, .14);
+        burst(bossG.position, 0xffffff, 12, 7); shake = Math.max(shake, .15);
+        if (i % 4 === 0) wiiRumble(80);
+        if (last){ skImpact(.9, .8, 14, 0xfff2b0); ring(bossG.position, 8, 0xffd35a, .6); burst(bossG.position, 0xffd35a, 160, 14); }
+      } });
+  }
+  seq.push({ type:'idle', d:.25, on:() => { sb.active = false; } });
+  startAnim(seq);
 }
 // メニュー設定
 const skBind = (id, key, vid, fmt) => { $(id).oninput = e => { sk[key] = +e.target.value; $(vid).textContent = fmt ? fmt(sk[key]) : sk[key]; }; };
 skBind('skWin', 'win', 'skWinV'); skBind('skRB', 'rB', 'skRBV', v => v.toFixed(2)); skBind('skRA', 'rA', 'skRAV', v => v.toFixed(2));
-skBind('skPk', 'minPk', 'skPkV'); skBind('skMul', 'mult', 'skMulV');
+skBind('skPk', 'minPk', 'skPkV'); skBind('skMul', 'mult', 'skMulV'); skBind('skSq', 'sqWin', 'skSqV'); skBind('skHV', 'heavyV', 'skHVV'); skBind('skHH', 'heavyH', 'skHHV');
+skBind('skSp', 'spin', 'skSpV'); skBind('skTA', 'thrustA', 'skTAV', v => v.toFixed(1)); skBind('skTR', 'thrustRot', 'skTRV');
 $('skOn').onchange = e => { sk.on = e.target.checked; dbgDraw(); };
 $('skDbg').onchange = e => { sk.dbg = e.target.checked; dbgDraw(); };
 $('skCal').onclick = wiiRecal;
 dbgDraw();
 
-function startBattle(){ reset(); sk.A = null; state = 'play'; setMsg(null); bgmPlay(true); }
+function startBattle(){ reset(); state = 'play'; setMsg(null); bgmPlay(true); }
 function startGame(){
   (async () => { if (!camStream) await openCam(camSel.value || null); if (face.on && !face.stream) startFace(); else faceRecenter(); })();
   startBattle();
