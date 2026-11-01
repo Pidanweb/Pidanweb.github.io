@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ARモンスター配置</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F2EEFF;
+    --ink: #2A1B3D;
+    --sub: #5E4E78;
+    --accent: #FFD84D;
+    --mint: #6EE7C8;
+    --pill-bg: rgba(42, 27, 61, 0.78);
+    --pill-ink: #FFFFFF;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1E1430;
+      --ink: #F2EEFF;
+      --sub: #BFB2D9;
+      color-scheme: dark;
+    }
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Hiragino Sans", system-ui, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    overflow: hidden;
+  }
+
+  /* 開始画面 */
+  #intro {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+    padding: 2rem 1.5rem;
+    text-align: center;
+  }
+  #intro svg { width: min(46vw, 200px); height: auto; }
+  #intro h1 { font-size: 1.75rem; font-weight: 800; margin: 0; line-height: 1.3; }
+  #intro p { margin: 0; color: var(--sub); line-height: 1.7; max-width: 22em; }
+  #startBtn {
+    font: inherit;
+    font-weight: 800;
+    font-size: 1.15rem;
+    padding: 1rem 2.5rem;
+    border: 3px solid var(--ink);
+    border-radius: 999px;
+    background: var(--accent);
+    color: #2A1B3D;
+    box-shadow: 0 5px 0 var(--ink);
+    cursor: pointer;
+  }
+  #startBtn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--ink); }
+  #startBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+  #startBtn:focus-visible, .ui-btn:focus-visible { outline: 3px solid var(--mint); outline-offset: 3px; }
+  #notice { font-size: 0.9rem; color: var(--sub); }
+  #notice.error { color: #C2364A; font-weight: 500; }
+
+  /* AR中のオーバーレイ */
+  #overlay { display: none; position: fixed; inset: 0; pointer-events: none; }
+  #overlay.active { display: block; }
+  #status {
+    position: absolute;
+    top: calc(env(safe-area-inset-top, 0px) + 16px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--pill-bg);
+    color: var(--pill-ink);
+    padding: 0.7rem 1.2rem;
+    border-radius: 999px;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    max-width: calc(100% - 32px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .controls {
+    position: absolute;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+    left: 0; right: 0;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+  }
+  .ui-btn {
+    pointer-events: auto;
+    font: inherit;
+    font-weight: 800;
+    padding: 0.8rem 1.4rem;
+    border-radius: 999px;
+    border: 3px solid #2A1B3D;
+    background: #FFFFFF;
+    color: #2A1B3D;
+    cursor: pointer;
+  }
+  .ui-btn.primary { background: var(--accent); }
+  .ui-btn[hidden] { display: none; }
+  canvas { display: block; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div id="intro">
+  <!-- オリジナルのモンスター「ぷにまる」 -->
+  <svg viewBox="0 0 200 200" aria-hidden="true">
+    <ellipse cx="100" cy="182" rx="56" ry="9" fill="#2A1B3D" opacity="0.18"/>
+    <path d="M58 70 L48 22 L84 52 Z" fill="#8B6CF0" stroke="#2A1B3D" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M142 70 L152 22 L116 52 Z" fill="#8B6CF0" stroke="#2A1B3D" stroke-width="5" stroke-linejoin="round"/>
+    <ellipse cx="100" cy="115" rx="66" ry="64" fill="#8B6CF0" stroke="#2A1B3D" stroke-width="5"/>
+    <ellipse cx="100" cy="135" rx="38" ry="32" fill="#E9E1FF"/>
+    <circle cx="76" cy="100" r="13" fill="#fff" stroke="#2A1B3D" stroke-width="4"/>
+    <circle cx="124" cy="100" r="13" fill="#fff" stroke="#2A1B3D" stroke-width="4"/>
+    <circle cx="78" cy="102" r="6" fill="#2A1B3D"/>
+    <circle cx="122" cy="102" r="6" fill="#2A1B3D"/>
+    <path d="M90 124 Q100 133 110 124" fill="none" stroke="#2A1B3D" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="62" cy="122" r="7" fill="#FF9EC0" opacity="0.8"/>
+    <circle cx="138" cy="122" r="7" fill="#FF9EC0" opacity="0.8"/>
+  </svg>
+  <h1>床にモンスターを置こう</h1>
+  <p>カメラで床を見つけて、タップした場所にモンスターを固定します。歩き回っても同じ場所にいます。</p>
+  <button id="startBtn" disabled>ARをはじめる</button>
+  <div id="notice" role="status">対応状況を確認中…</div>
+</div>
+
+<div id="overlay">
+  <div id="status">床にカメラを向けて、ゆっくり動かしてね</div>
+  <div class="controls">
+    <button class="ui-btn" id="resetBtn" hidden>置き直す</button>
+    <button class="ui-btn primary" id="exitBtn">終了</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+  const startBtn = document.getElementById('startBtn');
+  const notice = document.getElementById('notice');
+  const overlay = document.getElementById('overlay');
+  const statusEl = document.getElementById('status');
+  const resetBtn = document.getElementById('resetBtn');
+  const exitBtn = document.getElementById('exitBtn');
+
+  // ---------- 対応チェック ----------
+  function showError(msg) {
+    notice.textContent = msg;
+    notice.classList.add('error');
+    startBtn.disabled = true;
+  }
+  if (!window.isSecureContext) {
+    showError('HTTPSで開いてください（カメラを使うために必要です）。');
+  } else if (!navigator.xr) {
+    showError('このブラウザはWebXRに対応していません。AndroidのChromeで開いてください。');
+  } else {
+    navigator.xr.isSessionSupported('immersive-ar').then((ok) => {
+      if (ok) {
+        startBtn.disabled = false;
+        notice.textContent = 'カメラへのアクセスを許可してください';
+      } else {
+        showError('この端末はAR（床の認識）に対応していません。ARCore対応のAndroid＋Chromeで開いてください。');
+      }
+    }).catch(() => showError('ARの対応状況を確認できませんでした。'));
+  }
+
+  // ---------- three.js 基本セットアップ ----------
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.xr.enabled = true;
+  renderer.domElement.style.display = 'none';
+  document.body.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 30);
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8877aa, 1.0));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+  sun.position.set(0.5, 1, 0.3);
+  scene.add(sun);
+
+  // ---------- 床検出のレティクル（ねらいマーク） ----------
+  const reticle = new THREE.Group();
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.09, 0.11, 40).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: 0xFFD84D, transparent: true, opacity: 0.95 })
+  );
+  const dot = new THREE.Mesh(
+    new THREE.CircleGeometry(0.02, 24).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
+  );
+  reticle.add(ring, dot);
+  reticle.matrixAutoUpdate = false;
+  reticle.visible = false;
+  scene.add(reticle);
+
+  // ---------- モンスター（プリミティブで組み立て） ----------
+  function createMonster() {
+    const root = new THREE.Group();     // 床に固定する位置
+    const body = new THREE.Group();     // アニメーション用
+    root.add(body);
+
+    const purple = new THREE.MeshStandardMaterial({ color: 0x8B6CF0, roughness: 0.55 });
+    const belly = new THREE.MeshStandardMaterial({ color: 0xE9E1FF, roughness: 0.7 });
+    const white = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.3 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x2A1B3D, roughness: 0.4 });
+    const pink = new THREE.MeshStandardMaterial({ color: 0xFF9EC0, roughness: 0.8 });
+
+    // 胴体（高さ約30cm）
+    const torso = new THREE.Mesh(new THREE.SphereGeometry(0.14, 32, 24), purple);
+    torso.scale.set(1, 1.05, 0.95);
+    torso.position.y = 0.15;
+    body.add(torso);
+
+    const bellyMesh = new THREE.Mesh(new THREE.SphereGeometry(0.09, 24, 16), belly);
+    bellyMesh.scale.set(1, 0.95, 0.5);
+    bellyMesh.position.set(0, 0.12, 0.095);
+    body.add(bellyMesh);
+
+    // 耳
+    [-1, 1].forEach((s) => {
+      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.11, 16), purple);
+      ear.position.set(0.075 * s, 0.3, 0);
+      ear.rotation.z = -0.35 * s;
+      body.add(ear);
+    });
+
+    // 目（まばたき用に保持）
+    const eyes = [];
+    [-1, 1].forEach((s) => {
+      const eye = new THREE.Group();
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(0.028, 20, 16), white);
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.014, 16, 12), dark);
+      pupil.position.z = 0.02;
+      const shine = new THREE.Mesh(new THREE.SphereGeometry(0.005, 8, 8), white);
+      shine.position.set(0.006, 0.007, 0.032);
+      eye.add(ball, pupil, shine);
+      eye.position.set(0.05 * s, 0.2, 0.115);
+      body.add(eye);
+      eyes.push(eye);
+    });
+
+    // ほっぺ
+    [-1, 1].forEach((s) => {
+      const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 10), pink);
+      cheek.scale.set(1, 0.6, 0.4);
+      cheek.position.set(0.085 * s, 0.165, 0.105);
+      body.add(cheek);
+    });
+
+    // 足
+    [-1, 1].forEach((s) => {
+      const foot = new THREE.Mesh(new THREE.SphereGeometry(0.035, 16, 12), purple);
+      foot.scale.set(1, 0.55, 1.3);
+      foot.position.set(0.065 * s, 0.018, 0.03);
+      body.add(foot);
+    });
+
+    // 床に落ちる影（ぼかした円）
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(64, 64, 4, 64, 64, 64);
+    grad.addColorStop(0, 'rgba(0,0,0,0.45)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 128, 128);
+    const shadow = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.36, 0.36).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false })
+    );
+    shadow.position.y = 0.002;
+    root.add(shadow);
+
+    root.userData = { body, eyes, shadow };
+    return root;
+  }
+
+  const monster = createMonster();
+  monster.visible = false;
+  scene.add(monster);
+
+  // ---------- AR セッション ----------
+  let session = null;
+  let refSpace = null;
+  let hitTestSource = null;
+  let lastHit = null;
+  let anchor = null;          // 対応端末ではアンカーで空間に固定
+  let placed = false;
+  let spawnTime = 0;
+  let nextBlink = 0;
+
+  function setStatus(text) { statusEl.textContent = text; }
+
+  // オーバーレイのボタンを押したときに「床をタップ」扱いにしない
+  [resetBtn, exitBtn].forEach((b) => b.addEventListener('beforexrselect', (e) => e.preventDefault()));
+
+  startBtn.addEventListener('click', async () => {
+    try {
+      session = await navigator.xr.requestSession('immersive-ar', {
+        requiredFeatures: ['hit-test'],
+        optionalFeatures: ['dom-overlay', 'anchors', 'local-floor'],
+        domOverlay: { root: overlay }
+      });
+    } catch (err) {
+      showError('ARを開始できませんでした：' + err.message);
+      return;
+    }
+
+    overlay.classList.add('active');
+    renderer.domElement.style.display = 'block';
+    renderer.xr.setReferenceSpaceType('local');
+    await renderer.xr.setSession(session);
+
+    refSpace = renderer.xr.getReferenceSpace();
+    const viewerSpace = await session.requestReferenceSpace('viewer');
+    hitTestSource = await session.requestHitTestSource({ space: viewerSpace });
+
+    session.addEventListener('select', onSelect);
+    session.addEventListener('end', onSessionEnd);
+
+    setStatus('床にカメラを向けて、ゆっくり動かしてね');
+    renderer.setAnimationLoop(render);
+  });
+
+  exitBtn.addEventListener('click', () => { if (session) session.end(); });
+
+  resetBtn.addEventListener('click', () => {
+    clearPlacement();
+    setStatus('置きたい場所をタップしてね');
+  });
+
+  function clearPlacement() {
+    if (anchor && anchor.delete) anchor.delete();
+    anchor = null;
+    placed = false;
+    monster.visible = false;
+    resetBtn.hidden = true;
+  }
+
+  function onSessionEnd() {
+    renderer.setAnimationLoop(null);
+    if (hitTestSource) hitTestSource.cancel();
+    hitTestSource = null;
+    lastHit = null;
+    clearPlacement();
+    reticle.visible = false;
+    session = null;
+    overlay.classList.remove('active');
+    renderer.domElement.style.display = 'none';
+  }
+
+  // 画面タップ → レティクルの位置に配置
+  function onSelect() {
+    if (!reticle.visible || placed) return;
+
+    // 位置：検出した床の点
+    monster.position.setFromMatrixPosition(reticle.matrix);
+
+    // 向き：カメラのほうを向かせる（水平方向のみ）
+    const xrCam = renderer.xr.getCamera(camera);
+    const camPos = new THREE.Vector3().setFromMatrixPosition(xrCam.matrixWorld);
+    monster.rotation.set(0, Math.atan2(camPos.x - monster.position.x, camPos.z - monster.position.z), 0);
+
+    monster.visible = true;
+    placed = true;
+    spawnTime = performance.now();
+    reticle.visible = false;
+    resetBtn.hidden = false;
+    setStatus('固定したよ。まわりを歩いて見てみて');
+
+    // アンカー対応ならアンカーを作成（トラッキング補正に追従してズレにくくなる）
+    if (lastHit && typeof lastHit.createAnchor === 'function') {
+      lastHit.createAnchor().then((a) => {
+        if (placed) anchor = a; else a.delete();
+      }).catch(() => { /* アンカー非対応でもヒット位置で固定済み */ });
+    }
+  }
+
+  const upVec = new THREE.Vector3();
+
+  function render(time, frame) {
+    if (frame && hitTestSource) {
+      // 床の検出
+      if (!placed) {
+        const results = frame.getHitTestResults(hitTestSource);
+        lastHit = null;
+        reticle.visible = false;
+        if (results.length) {
+          const pose = results[0].getPose(refSpace);
+          if (pose) {
+            reticle.matrix.fromArray(pose.transform.matrix);
+            // 面の向きを確認：上向きの面（床・テーブル）だけ受け付ける
+            upVec.setFromMatrixColumn(reticle.matrix, 1);
+            if (upVec.y > 0.85) {
+              reticle.visible = true;
+              lastHit = results[0];
+            }
+          }
+        }
+        setStatus(reticle.visible ? '床を見つけたよ。タップして置こう' : '床にカメラを向けて、ゆっくり動かしてね');
+      }
+
+      // アンカーの最新位置に追従
+      if (placed && anchor && frame.trackedAnchors && frame.trackedAnchors.has(anchor)) {
+        const aPose = frame.getPose(anchor.anchorSpace, refSpace);
+        if (aPose) {
+          const p = aPose.transform.position;
+          monster.position.set(p.x, p.y, p.z);
+        }
+      }
+    }
+
+    // レティクルのゆっくり回転
+    if (reticle.visible) ring.rotation.y = time * 0.0015;
+
+    // モンスターのアニメーション
+    if (placed) {
+      const { body, eyes, shadow } = monster.userData;
+      const t = (performance.now() - spawnTime) / 1000;
+
+      // 出現：ぽよんと弾むスケール
+      const s = t < 0.6 ? easeOutBack(Math.min(t / 0.6, 1)) : 1;
+      // 待機：呼吸
+      const breathe = 1 + Math.sin(t * 2.4) * 0.025;
+      body.scale.set(s * (2 - breathe), s * breathe, s * (2 - breathe));
+      shadow.scale.setScalar(Math.max(s, 0.01));
+
+      // まばたき
+      const now = performance.now();
+      if (now > nextBlink) nextBlink = now + 2000 + Math.random() * 3000;
+      const blinking = nextBlink - now < 120;
+      eyes.forEach((e) => { e.scale.y = blinking ? 0.1 : 1; });
+    }
+
+    renderer.render(scene, camera);
+  }
+
+  function easeOutBack(x) {
+    const c1 = 1.70158, c3 = c1 + 1;
+    return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+  }
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+})();
+</script>
+</body>
+</html>
