@@ -72,8 +72,8 @@
     <button id="skCal" style="margin-top:6px;width:100%">ジャイロ再キャリブ（−ボタンでも可）</button>
   </details>
   <button id="mRestart">↻ リスタート</button><button id="mTitle">⌂ タイトルへ</button>
-  <small style="color:#9fdcea">✋ 手のひらを約1秒見せて開く / 指先でカーソル → Aで決定（スライダーはAを押したまま左右）/ M キーで開閉</small></div>
-<div id="hCur"></div><div id="palmRing">✋</div>
+  <small style="color:#9fdcea">✌ ピースを約1秒キープで開く / 指先でカーソル → Aで決定（スライダーはAを押したまま左右）/ M キーで開閉</small></div>
+<div id="hCur"></div><div id="palmRing">✌</div>
 <pre id="wiiDbg"></pre>
 <canvas id="facePrev" width="320" height="240"></canvas>
 <video id="v" autoplay playsinline muted></video>
@@ -414,10 +414,10 @@ $('faceCal').onclick = faceRecenter;
 $('faceStart').onclick = () => { if (!face.on){ $('faceOn').checked = face.on = true; } startFace(); };
 let prevOn = true; $('facePrevOn').onchange = e => prevOn = e.target.checked;
 
-// ===== 手のひらを約1秒見せるとメニューを開く =====
+// ===== ピース(✌)を約0.8秒キープするとメニューを開く =====
 const hand = { lm:null, loading:false, trail:[], last:-1, cool:0, pt0:null, px:0, py:0, prog:0, lastOk:-1e9, needRelease:false, palm:null };
 // HOLD = 手のひらを見せ続ける時間(ms) / MOVE = これ以上動いたら数え直し(映像幅比) / GRACE = 認識が途切れても許す時間(ms)
-const PALM = { HOLD:1000, MOVE:.08, GRACE:250 };
+const PALM = { HOLD:800, MOVE:.08, GRACE:250 };
 async function loadHandModel(){
   if (hand.lm || hand.loading) return; hand.loading = true;
   try {
@@ -437,11 +437,12 @@ function handStep(now){
     hc.tx = cl((x - HC.X0)/(1 - HC.X0*2)); hc.ty = cl((p[8].y - HC.Y0)/(1 - HC.Y0*2)); return;
   }
   const d = (a, b) => Math.hypot(p[a].x - p[b].x, p[a].y - p[b].y);
-  // 手のひらを開いた形: 4本の指先が第2関節より手首から遠く、親指も外に開いている
-  const open = [[8, 6], [12, 10], [16, 14], [20, 18]].every(([t, j]) => d(t, 0) > d(j, 0)*1.15) && d(4, 17) > d(3, 17)*1.05;
+  // ピース(✌): 人差し指と中指だけ伸ばし、薬指・小指は曲げる。2本とも指先が付け根より上(指を立てている)
+  const open = d(8, 0) > d(6, 0)*1.15 && d(12, 0) > d(10, 0)*1.15 && d(16, 0) < d(14, 0) && d(20, 0) < d(18, 0)
+            && p[8].y < p[5].y && p[12].y < p[9].y;
   if (!open){ palmLost(now); return; }
-  hand.lastOk = now; if (hand.needRelease) return;   // 一度開いた後は、手を下ろす(開いた手をやめる)まで再判定しない
-  const cx = p[9].x, cy = p[9].y; hand.palm = { x:cx, y:cy };   // 9 = 中指の付け根(手のひらの中心付近)
+  hand.lastOk = now; if (hand.needRelease) return;   // 一度開いた後は、ピースをやめるまで再判定しない
+  const cx = p[9].x, cy = p[9].y; hand.palm = { x:cx, y:cy };   // 9 = 中指の付け根
   if (hand.pt0 == null || Math.hypot(cx - hand.px, cy - hand.py) > PALM.MOVE){ hand.pt0 = now; hand.px = cx; hand.py = cy; }   // 大きく動いたら数え直し
   hand.prog = Math.min(1, (now - hand.pt0)/PALM.HOLD);
   if (hand.prog >= 1){ hand.pt0 = null; hand.prog = 0; hand.needRelease = true; toggleMenu(true); }
