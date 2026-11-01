@@ -13,7 +13,7 @@
   #camPanel select{width:100%;margin:4px 0 8px;padding:4px;font:inherit}
   #camPanel div{margin-top:6px}
   #camStat{font-size:12px;color:#ffd35a;word-break:break-all}
-  #v,#fv{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
+  #v,#fv,#bgv{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
   #facePrev{position:fixed;left:10px;bottom:10px;z-index:5;width:240px;height:180px;border:2px solid #7ae7ff88;border-radius:8px;background:#000;pointer-events:none;display:none}
   #faceBadge{margin-top:6px;font-size:12px;color:#7ae7ff;text-shadow:0 0 4px #000}
   #camPanel input[type=range]{width:100%}
@@ -40,6 +40,14 @@
     <div><button id="camApply">このカメラを使う</button> <button id="camRefresh">一覧を更新</button></div>
     <div id="camStat">USBカメラは接続後「一覧を更新」</div>
     <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <b style="color:#ffd35a">🖼 敵の背景</b>
+    <label>背景に使う映像 <select id="bgMode"><option value="cam">上の「使うカメラ」のライブ映像（バック推奨）</option><option value="file">動画ファイル（バックカメラで撮った動画など）</option><option value="none">なし（単色）</option></select></label>
+    <label id="bgFileRow" style="display:none">動画ファイル<input type="file" id="bgFile" accept="video/*"></label>
+    <label><input type="checkbox" id="bgFlip"> 背景を左右反転</label>
+    <label><input type="checkbox" id="bgTP"> 俯瞰モードでも背景に表示</label>
+    <div id="bgStat" style="font-size:12px;color:#ffd35a"></div>
+    <small>「動画ファイル」にするとゲーム開始時に背景用カメラを開かないので、スマホでもフロント(顔・手)＋背景動画の組み合わせを試せます。</small>
+    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
     <label><input type="checkbox" id="faceOn" checked> 顔の動きで視点・照準を操作</label>
     <label>顔認識に使うカメラ<select id="faceSel"><option value="">自動（インカメラ）</option><option value="user">フロント</option><option value="environment">バック</option></select></label>
     <label>カメラの種類 <select id="faceType"><option value="auto">自動判定</option><option value="front">フロント（鏡像）</option><option value="back">バック（非鏡像）</option></select></label> <button id="faceFlip">🔄 前/後 切替</button>
@@ -56,7 +64,7 @@
     <label><input type="checkbox" id="poseMove" checked> 体の左右移動で回避</label>
     <small>俯瞰モードでは上の「使うカメラ」1台（既定はバックカメラ）だけで全身を認識します。顔用カメラは止めます。全身が映る位置に置いてください。</small>
   </div>
-  <div id="faceBadge"></div><div id="wiiStat" style="margin-top:4px;font-size:12px;color:#ffd35a;text-shadow:0 0 4px #000"></div></div>
+  <div id="faceBadge"></div><div id="perfStat" style="margin-top:4px;font:12px monospace;color:#9fffb0;text-shadow:0 0 4px #000"></div><div id="wiiStat" style="margin-top:4px;font-size:12px;color:#ffd35a;text-shadow:0 0 4px #000"></div></div>
 <div id="menu"><h3 style="margin:0">MENU</h3>
   <button id="mClose">▶ 再開</button><button id="mView">👁 視点: 一人称</button><button id="mAim">🎯 視点操作: ON</button><button id="mFace">🔄 顔カメラ: フロント</button><button id="mCtrl">🖱 操作: マウス</button>
   <button id="jobBtn">🔁 ジョブチェンジ</button>
@@ -89,6 +97,7 @@
 <canvas id="facePrev" width="320" height="240"></canvas>
 <video id="v" autoplay playsinline muted></video>
 <video id="fv" autoplay playsinline muted></video>
+<video id="bgv" playsinline muted loop></video>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 // ===== GIANT SLIME RAID =====
@@ -237,7 +246,7 @@ av.add(prim, holder); av.visible = false; scene.add(av);
 function setView(v){
   tp = v; av.visible = tp; rig = tp ? aim : camera; rig.add(sword, shield, gShield, arc);
   const t = tp ? '俯瞰(後方)' : '一人称'; $('viewBtn').textContent = '👁 ' + t; $('mView').textContent = '👁 視点: ' + t;
-  scene.background = tp ? BG : (camTex || BG); floorMat.opacity = tp ? .8 : .5;   // 俯瞰ではカメラ映像を背景にしない（カメラはプレイヤーを撮っているため）
+  applyBg(); floorMat.opacity = tp ? .8 : .5;   // 俯瞰ではカメラ映像を背景にしない（カメラはプレイヤーを撮っているため）
   if (tp) enterTP(); else leaveTP();
 }
 // ===== 視点操作（顔 / 俯瞰では頭の向き）で画面を動かすかどうか =====
@@ -314,7 +323,7 @@ async function openCam(id){
   vid.srcObject = camStream;
   try { await vid.play(); } catch (e){}
   if (!camTex){ camTex = new THREE.VideoTexture(vid); camTex.minFilter = THREE.LinearFilter; }
-  if (!tp) scene.background = camTex;
+  applyBg();
   camStat.textContent = '使用中: ' + (tr.label || 'カメラ');
   await listCams(); if (st.deviceId) camSel.value = st.deviceId;
   return true;
@@ -325,10 +334,37 @@ $('camRefresh').onclick = () => camStream ? listCams() : openCam(null);
 $('mir').onchange = e => camMirror = e.target.checked;
 for (const ev of ['mousedown', 'keydown', 'keyup']) for (const el of ['ui', 'menu']) $(el).addEventListener(ev, e => e.stopPropagation());
 if (navigator.mediaDevices) navigator.mediaDevices.addEventListener('devicechange', listCams);
+// ===== 背景ソース（ライブカメラ / 動画ファイル / なし）=====
+let bgMode = 'cam', bgTP = false, bgFlip = false, bgFileTex = null, bgURL = null;
+const bgv = $('bgv');
+const bgEl = () => bgMode === 'cam' ? vid : bgMode === 'file' ? bgv : null;
+const bgTex = () => bgMode === 'cam' ? camTex : bgMode === 'file' ? bgFileTex : null;
+function applyBg(){
+  scene.background = (tp && !bgTP) ? BG : (bgTex() || BG);
+  if (bgMode === 'file') { if (scene.background === bgFileTex && bgv.paused && bgv.src) bgv.play().catch(() => {}); }
+  else if (!bgv.paused) bgv.pause();
+}
+$('bgMode').onchange = e => {
+  bgMode = e.target.value; $('bgFileRow').style.display = bgMode === 'file' ? '' : 'none';
+  if (bgMode === 'cam' && !camStream) openCam(camSel.value || null);
+  $('bgStat').textContent = bgMode === 'file' ? (bgFileTex ? '動画を背景に再生中' : '動画ファイルを選んでください') : bgMode === 'none' ? '背景なし' : (camStream ? 'カメラ映像を背景に表示' : '');
+  applyBg();
+};
+$('bgFile').onchange = async e => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  if (bgURL) URL.revokeObjectURL(bgURL);
+  bgURL = URL.createObjectURL(f); bgv.src = bgURL;
+  if (!bgFileTex){ bgFileTex = new THREE.VideoTexture(bgv); bgFileTex.minFilter = THREE.LinearFilter; }
+  try { await bgv.play(); $('bgStat').textContent = '再生中: ' + f.name; } catch (err){ $('bgStat').textContent = '再生できません: ' + (err && err.name); }
+  applyBg();
+};
+$('bgFlip').onchange = e => bgFlip = e.target.checked;
+$('bgTP').onchange = e => { bgTP = e.target.checked; applyBg(); };
 function cover(a){
-  if (!camTex || !vid.videoWidth) return;
-  const va = vid.videoWidth/vid.videoHeight; let rx = 1, ry = 1; if (a > va) ry = va/a; else rx = a/va;
-  const c0 = (1 - rx)/2; camTex.repeat.set(camMirror ? -rx : rx, ry); camTex.offset.set(camMirror ? c0 + rx : c0, (1 - ry)/2);
+  const t = bgTex(), el = bgEl(); if (!t || !el || !el.videoWidth) return;
+  const mir = (bgMode === 'cam' ? camMirror : false) !== bgFlip;
+  const va = el.videoWidth/el.videoHeight; let rx = 1, ry = 1; if (a > va) ry = va/a; else rx = a/va;
+  const c0 = (1 - rx)/2; t.repeat.set(mir ? -rx : rx, ry); t.offset.set(mir ? c0 + rx : c0, (1 - ry)/2);
 }
 
 // ===== 顔トラッキング（MediaPipe Face Landmarker）=====
@@ -1342,7 +1378,7 @@ dbgDraw();
 
 function startBattle(){ reset(); state = 'play'; setMsg(null); bgmPlay(true); }
 function startGame(){
-  (async () => { if (!camStream) await openCam(camSel.value || null); if (tp) enterTP(); else if (face.on && !face.stream) startFace(); else faceRecenter(); })();
+  (async () => { if (!camStream && (tp || bgMode === 'cam')) await openCam(camSel.value || null); applyBg(); if (tp) enterTP(); else if (face.on && !face.stream) startFace(); else faceRecenter(); })();
   startBattle();
 }
 addEventListener('mousedown', e => {
@@ -1363,10 +1399,20 @@ addEventListener('mouseup', e => {
   if (performance.now() - mdn.t < GUARD_MS && state === 'play' && !menuOn) attack();
 });
 
+// ===== 処理負荷の目安（FPS / 認識にかかった時間 / 開いているカメラ数）=====
+const perf = { n:0, t0:performance.now(), ml:0, mlMax:0 };
+function perfTick(now, ms){
+  perf.n++; perf.ml += ms; perf.mlMax = Math.max(perf.mlMax, ms);
+  if (now - perf.t0 < 1000) return;
+  const fps = perf.n*1000/(now - perf.t0), cams = (camStream ? 1 : 0) + (face.stream ? 1 : 0);
+  $('perfStat').textContent = `FPS ${fps.toFixed(0)} | 認識 平均${(perf.ml/perf.n).toFixed(1)}ms 最大${perf.mlMax.toFixed(0)}ms | カメラ${cams}台` + (bgMode === 'file' && bgFileTex ? '+動画' : '');
+  $('perfStat').style.color = fps < 30 ? '#ff4d5e' : fps < 50 ? '#ffd35a' : '#9fffb0';
+  perf.n = 0; perf.ml = 0; perf.mlMax = 0; perf.t0 = now;
+}
 let last = performance.now();
 function loop(now){
   const dt = Math.min(.033, (now - last)/1000); last = now;
-  faceStep(now); poseStep(now); handStep(now); hcStep(now, dt); palmUI(now); faceDraw(); update(dt); render(); requestAnimationFrame(loop);
+  const t0 = performance.now(); faceStep(now); poseStep(now); handStep(now); perfTick(now, performance.now() - t0); hcStep(now, dt); palmUI(now); faceDraw(); update(dt); render(); requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 // タイトル画面(parytitle.html)から ?start=1 で来たら自動スタート
