@@ -17,6 +17,9 @@
   #facePrev{position:fixed;left:10px;bottom:10px;z-index:5;width:240px;height:180px;border:2px solid #7ae7ff88;border-radius:8px;background:#000;pointer-events:none;display:none}
   #faceBadge{margin-top:6px;font-size:12px;color:#7ae7ff;text-shadow:0 0 4px #000}
   #camPanel input[type=range]{width:100%}
+  #camPanel input[type=file]{width:100%;margin:4px 0;color:#9fdcea;font-size:12px}
+  #camPanel small{display:block;color:#9fdcea;font-size:11px;margin-top:4px}
+  #aimBtn.off,#mAim.off{color:#ff9aa5;border-color:#ff9aa588}
   #menu{position:fixed;top:0;bottom:0;left:50%;transform:translateX(-50%);width:min(260px,44vw);z-index:9;background:#061418cc;border:1px solid #7ae7ff88;border-radius:12px;padding:16px;display:none;flex-direction:column;gap:12px;justify-content:center;font:15px sans-serif;color:#fff;text-align:center;box-sizing:border-box}
   #menu.on{display:flex} #menu{overflow-y:auto;gap:8px} #menu>:first-child{margin-top:auto} #menu>:last-child{margin-bottom:auto} #jobs{display:none;flex-direction:column;gap:6px} #jobs.on{display:flex} #menu button:disabled{opacity:.45;cursor:not-allowed} #menu button{background:#0d2a30;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:8px;padding:10px;font:inherit;cursor:pointer}
   #wiiDbg{position:fixed;left:10px;top:10px;z-index:6;margin:0;padding:6px 8px;max-width:46vw;font:11px/1.35 monospace;color:#9fffb0;background:#000a;border:1px solid #7ae7ff44;border-radius:6px;pointer-events:none;white-space:pre-wrap}
@@ -30,7 +33,7 @@
 </style>
 </head>
 <body>
-<div id="ui"><button id="camBtn">📷 カメラ設定</button> <button id="viewBtn">👁 一人称</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰</button>
+<div id="ui"><button id="camBtn">📷 カメラ設定</button> <button id="viewBtn">👁 一人称</button> <button id="aimBtn">🎯 視点操作 ON</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰</button>
   <div id="camPanel" hidden>
     <label>使うカメラ<select id="camSel"></select></label>
     <label><input type="checkbox" id="mir"> 左右反転</label>
@@ -44,10 +47,18 @@
     <label><input type="checkbox" id="facePrevOn" checked> 認識プレビューを表示</label>
     <div><button id="faceStart">顔認識を開始/再起動</button> <button id="faceCal">中心リセット (C)</button></div>
     <div id="faceStat" style="font-size:12px;color:#ffd35a"></div>
+    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <b style="color:#ffd35a">🧍 俯瞰モード（VRMアバター）</b>
+    <label>VRMファイル<input type="file" id="vrmFile" accept=".vrm,.glb"></label>
+    <div id="vrmStat" style="font-size:12px;color:#ffd35a">未読み込み（読み込むまでは簡易アバター）</div>
+    <label>カメラの置き方 <select id="poseCam"><option value="front">プレイヤーを正面から撮る（推奨）</option><option value="back">プレイヤーを背後から撮る</option></select></label>
+    <label><input type="checkbox" id="poseOn" checked> 映像の動きをアバターに反映</label>
+    <label><input type="checkbox" id="poseMove" checked> 体の左右移動で回避</label>
+    <small>俯瞰モードでは上の「使うカメラ」1台（既定はバックカメラ）だけで全身を認識します。顔用カメラは止めます。全身が映る位置に置いてください。</small>
   </div>
   <div id="faceBadge"></div><div id="wiiStat" style="margin-top:4px;font-size:12px;color:#ffd35a;text-shadow:0 0 4px #000"></div></div>
 <div id="menu"><h3 style="margin:0">MENU</h3>
-  <button id="mClose">▶ 再開</button><button id="mView">👁 視点: 一人称</button><button id="mFace">🔄 顔カメラ: フロント</button><button id="mCtrl">🖱 操作: マウス</button>
+  <button id="mClose">▶ 再開</button><button id="mView">👁 視点: 一人称</button><button id="mAim">🎯 視点操作: ON</button><button id="mFace">🔄 顔カメラ: フロント</button><button id="mCtrl">🖱 操作: マウス</button>
   <button id="jobBtn">🔁 ジョブチェンジ</button>
   <div id="jobs"><button id="jSword">⚔ 剣士</button><button id="jWiz">🪄 魔法使い</button><button id="jGun" disabled>🔫 ガンナー（準備中）</button></div>
   <label>効果音 <input type="range" id="mVol" min="0" max="1" step=".1" value=".8"></label><label>BGM <input type="range" id="mBgm" min="0" max="1" step=".05" value=".5"></label><label>Wii振り感度 <input type="range" id="mWiiTh" min="1.2" max="4" step=".1" value="2.2"><br><small style="color:#9fdcea">左ほど敏感</small></label>
@@ -95,7 +106,7 @@ let W, H;
 function resize(){ W = innerWidth; H = innerHeight; renderer.setSize(W, H); }
 resize(); addEventListener('resize', resize);
 addEventListener('contextmenu', e => e.preventDefault());
-scene.background = new THREE.Color(0x0b1622);
+const BG = new THREE.Color(0x0b1622); scene.background = BG;
 scene.add(new THREE.HemisphereLight(0xcfeaff, 0x203020, 1.0));
 const sun = new THREE.DirectionalLight(0xffffff, .9); sun.position.set(3, 8, 4); scene.add(sun);
 
@@ -220,11 +231,23 @@ const av = new THREE.Group(), M = (c, r = .6) => new THREE.MeshStandardMaterial(
 const mk = (g, m, x, y, z) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); return o; };
 headM.position.y = 1.6; headM.add(mk(new THREE.SphereGeometry(.24, 16, 12), M(0xffd9b0), 0, 0, 0), mk(new THREE.SphereGeometry(.26, 16, 12), M(0x5a3a22), 0, .04, .07));
 const cape = mk(new THREE.PlaneGeometry(.75, 1.1), new THREE.MeshStandardMaterial({ color:0xc0303c, side:THREE.DoubleSide }), 0, .9, .36); cape.rotation.x = .12;
-av.add(mk(new THREE.CylinderGeometry(.3, .28, .6, 12), M(0x223049), 0, .3, 0), mk(new THREE.CylinderGeometry(.32, .38, 1, 12), M(0x3a7bd5), 0, 1.0, 0), headM, cape);
-av.visible = false; scene.add(av);
+const prim = new THREE.Group(), holder = new THREE.Group();   // prim = 簡易アバター / holder = VRMを入れる器
+prim.add(mk(new THREE.CylinderGeometry(.3, .28, .6, 12), M(0x223049), 0, .3, 0), mk(new THREE.CylinderGeometry(.32, .38, 1, 12), M(0x3a7bd5), 0, 1.0, 0), headM, cape);
+av.add(prim, holder); av.visible = false; scene.add(av);
 function setView(v){
   tp = v; av.visible = tp; rig = tp ? aim : camera; rig.add(sword, shield, gShield, arc);
   const t = tp ? '俯瞰(後方)' : '一人称'; $('viewBtn').textContent = '👁 ' + t; $('mView').textContent = '👁 視点: ' + t;
+  scene.background = tp ? BG : (camTex || BG); floorMat.opacity = tp ? .8 : .5;   // 俯瞰ではカメラ映像を背景にしない（カメラはプレイヤーを撮っているため）
+  if (tp) enterTP(); else leaveTP();
+}
+// ===== 視点操作（顔 / 俯瞰では頭の向き）で画面を動かすかどうか =====
+let viewCtl = true;
+function setViewCtl(v){
+  viewCtl = v; const t = v ? 'ON' : 'OFF';
+  $('aimBtn').textContent = '🎯 視点操作 ' + t; $('mAim').textContent = '🎯 視点操作: ' + t;
+  $('aimBtn').classList.toggle('off', !v); $('mAim').classList.toggle('off', !v);
+  mouse.nx = mouse.ny = 0;
+  if (v){ faceRecenter(); poseRecenter(); }
 }
 
 // ===== HUD（3Dで描くのでVRモードでも見える）=====
@@ -290,7 +313,8 @@ async function openCam(id){
   $('mir').checked = camMirror = st.facingMode !== 'environment';
   vid.srcObject = camStream;
   try { await vid.play(); } catch (e){}
-  if (!camTex){ camTex = new THREE.VideoTexture(vid); camTex.minFilter = THREE.LinearFilter; scene.background = camTex; }
+  if (!camTex){ camTex = new THREE.VideoTexture(vid); camTex.minFilter = THREE.LinearFilter; }
+  if (!tp) scene.background = camTex;
   camStat.textContent = '使用中: ' + (tr.label || 'カメラ');
   await listCams(); if (st.deviceId) camSel.value = st.deviceId;
   return true;
@@ -350,6 +374,8 @@ async function startFace(){
   loadFaceModel(); loadHandModel(); await openFaceCam();
 }
 function faceStep(now){
+  if (tp) return;   // 俯瞰中は全身ポーズ側で処理
+  if (!viewCtl){ setBadge('🎯 視点操作 OFF（画面固定）'); return; }
   const v = face.src;
   if (!face.on || !face.lm || !v || v.readyState < 2 || !v.videoWidth || v.currentTime === face.lastT) return;
   face.lastT = v.currentTime;
@@ -365,7 +391,7 @@ function faceStep(now){
   if (face.cx !== null) setBadge('👤 顔認識 OK');
 }
 function faceUpdate(dt){
-  if (!faceActive()) return;
+  if (!faceActive() || tp || !viewCtl) return;
   if (face.seen){
     const dx = face.x - face.cx, dy = face.y - face.cy, f = d => Math.abs(d) < FACE_DEAD ? 0 : d - Math.sign(d)*FACE_DEAD;
     face.tx = Math.max(-1, Math.min(1, (faceMirror() ? -1 : 1)*f(dx)*FACE_GX*face.gain));   // フロント(鏡像)は左右反転、バックはそのまま
@@ -377,8 +403,9 @@ function faceUpdate(dt){
 }
 const prevC = $('facePrev'), pctx = prevC.getContext('2d');
 function faceDraw(){
-  const show = prevOn && face.on && !vr && state !== undefined;
+  const show = prevOn && (tp || face.on) && !vr && state !== undefined;
   prevC.style.display = show ? 'block' : 'none'; if (!show) return;
+  if (tp){ poseDraw(); return; }
   const w = prevC.width, h = prevC.height, v = face.src;
   pctx.fillStyle = '#000'; pctx.fillRect(0, 0, w, h);
   if (!v || v.readyState < 2 || !v.videoWidth){
@@ -410,7 +437,7 @@ $('faceOn').onchange = e => {
 };
 $('faceGain').oninput = e => face.gain = +e.target.value;
 faceSel.onchange = () => { if (face.on) openFaceCam(); };
-$('faceCal').onclick = faceRecenter;
+$('faceCal').onclick = () => { faceRecenter(); poseRecenter(); };
 $('faceStart').onclick = () => { if (!face.on){ $('faceOn').checked = face.on = true; } startFace(); };
 let prevOn = true; $('facePrevOn').onchange = e => prevOn = e.target.checked;
 
@@ -428,12 +455,12 @@ async function loadHandModel(){
   hand.loading = false;
 }
 function handStep(now){
-  const v = face.src; if (!hand.lm || !v || v.readyState < 2 || !v.videoWidth || now - hand.last < 50) return; hand.last = now;
+  const v = tp ? vid : face.src; if (!hand.lm || !v || v.readyState < 2 || !v.videoWidth || now - hand.last < 50) return; hand.last = now;
   let r; try { r = hand.lm.detectForVideo(v, now); } catch (e){ return; }
   const p = r.landmarks && r.landmarks[0]; if (!p){ palmLost(now); return; }
   if (menuOn){   // メニュー中は人差し指の先(8)をカーソルに使う
     hand.needRelease = true; hand.pt0 = null; hand.prog = 0; hc.seen = now;
-    const cl = v => Math.max(0, Math.min(1, v)), x = faceMirror() ? 1 - p[8].x : p[8].x;
+    const cl = v => Math.max(0, Math.min(1, v)), x = (tp ? pose.cam === 'front' : faceMirror()) ? 1 - p[8].x : p[8].x;
     hc.tx = cl((x - HC.X0)/(1 - HC.X0*2)); hc.ty = cl((p[8].y - HC.Y0)/(1 - HC.Y0*2)); return;
   }
   const d = (a, b) => Math.hypot(p[a].x - p[b].x, p[a].y - p[b].y);
@@ -455,6 +482,191 @@ function palmUI(now){
   const el = $('palmRing'), on = !menuOn && hand.prog > .08 && now - hand.lastOk < 300;
   el.classList.toggle('on', on); if (on) el.style.setProperty('--p', (hand.prog*360).toFixed(0) + 'deg');
 }
+// ===== 俯瞰モード：VRMアバター + 全身ポーズ推定（MediaPipe Pose Landmarker）=====
+// カメラは1台だけ（「使うカメラ」= vid。既定はバックカメラ）。それでプレイヤーの全身を撮り、VRMの骨を回す。
+// アバターはモンスター(-Z)の方を向き、こちらには背中を見せる。
+// プレイヤーを「正面から」撮ると骨格は手前を向いているので、Y軸で180°回して後ろ姿として当てはめる
+// （左右も正しく入れ替わるので、右手を上げると画面右側＝アバターの右手が上がる）。
+const pose = { lm:null, loading:false, on:true, move:true, cam:'front', last:-1, seen:false, n:null, w:null,
+               cn:0, sx:0, sr:0, sp:0, cx:null, cr:0, cp:0, tx:0, ax:0, ay:0, sax:0, say:0 };
+const POSE_CAL = 15, POSE_MOVE_K = 18, POSE_AIM_G = 2.2, POSE_DEAD = .04;
+const poseReady = () => tp && pose.on && pose.seen && pose.cx !== null;
+const poseAimActive = () => poseReady() && pose.cam === 'front';   // 背後からだと顔が映らないので頭での照準は使わない
+function poseRecenter(){ pose.cx = null; pose.cn = pose.sx = pose.sr = pose.sp = 0; }
+async function loadPoseModel(){
+  if (pose.lm || pose.loading) return; pose.loading = true; setBadge('🧍 全身認識モデル読み込み中…');
+  try {
+    const V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14', mp = await import(V + '/vision_bundle.mjs'), fs = await mp.FilesetResolver.forVisionTasks(V + '/wasm');
+    const o = d => ({ baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task', delegate:d }, runningMode:'VIDEO', numPoses:1 });
+    try { pose.lm = await mp.PoseLandmarker.createFromOptions(fs, o('GPU')); } catch (e){ pose.lm = await mp.PoseLandmarker.createFromOptions(fs, o('CPU')); }
+    setBadge('🧍 全身を探しています…');
+  } catch (e){ console.error(e); setBadge('🧍 全身認識を読み込めません: ' + (e && e.message || e)); }
+  pose.loading = false;
+}
+async function enterTP(){
+  // 1台で済ませるため、顔用カメラは止める（スマホは前後カメラを同時に開けないことが多い）
+  if (face.stream){ face.stream.getTracks().forEach(t => t.stop()); face.stream = null; }
+  face.src = null; faceRecenter(); poseRecenter();
+  loadPoseModel(); loadHandModel();
+  if (!camStream) await openCam(camSel.value || null);
+  if (!vrm) restoreVRM();
+}
+function leaveTP(){ pose.seen = false; if (face.on && !face.stream) startFace(); }
+function poseStep(now){
+  if (!tp || !pose.on || !pose.lm || !camStream){ pose.seen = false; return; }
+  const v = vid; if (v.readyState < 2 || !v.videoWidth || v.currentTime === pose.last) return; pose.last = v.currentTime;
+  let r; try { r = pose.lm.detectForVideo(v, now); } catch (e){ console.error(e); return; }
+  const n = r.landmarks && r.landmarks[0], w = r.worldLandmarks && r.worldLandmarks[0];
+  if (!n || !w){ pose.seen = false; setBadge('🧍 全身が見つかりません（カメラから離れて全身を映す）'); return; }
+  pose.seen = true; pose.n = n; pose.w = w;
+  const hx = (n[23].x + n[24].x)/2, ex = (n[7].x + n[8].x)/2, ey = (n[7].y + n[8].y)/2, ed = Math.max(.01, Math.hypot(n[7].x - n[8].x, n[7].y - n[8].y));
+  const hr = (n[0].x - ex)/ed, hp = (n[0].y - ey)/ed;   // 耳の中点から見た鼻の位置 = 頭の向き
+  if (pose.cx === null){
+    pose.sx += hx; pose.sr += hr; pose.sp += hp;
+    if (++pose.cn < POSE_CAL){ setBadge('🧍 まっすぐ立って画面の方を向いてください…'); return; }
+    pose.cx = pose.sx/pose.cn; pose.cr = pose.sr/pose.cn; pose.cp = pose.sp/pose.cn;
+  }
+  const sg = pose.cam === 'front' ? -1 : 1, dz = d => Math.abs(d) < POSE_DEAD ? 0 : d - Math.sign(d)*POSE_DEAD, cl = v => Math.max(-1, Math.min(1, v));
+  pose.tx = Math.max(-3.2, Math.min(3.2, sg*(hx - pose.cx)*POSE_MOVE_K));   // 映像は左右反転していないので、正面撮りなら符号を逆に
+  pose.ax = cl(sg*dz(hr - pose.cr)*POSE_AIM_G*face.gain); pose.ay = cl(-dz(hp - pose.cp)*POSE_AIM_G*1.4*face.gain);
+  setBadge('🧍 全身認識 OK' + (pose.cam === 'front' ? '（頭の向きで視点）' : ''));
+}
+function poseAimUpdate(dt){
+  if (!viewCtl || !poseAimActive()) return;
+  const k = 1 - Math.exp(-dt*12);
+  pose.sax += (pose.ax - pose.sax)*k; pose.say += (pose.ay - pose.say)*k;
+  mouse.nx = pose.sax; mouse.ny = pose.say;
+}
+const POSE_LINKS = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+function poseDraw(){
+  const w = prevC.width, h = prevC.height, v = vid;
+  pctx.fillStyle = '#000'; pctx.fillRect(0, 0, w, h);
+  if (!camStream || v.readyState < 2 || !v.videoWidth){
+    pctx.fillStyle = '#ffd35a'; pctx.font = 'bold 16px sans-serif'; pctx.textAlign = 'center'; pctx.fillText('カメラ待機中…', w/2, h/2); return;
+  }
+  const mir = pose.cam === 'front', f = Math.min(w/v.videoWidth, h/v.videoHeight), dw = v.videoWidth*f, dh = v.videoHeight*f, ox = (w - dw)/2, oy = (h - dh)/2;
+  pctx.save(); if (mir){ pctx.translate(w, 0); pctx.scale(-1, 1); } pctx.drawImage(v, ox, oy, dw, dh); pctx.restore();
+  const X = x => { const p = ox + x*dw; return mir ? w - p : p; }, Y = y => oy + y*dh;
+  if (pose.seen && pose.n){
+    const n = pose.n; pctx.strokeStyle = '#5ee08a'; pctx.lineWidth = 3; pctx.beginPath();
+    for (const [a, b] of POSE_LINKS){ pctx.moveTo(X(n[a].x), Y(n[a].y)); pctx.lineTo(X(n[b].x), Y(n[b].y)); } pctx.stroke();
+    pctx.fillStyle = '#ff4d5e'; pctx.beginPath(); pctx.arc(X(n[0].x), Y(n[0].y), 4, 0, 7); pctx.fill();
+  }
+  if (pose.cx !== null){ pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 1.5; pctx.setLineDash([4, 4]); pctx.beginPath(); pctx.moveTo(X(pose.cx), oy); pctx.lineTo(X(pose.cx), oy + dh); pctx.stroke(); pctx.setLineDash([]); }
+  pctx.font = 'bold 15px sans-serif'; pctx.textAlign = 'left';
+  pctx.fillStyle = !pose.lm ? '#ffd35a' : pose.seen ? '#5ee08a' : '#ff4d5e';
+  pctx.fillText(!pose.lm ? 'モデル読み込み中…' : pose.seen ? (pose.cx === null ? 'まっすぐ立って…' : '● 全身追跡中') : '× 全身が見つかりません', 8, 20);
+}
+
+// ----- VRM 読み込み（three-vrm は使わず GLTFLoader + VRMの骨情報だけ読む。VRM0.x / 1.0 両対応）-----
+let vrm = null;
+const BN = ['hips','spine','chest','upperChest','neck','head','leftUpperArm','leftLowerArm','leftHand','rightUpperArm','rightLowerArm','rightHand',
+            'leftUpperLeg','leftLowerLeg','leftFoot','rightUpperLeg','rightLowerLeg','rightFoot'];
+const LIMB = { leftUpperArm:'leftLowerArm', leftLowerArm:'leftHand', rightUpperArm:'rightLowerArm', rightLowerArm:'rightHand',
+               leftUpperLeg:'leftLowerLeg', leftLowerLeg:'leftFoot', rightUpperLeg:'rightLowerLeg', rightLowerLeg:'rightFoot' };
+const vrmStat = t => $('vrmStat').textContent = t;
+function loadScript(src){ return new Promise((res, rej) => { const e = document.createElement('script'); e.src = src; e.onload = res; e.onerror = () => rej(new Error('読み込み失敗: ' + src)); document.head.appendChild(e); }); }
+let gltfLib = null;
+const needGLTF = () => gltfLib || (gltfLib = THREE.GLTFLoader ? Promise.resolve() : loadScript('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js'));
+function avQuat(o, out = new THREE.Quaternion()){ out.identity(); for (; o && o !== av; o = o.parent) out.premultiply(o.quaternion); return out; }   // av から見た向き
+function avPos(o){ const v = o.getWorldPosition(new THREE.Vector3()); return av.worldToLocal(v); }
+async function loadVRM(buf, name, save){
+  vrmStat('⏳ 読み込み中…');
+  try {
+    await needGLTF();
+    const gltf = await new Promise((res, rej) => new THREE.GLTFLoader().parse(buf, '', res, rej));
+    const ext = gltf.parser.json.extensions || {}, map = {};
+    if (ext.VRMC_vrm) for (const [k, b] of Object.entries(ext.VRMC_vrm.humanoid.humanBones)) map[k] = b.node;
+    else if (ext.VRM) for (const b of ext.VRM.humanoid.humanBones) map[b.bone] = b.node;
+    else throw new Error('VRMの骨情報がありません（VRM形式ではない?）');
+    const bones = {};
+    for (const k of BN) if (map[k] !== undefined) bones[k] = await gltf.parser.getDependency('node', map[k]);
+    if (!bones.hips || !bones.head || !bones.leftUpperArm || !bones.rightUpperArm) throw new Error('必要な骨（hips/head/腕）が見つかりません');
+    if (vrm){ holder.remove(vrm.root); vrm = null; }
+    const root = gltf.scene;
+    root.traverse(o => {
+      if (!o.isMesh) return; o.frustumCulled = false;
+      for (const m of [].concat(o.material)){
+        // このゲームはリニア出力なので、テクスチャ色をそのまま出す（暗くならないように）
+        for (const k of ['map', 'emissiveMap']) if (m[k]) m[k].encoding = THREE.LinearEncoding;
+        if (m.isMeshStandardMaterial){ m.metalness = 0; m.roughness = Math.max(m.roughness, .8); }
+        m.needsUpdate = true;
+      }
+    });
+    av.rotation.set(0, 0, 0); holder.rotation.set(0, 0, 0); holder.scale.setScalar(1); holder.add(root);
+    av.updateMatrixWorld(true);
+    if (avPos(bones.rightUpperArm).x < avPos(bones.leftUpperArm).x) holder.rotation.y = Math.PI;   // 右手が+X = モンスター(-Z)向き＝背中がこちら
+    av.updateMatrixWorld(true);
+    const hh = avPos(bones.head).y; if (hh < 1 || hh > 2) holder.scale.setScalar(1.45/hh);   // 極端に大きい/小さいモデルだけ身長を合わせる
+    av.updateMatrixWorld(true);
+    const rest = {}, dir = {};
+    for (const k in bones) rest[k] = { q:bones[k].quaternion.clone(), aq:avQuat(bones[k]) };
+    for (const [a, b] of Object.entries(LIMB)) if (bones[a] && bones[b]) dir[a] = avPos(bones[b]).sub(avPos(bones[a])).normalize();
+    vrm = { root, bones, rest, dir, name }; prim.visible = false;
+    if (save) idbPut({ buf, name });
+    vrmStat('✔ ' + name + '（' + (ext.VRMC_vrm ? 'VRM 1.0' : 'VRM 0.x') + '）');
+  } catch (e){ console.error(e); vrmStat('✖ ' + (e && e.message || e)); }
+}
+// 前回読み込んだVRMをブラウザ内(IndexedDB)に保存し、ページを開き直しても使えるようにする
+function idb(){ return new Promise((res, rej) => { const r = indexedDB.open('cw_vrm', 1); r.onupgradeneeded = () => r.result.createObjectStore('f'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function idbPut(v){ try { (await idb()).transaction('f', 'readwrite').objectStore('f').put(v, 'vrm'); } catch (e){} }
+async function idbGet(){ try { const db = await idb(); return await new Promise(res => { const q = db.transaction('f').objectStore('f').get('vrm'); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); }); } catch (e){ return null; } }
+let vrmRestoring = false;
+async function restoreVRM(){ if (vrm || vrmRestoring) return; vrmRestoring = true; const v = await idbGet(); if (v && v.buf && !vrm) await loadVRM(v.buf, v.name || '保存済みVRM', false); vrmRestoring = false; }
+$('vrmFile').onchange = async e => { const f = e.target.files[0]; if (f) loadVRM(await f.arrayBuffer(), f.name, true); };
+$('poseCam').onchange = e => { pose.cam = e.target.value; poseRecenter(); };
+$('poseOn').onchange = e => { pose.on = e.target.checked; };
+$('poseMove').onchange = e => { pose.move = e.target.checked; };
+
+// ----- 骨を回す（すべて av 空間で「休止姿勢(Tポーズ)からの回転 D」を求め、親の向きで割ってローカル回転にする）-----
+const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _qd = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _m4 = new THREE.Matrix4(), UP = new THREE.Vector3(0, 1, 0);
+function setAv(name, D, k){
+  const b = vrm.bones[name]; if (!b) return;
+  const T = _q.copy(D).multiply(vrm.rest[name].aq), L = avQuat(b.parent, _q2).invert().multiply(T);
+  b.quaternion.slerp(L, k);
+}
+function setDir(name, v, k){ const d = vrm.dir[name]; if (d && vrm.bones[name] && v.lengthSq() > 1e-8) setAv(name, _qd.setFromUnitVectors(d, v.normalize()), k); }
+function relax(name, k){ const b = vrm.bones[name]; if (b) b.quaternion.slerp(vrm.rest[name].q, k); }
+function basisRU(r, u, out){   // 右(r)と上(u)から向きを作る（休止姿勢は 右=+X, 上=+Y）
+  const x = r.clone().normalize(), y = u.clone().sub(x.clone().multiplyScalar(u.dot(x))).normalize();
+  return out.setFromRotationMatrix(_m4.makeBasis(x, y, x.clone().cross(y)));
+}
+function basisRF(r, f, out){   // 右(r)と前(f)から向きを作る（休止姿勢は 前=-Z）
+  const x = r.clone().normalize(), z = f.clone().sub(x.clone().multiplyScalar(f.dot(x))).normalize().negate();
+  return out.setFromRotationMatrix(_m4.makeBasis(x, z.clone().cross(x), z));
+}
+function poseApply(dt){
+  if (!vrm) return;
+  const k = 1 - Math.exp(-dt*14), live = pose.on && pose.seen && pose.w;
+  if (live){
+    // MediaPipe(x右,y下,z奥) → av空間。正面撮り:Y軸180°回転して後ろ姿に / 背後撮り:そのまま
+    const w = pose.w, s = pose.cam === 'front' ? [-1, -1, 1] : [1, -1, -1];
+    const P_ = i => new THREE.Vector3(w[i].x*s[0], w[i].y*s[1], w[i].z*s[2]), vis = i => (pose.n[i].visibility ?? 1) > .5;
+    const hL = P_(23), hR = P_(24), sL = P_(11), sR = P_(12), hM = hL.clone().add(hR).multiplyScalar(.5), sM = sL.clone().add(sR).multiplyScalar(.5);
+    setAv('hips', basisRU(hR.clone().sub(hL), UP, _qb), k);
+    setAv('spine', basisRU(sR.clone().sub(sL), sM.clone().sub(hM), _qb), k);
+    for (const b of ['chest', 'upperChest', 'neck']) relax(b, k);
+    const eL = P_(7), eR = P_(8), eM = eL.clone().add(eR).multiplyScalar(.5), fw = P_(0).sub(eM); fw.y += .03;   // 鼻は耳より少し下にあるぶん補正
+    setAv('head', basisRF(eR.clone().sub(eL), fw, _qb), k);
+    for (const [sd, a, b, c] of [['left', 11, 13, 15], ['right', 12, 14, 16]]){
+      setDir(sd + 'UpperArm', P_(b).sub(P_(a)), k); setDir(sd + 'LowerArm', P_(c).sub(P_(b)), k);
+    }
+    for (const [sd, a, b, c] of [['left', 23, 25, 27], ['right', 24, 26, 28]]){
+      if (vis(b) && vis(c)){ setDir(sd + 'UpperLeg', P_(b).sub(P_(a)), k); setDir(sd + 'LowerLeg', P_(c).sub(P_(b)), k); }
+      else { relax(sd + 'UpperLeg', k); relax(sd + 'LowerLeg', k); }   // 足が映っていなければ直立
+    }
+  } else {   // 未認識：腕を下ろした待機姿勢。頭だけ視点に合わせる
+    setAv('hips', _qb.identity(), k); setAv('spine', _qb.identity(), k);
+    for (const b of ['chest', 'upperChest', 'neck']) relax(b, k);
+    setAv('head', _qb.setFromAxisAngle(UP, -mouse.nx*.5), k);
+    setDir('leftUpperArm', new THREE.Vector3(-.25, -1, .05), k); setDir('leftLowerArm', new THREE.Vector3(-.12, -1, -.3), k);
+    setDir('rightUpperArm', new THREE.Vector3(.25, -1, .05), k); setDir('rightLowerArm', new THREE.Vector3(.12, -1, -.3), k);
+    for (const b of ['leftUpperLeg', 'leftLowerLeg', 'rightUpperLeg', 'rightLowerLeg']) relax(b, k);
+  }
+  for (const b of ['leftHand', 'rightHand', 'leftFoot', 'rightFoot']) relax(b, k);
+}
+restoreVRM();   // 起動時に前回のVRMを復元
+
 function toggleMenu(f){ menuOn = f === undefined ? !menuOn : f; $('menu').classList.toggle('on', menuOn); }
 
 // ===== 指先カーソル（メニュー表示中のみ）: 人差し指の先で指して、Wiiリモコンの A で決定 =====
@@ -516,7 +728,8 @@ function playGuard(){ try {
   o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + .2);
 } catch (e){} }
 function playPary(){ try { const a = sPary.cloneNode(); a.volume = vol; a.play().catch(() => {}); } catch (e){} }
-$('viewBtn').onclick = () => setView(!tp); $('mView').onclick = () => setView(!tp); $('menuBtn').onclick = () => toggleMenu();
+$('viewBtn').onclick = () => setView(!tp); $('mView').onclick = () => setView(!tp);
+$('aimBtn').onclick = $('mAim').onclick = () => setViewCtl(!viewCtl); $('menuBtn').onclick = () => toggleMenu();
 $('mClose').onclick = () => toggleMenu(false); $('mFace').onclick = $('faceFlip').onclick = flipFaceCam;
 $('mVol').oninput = e => vol = +e.target.value; $('mBgm').oninput = e => bgm.volume = +e.target.value;
 $('mRestart').onclick = () => { toggleMenu(false); startBattle(); };
@@ -545,7 +758,7 @@ function titleMsg(){
           ['赤く光っている間に右クリック → 弾き返してスタン → 大ダメージ', '#fff', 28],
           ['Wii: 振る=斬る / B+振り上げ=パリィ / A長押し=ガード', '#ffd35a', 26],
           ['Wii: 縦→横=バーチカル / 突き / 縦横縦横 / 一回転 など（−:ジャイロ再調整）', '#ffd35a', 22],
-          ['顔を動かして狙う　C:中心リセット　V:VR　T:視点　M:メニュー', '#7ae7ff', 26],
+          ['顔を動かして狙う　C:中心リセット　V:VR　T:俯瞰/一人称　F:視点操作ON/OFF　M:メニュー', '#7ae7ff', 24],
           ['クリックでスタート（Webカメラを使います）', '#7ae7ff', 34]]);
 }
 titleMsg();
@@ -738,20 +951,23 @@ function update(dt){
     const gIn = ctl.mode === 'mouse' ? (mdn.on && nowMs - mdn.t >= GUARD_MS) : (wii.a && nowMs - wii.aT >= 150);
     P.guard = gIn && P.par <= 0 && !P.armed && P.swing <= 0;
     P.x = Math.max(-3.2, Math.min(3.2, P.x + mv*(P.par > 0 || P.guard ? 3 : 6)*dt));
+    if (tp && pose.move && poseReady() && !mv) P.x += (pose.tx - P.x)*Math.min(1, dt*8);   // 俯瞰：体を左右に動かして回避
     P.counter -= dt; P.swing -= dt; P.swingCd -= dt; P.inv -= dt; P.parCd -= dt;
     if (P.par > 0 || P.armed) P.parAge += dt;
     if (P.par > 0) P.par -= dt;
     bossAI(dt);
   } else if (state === 'title'){ B.z += (HOVER - B.z)*Math.min(1, dt*2); B.s = 'enter'; }
   if (!(state === 'play' && !menuOn)) P.guard = false;
-  faceUpdate(dt);
+  faceUpdate(dt); poseAimUpdate(dt);
+  if (!viewCtl) mouse.nx = mouse.ny = 0;   // 視点操作OFF：画面は正面固定
   bossAnim(dt); updSword(dt); updFX(dt); updSkillFx(dt); skTick();
-  { const fa = faceActive(); reticle.visible = fa && state === 'play';
+  { const fa = viewCtl && (tp ? poseAimActive() : faceActive()); reticle.visible = fa && state === 'play';
     if (fa){ const asp = vr ? W/2/H : W/H, hh = Math.tan((70 - fovp)*Math.PI/360)*3;
       reticle.position.set(mouse.nx*hh*asp, mouse.ny*hh, -3); reticle.scale.setScalar(.4); } }
   const sh = (Math.random()-.5)*shake;
   aim.position.set(P.x, EYE, 0); aim.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0);
-  av.position.x = P.x; av.rotation.y = -mouse.nx*.3; headM.rotation.y = -mouse.nx*.5;   // 顔の向きにアバターも向く
+  av.position.x = P.x; av.rotation.y = vrm ? 0 : -mouse.nx*.3; headM.rotation.y = -mouse.nx*.5;   // 顔の向きにアバターも向く
+  if (tp) poseApply(dt);   // VRMの骨を全身ポーズに合わせる
   if (tp){ camera.rotation.set(mouse.ny*.12 - .22, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + 1.5 + sh*.6, 4.2); }
   else { camera.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + sh*.6, 0); }
   bossBar.scale.x = Math.max(.0001, B.hp/B.max); pBar.scale.x = Math.max(.0001, P.hp/PMAX);
@@ -772,10 +988,10 @@ function render(){
 }
 
 // ===== 入力 =====
-addEventListener('keydown', e => { const k = e.key.toLowerCase(); keys[k] = true; if (state === 'play' && bgm.paused && !menuOn) bgmPlay(); if (k === 'v') vr = !vr; if (k === 'c') faceRecenter(); if (k === 'm') toggleMenu(); if (k === 't') setView(!tp); if (k === 'escape' && menuOn) toggleMenu(false); if (k === 'enter' && menuOn && hc.hover){ e.preventDefault(); hcClick(); } });
+addEventListener('keydown', e => { const k = e.key.toLowerCase(); keys[k] = true; if (state === 'play' && bgm.paused && !menuOn) bgmPlay(); if (k === 'v') vr = !vr; if (k === 'c'){ faceRecenter(); poseRecenter(); } if (k === 'f') setViewCtl(!viewCtl); if (k === 'm') toggleMenu(); if (k === 't') setView(!tp); if (k === 'escape' && menuOn) toggleMenu(false); if (k === 'enter' && menuOn && hc.hover){ e.preventDefault(); hcClick(); } });
 addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 function setMouse(e){
-  if (faceActive()) return;   // 顔操作中はマウスで視点を動かさない
+  if (!viewCtl || (tp ? poseAimActive() : faceActive())) return;   // 顔/頭で操作中・視点操作OFF中はマウスで視点を動かさない
   const w = vr ? W/2 : W; mouse.nx = ((e.clientX % w)/w)*2 - 1; mouse.ny = -((e.clientY/H)*2 - 1);
 }
 addEventListener('mousemove', setMouse);
@@ -1126,7 +1342,7 @@ dbgDraw();
 
 function startBattle(){ reset(); state = 'play'; setMsg(null); bgmPlay(true); }
 function startGame(){
-  (async () => { if (!camStream) await openCam(camSel.value || null); if (face.on && !face.stream) startFace(); else faceRecenter(); })();
+  (async () => { if (!camStream) await openCam(camSel.value || null); if (tp) enterTP(); else if (face.on && !face.stream) startFace(); else faceRecenter(); })();
   startBattle();
 }
 addEventListener('mousedown', e => {
@@ -1150,7 +1366,7 @@ addEventListener('mouseup', e => {
 let last = performance.now();
 function loop(now){
   const dt = Math.min(.033, (now - last)/1000); last = now;
-  faceStep(now); handStep(now); hcStep(now, dt); palmUI(now); faceDraw(); update(dt); render(); requestAnimationFrame(loop);
+  faceStep(now); poseStep(now); handStep(now); hcStep(now, dt); palmUI(now); faceDraw(); update(dt); render(); requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 // タイトル画面(parytitle.html)から ?start=1 で来たら自動スタート
