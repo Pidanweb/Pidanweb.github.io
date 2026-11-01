@@ -6,40 +6,55 @@
 <title>QRスライム配置テスト</title>
 <style>
   :root{ --bg:#0a1110; --cyan:#7ae7ff; --gold:#ffd35a; --panel:#000c; --btn:#0d2a30; color-scheme:dark; }
+  [hidden]{display:none !important}
   html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:#fff;font:14px "Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif}
-  #stage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#000}
+  #stage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:100vw;height:100vh;background:#000}
   #stage video,#stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
-  #ui{position:fixed;top:10px;right:10px;z-index:5;text-align:right}
+  #stage video{object-fit:fill}
+  #stage.mir>*{transform:scaleX(-1)}
+  #ui{position:fixed;top:10px;right:10px;z-index:20;text-align:right}
   button,select{font:inherit}
-  #ui>button,#start button{background:var(--btn);color:var(--cyan);border:1px solid #7ae7ff88;border-radius:6px;padding:6px 10px;cursor:pointer}
-  #panel{margin-top:6px;padding:10px;background:var(--panel);border:1px solid #7ae7ff55;border-radius:8px;width:270px;text-align:left;max-height:calc(100vh - 80px);overflow-y:auto;box-sizing:border-box}
-  #panel label{display:block;margin-top:8px}
-  #panel select,#panel input[type=range]{width:100%;margin-top:4px}
-  #panel small{display:block;color:#9fdcea;font-size:11px;margin-top:2px}
-  #panel b{color:var(--gold)}
-  #stat{position:fixed;left:10px;bottom:10px;z-index:5;padding:6px 10px;background:#000a;border:1px solid #7ae7ff44;border-radius:6px;font:12px/1.5 monospace;color:#9fffb0;white-space:pre}
-  #start{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:var(--bg);text-align:center;padding:20px}
+  .btn{background:var(--btn);color:var(--cyan);border:1px solid #7ae7ff88;border-radius:6px;padding:6px 10px;cursor:pointer}
+  .panel{margin-top:6px;margin-left:auto;padding:10px;background:var(--panel);border:1px solid #7ae7ff55;border-radius:8px;width:290px;text-align:left;max-height:calc(100vh - 80px);overflow-y:auto;box-sizing:border-box}
+  .panel label{display:block;margin-top:8px}
+  .panel select,.panel input[type=range]{width:100%;margin-top:4px}
+  .panel small{display:block;color:#9fdcea;font-size:11px;margin-top:2px}
+  .panel b{color:var(--gold)}
+  .row{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+  #camInfo{margin-top:8px;font-size:12px;color:var(--gold);word-break:break-all}
+  #stat{position:fixed;left:10px;top:10px;z-index:20;padding:6px 10px;background:#000a;border:1px solid #7ae7ff44;border-radius:6px;font:12px/1.5 monospace;color:#9fffb0;white-space:pre}
+  #logBox{position:fixed;left:10px;bottom:10px;z-index:20;width:min(560px,calc(100vw - 20px));background:#000d;border:1px solid #7ae7ff55;border-radius:8px;box-sizing:border-box}
+  #logHead{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-bottom:1px solid #7ae7ff33;color:var(--gold);font-size:12px}
+  #logHead .btn{padding:2px 8px;font-size:12px}
+  #log{margin:0;padding:6px 8px;height:170px;overflow-y:auto;font:11px/1.45 monospace;white-space:pre-wrap;word-break:break-all;color:#cfe}
+  #log .w{color:var(--gold)} #log .e{color:#ff8a96} #log .ok{color:#9fffb0}
+  #start{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:var(--bg);text-align:center;padding:20px;box-sizing:border-box}
   #start h1{margin:0;color:var(--gold);font-size:26px}
   #start p{margin:0;color:#9fdcea;line-height:1.7;max-width:30em}
-  #start button{font-size:18px;padding:12px 28px}
-  #start .err{color:#ff8a96}
+  #start .btn{font-size:18px;padding:12px 28px}
   button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 </style>
 </head>
 <body>
 <div id="start">
   <h1>QRスライム配置テスト</h1>
-  <p>印刷したQRコード（0〜3）をカメラに映すと、その上にスライムが乗ります。<br>PCのWebカメラ・USBカメラ・スマホのどれでも動きます。</p>
-  <button id="startBtn">カメラを開始</button>
-  <p id="startErr" class="err"></p>
+  <p>印刷したQRコード（0〜3）をカメラに映すと、その上にスライムが乗ります。<br>使うカメラは右上の「📷 カメラ設定」で選べます。</p>
+  <button class="btn" id="startBtn">カメラを開始</button>
 </div>
 
 <div id="stage"><video id="vid" autoplay playsinline muted></video></div>
 
 <div id="ui">
-  <button id="panelBtn">⚙ 設定</button>
-  <div id="panel" hidden>
-    <label>カメラ <select id="camSel"></select></label>
+  <button class="btn" id="camBtn">📷 カメラ設定</button>
+  <button class="btn" id="panelBtn">⚙ 表示設定</button>
+  <button class="btn" id="logBtn">📜 ログ</button>
+  <div id="camPanel" class="panel" hidden>
+    <label>使うカメラ <select id="camSel"><option value="">（まず「カメラを開始」を押してください）</option></select></label>
+    <label>解像度 <select id="resSel"><option value="1280x720" selected>1280×720</option><option value="1920x1080">1920×1080</option><option value="640x480">640×480</option></select></label>
+    <div class="row"><button class="btn" id="camApply">▶ このカメラで開く</button><button class="btn" id="camRefresh">🔄 再検出</button></div>
+    <div id="camInfo"></div>
+  </div>
+  <div id="panel" class="panel" hidden>
     <label>スライムを出すQR
       <select id="target"><option value="*">すべてのQR</option><option value="0">QR 0</option><option value="1">QR 1</option><option value="2">QR 2</option><option value="3">QR 3</option></select>
     </label>
@@ -50,14 +65,41 @@
       <input type="range" id="fov" min="35" max="110" step="1" value="65">
       <small>スライムが傾く・浮く・沈むときに調整（一般的なWebカメラは60〜78°）</small>
     </label>
+    <label><input type="checkbox" id="mirror"> 映像を左右反転（見た目だけ）</label>
     <label><input type="checkbox" id="dbg" checked> 検出枠と番号を表示</label>
   </div>
 </div>
-<div id="stat">待機中</div>
+<div id="stat" hidden>待機中</div>
+<div id="logBox">
+  <div id="logHead"><span>システムログ</span><span><button class="btn" id="logCopy">コピー</button> <button class="btn" id="logClear">消去</button></span></div>
+  <pre id="log"></pre>
+</div>
 
+<script>
+// ===== システムログ（最初に読み込み、以降のエラーをすべて拾う）=====
+const LOG = document.getElementById('log');
+function log(msg, cls = ''){
+  const d = new Date(), ts = d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+  const line = document.createElement('div'); if (cls) line.className = cls;
+  line.textContent = `[${ts}] ${msg}`; LOG.appendChild(line);
+  while (LOG.childNodes.length > 400) LOG.removeChild(LOG.firstChild);
+  LOG.scrollTop = LOG.scrollHeight;
+}
+const fmt = a => a.map(x => x instanceof Error ? `${x.name}: ${x.message}` : typeof x === 'object' ? (() => { try { return JSON.stringify(x); } catch (e) { return String(x); } })() : String(x)).join(' ');
+for (const [k, cls] of [['log', ''], ['info', ''], ['warn', 'w'], ['error', 'e']]){
+  const orig = console[k].bind(console);
+  console[k] = (...a) => { orig(...a); log(fmt(a), cls); };
+}
+addEventListener('error', e => {
+  if (e.target && e.target !== window && e.target.src) log(`読み込み失敗: ${e.target.src}`, 'e');
+  else log(`エラー: ${e.message} (${(e.filename || '').split('/').pop()}:${e.lineno})`, 'e');
+}, true);
+addEventListener('unhandledrejection', e => log(`未処理のエラー: ${e.reason && (e.reason.name + ': ' + e.reason.message) || e.reason}`, 'e'));
+log(`ページ読み込み: ${location.protocol}//${location.host || '(ローカルファイル)'}  secureContext=${window.isSecureContext}`);
+log(`ブラウザ: ${navigator.userAgent}`);
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script id="scanSrc" type="text/plain">
-importScripts('https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js');
+<script id="scanLib">
 // ===== QRスキャナ（Workerでもnodeでも使う）=====
 const TILES = (() => {
   const t = [[0, 0, 1, 1]];
@@ -111,13 +153,9 @@ function scanFrame(jsQR, d, w, h, rois, tile){
   }
   return found;
 }
-onmessage = e => {
-  const { buf, w, h, rois, tile, id } = e.data;
-  const found = scanFrame(jsQR, new Uint8ClampedArray(buf), w, h, rois, tile);
-  postMessage({ found, id });
-};
 </script>
 <script>
+if (!window.THREE) log('three.js を読み込めませんでした。インターネット接続を確認してください', 'e');
 // ===== QRスライム配置テスト =====
 // 流れ: カメラ映像 → Worker(jsQR)でQRの4隅を検出 → 4隅からQRの傾き・距離を計算 → その上にスライムを立たせる
 const $ = id => document.getElementById(id);
@@ -239,34 +277,65 @@ function poseFromCorners(c, w, h, f, retry = true){
 
 // ---------- 設定 ----------
 const cfg = { target:'*', size:1.4, hfov:65, dbg:true };
-$('panelBtn').onclick = () => { $('panel').hidden = !$('panel').hidden; };
-$('target').onchange = e => cfg.target = e.target.value;
+const toggle = (id, others) => { const p = $(id); p.hidden = !p.hidden; if (!p.hidden) others.forEach(o => $(o).hidden = true); };
+$('camBtn').onclick = () => { toggle('camPanel', ['panel']); if (!$('camPanel').hidden) listCams(); };
+$('panelBtn').onclick = () => toggle('panel', ['camPanel']);
+$('logBtn').onclick = () => { $('logBox').hidden = !$('logBox').hidden; };
+$('logClear').onclick = () => { LOG.innerHTML = ''; };
+$('logCopy').onclick = () => navigator.clipboard.writeText(LOG.innerText).then(() => log('ログをクリップボードにコピーしました', 'ok'), e => log('コピー失敗: ' + e.message, 'e'));
+$('target').onchange = e => { cfg.target = e.target.value; log('スライムを出すQR: ' + (cfg.target === '*' ? 'すべて' : cfg.target)); };
 $('size').oninput = e => { cfg.size = +e.target.value; $('sizeV').textContent = cfg.size.toFixed(1); };
 $('fov').oninput = e => { cfg.hfov = +e.target.value; $('fovV').textContent = cfg.hfov; layout(); };
+$('mirror').onchange = e => stage.classList.toggle('mir', e.target.checked);
 $('dbg').onchange = e => cfg.dbg = e.target.checked;
 
 // ---------- カメラ ----------
-let stream = null;
+let stream = null, running = false;
 async function openCam(deviceId){
-  if (stream) stream.getTracks().forEach(t => t.stop());
-  const video = deviceId ? { deviceId:{ exact:deviceId }, width:{ ideal:1280 }, height:{ ideal:720 } }
-                         : { facingMode:{ ideal:'environment' }, width:{ ideal:1280 }, height:{ ideal:720 } };
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
+    throw new Error('このブラウザ/開き方ではカメラが使えません（HTTPS か localhost で開いてください）');
+  if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+  const [rw, rh] = $('resSel').value.split('x').map(Number);
+  const video = deviceId ? { deviceId:{ exact:deviceId }, width:{ ideal:rw }, height:{ ideal:rh } }
+                         : { facingMode:{ ideal:'environment' }, width:{ ideal:rw }, height:{ ideal:rh } };
+  log(`カメラを要求: ${deviceId ? 'deviceId=' + deviceId.slice(0, 8) + '…' : '既定(背面優先)'} ${rw}×${rh}`);
   stream = await navigator.mediaDevices.getUserMedia({ video, audio:false });
-  vid.srcObject = stream; await vid.play();
+  const tr = stream.getVideoTracks()[0], st = tr.getSettings();
+  log(`カメラ取得OK: 「${tr.label || '名前なし'}」 ${st.width}×${st.height} ${st.frameRate ? Math.round(st.frameRate) + 'fps' : ''}`, 'ok');
+  tr.onended = () => log('カメラが切断されました（他のアプリが使用中、またはケーブル抜け）', 'e');
+  tr.onmute = () => log('カメラ映像が止まりました（mute）', 'w');
+  tr.onunmute = () => log('カメラ映像が再開しました');
+  vid.srcObject = stream;
+  try { await vid.play(); } catch (e){ log('映像の再生に失敗: ' + e.name + ' ' + e.message, 'e'); }
+  $('camInfo').textContent = `使用中: ${tr.label || '名前なし'}（${st.width}×${st.height}）`;
   layout(); listCams();
 }
 async function listCams(){
+  if (!navigator.mediaDevices) return;
   const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
   const cur = stream && stream.getVideoTracks()[0].getSettings().deviceId, sel = $('camSel');
   sel.innerHTML = '';
-  devs.forEach((d, i) => { const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || 'カメラ ' + (i+1); o.selected = d.deviceId === cur; sel.appendChild(o); });
+  if (!devs.length){ sel.innerHTML = '<option value="">カメラが見つかりません</option>'; log('カメラが1台も見つかりません', 'e'); return; }
+  devs.forEach((d, i) => { const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || 'カメラ ' + (i+1) + '（許可前は名前が出ません）'; o.selected = d.deviceId === cur; sel.appendChild(o); });
 }
-$('camSel').onchange = e => openCam(e.target.value).catch(err => $('stat').textContent = 'カメラを開けません: ' + err.name);
-$('startBtn').onclick = async () => {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ $('startErr').textContent = 'このブラウザはカメラに対応していません。HTTPS か localhost で開いてください。'; return; }
-  try { await openCam(); $('start').hidden = true; requestAnimationFrame(loop); }
-  catch (err){ $('startErr').textContent = 'カメラを開けませんでした（' + err.name + '）。カメラの許可を確認してください。'; }
-};
+async function startWith(deviceId){
+  try {
+    await openCam(deviceId);
+    $('start').hidden = true; $('stat').hidden = false;
+    if (!running){ running = true; requestAnimationFrame(loop); log('描画ループ開始', 'ok'); }
+  } catch (err){
+    log(`カメラを開けません: ${err.name} ${err.message}`, 'e');
+    if (err.name === 'NotAllowedError') log('→ ブラウザのアドレスバー左のカメラ許可を確認してください', 'w');
+    if (err.name === 'NotReadableError') log('→ 他のアプリ（Zoom・Teams・別タブなど）がカメラを使っていないか確認してください', 'w');
+    if (err.name === 'OverconstrainedError') log('→ この解像度に対応していない可能性があります。解像度を下げてください', 'w');
+  }
+}
+$('startBtn').onclick = () => startWith($('camSel').value || null);
+$('camApply').onclick = () => startWith($('camSel').value || null);
+$('camRefresh').onclick = async () => { await listCams(); log(`カメラ再検出: ${$('camSel').options.length}台`); };
+listCams().catch(() => {});
+vid.addEventListener('loadedmetadata', () => { log(`映像サイズ: ${vid.videoWidth}×${vid.videoHeight}`); layout(); });
+vid.addEventListener('playing', () => log('映像の再生開始', 'ok'));
 
 // ---------- 画面サイズ（映像と3Dのズレを防ぐため、映像と同じ縦横比で表示）----------
 const det = document.createElement('canvas'), dctx = det.getContext('2d', { willReadFrequently:true });
@@ -283,33 +352,64 @@ function layout(){
   camera.updateProjectionMatrix();
 }
 addEventListener('resize', layout);
-vid.addEventListener('loadedmetadata', layout);
 
-// ---------- 検出Worker ----------
-const worker = new Worker(URL.createObjectURL(new Blob([$('scanSrc').textContent], { type:'text/javascript' })));
-let busy = false, tile = 0, detFps = 0, detN = 0, detT = performance.now(), workerErr = '';
-worker.onerror = e => { workerErr = 'QR検出の読み込みに失敗: ' + (e.message || 'ネットワークを確認'); busy = false; };
+// ---------- QR検出（Worker。読み込めない環境ではメインスレッドで代行）----------
+const JSQR_URL = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+let busy = false, tile = 0, detFps = 0, detN = 0, detT = performance.now(), mode = 'init', worker = null;
+function startWorker(){
+  try {
+    const code = `try{importScripts('${JSQR_URL}');postMessage({ready:true});}catch(e){postMessage({fail:String(e)});}\n`
+      + $('scanLib').textContent
+      + `\nonmessage=e=>{const{buf,w,h,rois,tile}=e.data;postMessage({found:scanFrame(jsQR,new Uint8ClampedArray(buf),w,h,rois,tile)});};`;
+    worker = new Worker(URL.createObjectURL(new Blob([code], { type:'text/javascript' })));
+    worker.onerror = e => { log('Workerエラー: ' + (e.message || '不明'), 'e'); e.preventDefault(); fallbackMain(); };
+    worker.onmessage = e => {
+      if (e.data.ready){ mode = 'worker'; log('QR検出エンジン(Worker)の準備完了', 'ok'); return; }
+      if (e.data.fail){ log('Workerで jsQR を読み込めません: ' + e.data.fail, 'e'); fallbackMain(); return; }
+      onFound(e.data.found);
+    };
+    log('QR検出エンジンを読み込み中…');
+  } catch (e){ log('Workerを作れません: ' + e.message, 'w'); fallbackMain(); }
+}
+function fallbackMain(){
+  if (mode === 'main' || mode === 'loading') return;
+  if (worker){ worker.terminate(); worker = null; }
+  mode = 'loading'; busy = false;
+  log('メインスレッドでQR検出します（少し重くなります）', 'w');
+  const s = document.createElement('script'); s.src = JSQR_URL;
+  s.onload = () => { mode = 'main'; log('QR検出エンジン(メイン)の準備完了', 'ok'); };
+  s.onerror = () => { mode = 'dead'; log('jsQR を読み込めません。インターネット接続を確認してください: ' + JSQR_URL, 'e'); };
+  document.head.appendChild(s);
+}
+startWorker();
+let frames = 0;
 function pump(){
-  if (busy || !vid.videoWidth || vid.readyState < 2) return;
+  if (busy || !vid.videoWidth || vid.readyState < 2 || (mode !== 'worker' && mode !== 'main')) return;
   dctx.drawImage(vid, 0, 0, det.width, det.height);
   const img = dctx.getImageData(0, 0, det.width, det.height), now = performance.now();
   const rois = [...tracks.values()].filter(t => now - t.seen < LOST_MS && t.corners).map(t => t.corners);
-  // 追跡中は重い「全画面」タイル(0番)を飛ばす
-  tile = (tile + 1) % 14; if (rois.length && tile === 0) tile = 1;
-  busy = true;
-  worker.postMessage({ buf:img.data.buffer, w:det.width, h:det.height, rois, tile }, [img.data.buffer]);
+  tile = (tile + 1) % TILES.length; if (rois.length && tile === 0) tile = 1;   // 追跡中は重い全画面タイルを飛ばす
+  if (++frames === 1) log(`QR検出を開始（解析サイズ ${det.width}×${det.height}）`, 'ok');
+  if (mode === 'worker'){
+    busy = true;
+    worker.postMessage({ buf:img.data.buffer, w:det.width, h:det.height, rois, tile }, [img.data.buffer]);
+  } else {
+    try { onFound(scanFrame(jsQR, img.data, det.width, det.height, rois, tile)); } catch (e){ log('検出エラー: ' + e.message, 'e'); }
+  }
 }
-worker.onmessage = e => {
+function onFound(found){
   busy = false; detN++;
   const now = performance.now();
-  for (const f of e.data.found){
-    const m = poseFromCorners(f.c, det.width, det.height, focal); if (!m) continue;
-    const t = getTrack(f.data);
-    t.corners = f.c; t.seen = now;
+  for (const f of found){
+    const m = poseFromCorners(f.c, det.width, det.height, focal);
+    if (!m){ log(`QR ${f.data}: 姿勢を計算できません（角度が急すぎる）`, 'w'); continue; }
+    const isNew = !tracks.has(f.data), t = getTrack(f.data);
+    if (isNew || now - t.seen > LOST_MS) log(`QR「${f.data}」を${isNew ? '発見' : '再発見'}`, 'ok');
+    t.corners = f.c; t.seen = now; t.lostLogged = false;
     m.decompose(t.tPos, t.tQuat, new THREE.Vector3());
     if (t.fresh){ t.pos.copy(t.tPos); t.quat.copy(t.tQuat); t.fresh = false; }
   }
-};
+}
 
 // ---------- 描画ループ ----------
 const easeOutBack = x => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3*Math.pow(x-1, 3) + c1*Math.pow(x-1, 2); };
@@ -324,6 +424,7 @@ function loop(){
   for (const t of tracks.values()){
     const visible = now - t.seen < LOST_MS && (cfg.target === '*' || cfg.target === t.id);
     t.appear = Math.max(0, Math.min(1, t.appear + (visible ? dt/.5 : -dt/.2)));
+    if (now - t.seen >= LOST_MS && !t.lostLogged){ t.lostLogged = true; log(`QR「${t.id}」を見失いました`, 'w'); }
     if (!visible && t.appear === 0){ t.marker.visible = false; t.fresh = true; continue; }
     t.marker.visible = true;
     t.pos.lerp(t.tPos, a); t.quat.slerp(t.tQuat, a);
@@ -362,7 +463,7 @@ function loop(){
 
   if (now - detT > 1000){ detFps = detN*1000/(now - detT); detN = 0; detT = now; }
   const live = [...tracks.values()].filter(t => now - t.seen < LOST_MS).map(t => t.id).sort();
-  $('stat').textContent = workerErr || `検出中のQR: ${live.length ? live.join(', ') : 'なし'}\n検出 ${detFps.toFixed(1)} 回/秒  解析 ${det.width}×${det.height}`;
+  $('stat').textContent = `エンジン: ${({worker:'Worker',main:'メイン',loading:'読込中',init:'読込中',dead:'読込失敗'})[mode]}\n検出中のQR: ${live.length ? live.join(', ') : 'なし'}\n検出 ${detFps.toFixed(1)} 回/秒  解析 ${det.width}×${det.height}`;
 }
 </script>
 </body>
