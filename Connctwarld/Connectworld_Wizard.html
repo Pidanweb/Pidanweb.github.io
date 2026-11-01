@@ -549,7 +549,7 @@ function reset(){
 }
 function titleMsg(){
   setMsg([['WIZARD MODE', '#ffd35a', 72], ['詠唱ボタン / Space / Wii十字↓ を押しながら呪文を唱える', '#fff', 28],
-          ['ファイヤ / ウォーター / リーフ / キュア　強: レイジング / スプラッシュ / ブレード', '#e6b8ff', 24],
+          ['ファイヤ / ウォーター / リーフ / キュア　強: レイジング / スプラッシュ / ジャイアントプラント', '#e6b8ff', 24],
           ['必殺は左上の光る言葉を全部言えば発動（途中で被弾しても続きからでOK）', '#ffd35a', 24],
           ['右クリック / Wii B+振り上げ: パリィ　左長押し / Wii A: ガード　A / D: 回避', '#fff', 24],
           ['紫に光る攻撃はパリィ不可 → ガードで防ぐ', '#c06bff', 24],
@@ -818,7 +818,7 @@ const SP = [
   { id:'leaf', n:'リーフ', hex:0x5fe07a, cd:1, dmg:8, rx:/りふ|leaf|leave/ },
   { id:'rfire', n:'レイジングファイヤ', hex:0xff3a1a, cd:5, dmg:36, sc:2.4, big:1, rx:/れ[いえ]じんぐ|raging/ },
   { id:'swater', n:'スプラッシュウォーター', hex:0x7ad0ff, cd:5, dmg:35, count:5, sc:1.1, big:1, rx:/すぷらっしゅ|splash/ },
-  { id:'lblade', n:'リーフブレード', hex:0x9dff5a, cd:5, dmg:36, count:3, sc:1.4, blade:1, big:1, rx:/ぶれ[いえ]?ど|blade/ },
+  { id:'gplant', n:'ジャイアントプラント', hex:0x9dff5a, cd:5, dmg:36, plant:1, big:1, rx:/じゃいあんと|ぷらんと|giant|plant/ },
   { id:'cure', n:'キュア', hex:0x9dffb0, cd:8, heal:.3, rx:/きゅ[うー]?あ|cure/ }];
 const SPm = SP.slice().sort((a, b) => (b.big ? 1 : 0) - (a.big ? 1 : 0));   // 強攻撃を先に判定
 const norm = t => t.normalize('NFKC').toLowerCase().replace(/[ーぃィ\s、。,.!！?？'"]/g, '').replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 96));
@@ -903,7 +903,8 @@ function cast(sp){
     popup('HP +' + v, '#9dffb0', new THREE.Vector3(0, -.4, -3), .8, 1.2, camera); return;
   }
   let d = sp.dmg; if (P.counter > 0){ d = Math.max(d, P.cBig); P.counter = 0; popup('COUNTER!!', '#ffd35a', new THREE.Vector3(0, -.4, -3), 1.1, 1, camera); }
-  fireSpell(sp, d); wiiRumble(sp.big ? 180 : 80);
+  if (sp.plant) growPlant(d); else fireSpell(sp, d);
+  wiiRumble(sp.big ? 180 : 80);
 }
 
 // ---- 必殺の演出 ----
@@ -946,7 +947,7 @@ const ULT_FX = {
     });
   },
   ygg(d){   // 木の葉の刃 → 世界樹がボスを貫く
-    later(0, () => fireSpell({ ...SP[5], count:6, sc:1.6 }, d*.3));
+    later(0, () => fireSpell({ hex:0x9dff5a, count:6, sc:1.6, blade:1, big:1 }, d*.3));
     later(900, () => {
       const g = new THREE.Group(); g.position.set(bossG.position.x, 0, bossG.position.z);
       g.add(mk(new THREE.CylinderGeometry(.5, .9, 9, 10), M(0x5a3a22), 0, 4.5, 0));
@@ -957,6 +958,38 @@ const ULT_FX = {
       });
     });
   } };
+// ジャイアントプラント：ボスの足元から巨大な植物が突き上げる
+function growPlant(d){
+  // ボスの横（画面の内側寄り）から巨大な食虫植物が生え、口を開いて構え → ボスへかぶりつく
+  const side = bossG.position.x > P.x ? 1 : -1, x0 = bossG.position.x - side*2.4, z0 = bossG.position.z + 1;
+  const g = new THREE.Group(); g.position.set(x0, 0, z0);
+  const stemM = M(0x2f8a3a), leafM = M(0x5fe07a), headM2 = M(0x7a1f3a), toothM = M(0xe8ffd0);
+  const st = mk(new THREE.CylinderGeometry(.3, .55, 4.4, 10), stemM, .55, 2.1, 0); st.rotation.z = -.3;
+  const head = new THREE.Group();
+  const jawU = mk(new THREE.SphereGeometry(1.1, 16, 10, 0, Math.PI*2, 0, Math.PI/2), headM2, 0, 0, 0);
+  const jawL = mk(new THREE.SphereGeometry(1.1, 16, 10, 0, Math.PI*2, Math.PI/2, Math.PI/2), headM2, 0, 0, 0);
+  for (const j of [jawU, jawL]) for (let i = 0; i < 8; i++){
+    const a = i/8*Math.PI*2, t = mk(new THREE.ConeGeometry(.12, .4, 6), toothM, Math.cos(a)*1.02, 0, Math.sin(a)*1.02);
+    t.rotation.x = j === jawU ? Math.PI : 0; j.add(t);
+  }
+  head.add(jawU, jawL); g.add(st, head);
+  for (let i = 0; i < 4; i++){   // 根元の大きな葉
+    const l = mk(new THREE.SphereGeometry(1, 10, 8), leafM, Math.cos(i*1.57)*1.1, .5 + i*.25, Math.sin(i*1.57)*1.1);
+    l.scale.set(1.3, .15, .5); l.rotation.y = -i*1.57; g.add(l);
+  }
+  ring(V3(x0, .1, z0), 4, 0x9dff5a, .5); burst(V3(x0, .3, z0), 0x5fe07a, 40, 6);
+  addUfx(g, 1.5, .45, (k, o) => {
+    const grow = k < .3 ? 1 - Math.pow(1 - k/.3, 3) : k > .8 ? Math.max(.001, 1 - (k - .8)/.2) : 1;
+    o.scale.set(side*grow, grow + .001, grow);   // side で左右反転してもボスの方へ曲がる
+    const b = k < .3 ? 0 : Math.min(1, (k - .3)/.15), open = k < .3 ? .9 : .9*(1 - b) + .1;
+    jawU.rotation.z = open*.7; jawL.rotation.z = -open*.7;
+    head.rotation.z = .4 - 1.4*b; head.position.set(1.4 + .9*b, 4.2 - 1.3*b, 0);
+  }, () => {
+    if (state === 'play' && B.s !== 'dead') hurtBoss(d, bossAt(), true);
+    shake = Math.max(shake, .4); ring(bossAt(), 4, 0x9dff5a, .4); burst(bossAt(), 0x9dff5a, 50, 7);
+  });
+}
+
 function castUlt(u){
   CD[u.id] = u.cd; for (const c of u.cps){ c.lit = false; c.el.classList.remove('lit'); } ultDraw(u);
   colR = u.hex; kick = .25; flash = .6; flashM.material.color.set(0xffffff);
