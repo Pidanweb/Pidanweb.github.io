@@ -21,6 +21,9 @@
   #menu.on{display:flex} #menu{overflow-y:auto;gap:8px} #menu>:first-child{margin-top:auto} #menu>:last-child{margin-bottom:auto} #jobs{display:none;flex-direction:column;gap:6px} #jobs.on{display:flex} #menu button:disabled{opacity:.45;cursor:not-allowed} #menu button{background:#0d2a30;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:8px;padding:10px;font:inherit;cursor:pointer}
   #wiiDbg{position:fixed;left:10px;top:10px;z-index:6;margin:0;padding:6px 8px;max-width:46vw;font:11px/1.35 monospace;color:#9fffb0;background:#000a;border:1px solid #7ae7ff44;border-radius:6px;pointer-events:none;white-space:pre-wrap}
   #skMenu{border:1px solid #7ae7ff44;border-radius:8px;padding:6px 8px;font-size:13px;text-align:left} #skMenu summary{cursor:pointer;color:#ffd35a;font-weight:bold} #skMenu label{display:block;margin-top:6px} #skMenu input[type=range]{width:100%} #skMenu small{color:#9fdcea}
+  #hCur{position:fixed;left:0;top:0;z-index:20;width:22px;height:22px;margin:-11px 0 0 -11px;border:3px solid #ffd35a;border-radius:50%;background:#ffd35a33;box-shadow:0 0 10px #ffd35a;pointer-events:none;display:none}
+  #hCur.on{display:block} #hCur.down{background:#ffd35acc;border-color:#fff}
+  #menu .hHover{outline:2px solid #ffd35a;outline-offset:2px;box-shadow:0 0 12px #ffd35a88}
 </style>
 </head>
 <body>
@@ -66,7 +69,8 @@
     <button id="skCal" style="margin-top:6px;width:100%">ジャイロ再キャリブ（−ボタンでも可）</button>
   </details>
   <button id="mRestart">↻ リスタート</button><button id="mTitle">⌂ タイトルへ</button>
-  <small style="color:#9fdcea">✋ 人差し指で「1」を描く / M キーで開閉</small></div>
+  <small style="color:#9fdcea">✋ 人差し指で「1」を描いて開く / 指先でカーソル → Aで決定（スライダーはAを押したまま左右）/ M キーで開閉</small></div>
+<div id="hCur"></div>
 <pre id="wiiDbg"></pre>
 <canvas id="facePrev" width="320" height="240"></canvas>
 <video id="v" autoplay playsinline muted></video>
@@ -422,6 +426,11 @@ function handStep(now){
   const v = face.src; if (!hand.lm || !v || v.readyState < 2 || !v.videoWidth || now - hand.last < 50) return; hand.last = now;
   let r; try { r = hand.lm.detectForVideo(v, now); } catch (e){ return; }
   const p = r.landmarks && r.landmarks[0]; if (!p){ hand.trail = []; return; }
+  if (menuOn){   // メニュー中は人差し指の先(8)をカーソルに使う。下方向へ動かしても閉じないよう「1」判定は止める
+    hand.trail = []; hc.seen = now;
+    const cl = v => Math.max(0, Math.min(1, v)), x = faceMirror() ? 1 - p[8].x : p[8].x;
+    hc.tx = cl((x - HC.X0)/(1 - HC.X0*2)); hc.ty = cl((p[8].y - HC.Y0)/(1 - HC.Y0*2)); return;
+  }
   const d = (a, b) => Math.hypot(p[a].x - p[b].x, p[a].y - p[b].y);
   // 人差し指だけ伸ばし、他の指は曲げている形
   if (!(d(8, 0) > d(6, 0)*1.1 && d(12, 0) < d(10, 0) && d(16, 0) < d(14, 0) && d(20, 0) < d(18, 0))){ hand.trail = []; return; }
@@ -431,6 +440,44 @@ function handStep(now){
   if (dy > .22 && wd < dy*.35 && now - T[0].t > 250){ hand.cool = now + 1500; hand.trail = []; toggleMenu(); }   // 上→下へ縦一線
 }
 function toggleMenu(f){ menuOn = f === undefined ? !menuOn : f; $('menu').classList.toggle('on', menuOn); }
+
+// ===== 指先カーソル（メニュー表示中のみ）: 人差し指の先で指して、Wiiリモコンの A で決定 =====
+// HC.X0/Y0 = カメラ映像の端からこの割合は使わない（指を画面端まで伸ばさなくても届くように）
+const HC = { X0:.2, Y0:.15, MARGIN:24, SMOOTH:14, EDGE:60, SCROLL:700 };
+const hc = { seen:-1e9, tx:.5, ty:.5, x:0, y:0, init:false, hover:null, drag:null, flash:0 };
+const hcPick = el => { const t = el && el.closest('#menu button, #menu summary, #menu input, #menu label'); return t && !t.disabled ? t : null; };
+function hcSetRange(t){
+  const r = t.getBoundingClientRect(), min = +t.min || 0, max = +(t.max || 100), st = +t.step || 1;
+  const f = Math.max(0, Math.min(1, (hc.x - r.left)/r.width)), v = Math.round(f*(max - min)/st)*st + min;
+  if (+t.value !== v){ t.value = v; t.dispatchEvent(new Event('input', { bubbles:true })); }
+}
+function hcStep(now, dt){
+  const c = $('hCur'), M = $('menu');
+  if (!menuOn || now - hc.seen > 500){
+    if (hc.init){ c.classList.remove('on', 'down'); if (hc.hover) hc.hover.classList.remove('hHover'); hc.hover = hc.drag = null; hc.init = false; }
+    return;
+  }
+  const r = M.getBoundingClientRect(), px = r.left - HC.MARGIN + hc.tx*(r.width + HC.MARGIN*2), py = r.top + hc.ty*r.height;
+  if (!hc.init){ hc.x = px; hc.y = py; hc.init = true; c.classList.add('on'); }
+  const k = 1 - Math.exp(-dt*HC.SMOOTH); hc.x += (px - hc.x)*k; hc.y += (py - hc.y)*k;
+  const down = !!(wii.a && hc.drag) || now < hc.flash;
+  c.classList.toggle('down', down); c.style.transform = `translate(${hc.x}px,${hc.y}px)` + (down ? ' scale(.75)' : '');
+  // メニュー上下の端に寄せると自動スクロール
+  if (hc.y < r.top + HC.EDGE) M.scrollTop -= HC.SCROLL*dt*(1 - (hc.y - r.top)/HC.EDGE);
+  else if (hc.y > r.bottom - HC.EDGE) M.scrollTop += HC.SCROLL*dt*(1 - (r.bottom - hc.y)/HC.EDGE);
+  // スライダーは A を押している間だけドラッグ
+  if (hc.drag){ if (wii.a) { hcSetRange(hc.drag); return; } hc.drag = null; }
+  const t = hcPick(document.elementFromPoint(hc.x, hc.y));
+  if (t !== hc.hover){ if (hc.hover) hc.hover.classList.remove('hHover'); hc.hover = t; if (t) t.classList.add('hHover'); }
+}
+function hcClick(){
+  const t = hc.hover; if (!menuOn || !hc.init || !t) return;
+  hc.flash = performance.now() + 150;
+  if (t.type === 'range'){ hc.drag = t; hcSetRange(t); return; }
+  const rg = t.tagName === 'LABEL' && t.querySelector('input[type=range]');
+  if (rg){ hc.drag = rg; hcSetRange(rg); return; }   // ラベルの文字部分を指していてもスライダー操作にする
+  t.click();
+}
 function flipFaceCam(){
   faceSel.value = faceSel.value === 'environment' ? 'user' : 'environment';
   $('mFace').textContent = '🔄 顔カメラ: ' + (faceSel.value === 'environment' ? 'バック' : 'フロント');
@@ -709,7 +756,7 @@ function render(){
 }
 
 // ===== 入力 =====
-addEventListener('keydown', e => { const k = e.key.toLowerCase(); keys[k] = true; if (state === 'play' && bgm.paused && !menuOn) bgmPlay(); if (k === 'v') vr = !vr; if (k === 'c') faceRecenter(); if (k === 'm') toggleMenu(); if (k === 't') setView(!tp); if (k === 'escape' && menuOn) toggleMenu(false); });
+addEventListener('keydown', e => { const k = e.key.toLowerCase(); keys[k] = true; if (state === 'play' && bgm.paused && !menuOn) bgmPlay(); if (k === 'v') vr = !vr; if (k === 'c') faceRecenter(); if (k === 'm') toggleMenu(); if (k === 't') setView(!tp); if (k === 'escape' && menuOn) toggleMenu(false); if (k === 'enter' && menuOn && hc.hover){ e.preventDefault(); hcClick(); } });
 addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 function setMouse(e){
   if (faceActive()) return;   // 顔操作中はマウスで視点を動かさない
@@ -785,12 +832,14 @@ function onWii(e){
   const b0 = d.getUint8(0), b1 = d.getUint8(1);
   const A = !!(b1 & 0x08), Bb = !!(b1 & 0x04), plus = !!(b0 & 0x10), home = !!(b1 & 0x80), minus = !!(b1 & 0x10);
   if (A && !wii.pA) wii.aT = now;
+  const pressA = A && !wii.pA;
   const pressStart = (A && !wii.pA) || (plus && !wii.pPlus), pressHome = home && !wii.pHome;
   wii.pA = A; wii.pPlus = plus; wii.pHome = home; wii.a = A; wii.b = Bb;
   if (pressHome) toggleMenu();
   if (minus && !wii.pMinus) wiiRecal();
   wii.pMinus = minus;
   if (pressStart && state !== 'play' && !menuOn && !(state !== 'title' && now - endAt < 600)) startGame();
+  if (pressA && menuOn) hcClick();   // 指先カーソルで指している項目を決定
   // 加速度（0g=128, 1g≒26）
   const x = (d.getUint8(2) - 128)/26, y = (d.getUint8(3) - 128)/26, z = (d.getUint8(4) - 128)/26, m = Math.hypot(x, y, z);
   if (Math.abs(m - 1) < .12){   // ほぼ静止している時だけ重力方向を更新
@@ -1085,7 +1134,7 @@ addEventListener('mouseup', e => {
 let last = performance.now();
 function loop(now){
   const dt = Math.min(.033, (now - last)/1000); last = now;
-  faceStep(now); handStep(now); faceDraw(); update(dt); render(); requestAnimationFrame(loop);
+  faceStep(now); handStep(now); hcStep(now, dt); faceDraw(); update(dt); render(); requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 // タイトル画面(parytitle.html)から ?start=1 で来たら自動スタート
