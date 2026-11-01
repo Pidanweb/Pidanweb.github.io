@@ -65,8 +65,15 @@
   #rec::before{content:"";width:56px;height:56px;border-radius:50%;background:var(--rec);transition:all .2s ease}
   #rec.on::before{width:30px;height:30px;border-radius:7px}
   #rec:disabled{opacity:.4}
-  #share,#dl{display:none}
-  #share{background:#fff;color:#1a1130;border-color:transparent;font-weight:700}
+  #review{display:none;background:#fff;color:#1a1130;border-color:transparent;font-weight:700}
+  /* 録画の確認画面 */
+  #rv{position:fixed;inset:0;z-index:15;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(8,4,16,.94);
+    padding:calc(var(--st) + 12px) calc(var(--sr) + 12px) calc(var(--sb) + 16px) calc(var(--sl) + 12px)}
+  body.review #rv{display:flex}
+  #rvVideo{max-width:100%;max-height:calc(100% - 120px);min-height:0;border-radius:12px;background:#000}
+  #rvInfo{font-size:13px;color:var(--dim);text-align:center}
+  #rv .acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+  #share{display:none}
   .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
   /* 設定シート(スマホ: 下から / PC: 右から) */
@@ -127,7 +134,17 @@
 <div id="recRow">
   <div class="l"><button id="flipBtn" title="前後のカメラを切り替え">🔄 切替</button></div>
   <button id="rec" disabled><span class="vh" id="recLabel">録画開始</span></button>
-  <div class="r"><button id="share">共有・保存</button><a id="dl" class="btn" href="#">保存</a></div>
+  <div class="r"><button id="review">▶ 確認</button></div>
+</div>
+
+<div id="rv" role="dialog" aria-label="録画の確認">
+  <video id="rvVideo" controls playsinline></video>
+  <div id="rvInfo"></div>
+  <div class="acts">
+    <a id="dl" class="btn primary" href="#">⬇ ダウンロード</a>
+    <button id="share">共有</button>
+    <button id="rvClose">閉じる</button>
+  </div>
 </div>
 
 <div id="scrim"></div>
@@ -839,20 +856,33 @@ $('rec').onclick = () => {
     recFile = new File([blob], name, { type });
     const a = $('dl'); if (a.href.startsWith('blob:')) URL.revokeObjectURL(a.href);
     a.href = URL.createObjectURL(blob); a.download = name;
-    a.textContent = '保存 ' + (blob.size / 1e6).toFixed(0) + 'MB';
     let canShare = false; try { canShare = !!navigator.canShare?.({ files: [recFile] }); } catch {}
     $('share').style.display = canShare ? 'inline-flex' : 'none';
-    a.style.display = canShare && isMobile ? 'none' : 'inline-flex';   // スマホは共有シートから写真に保存できる
+    $('review').style.display = 'inline-flex';
     resize();   // 録画中に画面を回していたらここで反映
-    say('録画完了 ' + mmss(sec) + (canShare ? '。「共有・保存」から写真やXに送れます' : '。「保存」でダウンロードできます') + (ext === 'webm' ? ' ※WebM形式はXに直接は上げられません' : ''));
+    $('rvInfo').textContent = mmss(sec) + ' / ' + (blob.size / 1e6).toFixed(1) + 'MB / ' + outW + '×' + outH + ' / ' + ext.toUpperCase()
+      + (ext === 'webm' ? '(WebMはXに直接上げられません)' : '');
+    openReview();
+    say('録画完了 ' + mmss(sec) + '。「▶ 確認」でいつでも見直せます');
   };
   recorder.start(1000);
   if ($('bgmLink').checked) bgmFromTop(true);
-  $('dl').style.display = 'none'; $('share').style.display = 'none';
+  $('review').style.display = 'none'; closeReview();
   setRecUI(true); document.body.classList.remove('sheet');
   t0 = Date.now(); say('● REC 00:00');
   timer = setInterval(() => say('● REC ' + mmss(((Date.now() - t0) / 1000) | 0)), 500);
 };
+// 録画の確認画面(再生・ダウンロード・共有)
+function openReview() {
+  const v = $('rvVideo');
+  if (v.src !== $('dl').href) v.src = $('dl').href;
+  document.body.classList.remove('sheet'); document.body.classList.add('review');
+  v.currentTime = 0;
+}
+function closeReview() { $('rvVideo').pause(); document.body.classList.remove('review'); }
+$('review').onclick = openReview;
+$('rvClose').onclick = closeReview;
+addEventListener('keydown', e => { if (e.key === 'Escape') closeReview(); });
 $('share').onclick = async () => {
   if (!recFile) return;
   try { await navigator.share({ files: [recFile] }); }
