@@ -41,12 +41,12 @@
     <div id="camStat">USBカメラは接続後「一覧を更新」</div>
     <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
     <b style="color:#ffd35a">🖼 敵の背景</b>
-    <label>背景に使う映像 <select id="bgMode"><option value="cam">上の「使うカメラ」のライブ映像（バック推奨）</option><option value="file">動画ファイル（バックカメラで撮った動画など）</option><option value="none">なし（単色）</option></select></label>
-    <label id="bgFileRow" style="display:none">動画ファイル<input type="file" id="bgFile" accept="video/*"></label>
+    <label>背景に使う映像 <select id="bgMode"><option value="cam">カメラのライブ映像（バック）</option><option value="video">動画ファイル</option><option value="image">画像ファイル</option><option value="none">なし（単色）</option></select></label>
+    <label id="bgFileRow" style="display:none"><span id="bgFileLbl">ファイル</span><input type="file" id="bgFile" accept="video/*"></label>
     <label><input type="checkbox" id="bgFlip"> 背景を左右反転</label>
     <label><input type="checkbox" id="bgTP"> 俯瞰モードでも背景に表示</label>
     <div id="bgStat" style="font-size:12px;color:#ffd35a"></div>
-    <small>「動画ファイル」にするとゲーム開始時に背景用カメラを開かないので、スマホでもフロント(顔・手)＋背景動画の組み合わせを試せます。</small>
+    <small>既定: バックカメラ＝背景 / フロントカメラ＝顔・手の認識。動画・画像にすると背景用カメラは開きません。</small>
     <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
     <label><input type="checkbox" id="faceOn" checked> 顔の動きで視点・照準を操作</label>
     <label>顔認識に使うカメラ<select id="faceSel"><option value="">自動（インカメラ）</option><option value="user">フロント</option><option value="environment">バック</option></select></label>
@@ -301,7 +301,7 @@ const $ = id => document.getElementById(id), camSel = $('camSel'), camStat = $('
 async function listCams(){
   try {
     const ds = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'), cur = camSel.value;
-    camSel.innerHTML = '';
+    camSel.innerHTML = '<option value="">自動（バックカメラ）</option>';
     ds.forEach((d, i) => { const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || ('カメラ ' + (i+1)); camSel.appendChild(o); });
     if (cur) camSel.value = cur;
     const fcur = faceSel.value; faceSel.innerHTML = '<option value="">自動（インカメラ）</option><option value="user">フロント</option><option value="environment">バック</option>';
@@ -324,7 +324,7 @@ async function openCam(id){
   try { await vid.play(); } catch (e){}
   if (!camTex){ camTex = new THREE.VideoTexture(vid); camTex.minFilter = THREE.LinearFilter; }
   applyBg();
-  camStat.textContent = '使用中: ' + (tr.label || 'カメラ');
+  camStat.textContent = '使用中: ' + (tr.label || 'カメラ'); if (typeof bgStatus === 'function') bgStatus();
   await listCams(); if (st.deviceId) camSel.value = st.deviceId;
   return true;
 }
@@ -334,36 +334,57 @@ $('camRefresh').onclick = () => camStream ? listCams() : openCam(null);
 $('mir').onchange = e => camMirror = e.target.checked;
 for (const ev of ['mousedown', 'keydown', 'keyup']) for (const el of ['ui', 'menu']) $(el).addEventListener(ev, e => e.stopPropagation());
 if (navigator.mediaDevices) navigator.mediaDevices.addEventListener('devicechange', listCams);
-// ===== 背景ソース（ライブカメラ / 動画ファイル / なし）=====
-let bgMode = 'cam', bgTP = false, bgFlip = false, bgFileTex = null, bgURL = null;
-const bgv = $('bgv');
-const bgEl = () => bgMode === 'cam' ? vid : bgMode === 'file' ? bgv : null;
-const bgTex = () => bgMode === 'cam' ? camTex : bgMode === 'file' ? bgFileTex : null;
+// ===== 背景ソース（ライブカメラ / 動画 / 画像 / なし）=====
+// 既定: バックカメラ(vid) = 背景、フロントカメラ(fv) = 顔・手の認識
+let bgMode = 'cam', bgTP = false, bgFlip = false, bgURL = null, bgVidTex = null, bgImgTex = null;
+const bgv = $('bgv'), bgImg = new Image();
+const bgEl = () => bgMode === 'cam' ? vid : bgMode === 'video' ? bgv : bgMode === 'image' ? bgImg : null;
+const bgTex = () => bgMode === 'cam' ? camTex : bgMode === 'video' ? bgVidTex : bgMode === 'image' ? bgImgTex : null;
+const bgSize = el => el ? [el.videoWidth || el.naturalWidth || 0, el.videoHeight || el.naturalHeight || 0] : [0, 0];
 function applyBg(){
   scene.background = (tp && !bgTP) ? BG : (bgTex() || BG);
-  if (bgMode === 'file') { if (scene.background === bgFileTex && bgv.paused && bgv.src) bgv.play().catch(() => {}); }
+  if (bgMode === 'video'){ if (bgv.src && bgv.paused) bgv.play().catch(() => {}); }
   else if (!bgv.paused) bgv.pause();
 }
+function bgStatus(){
+  $('bgStat').textContent = bgMode === 'cam' ? (camStream ? 'カメラ映像を背景に表示中' : 'ゲーム開始時にバックカメラを開きます')
+    : bgMode === 'none' ? '背景なし' : (bgTex() ? '背景に表示中' : (bgMode === 'video' ? '動画' : '画像') + 'ファイルを選んでください');
+}
 $('bgMode').onchange = e => {
-  bgMode = e.target.value; $('bgFileRow').style.display = bgMode === 'file' ? '' : 'none';
-  if (bgMode === 'cam' && !camStream) openCam(camSel.value || null);
-  $('bgStat').textContent = bgMode === 'file' ? (bgFileTex ? '動画を背景に再生中' : '動画ファイルを選んでください') : bgMode === 'none' ? '背景なし' : (camStream ? 'カメラ映像を背景に表示' : '');
-  applyBg();
+  bgMode = e.target.value;
+  const isFile = bgMode === 'video' || bgMode === 'image';
+  $('bgFileRow').style.display = isFile ? '' : 'none';
+  if (isFile){ $('bgFile').accept = bgMode + '/*'; $('bgFileLbl').textContent = bgMode === 'video' ? '動画ファイル' : '画像ファイル'; }
+  if (bgMode === 'cam' && !camStream && state !== 'title') openCam(camSel.value || null);
+  if (bgMode !== 'cam' && camStream && !tp && face.src !== vid){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }   // 背景に使わないならバックカメラは止めて軽くする
+  bgStatus(); applyBg();
 };
 $('bgFile').onchange = async e => {
   const f = e.target.files && e.target.files[0]; if (!f) return;
-  if (bgURL) URL.revokeObjectURL(bgURL);
-  bgURL = URL.createObjectURL(f); bgv.src = bgURL;
-  if (!bgFileTex){ bgFileTex = new THREE.VideoTexture(bgv); bgFileTex.minFilter = THREE.LinearFilter; }
-  try { await bgv.play(); $('bgStat').textContent = '再生中: ' + f.name; } catch (err){ $('bgStat').textContent = '再生できません: ' + (err && err.name); }
-  applyBg();
+  if (bgURL) URL.revokeObjectURL(bgURL); bgURL = URL.createObjectURL(f);
+  if (f.type.startsWith('image/')){
+    bgImg.onload = () => {
+      if (bgImgTex) bgImgTex.dispose();
+      bgImgTex = new THREE.Texture(bgImg); bgImgTex.minFilter = THREE.LinearFilter; bgImgTex.needsUpdate = true;
+      if (bgMode !== 'image') $('bgMode').value = bgMode = 'image';
+      $('bgStat').textContent = '表示中: ' + f.name; applyBg();
+    };
+    bgImg.onerror = () => $('bgStat').textContent = '画像を読み込めません';
+    bgImg.src = bgURL;
+  } else {
+    bgv.src = bgURL;
+    if (!bgVidTex){ bgVidTex = new THREE.VideoTexture(bgv); bgVidTex.minFilter = THREE.LinearFilter; }
+    if (bgMode !== 'video') $('bgMode').value = bgMode = 'video';
+    try { await bgv.play(); $('bgStat').textContent = '再生中: ' + f.name; } catch (err){ $('bgStat').textContent = '再生できません: ' + (err && err.name); }
+    applyBg();
+  }
 };
 $('bgFlip').onchange = e => bgFlip = e.target.checked;
 $('bgTP').onchange = e => { bgTP = e.target.checked; applyBg(); };
 function cover(a){
-  const t = bgTex(), el = bgEl(); if (!t || !el || !el.videoWidth) return;
+  const t = bgTex(), [vw, vh] = bgSize(bgEl()); if (!t || !vw || !vh) return;
   const mir = (bgMode === 'cam' ? camMirror : false) !== bgFlip;
-  const va = el.videoWidth/el.videoHeight; let rx = 1, ry = 1; if (a > va) ry = va/a; else rx = a/va;
+  const va = vw/vh; let rx = 1, ry = 1; if (a > va) ry = va/a; else rx = a/va;
   const c0 = (1 - rx)/2; t.repeat.set(mir ? -rx : rx, ry); t.offset.set(mir ? c0 + rx : c0, (1 - ry)/2);
 }
 
@@ -1405,7 +1426,7 @@ function perfTick(now, ms){
   perf.n++; perf.ml += ms; perf.mlMax = Math.max(perf.mlMax, ms);
   if (now - perf.t0 < 1000) return;
   const fps = perf.n*1000/(now - perf.t0), cams = (camStream ? 1 : 0) + (face.stream ? 1 : 0);
-  $('perfStat').textContent = `FPS ${fps.toFixed(0)} | 認識 平均${(perf.ml/perf.n).toFixed(1)}ms 最大${perf.mlMax.toFixed(0)}ms | カメラ${cams}台` + (bgMode === 'file' && bgFileTex ? '+動画' : '');
+  $('perfStat').textContent = `FPS ${fps.toFixed(0)} | 認識 平均${(perf.ml/perf.n).toFixed(1)}ms 最大${perf.mlMax.toFixed(0)}ms | カメラ${cams}台` + (bgMode === 'video' && bgVidTex ? '+背景動画' : bgMode === 'image' && bgImgTex ? '+背景画像' : '');
   $('perfStat').style.color = fps < 30 ? '#ff4d5e' : fps < 50 ? '#ffd35a' : '#9fffb0';
   perf.n = 0; perf.ml = 0; perf.mlMax = 0; perf.t0 = now;
 }
