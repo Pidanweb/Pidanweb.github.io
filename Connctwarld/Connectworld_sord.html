@@ -70,16 +70,6 @@
     <label><input type="checkbox" id="poseOn" checked> 映像の動きをアバターに反映</label>
     <label><input type="checkbox" id="poseMove" checked> 体の左右移動で回避</label>
     <small>俯瞰モードでは「バック」のカメラ1台（既定はバックカメラ）だけで全身を認識します。顔用カメラは止めます。全身が映る位置に置いてください。</small>
-    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
-    <b style="color:#ffd35a">🧍 体キャリブレーション（俯瞰モード・床の位置合わせ）</b>
-    <label>身長 <input type="number" id="bcH" value="170" min="100" max="230" style="width:70px"> cm</label>
-    <label>カメラの高さ（床からレンズ） <input type="number" id="bcCamH" value="0" min="0" max="300" style="width:70px"> cm<small>0 = わからない（途中で1〜2歩 前後に動いてもらいます）</small></label>
-    <label>カメラの画角 <b id="bcFovV">65</b>°<input type="range" id="bcFovIn" min="35" max="110" step="1" value="65"><small>カメラの仕様（対角でなく水平の画角）が分かれば合わせる</small></label>
-    <label>ボスまでの距離 <b id="bcBossV">8.5</b> m<input type="range" id="bcBoss" min="3" max="12" step="0.5" value="8.5"></label>
-    <div><button id="bcStart">🧍 キャリブレーション開始</button> <button id="bcReset">リセット</button></div>
-    <label><input type="checkbox" id="bcAR"> AR確認表示（カメラ映像にゲームの床とボスを重ねる）</label>
-    <div id="bcStat" style="font-size:12px;color:#ffd35a">未設定</div>
-    <small>足元まで全身が映るようにして「開始」→ プレイする位置で3秒まっすぐ立つ。左下のプレビューに床のマス目（1m間隔）が出るので、実際の床と合っているか確認してください。</small>
   </div>
   <div id="faceBadge"></div><div id="perfStat" style="margin-top:4px;font:12px monospace;color:#9fffb0;text-shadow:0 0 4px #000"></div><div id="wiiStat" style="margin-top:4px;font-size:12px;color:#ffd35a;text-shadow:0 0 4px #000"></div></div>
 <div id="menu"><h3 style="margin:0">MENU</h3>
@@ -135,8 +125,7 @@ renderer.setScissorTest(true);
 document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(70, 1, .05, 100);
 camera.rotation.order = 'YXZ'; scene.add(camera);
-const EYE = 1.6, R = 1.8;
-let HOVER = -8.5;   // ボスの待機位置（体キャリブレーション後は設定した距離）
+const EYE = 1.6, HOVER = -8.5, R = 1.8;
 let W, H;
 function resize(){ W = innerWidth; H = innerHeight; renderer.setSize(W, H); }
 resize(); addEventListener('resize', resize);
@@ -392,7 +381,7 @@ const bgEl = () => bgMode === 'cam' ? vid : bgMode === 'video' ? bgv : bgMode ==
 const bgTex = () => bgMode === 'cam' ? camTex : bgMode === 'video' ? bgVidTex : bgMode === 'image' ? bgImgTex : null;
 const bgSize = el => el ? [el.videoWidth || el.naturalWidth || 0, el.videoHeight || el.naturalHeight || 0] : [0, 0];
 function applyBg(){
-  scene.background = bcARActive() ? camTex : (tp && !bgTP) ? BG : (bgTex() || BG);
+  scene.background = (tp && !bgTP) ? BG : (bgTex() || BG);
   if (bgMode === 'video'){ if (bgv.src && bgv.paused) bgv.play().catch(() => {}); }
   else if (!bgv.paused) bgv.pause();
 }
@@ -432,8 +421,8 @@ $('bgFile').onchange = async e => {
 $('bgFlip').onchange = e => bgFlip = e.target.checked;
 $('bgTP').onchange = e => { bgTP = e.target.checked; applyBg(); };
 function cover(a){
-  const ar = bcARActive(), t = ar ? camTex : bgTex(), [vw, vh] = bgSize(ar ? vid : bgEl()); if (!t || !vw || !vh) return;
-  const mir = ar ? false : (bgMode === 'cam' ? camMirror : false) !== bgFlip;   // AR確認表示は反転しない（3Dと位置を合わせるため）
+  const t = bgTex(), [vw, vh] = bgSize(bgEl()); if (!t || !vw || !vh) return;
+  const mir = (bgMode === 'cam' ? camMirror : false) !== bgFlip;
   const va = vw/vh; let rx = 1, ry = 1; if (a > va) ry = va/a; else rx = a/va;
   const c0 = (1 - rx)/2; t.repeat.set(mir ? -rx : rx, ry); t.offset.set(mir ? c0 + rx : c0, (1 - ry)/2);
 }
@@ -634,7 +623,7 @@ function poseStep(now){
   let r; try { r = pose.lm.detectForVideo(v, now); } catch (e){ console.error(e); return; } finally { perf.pose += performance.now() - _t; }
   const n = r.landmarks && r.landmarks[0], w = r.worldLandmarks && r.worldLandmarks[0];
   if (!n || !w){ pose.seen = false; setBadge('🧍 全身が見つかりません（カメラから離れて全身を映す）'); return; }
-  pose.seen = true; pose.n = n; pose.w = w; bcPose(n);
+  pose.seen = true; pose.n = n; pose.w = w;
   const hx = (n[23].x + n[24].x)/2, ex = (n[7].x + n[8].x)/2, ey = (n[7].y + n[8].y)/2, ed = Math.max(.01, Math.hypot(n[7].x - n[8].x, n[7].y - n[8].y));
   const hr = (n[0].x - ex)/ed, hp = (n[0].y - ey)/ed;   // 耳の中点から見た鼻の位置 = 頭の向き
   if (pose.cx === null){
@@ -672,172 +661,7 @@ function poseDraw(){
   pctx.font = 'bold 15px sans-serif'; pctx.textAlign = 'left';
   pctx.fillStyle = !pose.lm ? '#ffd35a' : pose.seen ? '#5ee08a' : '#ff4d5e';
   pctx.fillText(!pose.lm ? 'モデル読み込み中…' : pose.seen ? (pose.cx === null ? 'まっすぐ立って…' : '● 全身追跡中') : '× 全身が見つかりません', 8, 20);
-  bcDrawPrev(X, Y);
 }
-
-// ===== 体キャリブレーション（俯瞰モード）=====
-// プレイヤー自身を「ものさし」にして、カメラの高さ・下向き角・傾きを求め、床の位置を決める。
-// 座標の呼び方: F = 床座標（カメラ真下の床が原点, +Yが上, -Zがカメラの向く水平方向, メートル）
-//              G = ゲーム座標（キャリブレーション時の立ち位置が原点, -Zがボスの方向）
-// 観測 o: { fx, fy, hx, hy } = かかと / 頭（目・耳の平均）の正規化画像座標 ((u-cx)/f, (v-cy)/f)
-// 未知数: θ(カメラの下向き角), φ(傾き), h(カメラの高さ)
-const BC_LIFT = .03;   // かかとの点は床から約3cm
-function bcUp(th, ph){ return [Math.sin(ph), -Math.cos(ph)*Math.cos(th), -Math.cos(ph)*Math.sin(th)]; }   // 世界の「上」をカメラ座標(x右,y下,z前)で
-function bcCost(p, obs, eye, hKnown){
-  const th = p[0], ph = p[1], h = hKnown || p[2];
-  if (h < .2 || h > 3.5 || Math.abs(ph) > .6 || th < -.6 || th > 1.4) return 1e9;
-  const U = bcUp(th, ph); let s = 0;
-  for (const o of obs){
-    const du = o.fx*U[0] + o.fy*U[1] + U[2]; if (du >= -1e-6) return 1e9;   // かかとへの光線は下向きでないといけない
-    const sf = (-h + BC_LIFT)/du, d = eye - BC_LIFT;
-    const E = [o.fx*sf + U[0]*d, o.fy*sf + U[1]*d, sf + U[2]*d]; if (E[2] < .05) return 1e9;
-    const ex = E[0]/E[2] - o.hx, ey = E[1]/E[2] - o.hy; s += ex*ex + ey*ey;
-  }
-  return s/obs.length;
-}
-function bcNM(f, x0, step, iters = 600){   // Nelder-Mead
-  const n = x0.length; let S = [x0.slice()];
-  for (let i = 0; i < n; i++){ const x = x0.slice(); x[i] += step[i]; S.push(x); }
-  let F = S.map(f);
-  for (let it = 0; it < iters; it++){
-    const idx = F.map((v, i) => i).sort((a, b) => F[a] - F[b]); S = idx.map(i => S[i]); F = idx.map(i => F[i]);
-    const c = new Array(n).fill(0); for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) c[j] += S[i][j]/n;
-    const pt = k => c.map((v, j) => v + k*(S[n][j] - v));
-    const xr = pt(-1), fr = f(xr);
-    if (fr < F[0]){ const xe = pt(-2), fe = f(xe); if (fe < fr){ S[n] = xe; F[n] = fe; } else { S[n] = xr; F[n] = fr; } }
-    else if (fr < F[n-1]){ S[n] = xr; F[n] = fr; }
-    else { const xc = pt(.5), fc = f(xc); if (fc < F[n]){ S[n] = xc; F[n] = fc; } else { for (let i = 1; i <= n; i++){ S[i] = S[i].map((v, j) => S[0][j] + .5*(v - S[0][j])); F[i] = f(S[i]); } } }
-  }
-  const b = F.indexOf(Math.min(...F)); return { x:S[b], f:F[b] };
-}
-function bcSolve(obs, eye, hKnown){
-  let best = null;
-  for (const th0 of [-.2, .15, .5, .9]) for (const h0 of hKnown ? [0] : [.6, 1.2, 2]){
-    const x0 = hKnown ? [th0, 0] : [th0, 0, h0], st = hKnown ? [.2, .1] : [.2, .1, .3];
-    const r = bcNM(p => bcCost(p, obs, eye, hKnown), x0, st);
-    if (!best || r.f < best.f) best = r;
-  }
-  return { th:best.x[0], ph:best.x[1], h:hKnown || best.x[2], rms:Math.sqrt(best.f) };
-}
-const bc = { state:'off', height:1.70, camH:0, hfov:65, boss:8.5, ar:false,
-  obs:[], obsA:[], meanA:null, t0:0, still:0, lastF:null, msg:'', res:null,
-  camF:new THREE.Matrix4(), FfromCam:new THREE.Matrix4(), FfromG:new THREE.Matrix4(), GfromF:new THREE.Matrix4(), GfromCam:new THREE.Matrix4(),
-  origin:null, feetS:[], feetF:null, feetX:0, feetSeen:-1e9, live:null };
-const BC_STAND_MS = 3000;
-const bcEye = () => bc.height*.93;   // 目・耳の高さ ≒ 身長×0.93
-const bcFocal = w => (w/2)/Math.tan(bc.hfov*Math.PI/360);
-function bcSay(t, popup, quiet){ if (bc.msg === t) return; bc.msg = t; $('bcStat').textContent = t; if (popup) popCam(popup, '#ffd35a', .6, 2.2); if (!quiet) console.log('[体キャリブ] ' + t); }
-// ランドマーク → 正規化画像座標の観測
-function bcObsFrom(n){
-  const W_ = vid.videoWidth, H_ = vid.videoHeight; if (!W_) return null;
-  const vis = i => n[i].visibility === undefined ? 1 : n[i].visibility;
-  if (Math.min(vis(29), vis(30)) < .5) return null;   // かかとが見えない
-  const f = bcFocal(W_), nx = x => (x*W_ - W_/2)/f, ny = y => (y*H_ - H_/2)/f;
-  const hd = [2, 5, 7, 8];   // 目と耳（正面でも背後からでも頭の高さとして使える）
-  const hx = hd.reduce((a, i) => a + n[i].x, 0)/4, hy = hd.reduce((a, i) => a + n[i].y, 0)/4;
-  return { fx:nx((n[29].x + n[30].x)/2), fy:ny((n[29].y + n[30].y)/2), hx:nx(hx), hy:ny(hy) };
-}
-const bcMean = L => L.reduce((a, o) => ({ fx:a.fx + o.fx/L.length, fy:a.fy + o.fy/L.length, hx:a.hx + o.hx/L.length, hy:a.hy + o.hy/L.length }), { fx:0, fy:0, hx:0, hy:0 });
-
-// --- キャリブレーションの進行（poseStepから毎フレーム呼ばれる）---
-function bcPose(n){
-  const o = bcObsFrom(n); bc.live = o;
-  if (bc.state === 'locked'){ bcFeet(o); return; }
-  if (!['stand1', 'move', 'stand2'].includes(bc.state)) return;
-  const now = performance.now();
-  if (!o){ bcSay('かかとが見えません。足元まで全身が映るようにしてください', null, true); bc.t0 = now; return; }
-  // 静止判定（直前フレームとの差が小さい）
-  const moved = bc.lastF ? Math.hypot(o.fx - bc.lastF.fx, o.fy - bc.lastF.fy) : 1; bc.lastF = o;
-  if (bc.state === 'stand1' || bc.state === 'stand2'){
-    if (moved > .01){ bc.t0 = now; (bc.state === 'stand1' ? bc.obsA : bc.obs).length = 0; }
-    const L = bc.state === 'stand1' ? bc.obsA : bc.obs; L.push(o);
-    const left = Math.max(0, BC_STAND_MS - (now - bc.t0));
-    bcSay(`まっすぐ立って動かないで… ${(left/1000).toFixed(1)}秒`, null, true);
-    if (left > 0) return;
-    if (bc.state === 'stand1'){
-      bc.meanA = bcMean(bc.obsA);
-      if (bc.camH > 0){ bcFinish(bc.obsA); return; }
-      bc.state = 'move'; bc.still = 0; bcSay('1〜2歩 前か後ろに動いて、止まってください', '1〜2歩 前後に動いて止まって');
-    } else bcFinish(bc.obsA.concat(bc.obs));
-  } else if (bc.state === 'move'){
-    const far = Math.abs(o.fy - bc.meanA.fy) > .035;   // 足元が画面上で十分動いた
-    if (far && moved < .01){ if (++bc.still > 8){ bc.state = 'stand2'; bc.t0 = now; bc.obs = []; } }
-    else bc.still = 0;
-    if (bc.state === 'move') bcSay(far ? 'そこで止まってください' : '1〜2歩 前か後ろに動いて、止まってください', null, true);
-  }
-}
-function bcStart(){
-  if (!tp){ bcSay('先に俯瞰モード（👁 ボタン）にしてください'); return; }
-  if (!pose.lm){ bcSay('全身認識の読み込みを待っています。少ししてからもう一度押してください'); return; }
-  bc.height = +$('bcH').value/100; bc.camH = +$('bcCamH').value/100;
-  if (!(bc.height > 1 && bc.height < 2.3)){ bcSay('身長を正しく入れてください'); return; }
-  bc.state = 'stand1'; bc.t0 = performance.now(); bc.obsA = []; bc.obs = []; bc.lastF = null;
-  HOVER = -8.5; applyBg();
-  bcSay('プレイする位置に、まっすぐ立ってください', 'まっすぐ立ってください');
-}
-function bcFinish(obs){
-  const r = bcSolve(obs, bcEye(), bc.camH || 0), px = r.rms*bcFocal(vid.videoWidth);
-  console.log(`[体キャリブ] 計算結果: 高さ ${r.h.toFixed(2)}m 下向き ${(r.th*180/Math.PI).toFixed(1)}° 傾き ${(r.ph*180/Math.PI).toFixed(1)}° 誤差 ${px.toFixed(1)}px（観測${obs.length}件）`);
-  if (px > 25 || r.h < .2 || r.h > 3.4){ bc.state = 'off'; bcSay(`うまく測れませんでした（誤差 ${px.toFixed(0)}px）。身長・カメラの高さ・画角を確認して、もう一度`); return; }
-  bc.res = r;
-  // 床座標 F をカメラ座標(three.js)で作る
-  const Uc = bcUp(r.th, r.ph), U = new THREE.Vector3(Uc[0], -Uc[1], -Uc[2]).normalize();   // OpenCV → three.js
-  const back = new THREE.Vector3(0, 0, 1); back.addScaledVector(U, -back.dot(U)).normalize();   // カメラの後ろ向きの水平成分
-  const X = new THREE.Vector3().crossVectors(U, back), O = U.clone().multiplyScalar(-r.h);
-  bc.camF.makeBasis(X, U, back).setPosition(O);
-  bc.FfromCam.copy(bc.camF).invert();
-  // 立ち位置 = 最後に立った場所のかかとの平均
-  const m = bcMean(bc.camH > 0 ? bc.obsA : bc.obs), p = bcRay(m);
-  if (!p){ bc.state = 'off'; bcSay('立ち位置を計算できませんでした。もう一度'); return; }
-  bc.origin = p;
-  // ゲームの前方: 正面撮り → カメラの方 / 背後撮り → カメラの向く方
-  const th = pose.cam === 'front' ? Math.PI : 0;
-  bc.FfromG.makeRotationY(th).setPosition(p.x, 0, p.z);
-  bc.GfromF.copy(bc.FfromG).invert();
-  bc.GfromCam.multiplyMatrices(bc.GfromF, bc.FfromCam);
-  bc.state = 'locked'; HOVER = -bc.boss; applyBg();
-  const dist = Math.hypot(p.x, p.z);
-  bcSay(`完了: カメラの高さ ${r.h.toFixed(2)}m・下向き ${(r.th*180/Math.PI).toFixed(0)}°・立ち位置まで ${dist.toFixed(1)}m（誤差 ${px.toFixed(1)}px）`, 'キャリブレーション完了');
-}
-// 正規化画像座標のかかと → 床との交点（F座標）
-function bcRay(o){
-  if (!o) return null;
-  const c = new THREE.Vector3().applyMatrix4(bc.FfromCam);
-  const d = new THREE.Vector3(o.fx, -o.fy, -1).transformDirection(bc.FfromCam);
-  if (d.y > -1e-4) return null;
-  const t = (BC_LIFT - c.y)/d.y; if (t <= 0 || t > 40) return null;
-  const p = c.addScaledVector(d, t); p.y = 0; return p;
-}
-function bcFeet(o){
-  const p = bcRay(o); if (!p) return;
-  bc.feetF = p; bc.feetX = p.clone().applyMatrix4(bc.GfromF).x; bc.feetSeen = performance.now();
-}
-const bcFeetOK = () => bc.state === 'locked' && performance.now() - bc.feetSeen < 500;
-const bcARActive = () => tp && bc.ar && bc.state === 'locked' && camTex && vid.videoWidth > 0;
-function bcFov(){   // 背景の切り抜き（cover）と同じ範囲になるように縦の画角を決める
-  const vw = vid.videoWidth, vh = vid.videoHeight, f = bcFocal(vw), a = W/H;
-  return 2*Math.atan(((a > vw/vh ? vw/a : vh)/2)/f)*180/Math.PI;
-}
-function bcCamApply(){ bc.GfromCam.decompose(camera.position, camera.quaternion, new THREE.Vector3()); }
-function bcReset(){ bc.state = 'off'; HOVER = -8.5; applyBg(); bcSay('リセットしました（ボスは通常の位置）'); }
-// 認識プレビューに床のグリッド・立ち位置を重ねる（X, Y: 0〜1 → プレビュー座標）
-function bcDrawPrev(X, Y){
-  if (bc.state !== 'locked') return;
-  const vw = vid.videoWidth, vh = vid.videoHeight, f = bcFocal(vw);
-  const P = (x, z) => { const c = new THREE.Vector3(x, 0, z).applyMatrix4(bc.FfromG).applyMatrix4(bc.camF); return c.z < -.1 ? [X(.5 + f*c.x/-c.z/vw), Y(.5 - f*c.y/-c.z/vh)] : null; };
-  const seg = (a, b) => { const p = P(...a), q = P(...b); if (p && q){ pctx.moveTo(p[0], p[1]); pctx.lineTo(q[0], q[1]); } };
-  pctx.strokeStyle = 'rgba(122,231,255,.7)'; pctx.lineWidth = 1; pctx.beginPath();
-  for (let i = -2; i <= 2; i++){ seg([i, -3], [i, 2]); }
-  for (let j = -3; j <= 2; j++){ seg([-2, j], [2, j]); }
-  pctx.stroke();
-  const o = P(0, 0); if (o){ pctx.fillStyle = '#ffd35a'; pctx.beginPath(); pctx.arc(o[0], o[1], 5, 0, 7); pctx.fill(); pctx.font = 'bold 11px sans-serif'; pctx.fillText('立ち位置', o[0] + 6, o[1] - 4); }
-  if (bcFeetOK() && bc.feetF){ const c = bc.feetF.clone().applyMatrix4(bc.camF); if (c.z < -.1){ pctx.fillStyle = '#ff4d5e'; pctx.beginPath(); pctx.arc(X(.5 + f*c.x/-c.z/vw), Y(.5 - f*c.y/-c.z/vh), 4, 0, 7); pctx.fill(); } }
-}
-$('bcStart').onclick = bcStart;
-$('bcReset').onclick = bcReset;
-$('bcFovIn').oninput = e => { bc.hfov = +e.target.value; $('bcFovV').textContent = bc.hfov; };
-$('bcBoss').oninput = e => { bc.boss = +e.target.value; $('bcBossV').textContent = bc.boss.toFixed(1); if (bc.state === 'locked') HOVER = -bc.boss; };
-$('bcAR').onchange = e => { bc.ar = e.target.checked; applyBg(); };
 
 // ----- VRM 読み込み（three-vrm は使わず GLTFLoader + VRMの骨情報だけ読む。VRM0.x / 1.0 両対応）-----
 let vrm = null;
@@ -1236,7 +1060,7 @@ function update(dt){
     const gIn = ctl.mode === 'mouse' ? (mdn.on && nowMs - mdn.t >= GUARD_MS) : (wii.a && nowMs - wii.aT >= 150);
     P.guard = gIn && P.par <= 0 && !P.armed && P.swing <= 0;
     P.x = Math.max(-3.2, Math.min(3.2, P.x + mv*(P.par > 0 || P.guard ? 3 : 6)*dt));
-    if (tp && pose.move && poseReady() && !mv) P.x += ((bcFeetOK() ? Math.max(-3.2, Math.min(3.2, bc.feetX)) : pose.tx) - P.x)*Math.min(1, dt*8);   // キャリブレーション済みなら床の上の実際の位置(m)   // 俯瞰：体を左右に動かして回避
+    if (tp && pose.move && poseReady() && !mv) P.x += (pose.tx - P.x)*Math.min(1, dt*8);   // 俯瞰：体を左右に動かして回避
     P.counter -= dt; P.swing -= dt; P.swingCd -= dt; P.inv -= dt; P.parCd -= dt;
     if (P.par > 0 || P.armed) P.parAge += dt;
     if (P.par > 0) P.par -= dt;
@@ -1253,21 +1077,17 @@ function update(dt){
   aim.position.set(P.x, EYE, 0); aim.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0);
   av.position.x = P.x; av.rotation.y = vrm ? 0 : -mouse.nx*.3; headM.rotation.y = -mouse.nx*.5;   // 顔の向きにアバターも向く
   if (tp) poseApply(dt);   // VRMの骨を全身ポーズに合わせる
-  av.visible = tp && !bcARActive();   // AR確認表示では本物のプレイヤーが映るのでアバターを隠す
-  if (bcARActive()) bcCamApply();   // 実カメラと同じ位置・向きから描く
-  else if (tp){ camera.rotation.set(mouse.ny*.12 - .22, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + 1.5 + sh*.6, 4.2); }
+  if (tp){ camera.rotation.set(mouse.ny*.12 - .22, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + 1.5 + sh*.6, 4.2); }
   else { camera.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + sh*.6, 0); }
   bossBar.scale.x = Math.max(.0001, B.hp/B.max); pBar.scale.x = Math.max(.0001, P.hp/PMAX);
   parBar.scale.x = Math.max(.0001, P.parCd > 0 ? 1 - P.parCd/.7 : 1);
   hud.visible = state === 'play'; $('ui').style.display = vr ? 'none' : '';
-  const asp = vr ? W/2/H : W/H, mw = Math.min(7, 5.3*asp);
-  const hk = bcARActive() ? Math.tan(bcFov()*Math.PI/360)/Math.tan(35*Math.PI/180) : 1;   // AR表示は画角が狭いのでHUDを縮める
-  hud.scale.setScalar(hk); msg.scale.set(mw*hk, mw/2*hk, 1);
+  const asp = vr ? W/2/H : W/H, mw = Math.min(7, 5.3*asp); msg.scale.set(mw, mw/2, 1);
 }
 
 function view(x, y, w, h){ renderer.setViewport(x, y, w, h); renderer.setScissor(x, y, w, h); }
 function render(){
-  camera.fov = bcARActive() ? bcFov() : 70 - fovp; const bx = camera.position.x;
+  camera.fov = 70 - fovp; const bx = camera.position.x;
   if (!vr){ view(0, 0, W, H); camera.aspect = W/H; camera.updateProjectionMatrix(); cover(W/H); renderer.render(scene, camera); }
   else {
     const w = W/2; camera.aspect = w/H; camera.updateProjectionMatrix(); cover(w/H);
