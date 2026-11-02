@@ -42,8 +42,11 @@ main{padding:0 clamp(14px,3vw,32px) 28px;display:grid;gap:14px}
 @media (min-width:900px){.stages{grid-template-columns:1fr 1fr}}
 .stage{position:relative;aspect-ratio:4/3;border-radius:18px;overflow:hidden;background:var(--stage);color:var(--stage-ink);box-shadow:0 0 0 1px rgba(67,205,238,.18) inset}
 @media (min-width:900px){.stage{aspect-ratio:16/11}}
-.stage video,.stage canvas.ov{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
-.stage video{transform:scaleX(-1)}
+.stage video{position:absolute;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
+.stage canvas.ov,.stage canvas.cam{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.stage canvas.cam{transform:scaleX(-1)}
+@media (min-width:900px){.stages.portrait .stage{aspect-ratio:3/4}}
+.stages.portrait .stage{aspect-ratio:3/4}
 .stage .chip{pointer-events:none;position:absolute;left:12px;top:12px;padding:4px 11px;border-radius:999px;background:rgba(14,24,36,.72);border:1px solid rgba(67,205,238,.35);font-size:12.5px;backdrop-filter:blur(6px);max-width:calc(100% - 24px)}
 .stage .chip.ok{border-color:rgba(35,160,102,.85)}
 .stage .empty{pointer-events:none;position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:#8fa6ba;font-size:14px}
@@ -123,6 +126,7 @@ canvas.ov.editing{cursor:crosshair;touch-action:none}
   <section class="stages">
     <div class="stage" aria-label="カメラ映像">
       <video id="video" playsinline muted></video>
+      <canvas class="cam" id="camView"></canvas>
       <canvas class="ov" id="overlay"></canvas>
       <div class="empty" id="camEmpty"><div><strong>NO SIGNAL</strong>下の「Link Start」でカメラを起動します</div></div>
       <div class="chip" id="camChip" hidden></div>
@@ -165,6 +169,13 @@ canvas.ov.editing{cursor:crosshair;touch-action:none}
         <div class="row">
           <label class="sel">カメラ
             <select id="camSelect" disabled><option>起動後に選べます</option></select>
+          </label>
+          <label class="sel">カメラの向き
+            <select id="rotSelect">
+              <option value="0">横（ふつう）</option>
+              <option value="90">縦・右回転</option>
+              <option value="-90">縦・左回転</option>
+            </select>
           </label>
           <label class="sel">骨格モデル
             <select id="modelSelect">
@@ -836,6 +847,28 @@ const SEG_MODEL = 'https://storage.googleapis.com/mediapipe-models/image_segment
 
 const $ = s => document.querySelector(s);
 const video = $('#video'), ov = $('#overlay'), octx = ov.getContext('2d');
+/* カメラ映像は一度この src に描いてから使う（縦置きのときはここで90°回す） */
+const src = document.createElement('canvas'), srcCtx = src.getContext('2d');
+const camView = $('#camView'), camCtx = camView.getContext('2d');
+let rot = 0;
+function applyRotation() {
+  rot = +$('#rotSelect').value;
+  const vw = video.videoWidth, vh = video.videoHeight; if (!vw) return;
+  const [w, h] = rot ? [vh, vw] : [vw, vh];
+  for (const c of [src, ov, off, camView]) { c.width = w; c.height = h; }
+  document.querySelector('.stages').classList.toggle('portrait', h > w);
+  drawFrame();
+}
+function drawFrame() {
+  const w = src.width, h = src.height; if (!w) return;
+  srcCtx.save();
+  if (rot === 90) { srcCtx.translate(w, 0); srcCtx.rotate(Math.PI / 2); }
+  else if (rot === -90) { srcCtx.translate(0, h); srcCtx.rotate(-Math.PI / 2); }
+  srcCtx.drawImage(video, 0, 0);
+  srcCtx.restore();
+  camCtx.drawImage(src, 0, 0);
+}
+$('#rotSelect').onchange = () => { applyRotation(); cur = null; holdT = 0; };
 const off = document.createElement('canvas'), offCtx = off.getContext('2d', { willReadFrequently: true });
 const NAMES = { front: '正面', side: '横', back: '背中', face: '顔' }, ORDER = ['front', 'side', 'back', 'face'];
 const isObj = v => v && v !== 'skip';
@@ -922,7 +955,7 @@ async function startCamera(deviceId) {
   const size = { width: { ideal: 1280 }, height: { ideal: 720 } };
   stream = await navigator.mediaDevices.getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId }, ...size } : size, audio: false });
   video.srcObject = stream; await video.play();
-  ov.width = off.width = video.videoWidth; ov.height = off.height = video.videoHeight;
+  applyRotation();
   $('#camEmpty').hidden = true;
   const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
   const sel = $('#camSelect'), curId = stream.getVideoTracks()[0].getSettings().deviceId;
@@ -988,7 +1021,7 @@ function onResult(res) {
     if (capCount % every === (every >> 1)) {
       const cands = [];
       if (m) { try { cands.push({ mask: new Float32Array(m.getAsFloat32Array()), mw: m.width, mh: m.height, src: 'pose' }); } catch (e) { console.warn(e); } }
-      offCtx.drawImage(video, 0, 0, off.width, off.height);
+      offCtx.drawImage(src, 0, 0, off.width, off.height);
       snaps.push({ lm: cur.lm, cands, img: offCtx.getImageData(0, 0, off.width, off.height) });
     }
   }
@@ -1045,7 +1078,7 @@ function updateFace(now) {
     if (curFace) {
       const q = faceQ(curFace);
       if (q.ok && (!faceBest || q.yaw + q.roll < faceBest.q.yaw + faceBest.q.roll)) {
-        offCtx.drawImage(video, 0, 0, off.width, off.height);
+        offCtx.drawImage(src, 0, 0, off.width, off.height);
         faceBest = { q, lm: curFace, img: offCtx.getImageData(0, 0, off.width, off.height) };
       }
     }
@@ -1583,14 +1616,15 @@ function drawOverlay(now) {
 function tick() {
   requestAnimationFrame(tick);
   const now = performance.now();
-  if (video.readyState >= 2 && video.currentTime !== lastVT) {
+  if (video.readyState >= 2 && video.currentTime !== lastVT && src.width) {
     lastVT = video.currentTime;
+    drawFrame();
     if (phase === 'scan' && view === 'face') {
       if (faceLm && sub !== 'review') {
-        try { const r = faceLm.detectForVideo(video, now); curFace = r.faceLandmarks && r.faceLandmarks[0] ? r.faceLandmarks[0].map(p => ({ x: p.x, y: p.y })) : null; } catch (e) { console.warn(e); }
+        try { const r = faceLm.detectForVideo(src, now); curFace = r.faceLandmarks && r.faceLandmarks[0] ? r.faceLandmarks[0].map(p => ({ x: p.x, y: p.y })) : null; } catch (e) { console.warn(e); }
       }
     } else if (landmarker) {
-      try { landmarker.detectForVideo(video, now, onResult); } catch (e) { console.warn(e); }
+      try { landmarker.detectForVideo(src, now, onResult); } catch (e) { console.warn(e); }
     }
   }
   updatePhase(now); drawOverlay(now); update3D(now);
