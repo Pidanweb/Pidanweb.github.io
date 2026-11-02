@@ -73,8 +73,8 @@
     <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
     <b style="color:#ffd35a">🧍 体キャリブレーション（俯瞰モード・床の位置合わせ）</b>
     <label>身長 <input type="number" id="bcH" value="170" min="100" max="230" style="width:70px"> cm</label>
-    <label>カメラの高さ（床からレンズ） <input type="number" id="bcCamH" value="0" min="0" max="300" style="width:70px"> cm<small>0 = わからない（途中で1〜2歩 前後に動いてもらいます）</small></label>
-    <label><input type="checkbox" id="bcAutoFov" checked> 画角も自動で測る（カメラの高さを入れた時。1〜2歩 前後に動いてもらいます）</label>
+    <label>カメラの高さ（床からレンズ） <input type="number" id="bcCamH" value="0" min="0" max="300" style="width:70px"> cm<small>0 = わからない（途中で横に1歩 動いてもらいます）</small></label>
+    <label><input type="checkbox" id="bcAutoFov" checked> 画角も自動で測る（カメラの高さを入れた時。途中で横に1歩 動いてもらいます）</label>
     <label>カメラの画角 <b id="bcFovV">65</b>°<input type="range" id="bcFovIn" min="35" max="110" step="1" value="65"><small>カメラの仕様（対角でなく水平の画角）が分かれば合わせる</small></label>
     <label>ボスまでの距離 <b id="bcBossV">8.5</b> m<input type="range" id="bcBoss" min="3" max="12" step="0.5" value="8.5"></label>
     <div><button id="bcStart">🧍 キャリブレーション開始</button> <button id="bcReset">リセット</button></div>
@@ -778,13 +778,13 @@ function bcPose(n){
     if (bc.state === 'stand1'){
       bc.meanA = bcMean(bc.obsA);
       if (bc.camH > 0 && !bc.autoFov){ bcFinish(bc.obsA); return; }
-      bc.state = 'move'; bc.still = 0; bcSay('1〜2歩 前か後ろに動いて、止まってください', '1〜2歩 前後に動いて止まって');
+      bc.state = 'move'; bc.still = 0; bcSay('横に1歩（50cm以上）動いて、止まってください', '横に1歩 動いて止まって');
     } else bcFinish(bc.obsA.concat(bc.obs));
   } else if (bc.state === 'move'){
-    const far = Math.abs(o.fy - bc.meanA.fy) > .035;   // 足元が画面上で十分動いた
+    const far = Math.abs(o.fx - bc.meanA.fx)*bcFocal(vid.videoWidth)/vid.videoWidth > .08;   // 横に画面幅の8%以上動いた（前後の移動だけでは画角が求まらない）
     if (far && moved < .012 && o.upright){ if (++bc.still > 8){ bc.state = 'stand2'; bc.t0 = now; bc.obs = []; } }
     else bc.still = 0;
-    if (bc.state === 'move') bcSay(far ? 'そこでまっすぐ立って止まってください' : '1〜2歩 前か後ろに動いて、止まってください', null, true);
+    if (bc.state === 'move') bcSay(far ? 'そこでまっすぐ立って止まってください' : '横に1歩（50cm以上）動いて、止まってください', null, true);
   }
 }
 function bcStart(){
@@ -796,13 +796,20 @@ function bcStart(){
   HOVER = -8.5; applyBg();
   bcSay('5秒後に測定を始めます。プレイする位置に移動してください');
 }
+function bcFinishFixed(obs){ bc.fixedOnly = true; bcFinish(obs); bc.fixedOnly = false; }
 function bcFinish(obs){
-  const fovFree = bc.camH > 0 && bc.autoFov;
+  const fovFree = bc.camH > 0 && bc.autoFov && !bc.fixedOnly;
+  if (!fovFree && !bc.fixedOnly) bc.fovNote = '';
   const r = bcSolve(obs, bcEye(), bc.camH || 0, fovFree);
   if (fovFree){
     const fov = 2*Math.atan(Math.tan(bc.hfov*Math.PI/360)*r.s)*180/Math.PI;
     console.log(`[体キャリブ] 画角を推定: ${bc.hfov}° → ${fov.toFixed(1)}°`);
-    if (fov < 25 || fov > 130){ bc.state = 'off'; bcSay(`画角の推定がおかしな値（${fov.toFixed(0)}°）になりました。もう一度、前後に大きめに動いてください`); return; }
+    if (fov < 35 || fov > 110){   // 推定できなかった → 設定の画角で計算を続ける
+      console.warn(`[体キャリブ] 画角の推定値 ${fov.toFixed(0)}° は不自然なので使いません（設定値 ${bc.hfov}° で計算）`);
+      bc.fovNote = `画角は推定できず設定値 ${bc.hfov}° を使用`;
+      return bcFinishFixed(obs);
+    }
+    bc.fovNote = `画角 ${fov.toFixed(1)}° を推定`;
     // 観測を新しい画角に合わせて直す
     for (const L of [bc.obsA, bc.obs]) for (const o of L){ o.fx *= r.s; o.fy *= r.s; o.hx *= r.s; o.hy *= r.s; }
     bc.hfov = Math.round(fov*10)/10; $('bcFovIn').value = Math.round(bc.hfov); $('bcFovV').textContent = bc.hfov.toFixed(1);
@@ -828,7 +835,7 @@ function bcFinish(obs){
   bc.GfromCam.multiplyMatrices(bc.GfromF, bc.FfromCam);
   bc.state = 'locked'; HOVER = -bc.boss; applyBg();
   const dist = Math.hypot(p.x, p.z);
-  bcSay(`完了: カメラの高さ ${r.h.toFixed(2)}m・下向き ${(r.th*180/Math.PI).toFixed(0)}°・立ち位置まで ${dist.toFixed(1)}m（誤差 ${px.toFixed(1)}px）`, 'キャリブレーション完了');
+  bcSay(`完了: カメラの高さ ${r.h.toFixed(2)}m・下向き ${(r.th*180/Math.PI).toFixed(0)}°・立ち位置まで ${dist.toFixed(1)}m（誤差 ${px.toFixed(1)}px）` + (bc.fovNote ? '・' + bc.fovNote : ''), 'キャリブレーション完了');
 }
 // 正規化画像座標のかかと → 床との交点（F座標）
 function bcRay(o){
