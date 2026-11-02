@@ -1,0 +1,1762 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GIANT SLIME RAID</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#0a1110}
+  canvas{display:block;cursor:crosshair;touch-action:none}
+  #ui{position:fixed;top:10px;right:10px;z-index:5;font:14px sans-serif;color:#fff;text-align:right}
+  #ui button{background:#0d2a30cc;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer}
+  #camPanel{max-height:calc(100vh - 70px);overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;margin-top:6px;padding:10px;background:#000c;border:1px solid #7ae7ff55;border-radius:8px;width:280px;text-align:left}
+  #camPanel select{width:100%;margin:4px 0 8px;padding:4px;font:inherit}
+  #camPanel div{margin-top:6px}
+  #camStat{font-size:12px;color:#ffd35a;word-break:break-all}
+  #v,#fv,#bgv{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
+  #facePrev{position:fixed;left:10px;bottom:10px;z-index:5;width:240px;height:180px;border:2px solid #7ae7ff88;border-radius:8px;background:#000;pointer-events:none;display:none}
+  #faceBadge{margin-top:6px;font-size:12px;color:#7ae7ff;text-shadow:0 0 4px #000}
+  #camPanel input[type=range]{width:100%}
+  #camPanel input[type=file]{width:100%;margin:4px 0;color:#9fdcea;font-size:12px}
+  #camPanel small{display:block;color:#9fdcea;font-size:11px;margin-top:4px}
+  #aimBtn.off,#mAim.off{color:#ff9aa5;border-color:#ff9aa588}
+  #menu{position:fixed;top:0;bottom:0;left:50%;transform:translateX(-50%);width:min(260px,44vw);z-index:9;background:#061418cc;border:1px solid #7ae7ff88;border-radius:12px;padding:16px;display:none;flex-direction:column;gap:12px;justify-content:center;font:15px sans-serif;color:#fff;text-align:center;box-sizing:border-box}
+  #menu.on{display:flex} #menu{overflow-y:auto;gap:8px} #menu>:first-child{margin-top:auto} #menu>:last-child{margin-bottom:auto} #jobs{display:none;flex-direction:column;gap:6px} #jobs.on{display:flex} #menu button:disabled{opacity:.45;cursor:not-allowed} #menu button{background:#0d2a30;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:8px;padding:10px;font:inherit;cursor:pointer}
+  #wiiDbg{position:fixed;left:10px;top:10px;z-index:6;margin:0;padding:6px 8px;max-width:46vw;font:11px/1.35 monospace;color:#9fffb0;background:#000a;border:1px solid #7ae7ff44;border-radius:6px;pointer-events:none;white-space:pre-wrap}
+  #skMenu{border:1px solid #7ae7ff44;border-radius:8px;padding:6px 8px;font-size:13px;text-align:left} #skMenu summary{cursor:pointer;color:#ffd35a;font-weight:bold} #skMenu label{display:block;margin-top:6px} #skMenu input[type=range]{width:100%} #skMenu small{color:#9fdcea}
+  #hCur{position:fixed;left:0;top:0;z-index:20;width:22px;height:22px;margin:-11px 0 0 -11px;border:3px solid #ffd35a;border-radius:50%;background:#ffd35a33;box-shadow:0 0 10px #ffd35a;pointer-events:none;display:none}
+  #palmRing{position:fixed;left:50%;top:50%;z-index:19;width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:50%;display:none;place-items:center;font-size:40px;pointer-events:none;
+    background:radial-gradient(#061418dd 58%,transparent 60%),conic-gradient(#ffd35a var(--p,0deg),#7ae7ff33 0);box-shadow:0 0 16px #ffd35a66}
+  #palmRing.on{display:grid}
+  #hCur.on{display:block} #hCur.down{background:#ffd35acc;border-color:#fff}
+  #menu .hHover{outline:2px solid #ffd35a;outline-offset:2px;box-shadow:0 0 12px #ffd35a88}
+</style>
+</head>
+<body>
+<div id="ui"><button id="camBtn">📷 カメラ設定</button> <button id="viewBtn">👁 一人称</button> <button id="aimBtn">🎯 視点操作 ON</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰</button>
+  <div id="camPanel" hidden>
+    <label>⚙ 負荷モード <select id="qMode"><option value="high">高画質（重い）</option><option value="std">標準</option><option value="light" selected>軽量（ノートPC推奨）</option></select></label>
+    <small>軽量: 描画解像度を下げ、顔認識20回/秒・手認識5回/秒に間引き、背景カメラを640×360で取得</small>
+    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <b style="color:#ffd35a">📷 カメラの割り当て</b>
+    <label>フロント（顔・手の認識）<select id="faceSel"></select></label>
+    <label>バック（背景の映像）<select id="camSel"></select></label>
+    <div><button id="camApply">▶ この割り当てで開く</button> <button id="camRefresh">🔄 カメラを再検出</button> <button id="faceFlip">⇄ 入れ替え</button></div>
+    <div id="camStat">「カメラを再検出」で一覧に名前が出ます</div>
+    <small>自動: 内蔵カメラ＝フロント、USBカメラ＝バック。違うときは手で選んでください。</small>
+    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <b style="color:#ffd35a">🖼 敵の背景</b>
+    <label>背景の種類 <select id="bgMode"><option value="cam">📷 バックカメラの映像</option><option value="video">🎞 動画ファイル</option><option value="image">🖼 画像ファイル</option><option value="none">なし（単色）</option></select></label>
+    <div id="bgCamRow"><label><input type="checkbox" id="mir"> 左右反転</label></div>
+    <div id="bgFileRow" style="display:none">
+      <label><span id="bgFileLbl">ファイル</span><input type="file" id="bgFile" accept="video/*"></label>
+      <label><input type="checkbox" id="bgFlip"> 左右反転</label>
+    </div>
+    <label><input type="checkbox" id="bgTP"> 俯瞰モードでも背景に表示</label>
+    <div id="bgStat" style="font-size:12px;color:#ffd35a"></div>
+    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <b style="color:#ffd35a">👤 顔認識</b>
+    <label><input type="checkbox" id="faceOn" checked> 顔の動きで視点・照準を操作</label>
+    <label>カメラの種類 <select id="faceType"><option value="auto">自動判定</option><option value="front">フロント（鏡像）</option><option value="back">バック（非鏡像）</option></select></label>
+    <label>感度 <input type="range" id="faceGain" min="0.5" max="3" step="0.1" value="1.5"></label>
+    <label><input type="checkbox" id="facePrevOn" checked> 認識プレビューを表示</label>
+    <div><button id="faceStart">顔認識を開始/再起動</button> <button id="faceCal">中心リセット (C)</button></div>
+    <div id="faceStat" style="font-size:12px;color:#ffd35a"></div>
+    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <b style="color:#ffd35a">🧍 俯瞰モード（VRMアバター）</b>
+    <label>VRMファイル<input type="file" id="vrmFile" accept=".vrm,.glb"></label>
+    <div id="vrmStat" style="font-size:12px;color:#ffd35a">未読み込み（読み込むまでは簡易アバター）</div>
+    <label>カメラの置き方 <select id="poseCam"><option value="front">プレイヤーを正面から撮る（推奨）</option><option value="back">プレイヤーを背後から撮る</option></select></label>
+    <label><input type="checkbox" id="poseOn" checked> 映像の動きをアバターに反映</label>
+    <label><input type="checkbox" id="poseMove" checked> 体の左右移動で回避</label>
+    <small>俯瞰モードでは「バック」のカメラ1台（既定はバックカメラ）だけで全身を認識します。顔用カメラは止めます。全身が映る位置に置いてください。</small>
+    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <b style="color:#ffd35a">📍 QRでボスの位置を決める（俯瞰モード）</b>
+    <label>基準にするQR <select id="qrRef"><option value="auto">自動（最初に見つけたQR）</option><option value="0">QR 0</option><option value="1">QR 1</option><option value="2">QR 2</option><option value="3">QR 3</option></select></label>
+    <label>QRの印刷サイズ（黒い部分の1辺） <b id="qrSizeV">10.0</b> cm<input type="range" id="qrSize" min="3" max="40" step="0.5" value="10"></label>
+    <label>カメラの画角 <b id="qrFovV">65</b>°<input type="range" id="qrFovIn" min="35" max="110" step="1" value="65"></label>
+    <div><button id="qrCal">📌 QRを読み取って固定</button> <button id="qrReset">リセット</button></div>
+    <label><input type="checkbox" id="qrAR"> AR確認表示（カメラ映像にボスを重ねる）</label>
+    <div id="qrStat" style="font-size:12px;color:#ffd35a">未設定（ボスは通常の位置）</div>
+    <small>1) カメラを固定し、QRを床に置く 2)「読み取って固定」 3) 全身が映る位置にまっすぐ立つ → QRの場所がボスの待機位置になります。サイズ・画角を変えたら読み取り直してください。</small>
+  </div>
+  <div id="faceBadge"></div><div id="perfStat" style="margin-top:4px;font:12px monospace;color:#9fffb0;text-shadow:0 0 4px #000"></div><div id="wiiStat" style="margin-top:4px;font-size:12px;color:#ffd35a;text-shadow:0 0 4px #000"></div></div>
+<div id="menu"><h3 style="margin:0">MENU</h3>
+  <button id="mClose">▶ 再開</button><button id="mView">👁 視点: 一人称</button><button id="mAim">🎯 視点操作: ON</button><button id="mFace">⇄ カメラ入れ替え</button><button id="mCtrl">🖱 操作: マウス</button>
+  <button id="jobBtn">🔁 ジョブチェンジ</button>
+  <div id="jobs"><button id="jSword">⚔ 剣士</button><button id="jWiz">🪄 魔法使い</button><button id="jGun" disabled>🔫 ガンナー（準備中）</button></div>
+  <label>効果音 <input type="range" id="mVol" min="0" max="1" step=".1" value=".8"></label><label>BGM <input type="range" id="mBgm" min="0" max="1" step=".05" value=".5"></label><label>Wii振り感度 <input type="range" id="mWiiTh" min="1.2" max="4" step=".1" value="2.2"><br><small style="color:#9fdcea">左ほど敏感</small></label>
+  <details id="skMenu"><summary>⚔ ソードスキル（縦→横）</summary>
+    <label><input type="checkbox" id="skOn" checked> 有効</label>
+    <label>受付時間 <b id="skWinV">1.5</b>秒<input type="range" id="skWin" min="0.5" max="3" step="0.1" value="1.5"><small>縦を斬り終えてから横を振り始めるまで</small></label>
+    <label>横と見なす度合 <b id="skRBV">0.18</b><input type="range" id="skRB" min="0.05" max="0.5" step="0.01" value="0.18"><small>小さいほど甘い（横になりやすい）</small></label>
+    <label>縦と見なす上限 <b id="skRAV">0.30</b><input type="range" id="skRA" min="0.1" max="0.8" step="0.01" value="0.30"><small>大きいほど甘い（縦になりやすい）</small></label>
+    <label>斬りの最小速度 <b id="skPkV">600</b>°/s<input type="range" id="skPk" min="300" max="1200" step="50" value="600"><small>これ未満は構え直しとして無視</small></label>
+    <label>ダメージ倍率 ×<b id="skMulV">5</b><input type="range" id="skMul" min="2" max="10" step="0.5" value="5"><small>5が標準（全スキルに掛かる）</small></label>
+    <label>四角切りの継続受付 <b id="skSqV">1.1</b>秒<input type="range" id="skSq" min="0.6" max="2" step="0.1" value="1.1"><small>縦横縦横の各斬りの間隔</small></label>
+    <label>縦重撃(ソニックリープ) ∫縦 <b id="skHVV">650</b>°<input type="range" id="skHV" min="200" max="1500" step="10" value="650"></label>
+    <label>横重撃(ロータス) ∫横 <b id="skHHV">260</b>°<input type="range" id="skHH" min="100" max="500" step="10" value="260"></label>
+    <label>一回転(メテオブレイク) ∫横 <b id="skSpV">360</b>°<input type="range" id="skSp" min="150" max="700" step="10" value="360"></label>
+    <label>突き(ヴォーパル) 加速度 <b id="skTAV">4.0</b>g<input type="range" id="skTA" min="2.5" max="8" step="0.1" value="4.0"><small>回転が小さく加速度が大きい動き</small></label>
+    <label>突きの回転上限 <b id="skTRV">150</b>°<input type="range" id="skTR" min="30" max="400" step="10" value="150"></label>
+    <label>突きの最大速度 <b id="skTPV">800</b>°/s<input type="range" id="skTP" min="300" max="1500" step="50" value="800"></label>
+    <small style="display:block;margin-top:6px;color:#ffd35a">▼ 反応しない時: その動きを1回だけ行い、直後に押す（キー1〜4）。直近の斬りを基準にしきい値を自動設定</small>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px"><button id="skL1">①縦重撃を登録</button><button id="skL2">②突きを登録</button><button id="skL3">③横重撃を登録</button><button id="skL4">④一回転を登録</button></div>
+    <label><input type="checkbox" id="skDbg" checked> 判定ログを表示</label>
+    <small style="display:block;margin-top:6px">バーチカル:縦→横 / ヴォーパル:突き / ソニックリープ:縦重 / ロータス:横重 / スクエア:縦横縦横 / メテオ:一回転 / スターバースト:被ダメ0で16ヒット→READY→振る</small>
+    <button id="skCal" style="margin-top:6px;width:100%">ジャイロ再キャリブ（−ボタンでも可）</button>
+  </details>
+  <button id="mRestart">↻ リスタート</button><button id="mTitle">⌂ タイトルへ</button>
+  <small style="color:#9fdcea">✌ ピースを約1秒キープで開く / 指先でカーソル → Aで決定（スライダーはAを押したまま左右）/ M キーで開閉</small></div>
+<div id="hCur"></div><div id="palmRing">✌</div>
+<pre id="wiiDbg"></pre>
+<canvas id="facePrev" width="320" height="240"></canvas>
+<video id="v" autoplay playsinline muted></video>
+<video id="fv" autoplay playsinline muted></video>
+<video id="bgv" playsinline muted loop></video>
+<script id="qrLib">
+// ===== QRスキャナ（メインとWorkerで共用。画面をタイルに分けて複数QRを探し、見つけたQRは周辺だけ追跡）=====
+// ===== QRスキャナ（Workerでもnodeでも使う）=====
+const TILES = (() => {
+  const t = [[0, 0, 1, 1]];
+  for (const y of [0, .4]) for (const x of [0, .4]) t.push([x, y, .6, .6]);
+  for (const y of [0, .275, .55]) for (const x of [0, .275, .55]) t.push([x, y, .45, .45]);
+  return t;
+})();
+function crop(d, w, h, x0, y0, cw, ch){
+  const c = new Uint8ClampedArray(cw*ch*4);
+  for (let y = 0; y < ch; y++) c.set(d.subarray(((y0+y)*w + x0)*4, ((y0+y)*w + x0 + cw)*4), y*cw*4);
+  return c;
+}
+function maskQuad(d, w, h, c, grow){
+  const cx = (c[0].x+c[1].x+c[2].x+c[3].x)/4, cy = (c[0].y+c[1].y+c[2].y+c[3].y)/4;
+  const p = c.map(q => ({ x:cx + (q.x-cx)*grow, y:cy + (q.y-cy)*grow }));
+  const x0 = Math.max(0, Math.floor(Math.min(...p.map(q => q.x)))), x1 = Math.min(w-1, Math.ceil(Math.max(...p.map(q => q.x))));
+  const y0 = Math.max(0, Math.floor(Math.min(...p.map(q => q.y)))), y1 = Math.min(h-1, Math.ceil(Math.max(...p.map(q => q.y))));
+  const sg = Math.sign((p[1].x-p[0].x)*(p[2].y-p[0].y) - (p[1].y-p[0].y)*(p[2].x-p[0].x)) || 1;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++){
+    let ok = true;
+    for (let i = 0; i < 4; i++){ const a = p[i], b = p[(i+1)%4]; if (sg*((b.x-a.x)*(y-a.y) - (b.y-a.y)*(x-a.x)) < 0){ ok = false; break; } }
+    if (ok){ const i = (y*w + x)*4; d[i] = d[i+1] = d[i+2] = 255; }
+  }
+}
+function readRect(jsQR, d, w, h, x0, y0, cw, ch){
+  x0 = Math.max(0, Math.floor(x0)); y0 = Math.max(0, Math.floor(y0));
+  cw = Math.min(w - x0, Math.floor(cw)); ch = Math.min(h - y0, Math.floor(ch));
+  if (cw < 40 || ch < 40) return null;
+  const r = jsQR(crop(d, w, h, x0, y0, cw, ch), cw, ch, { inversionAttempts:'dontInvert' });
+  if (!r) return null;
+  const L = r.location;
+  return { data:r.data, c:[L.topLeftCorner, L.topRightCorner, L.bottomRightCorner, L.bottomLeftCorner].map(p => ({ x:p.x + x0, y:p.y + y0 })) };
+}
+// rois: 追跡中のQRの4隅 / tile: 今回探す新規発見用タイル番号
+function scanFrame(jsQR, d, w, h, rois, tile){
+  const found = [], seen = new Set();
+  for (const c of rois){
+    const xs = c.map(p => p.x), ys = c.map(p => p.y);
+    const mx = Math.min(...xs), Mx = Math.max(...xs), my = Math.min(...ys), My = Math.max(...ys);
+    const s = Math.max(Mx - mx, My - my), cx = (mx+Mx)/2, cy = (my+My)/2, half = s*1.1;
+    const r = readRect(jsQR, d, w, h, cx - half, cy - half, half*2, half*2);
+    if (r && !seen.has(r.data)){ seen.add(r.data); found.push(r); }
+  }
+  // 見つけ済みのQRを白く塗りつぶしてから、新規発見用のタイルを探す
+  for (const r of found) maskQuad(d, w, h, r.c, 1.3);
+  const [tx, ty, tw, th] = TILES[tile % TILES.length];
+  for (let k = 0; k < 2; k++){
+    const r = readRect(jsQR, d, w, h, tx*w, ty*h, tw*w, th*h);
+    if (!r || seen.has(r.data)) break;
+    seen.add(r.data); found.push(r); maskQuad(d, w, h, r.c, 1.3);
+  }
+  return found;
+}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ===== GIANT SLIME RAID =====
+// 左クリック: 斬る(長押しでガード) / 右クリック: パリィ / 紫の攻撃はパリィ不可→ガード / Wii: 振る=斬る, B+振り上げ=パリィ, A長押し=ガード / A,D: 左右に回避 / V: VR(左右分割)モード切替 / 視点・照準: 顔の動き(マウスでも可) / C: 顔の中心リセット
+const FONT = '"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif';
+const vid = document.getElementById('v');
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+// ===== 負荷モード =====
+// pr = 描画解像度の倍率上限 / faceMs,handMs,poseMs = 認識の最短間隔 / bgW,bgH = 背景カメラの取得解像度 / prevMs = 認識プレビューの描画間隔
+const QP = {
+  high:  { pr:2,    faceMs:0,  handMs:50,  poseMs:0,  bgW:1280, bgH:720, prevMs:0 },
+  std:   { pr:1.25, faceMs:33, handMs:100, poseMs:33, bgW:960,  bgH:540, prevMs:33 },
+  light: { pr:1,    faceMs:50, handMs:200, poseMs:50, bgW:640,  bgH:360, prevMs:100 },
+};
+let Q = QP.light;
+renderer.setPixelRatio(Math.min(devicePixelRatio, Q.pr));
+renderer.setScissorTest(true);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(70, 1, .05, 100);
+camera.rotation.order = 'YXZ'; scene.add(camera);
+const EYE = 1.6, R = 1.8;
+let HOVER = -8.5;   // ボスの待機位置（QR配置を使うと実際の距離に変わる）
+let W, H;
+function resize(){ W = innerWidth; H = innerHeight; renderer.setSize(W, H); }
+resize(); addEventListener('resize', resize);
+addEventListener('contextmenu', e => e.preventDefault());
+const BG = new THREE.Color(0x0b1622); scene.background = BG;
+scene.add(new THREE.HemisphereLight(0xcfeaff, 0x203020, 1.0));
+const sun = new THREE.DirectionalLight(0xffffff, .9); sun.position.set(3, 8, 4); scene.add(sun);
+
+function canvasTex(w, h, fn){ const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), w, h); return new THREE.CanvasTexture(c); }
+function mkSprite(text, hex, sc){
+  const t = canvasTex(384, 128, (x, w, h) => {
+    let f = 60; do { x.font = `bold ${f}px ${FONT}`; f -= 4; } while (x.measureText(text).width > 360 && f > 16);
+    x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineWidth = 10; x.strokeStyle = '#000c';
+    x.strokeText(text, w/2, h/2); x.fillStyle = hex; x.fillText(text, w/2, h/2);
+  });
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:t, transparent:true, depthTest:false }));
+  s.scale.set(3*sc, sc, 1); s.renderOrder = 20; return s;
+}
+
+// ===== 床（ARでは映像の上に半透明グリッド）=====
+const gridTex = canvasTex(256, 256, (x, w, h) => { x.strokeStyle = 'rgba(122,231,255,.6)'; x.lineWidth = 4; x.strokeRect(0, 0, w, h); });
+gridTex.wrapS = gridTex.wrapT = THREE.RepeatWrapping; gridTex.repeat.set(10, 20);
+const floorMat = new THREE.MeshBasicMaterial({ map:gridTex, transparent:true, opacity:.5, depthWrite:false });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 40), floorMat);
+floor.rotation.x = -Math.PI/2; floor.position.set(0, 0, -16); scene.add(floor);
+const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
+  map:canvasTex(128, 128, (x, w, h) => { const g = x.createRadialGradient(64,64,0,64,64,64); g.addColorStop(0,'rgba(0,0,0,.6)'); g.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0,0,w,h); }),
+  transparent:true, depthWrite:false }));
+shadow.rotation.x = -Math.PI/2; shadow.position.y = .02; scene.add(shadow);
+const lane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color:0xff3a4a, transparent:true, opacity:.3, depthWrite:false }));
+lane.rotation.x = -Math.PI/2; lane.visible = false; scene.add(lane);
+
+// ===== ボス：ジャイアントスライム =====
+const bossG = new THREE.Group(); scene.add(bossG);
+const bGeo = new THREE.SphereGeometry(1, 40, 28), bBase = bGeo.attributes.position.array.slice();
+const bMat = new THREE.MeshStandardMaterial({ color:0x5fe07a, roughness:.12, transparent:true, opacity:.86, emissive:0x0a3a18 });
+bossG.add(new THREE.Mesh(bGeo, bMat));
+const core = new THREE.Mesh(new THREE.SphereGeometry(.32, 16, 12), new THREE.MeshStandardMaterial({ color:0x1d9a44, emissive:0x0a5a20 }));
+core.position.set(0, -.1, -.1); bossG.add(core);
+const eyes = [], pupils = [];
+for (const s of [-1, 1]){
+  const w = new THREE.Mesh(new THREE.SphereGeometry(.15, 12, 10), new THREE.MeshBasicMaterial({ color:0xffffff }));
+  w.position.set(s*.33, .22, .86);
+  const p = new THREE.Mesh(new THREE.SphereGeometry(.07, 10, 8), new THREE.MeshBasicMaterial({ color:0x111111 }));
+  p.position.set(0, 0, .12); w.add(p); bossG.add(w); eyes.push(w); pupils.push(p);
+}
+const stars = new THREE.Group(); stars.position.y = 1.35; bossG.add(stars);
+for (let i = 0; i < 3; i++){ const m = new THREE.Mesh(new THREE.SphereGeometry(.12, 8, 6), new THREE.MeshBasicMaterial({ color:0xffd35a })); m.position.set(Math.cos(i*2.09)*.6, 0, Math.sin(i*2.09)*.6); stars.add(m); }
+function jiggle(t, amp){
+  const p = bGeo.attributes.position.array;
+  for (let i = 0; i < p.length; i += 3){
+    const x = bBase[i], y = bBase[i+1], z = bBase[i+2], k = 1 + amp*Math.sin(t*7 + x*4 + y*3)*Math.cos(t*5 + z*4);
+    p[i] = x*k; p[i+1] = y*k; p[i+2] = z*k;
+  }
+  bGeo.attributes.position.needsUpdate = true; bGeo.computeVertexNormals();
+}
+
+// ===== エフェクト =====
+const NP = 500, pp = new Float32Array(NP*3), pc = new Float32Array(NP*3), pv = new Float32Array(NP*3), pl = new Float32Array(NP); let pn = 0;
+const pg = new THREE.BufferGeometry();
+pg.setAttribute('position', new THREE.BufferAttribute(pp, 3)); pg.setAttribute('color', new THREE.BufferAttribute(pc, 3));
+const pts = new THREE.Points(pg, new THREE.PointsMaterial({ size:.16, vertexColors:true, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false }));
+pts.frustumCulled = false; scene.add(pts);
+function burst(v, hex, n, sp){
+  const c = new THREE.Color(hex);
+  for (let k = 0; k < n; k++){
+    const i = pn++ % NP, a = Math.random()*6.28, b = Math.random()*3.14 - 1.57, s = sp*(.3 + Math.random());
+    pp.set([v.x, v.y, v.z], i*3); pc.set([c.r, c.g, c.b], i*3); pl[i] = .4 + Math.random()*.6;
+    pv.set([Math.cos(a)*Math.cos(b)*s, Math.sin(b)*s + 1, Math.sin(a)*Math.cos(b)*s], i*3);
+  }
+}
+const rings = [], pops = [];
+function ring(v, r1, hex, life = .45){
+  const m = new THREE.Mesh(new THREE.RingGeometry(.85, 1, 48), new THREE.MeshBasicMaterial({ color:hex, transparent:true, blending:THREE.AdditiveBlending, depthTest:false, side:THREE.DoubleSide }));
+  m.position.copy(v); m.quaternion.copy(camera.quaternion); m.renderOrder = 15; scene.add(m);
+  rings.push({ m, r1, life, max:life });
+}
+function popup(text, hex, pos, sc = .8, life = .9, parent = scene){
+  const s = mkSprite(text, hex, sc); s.position.copy(pos); parent.add(s); pops.push({ s, life, max:life, parent });
+}
+const popCam = (text, hex, sc = 1, life = .9) => popup(text, hex, new THREE.Vector3(0, .5, -3), sc, life, camera);
+function updFX(dt){
+  for (let i = 0; i < NP; i++){
+    if (pl[i] <= 0){ pp[i*3+1] = -999; continue; }
+    pl[i] -= dt; pv[i*3+1] -= 6*dt;
+    for (let j = 0; j < 3; j++){ pp[i*3+j] += pv[i*3+j]*dt; pc[i*3+j] *= 1 - dt*1.2; }
+  }
+  pg.attributes.position.needsUpdate = true; pg.attributes.color.needsUpdate = true;
+  for (let i = rings.length - 1; i >= 0; i--){
+    const r = rings[i]; r.life -= dt; const k = Math.max(0, r.life/r.max);
+    r.m.scale.setScalar(.1 + r.r1*(1-k)); r.m.material.opacity = k;
+    if (r.life <= 0){ scene.remove(r.m); r.m.geometry.dispose(); r.m.material.dispose(); rings.splice(i, 1); }
+  }
+  for (let i = pops.length - 1; i >= 0; i--){
+    const p = pops[i]; p.life -= dt; p.s.position.y += .6*dt; p.s.material.opacity = Math.min(1, p.life/p.max*2);
+    if (p.life <= 0){ p.parent.remove(p.s); p.s.material.map.dispose(); p.s.material.dispose(); pops.splice(i, 1); }
+  }
+}
+
+// ===== 一人称の大剣 =====
+const sword = new THREE.Group(); camera.add(sword);
+const steel = new THREE.MeshStandardMaterial({ color:0xdff6ff, metalness:.8, roughness:.2, emissive:0x2a6f88 });
+const gold = new THREE.MeshStandardMaterial({ color:0xd8a23a, metalness:.7, roughness:.3, emissive:0x3a2a08 });
+const blade = new THREE.Mesh(new THREE.BoxGeometry(.28, 3.4, .07), steel); blade.position.y = 2.1;
+const edge = new THREE.Mesh(new THREE.BoxGeometry(.05, 3.4, .09), new THREE.MeshBasicMaterial({ color:0x7ae7ff })); edge.position.y = 2.1;
+const tip = new THREE.Mesh(new THREE.ConeGeometry(.2, .6, 4), steel); tip.position.y = 4.1; tip.rotation.y = Math.PI/4; tip.scale.z = .25;
+const guard = new THREE.Mesh(new THREE.BoxGeometry(1.3, .16, .24), gold); guard.position.y = .35;
+const grip = new THREE.Mesh(new THREE.CylinderGeometry(.08, .08, .8, 10), new THREE.MeshStandardMaterial({ color:0x4a2a1a })); grip.position.y = -.1;
+const pommel = new THREE.Mesh(new THREE.SphereGeometry(.14, 12, 10), gold); pommel.position.y = -.55;
+sword.add(blade, edge, tip, guard, grip, pommel);
+sword.position.set(.9, -1.1, -1.9); sword.rotation.set(-.95, 0, .3);
+const shield = new THREE.Group(); shield.position.z = -2.3; shield.visible = false; camera.add(shield);
+shield.add(new THREE.Mesh(new THREE.CircleGeometry(.9, 32), new THREE.MeshBasicMaterial({ color:0xffd35a, transparent:true, opacity:.25, blending:THREE.AdditiveBlending, depthTest:false })));
+shield.add(new THREE.Mesh(new THREE.RingGeometry(.85, .95, 40), new THREE.MeshBasicMaterial({ color:0xffd35a, transparent:true, blending:THREE.AdditiveBlending, depthTest:false })));
+const arc = new THREE.Mesh(new THREE.RingGeometry(1.5, 2.3, 40, 1, 0, 2.2), new THREE.MeshBasicMaterial({ color:0xbfefff, transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthTest:false, side:THREE.DoubleSide }));
+arc.position.z = -2.8; arc.renderOrder = 12; camera.add(arc);
+const gShield = new THREE.Group(); gShield.position.z = -2.2; gShield.visible = false; camera.add(gShield);
+gShield.add(new THREE.Mesh(new THREE.CircleGeometry(1.1, 6), new THREE.MeshBasicMaterial({ color:0x7ae7ff, transparent:true, opacity:.22, blending:THREE.AdditiveBlending, depthTest:false })));
+gShield.add(new THREE.Mesh(new THREE.RingGeometry(1.05, 1.15, 6), new THREE.MeshBasicMaterial({ color:0x7ae7ff, transparent:true, blending:THREE.AdditiveBlending, depthTest:false })));
+const flashM = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0, depthTest:false }));
+flashM.position.z = -.5; flashM.renderOrder = 40; camera.add(flashM);
+
+// ===== 三人称(俯瞰)用アバター：一人称では非表示。剣・盾・斬撃は視点に応じて付け替える =====
+let tp = false, rig = camera, menuOn = false;
+const aim = new THREE.Group(); aim.rotation.order = 'YXZ'; scene.add(aim);
+const av = new THREE.Group(), M = (c, r = .6) => new THREE.MeshStandardMaterial({ color:c, roughness:r }), headM = new THREE.Group();
+const mk = (g, m, x, y, z) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); return o; };
+headM.position.y = 1.6; headM.add(mk(new THREE.SphereGeometry(.24, 16, 12), M(0xffd9b0), 0, 0, 0), mk(new THREE.SphereGeometry(.26, 16, 12), M(0x5a3a22), 0, .04, .07));
+const cape = mk(new THREE.PlaneGeometry(.75, 1.1), new THREE.MeshStandardMaterial({ color:0xc0303c, side:THREE.DoubleSide }), 0, .9, .36); cape.rotation.x = .12;
+const prim = new THREE.Group(), holder = new THREE.Group();   // prim = 簡易アバター / holder = VRMを入れる器
+prim.add(mk(new THREE.CylinderGeometry(.3, .28, .6, 12), M(0x223049), 0, .3, 0), mk(new THREE.CylinderGeometry(.32, .38, 1, 12), M(0x3a7bd5), 0, 1.0, 0), headM, cape);
+av.add(prim, holder); av.visible = false; scene.add(av);
+function setView(v){
+  tp = v; av.visible = tp; rig = tp ? aim : camera; rig.add(sword, shield, gShield, arc);
+  const t = tp ? '俯瞰(後方)' : '一人称'; $('viewBtn').textContent = '👁 ' + t; $('mView').textContent = '👁 視点: ' + t;
+  applyBg(); floorMat.opacity = tp ? .8 : .5;   // 俯瞰ではカメラ映像を背景にしない（カメラはプレイヤーを撮っているため）
+  if (tp) enterTP(); else leaveTP();
+}
+// ===== 視点操作（顔 / 俯瞰では頭の向き）で画面を動かすかどうか =====
+let viewCtl = true;
+function setViewCtl(v){
+  viewCtl = v; const t = v ? 'ON' : 'OFF';
+  $('aimBtn').textContent = '🎯 視点操作 ' + t; $('mAim').textContent = '🎯 視点操作: ' + t;
+  $('aimBtn').classList.toggle('off', !v); $('mAim').classList.toggle('off', !v);
+  mouse.nx = mouse.ny = 0;
+  if (v){ faceRecenter(); poseRecenter(); }
+}
+
+// ===== HUD（3Dで描くのでVRモードでも見える）=====
+const hud = new THREE.Group(); camera.add(hud);
+function bar(w, y, hex){
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(w + .06, .2), new THREE.MeshBasicMaterial({ color:0, transparent:true, opacity:.6, depthTest:false }));
+  back.position.set(0, y, -3); back.renderOrder = 10;
+  const g = new THREE.PlaneGeometry(w, .14); g.translate(w/2, 0, 0);
+  const fill = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color:hex, depthTest:false })); fill.position.set(-w/2, y, -3); fill.renderOrder = 11;
+  hud.add(back, fill); return fill;
+}
+const bossBar = bar(3.4, 1.55, 0xff4d5e), pBar = bar(2.4, -1.55, 0x5ee08a), parBar = bar(1.0, -1.78, 0xffd35a);
+const nameS = mkSprite('GIANT SLIME', '#ffffff', .4); nameS.position.set(0, 1.85, -3); hud.add(nameS);
+hud.visible = false;
+const msg = new THREE.Sprite(new THREE.SpriteMaterial({ transparent:true, depthTest:false }));
+msg.position.z = -4; msg.renderOrder = 30; camera.add(msg);
+// ===== 照準（顔操作時に表示。ray.setFromCamera と同じNDC位置に置く）=====
+const reticle = new THREE.Sprite(new THREE.SpriteMaterial({ transparent:true, depthTest:false, map:canvasTex(128, 128, (x, w, h) => {
+  const segs = [[64,14,64,34],[64,94,64,114],[14,64,34,64],[94,64,114,64]];
+  for (const [col, lw] of [['#000a', 10], ['#7ae7ff', 5]]){
+    x.strokeStyle = col; x.lineWidth = lw; x.beginPath(); x.arc(64, 64, 30, 0, 7); x.stroke();
+    x.beginPath(); for (const [a, b, c, d] of segs){ x.moveTo(a, b); x.lineTo(c, d); } x.stroke();
+  }
+  x.fillStyle = '#7ae7ff'; x.beginPath(); x.arc(64, 64, 4, 0, 7); x.fill();
+}) }));
+reticle.renderOrder = 35; reticle.visible = false; camera.add(reticle);
+function setMsg(L){
+  if (!L){ msg.visible = false; return; }
+  const t = canvasTex(1024, 512, (x, w, h) => {
+    x.fillStyle = 'rgba(0,0,0,.62)'; x.fillRect(0, 0, w, h); x.strokeStyle = '#ffd35a'; x.lineWidth = 4; x.strokeRect(8, 8, w-16, h-16);
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    let y = h/2 - L.reduce((a, l) => a + l[2]*1.5, 0)/2;
+    for (const [s, c, z] of L){ y += z*.75; x.font = `bold ${z}px ${FONT}`; x.fillStyle = c; x.fillText(s, w/2, y); y += z*.75; }
+  });
+  if (msg.material.map) msg.material.map.dispose();
+  msg.material.map = t; msg.material.needsUpdate = true; msg.visible = true;
+}
+
+// ===== Webカメラ =====
+let camTex = null, camMirror = true, camStream = null;
+const $ = id => document.getElementById(id), camSel = $('camSel'), camStat = $('camStat'), faceSel = $('faceSel');
+// ===== カメラ一覧と自動割り当て（内蔵=フロント/顔、USB=バック/背景）=====
+let camList = [];
+const isBuiltin = l => /integrated|built-?in|内蔵|facetime|user[- ]?facing|front|フロント/i.test(l || '');
+const isExt = l => /usb|logi|c9\d\d|c270|brio|external|rear|back|environment|world[- ]?facing|バック/i.test(l || '');
+const camName = id => { const d = camList.find(d => d.deviceId === id); return d ? (d.label || 'カメラ') : '自動'; };
+function autoIds(){
+  const L = camList.filter(d => d.deviceId); if (!L.length) return {};
+  const f = L.find(d => isBuiltin(d.label) && !isExt(d.label)) || L.find(d => !isExt(d.label)) || L[0];
+  const b = L.find(d => d !== f && isExt(d.label)) || L.find(d => d !== f) || null;
+  return { front: f.deviceId, back: b ? b.deviceId : null };
+}
+const frontId = () => faceSel.value || autoIds().front || null;
+const backId = () => camSel.value || autoIds().back || null;
+async function ensureCamPerm(){   // 一度許可を取らないとカメラ名・IDが取れない
+  if (camList.some(d => d.label) || camStream || face.stream || !navigator.mediaDevices) return;
+  try { const s = await navigator.mediaDevices.getUserMedia({ video:true, audio:false }); s.getTracks().forEach(t => t.stop()); } catch (e){}
+}
+async function listCams(){
+  try {
+    camList = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+    const a = autoIds(), fill = (sel, autoTxt) => {
+      const cur = sel.value; sel.innerHTML = '';
+      const o0 = document.createElement('option'); o0.value = ''; o0.textContent = autoTxt; sel.appendChild(o0);
+      camList.forEach((d, i) => { if (!d.deviceId) return; const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || ('カメラ ' + (i+1)); sel.appendChild(o); });
+      if (cur && camList.some(d => d.deviceId === cur)) sel.value = cur;
+    };
+    fill(faceSel, '自動: ' + (a.front ? camName(a.front) : '内蔵カメラ'));
+    fill(camSel, '自動: ' + (a.back ? camName(a.back) : (camList.length < 2 ? '（1台のみ→フロントと共用）' : 'USBカメラ')));
+    const same = frontId() && frontId() === backId();
+    camStat.textContent = !camList.length ? 'カメラが見つかりません'
+      : `${camList.length}台検出 / フロント: ${camName(frontId())} / バック: ${camName(backId())}` + (same ? '　⚠ 同じカメラです' : '');
+  } catch (e){ camStat.textContent = '一覧を取得できません'; }
+}
+async function openCam(id){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ camStat.textContent = 'HTTPS か localhost で開いてください'; return false; }
+  if (!id){ await ensureCamPerm(); await listCams(); id = backId(); }
+  if (camStream) camStream.getTracks().forEach(t => t.stop());
+  camStream = null;
+  const sz = { width:{ ideal:Q.bgW }, height:{ ideal:Q.bgH } };
+  const tries = id ? [{ video:{ deviceId:{ exact:id }, ...sz }, audio:false }, { video:{ deviceId:{ exact:id } }, audio:false }] : [{ video:{ facingMode:'environment', ...sz }, audio:false }, { video:sz, audio:false }, { video:true, audio:false }];
+  let err;
+  for (const c of tries){ try { camStream = await navigator.mediaDevices.getUserMedia(c); break; } catch (e){ err = e; } }
+  if (!camStream){ camStat.textContent = '起動失敗: ' + (err && err.name) + '（他のアプリが使用中、または許可なし）'; popCam('カメラ起動失敗', '#ff4d5e', .6, 3); return false; }
+  const tr = camStream.getVideoTracks()[0], st = tr.getSettings();
+  $('mir').checked = camMirror = st.facingMode !== 'environment';
+  vid.srcObject = camStream;
+  try { await vid.play(); } catch (e){}
+  if (!camTex){ camTex = new THREE.VideoTexture(vid); camTex.minFilter = THREE.LinearFilter; }
+  applyBg();
+  if (typeof bgStatus === 'function') bgStatus();
+  await listCams();
+  return true;
+}
+$('camBtn').onclick = () => { const p = $('camPanel'); p.hidden = !p.hidden; if (!p.hidden) listCams(); };
+$('camApply').onclick = async () => { if (bgMode === 'cam' || tp) await openCam(camSel.value || null); if (face.on && !tp) await startFace(); listCams(); };
+camSel.onchange = () => { listCams(); if (bgMode === 'cam' || tp) openCam(camSel.value || null); };
+$('camRefresh').onclick = async () => { camStat.textContent = '検出中…'; await ensureCamPerm(); await listCams(); };
+$('mir').onchange = e => camMirror = e.target.checked;
+for (const ev of ['mousedown', 'keydown', 'keyup']) for (const el of ['ui', 'menu']) $(el).addEventListener(ev, e => e.stopPropagation());
+if (navigator.mediaDevices) navigator.mediaDevices.addEventListener('devicechange', listCams);
+// ===== 背景ソース（ライブカメラ / 動画 / 画像 / なし）=====
+// 既定: バックカメラ(vid) = 背景、フロントカメラ(fv) = 顔・手の認識
+let bgMode = 'cam', bgTP = false, bgFlip = false, bgURL = null, bgVidTex = null, bgImgTex = null;
+const bgv = $('bgv'), bgImg = new Image();
+const bgEl = () => bgMode === 'cam' ? vid : bgMode === 'video' ? bgv : bgMode === 'image' ? bgImg : null;
+const bgTex = () => bgMode === 'cam' ? camTex : bgMode === 'video' ? bgVidTex : bgMode === 'image' ? bgImgTex : null;
+const bgSize = el => el ? [el.videoWidth || el.naturalWidth || 0, el.videoHeight || el.naturalHeight || 0] : [0, 0];
+function applyBg(){
+  scene.background = qrARActive() ? camTex : (tp && !bgTP) ? BG : (bgTex() || BG);
+  if (bgMode === 'video'){ if (bgv.src && bgv.paused) bgv.play().catch(() => {}); }
+  else if (!bgv.paused) bgv.pause();
+}
+function bgStatus(){
+  $('bgStat').textContent = bgMode === 'cam' ? (camStream ? 'カメラ映像を背景に表示中' : 'ゲーム開始時にバックカメラを開きます')
+    : bgMode === 'none' ? '背景なし' : (bgTex() ? '背景に表示中' : (bgMode === 'video' ? '動画' : '画像') + 'ファイルを選んでください');
+}
+$('bgMode').onchange = e => {
+  bgMode = e.target.value;
+  const isFile = bgMode === 'video' || bgMode === 'image';
+  $('bgFileRow').style.display = isFile ? '' : 'none'; $('bgCamRow').style.display = bgMode === 'cam' ? '' : 'none';
+  if (isFile){ $('bgFile').accept = bgMode + '/*'; $('bgFileLbl').textContent = bgMode === 'video' ? '動画ファイル' : '画像ファイル'; }
+  if (bgMode === 'cam' && !camStream) openCam(camSel.value || null);
+  if (bgMode !== 'cam' && camStream && !tp && face.src !== vid){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }   // 背景に使わないならバックカメラは止めて軽くする
+  bgStatus(); applyBg();
+};
+$('bgFile').onchange = async e => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  if (bgURL) URL.revokeObjectURL(bgURL); bgURL = URL.createObjectURL(f);
+  if (f.type.startsWith('image/')){
+    bgImg.onload = () => {
+      if (bgImgTex) bgImgTex.dispose();
+      bgImgTex = new THREE.Texture(bgImg); bgImgTex.minFilter = THREE.LinearFilter; bgImgTex.needsUpdate = true;
+      if (bgMode !== 'image') $('bgMode').value = bgMode = 'image';
+      $('bgStat').textContent = '表示中: ' + f.name; applyBg();
+    };
+    bgImg.onerror = () => $('bgStat').textContent = '画像を読み込めません';
+    bgImg.src = bgURL;
+  } else {
+    bgv.src = bgURL;
+    if (!bgVidTex){ bgVidTex = new THREE.VideoTexture(bgv); bgVidTex.minFilter = THREE.LinearFilter; }
+    if (bgMode !== 'video') $('bgMode').value = bgMode = 'video';
+    try { await bgv.play(); $('bgStat').textContent = '再生中: ' + f.name; } catch (err){ $('bgStat').textContent = '再生できません: ' + (err && err.name); }
+    applyBg();
+  }
+};
+$('bgFlip').onchange = e => bgFlip = e.target.checked;
+$('bgTP').onchange = e => { bgTP = e.target.checked; applyBg(); };
+function cover(a){
+  const ar = qrARActive(), t = ar ? camTex : bgTex(), [vw, vh] = bgSize(ar ? vid : bgEl()); if (!t || !vw || !vh) return;
+  const mir = ar ? false : (bgMode === 'cam' ? camMirror : false) !== bgFlip;   // AR確認表示は反転しない（3Dと位置を合わせるため）
+  const va = vw/vh; let rx = 1, ry = 1; if (a > va) ry = va/a; else rx = a/va;
+  const c0 = (1 - rx)/2; t.repeat.set(mir ? -rx : rx, ry); t.offset.set(mir ? c0 + rx : c0, (1 - ry)/2);
+}
+
+// ===== 顔トラッキング（MediaPipe Face Landmarker）=====
+// 鼻先の位置を「構えた中心」からの差分にして、マウス座標(-1〜1)の代わりに使う
+const fv = $('fv');
+const face = { on:true, lm:null, loading:false, stream:null, src:null, seen:false, x:0, y:0, cx:null, cy:null, sx:0, sy:0,
+               sumx:0, sumy:0, cn:0, lastT:-1, gain:1.5, badge:'' };
+const FACE_GX = 6, FACE_GY = 9, FACE_CAL = 20, FACE_DEAD = .012;
+const faceActive = () => face.on && !!face.lm && !!face.src && face.cx !== null;
+function setBadge(t){ if (face.badge === t) return; face.badge = t; $('faceBadge').textContent = t; $('faceStat').textContent = t; }
+function faceRecenter(){ face.cx = face.cy = null; face.sumx = face.sumy = face.cn = 0; }
+async function loadFaceModel(){
+  if (face.lm || face.loading) return;
+  face.loading = true; setBadge('👤 顔認識モデル読み込み中…');
+  try {
+    const V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+    const mp = await import(V + '/vision_bundle.mjs');
+    const fs = await mp.FilesetResolver.forVisionTasks(V + '/wasm');
+    const opt = d => ({ baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task', delegate:d },
+                        runningMode:'VIDEO', numFaces:1 });
+    try { face.lm = await mp.FaceLandmarker.createFromOptions(fs, opt('GPU')); }
+    catch (e){ face.lm = await mp.FaceLandmarker.createFromOptions(fs, opt('CPU')); }
+    setBadge('👤 顔を探しています…');
+  } catch (e){ console.error(e); setBadge('👤 顔認識を読み込めません: ' + (e && e.message || e)); }
+  face.loading = false;
+}
+async function openFaceCam(){
+  if (face.stream) face.stream.getTracks().forEach(t => t.stop());
+  face.stream = null; face.src = null; faceRecenter();
+  await ensureCamPerm(); await listCams();
+  const id = frontId(), sz = { width:{ ideal:640 }, height:{ ideal:480 } };
+  const tries = id ? [{ video:{ deviceId:{ exact:id }, ...sz }, audio:false }, { video:{ facingMode:'user', ...sz }, audio:false }]
+                   : [{ video:{ facingMode:'user', ...sz }, audio:false }, { video:true, audio:false }];
+  for (const c of tries){ try { face.stream = await navigator.mediaDevices.getUserMedia(c); break; } catch (e){} }
+  if (face.stream){
+    face.fm = (face.stream.getVideoTracks()[0].getSettings().facingMode || 'user') !== 'environment'; fv.srcObject = face.stream; try { await fv.play(); } catch (e){}
+    face.src = fv;
+  } else if (camStream){ face.src = vid; setBadge('👤 顔用カメラを開けず、背景カメラで認識します'); }
+  else setBadge('👤 顔認識用カメラを開けません');
+  listCams();
+}
+async function startFace(){
+  if (!face.on || !navigator.mediaDevices) return;
+  loadFaceModel(); loadHandModel(); await openFaceCam();
+}
+function faceStep(now){
+  if (tp) return;   // 俯瞰中は全身ポーズ側で処理
+  if (!viewCtl){ setBadge('🎯 視点操作 OFF（画面固定）'); return; }
+  const v = face.src;
+  if (!face.on || !face.lm || !v || v.readyState < 2 || !v.videoWidth || v.currentTime === face.lastT) return;
+  face.lastT = v.currentTime;
+  if (now - (face.lastRun || 0) < Q.faceMs) return;
+  face.lastRun = now; mlFrame = true; const _t = performance.now();
+  let r; try { r = face.lm.detectForVideo(v, now); } catch (e){ console.error(e); return; } finally { perf.face += performance.now() - _t; }
+  const p = r.faceLandmarks && r.faceLandmarks[0]; face.pts = p || null;
+  if (!p){ face.seen = false; setBadge('👤 顔が見つかりません'); return; }
+  face.seen = true; face.x = p[1].x; face.y = p[1].y;           // 1 = 鼻先
+  if (face.cx === null){
+    face.sumx += face.x; face.sumy += face.y;
+    if (++face.cn >= FACE_CAL){ face.cx = face.sumx/face.cn; face.cy = face.sumy/face.cn; }
+    else setBadge('👤 顔を画面の中心に構えてください…');
+  }
+  if (face.cx !== null) setBadge('👤 顔認識 OK');
+}
+function faceUpdate(dt){
+  if (!faceActive() || tp || !viewCtl) return;
+  if (face.seen){
+    const dx = face.x - face.cx, dy = face.y - face.cy, f = d => Math.abs(d) < FACE_DEAD ? 0 : d - Math.sign(d)*FACE_DEAD;
+    face.tx = Math.max(-1, Math.min(1, (faceMirror() ? -1 : 1)*f(dx)*FACE_GX*face.gain));   // フロント(鏡像)は左右反転、バックはそのまま
+    face.ty = Math.max(-1, Math.min(1, -f(dy)*FACE_GY*face.gain));
+  }
+  const k = 1 - Math.exp(-dt*16);
+  face.sx += ((face.tx || 0) - face.sx)*k; face.sy += ((face.ty || 0) - face.sy)*k;
+  mouse.nx = face.sx; mouse.ny = face.sy;
+}
+const prevC = $('facePrev'), pctx = prevC.getContext('2d');
+let prevLast = 0;
+function faceDraw(){
+  const show = prevOn && (tp || face.on) && !vr && state !== undefined;
+  prevC.style.display = show ? 'block' : 'none'; if (!show) return;
+  const now = performance.now(); if (now - prevLast < Q.prevMs) return; prevLast = now;
+  if (tp){ poseDraw(); return; }
+  const w = prevC.width, h = prevC.height, v = face.src;
+  pctx.fillStyle = '#000'; pctx.fillRect(0, 0, w, h);
+  if (!v || v.readyState < 2 || !v.videoWidth){
+    pctx.fillStyle = '#ffd35a'; pctx.font = 'bold 18px sans-serif'; pctx.textAlign = 'center';
+    pctx.fillText(face.lm || face.loading ? 'カメラ待機中…' : '「顔認識を開始」を押すか、ゲームを開始', w/2, h/2); return;
+  }
+  pctx.save(); if (faceMirror()){ pctx.translate(w, 0); pctx.scale(-1, 1); }
+  const va = v.videoWidth/v.videoHeight, dw = va > w/h ? h*va : w, dh = va > w/h ? h : w/va;
+  pctx.drawImage(v, (w - dw)/2, (h - dh)/2, dw, dh); pctx.restore();
+  const X = x => (faceMirror() ? 1 - x : x)*w, Y = y => y*h;
+  if (face.seen && face.pts){
+    pctx.fillStyle = '#5ee08a'; for (const q of face.pts) pctx.fillRect(X(q.x) - 1, Y(q.y) - 1, 2, 2);
+    pctx.fillStyle = '#ff4d5e'; pctx.beginPath(); pctx.arc(X(face.x), Y(face.y), 5, 0, 7); pctx.fill();   // 鼻先
+  }
+  if (face.cx !== null){   // 構えた中心
+    pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 1.5; const cx = X(face.cx), cy = Y(face.cy);
+    pctx.beginPath(); pctx.moveTo(cx - 12, cy); pctx.lineTo(cx + 12, cy); pctx.moveTo(cx, cy - 12); pctx.lineTo(cx, cy + 12); pctx.stroke();
+    if (face.seen){ pctx.strokeStyle = '#ff4d5e'; pctx.beginPath(); pctx.moveTo(cx, cy); pctx.lineTo(X(face.x), Y(face.y)); pctx.stroke(); }
+  }
+  if (hand.palm && hand.prog > 0){ pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 4; pctx.beginPath(); pctx.arc(X(hand.palm.x), Y(hand.palm.y), 22, -Math.PI/2, -Math.PI/2 + hand.prog*Math.PI*2); pctx.stroke(); }
+  pctx.font = 'bold 16px sans-serif'; pctx.textAlign = 'left';
+  pctx.fillStyle = !face.lm ? '#ffd35a' : face.seen ? '#5ee08a' : '#ff4d5e';
+  pctx.fillText(!face.lm ? 'モデル読み込み中…' : face.seen ? (face.cx === null ? '顔を中心に構えて…' : '● 追跡中') : '× 顔が見つかりません', 8, 22);
+}
+$('faceOn').onchange = e => {
+  face.on = e.target.checked;
+  if (face.on){ if (state !== 'title' || camStream) startFace(); }
+  else { if (face.stream) face.stream.getTracks().forEach(t => t.stop()); face.stream = face.src = null; faceRecenter(); setBadge(''); }
+};
+$('faceGain').oninput = e => face.gain = +e.target.value;
+faceSel.onchange = () => { listCams(); if (face.on && !tp) openFaceCam(); };
+$('faceCal').onclick = () => { faceRecenter(); poseRecenter(); };
+$('faceStart').onclick = () => { if (!face.on){ $('faceOn').checked = face.on = true; } startFace(); };
+let prevOn = true; $('facePrevOn').onchange = e => prevOn = e.target.checked;
+
+// ===== ピース(✌)を約0.8秒キープするとメニューを開く =====
+const hand = { lm:null, loading:false, trail:[], last:-1, cool:0, pt0:null, px:0, py:0, prog:0, lastOk:-1e9, needRelease:false, palm:null };
+// HOLD = 手のひらを見せ続ける時間(ms) / MOVE = これ以上動いたら数え直し(映像幅比) / GRACE = 認識が途切れても許す時間(ms)
+const PALM = { HOLD:800, MOVE:.08, GRACE:250 };
+async function loadHandModel(){
+  if (hand.lm || hand.loading) return; hand.loading = true;
+  try {
+    const V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14', mp = await import(V + '/vision_bundle.mjs'), fs = await mp.FilesetResolver.forVisionTasks(V + '/wasm');
+    const o = d => ({ baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate:d }, runningMode:'VIDEO', numHands:1 });
+    try { hand.lm = await mp.HandLandmarker.createFromOptions(fs, o('GPU')); } catch (e){ hand.lm = await mp.HandLandmarker.createFromOptions(fs, o('CPU')); }
+  } catch (e){ console.error(e); }
+  hand.loading = false;
+}
+function handStep(now){
+  const hms = menuOn ? Math.min(Q.handMs, 66) : Q.handMs;   // メニュー中は指カーソルなので速めに
+  const v = tp ? vid : face.src; if (!hand.lm || !v || v.readyState < 2 || !v.videoWidth || now - hand.last < hms) return;
+  if (mlFrame && !menuOn) return;   // 同じフレームで顔と手を両方走らせない（次のフレームに回す）
+  hand.last = now; const _t = performance.now();
+  let r; try { r = hand.lm.detectForVideo(v, now); } catch (e){ return; } finally { perf.hand += performance.now() - _t; }
+  const p = r.landmarks && r.landmarks[0]; if (!p){ palmLost(now); return; }
+  if (menuOn){   // メニュー中は人差し指の先(8)をカーソルに使う
+    hand.needRelease = true; hand.pt0 = null; hand.prog = 0; hc.seen = now;
+    const cl = v => Math.max(0, Math.min(1, v)), x = (tp ? pose.cam === 'front' : faceMirror()) ? 1 - p[8].x : p[8].x;
+    hc.tx = cl((x - HC.X0)/(1 - HC.X0*2)); hc.ty = cl((p[8].y - HC.Y0)/(1 - HC.Y0*2)); return;
+  }
+  const d = (a, b) => Math.hypot(p[a].x - p[b].x, p[a].y - p[b].y);
+  // ピース(✌): 人差し指と中指だけ伸ばし、薬指・小指は曲げる。2本とも指先が付け根より上(指を立てている)
+  const open = d(8, 0) > d(6, 0)*1.15 && d(12, 0) > d(10, 0)*1.15 && d(16, 0) < d(14, 0) && d(20, 0) < d(18, 0)
+            && p[8].y < p[5].y && p[12].y < p[9].y;
+  if (!open){ palmLost(now); return; }
+  hand.lastOk = now; if (hand.needRelease) return;   // 一度開いた後は、ピースをやめるまで再判定しない
+  const cx = p[9].x, cy = p[9].y; hand.palm = { x:cx, y:cy };   // 9 = 中指の付け根
+  if (hand.pt0 == null || Math.hypot(cx - hand.px, cy - hand.py) > PALM.MOVE){ hand.pt0 = now; hand.px = cx; hand.py = cy; }   // 大きく動いたら数え直し
+  hand.prog = Math.min(1, (now - hand.pt0)/PALM.HOLD);
+  if (hand.prog >= 1){ hand.pt0 = null; hand.prog = 0; hand.needRelease = true; toggleMenu(true); }
+}
+function palmLost(now){   // 一瞬の認識漏れでは途切れないよう少し猶予を持たせる
+  if (now - hand.lastOk < PALM.GRACE) return;
+  hand.pt0 = null; hand.prog = 0; hand.needRelease = false; hand.palm = null;
+}
+function palmUI(now){
+  const el = $('palmRing'), on = !menuOn && hand.prog > .08 && now - hand.lastOk < 300;
+  el.classList.toggle('on', on); if (on) el.style.setProperty('--p', (hand.prog*360).toFixed(0) + 'deg');
+}
+// ===== 俯瞰モード：VRMアバター + 全身ポーズ推定（MediaPipe Pose Landmarker）=====
+// カメラは1台だけ（「使うカメラ」= vid。既定はバックカメラ）。それでプレイヤーの全身を撮り、VRMの骨を回す。
+// アバターはモンスター(-Z)の方を向き、こちらには背中を見せる。
+// プレイヤーを「正面から」撮ると骨格は手前を向いているので、Y軸で180°回して後ろ姿として当てはめる
+// （左右も正しく入れ替わるので、右手を上げると画面右側＝アバターの右手が上がる）。
+const pose = { lm:null, loading:false, on:true, move:true, cam:'front', last:-1, seen:false, n:null, w:null,
+               cn:0, sx:0, sr:0, sp:0, cx:null, cr:0, cp:0, tx:0, ax:0, ay:0, sax:0, say:0 };
+const POSE_CAL = 15, POSE_MOVE_K = 18, POSE_AIM_G = 2.2, POSE_DEAD = .04;
+const poseReady = () => tp && pose.on && pose.seen && pose.cx !== null;
+const poseAimActive = () => poseReady() && pose.cam === 'front';   // 背後からだと顔が映らないので頭での照準は使わない
+function poseRecenter(){ pose.cx = null; pose.cn = pose.sx = pose.sr = pose.sp = 0; }
+async function loadPoseModel(){
+  if (pose.lm || pose.loading) return; pose.loading = true; setBadge('🧍 全身認識モデル読み込み中…');
+  try {
+    const V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14', mp = await import(V + '/vision_bundle.mjs'), fs = await mp.FilesetResolver.forVisionTasks(V + '/wasm');
+    const o = d => ({ baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task', delegate:d }, runningMode:'VIDEO', numPoses:1 });
+    try { pose.lm = await mp.PoseLandmarker.createFromOptions(fs, o('GPU')); } catch (e){ pose.lm = await mp.PoseLandmarker.createFromOptions(fs, o('CPU')); }
+    setBadge('🧍 全身を探しています…');
+  } catch (e){ console.error(e); setBadge('🧍 全身認識を読み込めません: ' + (e && e.message || e)); }
+  pose.loading = false;
+}
+async function enterTP(){
+  // 1台で済ませるため、顔用カメラは止める（スマホは前後カメラを同時に開けないことが多い）
+  if (face.stream){ face.stream.getTracks().forEach(t => t.stop()); face.stream = null; }
+  face.src = null; faceRecenter(); poseRecenter();
+  loadPoseModel(); loadHandModel();
+  if (!camStream) await openCam(camSel.value || null);
+  if (!vrm) restoreVRM();
+}
+function leaveTP(){ pose.seen = false; if (face.on && !face.stream) startFace(); }
+function poseStep(now){
+  if (!tp || !pose.on || !pose.lm || !camStream){ pose.seen = false; return; }
+  const v = vid; if (v.readyState < 2 || !v.videoWidth || v.currentTime === pose.last || now - (pose.lastRun || 0) < Q.poseMs) return; pose.last = v.currentTime; pose.lastRun = now; mlFrame = true;
+  const _t = performance.now();
+  let r; try { r = pose.lm.detectForVideo(v, now); } catch (e){ console.error(e); return; } finally { perf.pose += performance.now() - _t; }
+  const n = r.landmarks && r.landmarks[0], w = r.worldLandmarks && r.worldLandmarks[0];
+  if (!n || !w){ pose.seen = false; setBadge('🧍 全身が見つかりません（カメラから離れて全身を映す）'); return; }
+  pose.seen = true; pose.n = n; pose.w = w; qrFeet(n);
+  const hx = (n[23].x + n[24].x)/2, ex = (n[7].x + n[8].x)/2, ey = (n[7].y + n[8].y)/2, ed = Math.max(.01, Math.hypot(n[7].x - n[8].x, n[7].y - n[8].y));
+  const hr = (n[0].x - ex)/ed, hp = (n[0].y - ey)/ed;   // 耳の中点から見た鼻の位置 = 頭の向き
+  if (pose.cx === null){
+    pose.sx += hx; pose.sr += hr; pose.sp += hp;
+    if (++pose.cn < POSE_CAL){ setBadge('🧍 まっすぐ立って画面の方を向いてください…'); return; }
+    pose.cx = pose.sx/pose.cn; pose.cr = pose.sr/pose.cn; pose.cp = pose.sp/pose.cn;
+  }
+  const sg = pose.cam === 'front' ? -1 : 1, dz = d => Math.abs(d) < POSE_DEAD ? 0 : d - Math.sign(d)*POSE_DEAD, cl = v => Math.max(-1, Math.min(1, v));
+  pose.tx = Math.max(-3.2, Math.min(3.2, sg*(hx - pose.cx)*POSE_MOVE_K));   // 映像は左右反転していないので、正面撮りなら符号を逆に
+  pose.ax = cl(sg*dz(hr - pose.cr)*POSE_AIM_G*face.gain); pose.ay = cl(-dz(hp - pose.cp)*POSE_AIM_G*1.4*face.gain);
+  setBadge('🧍 全身認識 OK' + (pose.cam === 'front' ? '（頭の向きで視点）' : ''));
+}
+function poseAimUpdate(dt){
+  if (!viewCtl || !poseAimActive()) return;
+  const k = 1 - Math.exp(-dt*12);
+  pose.sax += (pose.ax - pose.sax)*k; pose.say += (pose.ay - pose.say)*k;
+  mouse.nx = pose.sax; mouse.ny = pose.say;
+}
+const POSE_LINKS = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+function poseDraw(){
+  const w = prevC.width, h = prevC.height, v = vid;
+  pctx.fillStyle = '#000'; pctx.fillRect(0, 0, w, h);
+  if (!camStream || v.readyState < 2 || !v.videoWidth){
+    pctx.fillStyle = '#ffd35a'; pctx.font = 'bold 16px sans-serif'; pctx.textAlign = 'center'; pctx.fillText('カメラ待機中…', w/2, h/2); return;
+  }
+  const mir = pose.cam === 'front', f = Math.min(w/v.videoWidth, h/v.videoHeight), dw = v.videoWidth*f, dh = v.videoHeight*f, ox = (w - dw)/2, oy = (h - dh)/2;
+  pctx.save(); if (mir){ pctx.translate(w, 0); pctx.scale(-1, 1); } pctx.drawImage(v, ox, oy, dw, dh); pctx.restore();
+  const X = x => { const p = ox + x*dw; return mir ? w - p : p; }, Y = y => oy + y*dh;
+  if (pose.seen && pose.n){
+    const n = pose.n; pctx.strokeStyle = '#5ee08a'; pctx.lineWidth = 3; pctx.beginPath();
+    for (const [a, b] of POSE_LINKS){ pctx.moveTo(X(n[a].x), Y(n[a].y)); pctx.lineTo(X(n[b].x), Y(n[b].y)); } pctx.stroke();
+    pctx.fillStyle = '#ff4d5e'; pctx.beginPath(); pctx.arc(X(n[0].x), Y(n[0].y), 4, 0, 7); pctx.fill();
+  }
+  if (pose.cx !== null){ pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 1.5; pctx.setLineDash([4, 4]); pctx.beginPath(); pctx.moveTo(X(pose.cx), oy); pctx.lineTo(X(pose.cx), oy + dh); pctx.stroke(); pctx.setLineDash([]); }
+  pctx.font = 'bold 15px sans-serif'; pctx.textAlign = 'left';
+  pctx.fillStyle = !pose.lm ? '#ffd35a' : pose.seen ? '#5ee08a' : '#ff4d5e';
+  pctx.fillText(!pose.lm ? 'モデル読み込み中…' : pose.seen ? (pose.cx === null ? 'まっすぐ立って…' : '● 全身追跡中') : '× 全身が見つかりません', 8, 20);
+  qrDrawPrev(X, Y);
+}
+
+// ===== QR配置（俯瞰モード）=====
+// 床に置いたQRを一度だけ読み取り、床の位置・傾きを測ってボスの立ち位置にする。
+// 座標の呼び方: F = 床座標（QRの中心が原点, +Yが上, メートル）/ G = ゲーム座標（プレイヤーの立ち位置が原点, -Zがボス方向）
+const qr = { state:'off', ref:'auto', refId:null, size:.10, hfov:65, ar:false,
+  samples:[], busy:false, tile:0, worker:null, mode:'init', found:new Map(), foundAt:new Map(),
+  camF:new THREE.Matrix4(), FfromCam:new THREE.Matrix4(), FfromG:new THREE.Matrix4(), GfromF:new THREE.Matrix4(), GfromCam:new THREE.Matrix4(),
+  origin:null, originS:[], originT:0, dist:0, feetF:null, feetX:0, feetSeen:-1e9, msg:'' };
+const qrDet = document.createElement('canvas'), qrCtx = qrDet.getContext('2d', { willReadFrequently:true });
+const QR_JSQR = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js', QR_LOST = 600;
+function qrSay(t, popup, quiet){ if (qr.msg === t) return; qr.msg = t; $('qrStat').textContent = t; if (popup) popCam(popup, '#ffd35a', .6, 2); if (!quiet) console.log('[QR] ' + t); }
+
+// --- 4隅 → 姿勢（ホモグラフィ分解）---
+function qrSolve(A, b){
+  const n = b.length;
+  for (let i = 0; i < n; i++){
+    let m = i; for (let k = i+1; k < n; k++) if (Math.abs(A[k][i]) > Math.abs(A[m][i])) m = k;
+    [A[i], A[m]] = [A[m], A[i]]; [b[i], b[m]] = [b[m], b[i]];
+    const p = A[i][i]; if (Math.abs(p) < 1e-12) return null;
+    for (let k = i+1; k < n; k++){ const f = A[k][i]/p; for (let j = i; j < n; j++) A[k][j] -= f*A[i][j]; b[k] -= f*b[i]; }
+  }
+  const x = new Array(n);
+  for (let i = n-1; i >= 0; i--){ let s = b[i]; for (let j = i+1; j < n; j++) s -= A[i][j]*x[j]; x[i] = s/A[i][i]; }
+  return x;
+}
+function qrPose(c, w, h, f, retry = true){   // 戻り値: QR面（1辺=1）→ カメラ座標(three.js) の行列
+  const M = [[-.5,-.5], [.5,-.5], [.5,.5], [-.5,.5]], A = [], b = [];
+  for (let i = 0; i < 4; i++){ const [x, y] = M[i], u = c[i].x, v = c[i].y; A.push([x, y, 1, 0, 0, 0, -u*x, -u*y]); b.push(u); A.push([0, 0, 0, x, y, 1, -v*x, -v*y]); b.push(v); }
+  const s = qrSolve(A, b); if (!s) return null; const H = [...s, 1];
+  const L = v => Math.hypot(v[0], v[1], v[2]), N = v => { const m = L(v); return v.map(x => x/m); };
+  const X = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+  const cx = w/2, cy = h/2, k = (a, b, cc) => [(a - cx*cc)/f, (b - cy*cc)/f, cc];
+  const k1 = k(H[0], H[3], H[6]), k2 = k(H[1], H[4], H[7]), k3 = k(H[2], H[5], H[8]);
+  let l = 2/(L(k1) + L(k2)); if (k3[2]*l < 0) l = -l;
+  let r1 = N(k1), r2 = N(k2); const t = k3.map(v => v*l);
+  const bis = N(r1.map((v, i) => v + r2[i])), perp = N(X(N(X(r1, r2)), bis)), q = Math.SQRT1_2;
+  r1 = bis.map((v, i) => q*(v - perp[i])); r2 = bis.map((v, i) => q*(v + perp[i]));
+  const r3 = X(r1, r2);
+  if (r3[0]*t[0] + r3[1]*t[1] + r3[2]*t[2] < 0 && retry) return qrPose([c[0], c[3], c[2], c[1]], w, h, f, false);
+  return new THREE.Matrix4().set(r1[0], r2[0], r3[0], t[0], -r1[1], -r2[1], -r3[1], -t[1], -r1[2], -r2[2], -r3[2], -t[2], 0, 0, 0, 1);
+}
+function qrMean(list){
+  const p = new THREE.Vector3(), q0 = list[0].quat, q = new THREE.Quaternion(0, 0, 0, 0);
+  for (const s of list){ p.add(s.pos); const sg = s.quat.dot(q0) < 0 ? -1 : 1; q.x += s.quat.x*sg; q.y += s.quat.y*sg; q.z += s.quat.z*sg; q.w += s.quat.w*sg; }
+  return { pos:p.divideScalar(list.length), quat:q.normalize() };
+}
+const qrFocal = w => (w/2)/Math.tan(qr.hfov*Math.PI/360);
+
+// --- 検出エンジン（Worker。ダメならメインスレッド）---
+function qrEngine(){
+  if (qr.mode !== 'init') return;
+  qr.mode = 'loading';
+  try {
+    const code = `try{importScripts('${QR_JSQR}');postMessage({ready:true});}catch(e){postMessage({fail:String(e)});}\n` + $('qrLib').textContent
+      + `\nonmessage=e=>{const{buf,w,h,rois,tile}=e.data;postMessage({found:scanFrame(jsQR,new Uint8ClampedArray(buf),w,h,rois,tile)});};`;
+    qr.worker = new Worker(URL.createObjectURL(new Blob([code], { type:'text/javascript' })));
+    qr.worker.onmessage = e => {
+      if (e.data.ready){ qr.mode = 'worker'; console.log('[QR] 検出エンジン(Worker) 準備完了'); return; }
+      if (e.data.fail){ console.error('[QR] Workerで jsQR を読めません: ' + e.data.fail); qrMainThread(); return; }
+      qrFound(e.data.found);
+    };
+    qr.worker.onerror = e => { e.preventDefault(); console.error('[QR] Workerエラー: ' + (e.message || '')); qrMainThread(); };
+  } catch (e){ qrMainThread(); }
+}
+function qrMainThread(){
+  if (qr.mode === 'main' || qr.mode === 'mainload') return;
+  if (qr.worker){ qr.worker.terminate(); qr.worker = null; }
+  qr.mode = 'mainload'; qr.busy = false;
+  loadScript(QR_JSQR).then(() => { qr.mode = 'main'; console.log('[QR] 検出エンジン(メイン) 準備完了'); })
+    .catch(() => { qr.mode = 'dead'; qrSay('QR検出エンジンを読み込めません（ネット接続を確認）'); });
+}
+function qrPump(now){
+  if (qr.state !== 'scan' || qr.busy || !camStream || vid.readyState < 2 || !vid.videoWidth) return;
+  if (qr.mode !== 'worker' && qr.mode !== 'main') return;
+  const vw = vid.videoWidth, vh = vid.videoHeight, ds = Math.min(1, 1280/vw);
+  if (qrDet.width !== Math.round(vw*ds)){ qrDet.width = Math.round(vw*ds); qrDet.height = Math.round(vh*ds); }
+  qrCtx.drawImage(vid, 0, 0, qrDet.width, qrDet.height);
+  const img = qrCtx.getImageData(0, 0, qrDet.width, qrDet.height);
+  const rois = [...qr.found].filter(([id]) => now - qr.foundAt.get(id) < QR_LOST).map(([, c]) => c);
+  qr.tile = (qr.tile + 1) % TILES.length; if (rois.length && qr.tile === 0) qr.tile = 1;
+  if (qr.mode === 'worker'){ qr.busy = true; qr.worker.postMessage({ buf:img.data.buffer, w:qrDet.width, h:qrDet.height, rois, tile:qr.tile }, [img.data.buffer]); }
+  else { try { qrFound(scanFrame(jsQR, img.data, qrDet.width, qrDet.height, rois, qr.tile)); } catch (e){ console.error(e); } }
+}
+function qrFound(found){
+  qr.busy = false; if (qr.state !== 'scan') return;
+  const now = performance.now();
+  for (const f of found){ if (!qr.foundAt.has(f.data) || now - qr.foundAt.get(f.data) > QR_LOST) console.log(`[QR] 「${f.data}」を認識`); qr.found.set(f.data, f.c); qr.foundAt.set(f.data, now); }
+  if (!qr.refId && found.length) qr.refId = found[0].data;
+  const f = found.find(x => x.data === qr.refId); if (!f) return;
+  const m = qrPose(f.c, qrDet.width, qrDet.height, qrFocal(qrDet.width)); if (!m) return;
+  const pos = new THREE.Vector3(), quat = new THREE.Quaternion(); m.decompose(pos, quat, new THREE.Vector3()); pos.multiplyScalar(qr.size);
+  const S = qr.samples;
+  if (S.length && now - S[S.length-1].t > QR_LOST) S.length = 0;
+  S.push({ pos, quat, t:now }); if (S.length > 15) S.shift();
+  const mp = qrMean(S), d = mp.pos.length();
+  let sp = 0, an = 0; for (const s of S){ sp = Math.max(sp, s.pos.distanceTo(mp.pos)); an = Math.max(an, 2*Math.acos(Math.min(1, Math.abs(s.quat.dot(mp.quat))))); }
+  const prog = Math.min(S.length/6, (now - S[0].t)/800, 1), stable = sp < d*.04 && an < .15;
+  qrSay(`QR「${qr.refId}」を読み取り中… ${Math.round(prog*100)}%` + (stable ? '（カメラを動かさないで）' : '（ブレています。カメラとQRを動かさないで）'), null, true);
+  if (stable && prog >= 1) qrLockFloor(mp);
+}
+
+// --- 床を固定 → 立ち位置を測る → ゲーム座標を決める ---
+function qrLockFloor(mp){
+  qr.camF.compose(mp.pos, mp.quat, new THREE.Vector3(1, 1, 1)).multiply(new THREE.Matrix4().makeRotationX(-Math.PI/2));
+  qr.FfromCam.copy(qr.camF).invert();
+  qr.state = 'origin'; qr.originS = []; qr.originT = performance.now();
+  qrSay(`床を固定（カメラから ${mp.pos.length().toFixed(2)}m）。立ち位置を測っています…まっすぐ立ってください`, '床を固定しました');
+}
+function qrFinalize(p, how){
+  const d = new THREE.Vector3(-p.x, 0, -p.z); qr.dist = d.length();
+  if (qr.dist < .3){ qrSay('立ち位置がQRに近すぎます。QRから離れて立ち、もう一度読み取ってください'); qr.state = 'off'; return; }
+  d.normalize();
+  const th = Math.atan2(-d.x, -d.z);
+  qr.origin = p.clone();
+  qr.FfromG.makeRotationY(th).setPosition(p.x, 0, p.z);
+  qr.GfromF.copy(qr.FfromG).invert();
+  qr.GfromCam.multiplyMatrices(qr.GfromF, qr.FfromCam);   // カメラ → ゲーム座標
+  HOVER = -Math.max(3, qr.dist);
+  qr.state = 'locked'; B.z = Math.min(B.z, HOVER);
+  applyBg();
+  qrSay(`配置完了（${how}）: ボスはQRの位置＝立ち位置から ${qr.dist.toFixed(2)}m 先` + (qr.dist < 3 ? '（近すぎるので3m先に置きます）' : ''), 'ボスの位置を固定しました');
+}
+// 足元（かかと）の画面上の点 → カメラからの光線 → 床との交点（F座標）
+function qrFeet(n){
+  if ((qr.state !== 'origin' && qr.state !== 'locked') || !vid.videoWidth) return;
+  const vis = i => (n[i].visibility === undefined ? 1 : n[i].visibility);
+  let a = 29, b = 30, lift = .03;
+  if (Math.min(vis(29), vis(30)) < .5){ a = 27; b = 28; lift = .08; if (Math.min(vis(27), vis(28)) < .3) return; }
+  const W_ = vid.videoWidth, H_ = vid.videoHeight, f = qrFocal(W_);
+  const u = (n[a].x + n[b].x)/2*W_, v = (n[a].y + n[b].y)/2*H_;
+  const o = new THREE.Vector3().applyMatrix4(qr.FfromCam);
+  const dir = new THREE.Vector3((u - W_/2)/f, -(v - H_/2)/f, -1).transformDirection(qr.FfromCam);
+  if (Math.abs(dir.y) < 1e-4) return;
+  const t = (lift - o.y)/dir.y; if (t <= 0 || t > 30) return;
+  const p = o.addScaledVector(dir, t); p.y = 0;
+  qr.feetF = p;
+  if (qr.state === 'origin'){ qr.originS.push(p.clone()); if (qr.originS.length >= 10){ const m = new THREE.Vector3(); qr.originS.forEach(q => m.add(q)); qrFinalize(m.divideScalar(qr.originS.length), '体の位置を測定'); } }
+  else { qr.feetX = p.clone().applyMatrix4(qr.GfromF).x; qr.feetSeen = performance.now(); }
+}
+function qrTick(now){
+  qrPump(now);
+  // 全身が映らないときは、カメラの真下を立ち位置とみなす（カメラを体の後ろに置いた場合）
+  if (qr.state === 'origin' && now - qr.originT > 2500 && qr.originS.length < 3){
+    const c = new THREE.Vector3().applyMatrix4(qr.FfromCam); c.y = 0;
+    qrFinalize(c, '全身が見えないのでカメラの真下を立ち位置に');
+  }
+}
+const qrFeetOK = () => qr.state === 'locked' && performance.now() - qr.feetSeen < 500;
+const qrARActive = () => tp && qr.ar && qr.state === 'locked' && camTex && vid.videoWidth > 0;
+function qrFov(){   // 背景の切り抜き（cover）と同じ範囲になるように縦の画角を決める
+  const vw = vid.videoWidth, vh = vid.videoHeight, f = qrFocal(vw), a = W/H;
+  const visH = a > vw/vh ? vw/a : vh;
+  return 2*Math.atan((visH/2)/f)*180/Math.PI;
+}
+function qrCamApply(){ qr.GfromCam.decompose(camera.position, camera.quaternion, new THREE.Vector3()); }
+function qrStart(){
+  if (!tp){ qrSay('先に俯瞰モード（👁 ボタン）にしてください'); return; }
+  if (!camStream){ qrSay('カメラが開いていません'); return; }
+  qrEngine();
+  qr.state = 'scan'; qr.samples = []; qr.refId = qr.ref === 'auto' ? null : qr.ref; qr.found.clear(); qr.foundAt.clear();
+  HOVER = -8.5; applyBg();
+  qrSay('床に置いたQRをカメラに映してください');
+}
+function qrReset(){ qr.state = 'off'; HOVER = -8.5; applyBg(); qrSay('QR配置をリセットしました（元の位置に戻ります）'); }
+// 認識プレビューにQRと立ち位置を重ねる（X, Y は 0〜1 の画面座標 → プレビュー座標）
+function qrDrawPrev(X, Y){
+  if (qr.state === 'off') return;
+  const now = performance.now();
+  pctx.lineWidth = 2;
+  if (qr.state === 'scan') for (const [id, c] of qr.found){
+    if (now - qr.foundAt.get(id) > QR_LOST) continue;
+    pctx.strokeStyle = id === qr.refId ? '#ffd35a' : '#7ae7ff'; pctx.beginPath();
+    c.forEach((p, i) => { const x = X(p.x/qrDet.width), y = Y(p.y/qrDet.height); i ? pctx.lineTo(x, y) : pctx.moveTo(x, y); }); pctx.closePath(); pctx.stroke();
+  }
+  if (qr.state !== 'locked' && qr.state !== 'origin') return;
+  const vw = vid.videoWidth, vh = vid.videoHeight, f = qrFocal(vw);
+  const proj = p => { const c = p.clone().applyMatrix4(qr.camF); if (c.z > -.05) return null; return [X(.5 + f*c.x/-c.z/vw), Y(.5 - f*c.y/-c.z/vh)]; };
+  const dot = (p, col, r, label) => { const s = proj(p); if (!s) return; pctx.fillStyle = col; pctx.beginPath(); pctx.arc(s[0], s[1], r, 0, 7); pctx.fill(); if (label){ pctx.font = 'bold 11px sans-serif'; pctx.fillText(label, s[0] + 6, s[1] - 4); } };
+  dot(new THREE.Vector3(), '#5fe07a', 6, 'ボス');
+  if (qr.origin) dot(qr.origin, '#ffd35a', 5, '立ち位置');
+  if (qr.feetF && now - qr.feetSeen < 500) dot(qr.feetF, '#ff4d5e', 4);
+}
+$('qrCal').onclick = qrStart;
+$('qrReset').onclick = qrReset;
+$('qrRef').onchange = e => qr.ref = e.target.value;
+$('qrSize').oninput = e => { qr.size = +e.target.value/100; $('qrSizeV').textContent = (+e.target.value).toFixed(1); };
+$('qrFovIn').oninput = e => { qr.hfov = +e.target.value; $('qrFovV').textContent = qr.hfov; };
+$('qrAR').onchange = e => { qr.ar = e.target.checked; applyBg(); };
+
+// ----- VRM 読み込み（three-vrm は使わず GLTFLoader + VRMの骨情報だけ読む。VRM0.x / 1.0 両対応）-----
+let vrm = null;
+const BN = ['hips','spine','chest','upperChest','neck','head','leftUpperArm','leftLowerArm','leftHand','rightUpperArm','rightLowerArm','rightHand',
+            'leftUpperLeg','leftLowerLeg','leftFoot','rightUpperLeg','rightLowerLeg','rightFoot'];
+const LIMB = { leftUpperArm:'leftLowerArm', leftLowerArm:'leftHand', rightUpperArm:'rightLowerArm', rightLowerArm:'rightHand',
+               leftUpperLeg:'leftLowerLeg', leftLowerLeg:'leftFoot', rightUpperLeg:'rightLowerLeg', rightLowerLeg:'rightFoot' };
+const vrmStat = t => $('vrmStat').textContent = t;
+function loadScript(src){ return new Promise((res, rej) => { const e = document.createElement('script'); e.src = src; e.onload = res; e.onerror = () => rej(new Error('読み込み失敗: ' + src)); document.head.appendChild(e); }); }
+let gltfLib = null;
+const needGLTF = () => gltfLib || (gltfLib = THREE.GLTFLoader ? Promise.resolve() : loadScript('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js'));
+function avQuat(o, out = new THREE.Quaternion()){ out.identity(); for (; o && o !== av; o = o.parent) out.premultiply(o.quaternion); return out; }   // av から見た向き
+function avPos(o){ const v = o.getWorldPosition(new THREE.Vector3()); return av.worldToLocal(v); }
+async function loadVRM(buf, name, save){
+  vrmStat('⏳ 読み込み中…');
+  try {
+    await needGLTF();
+    const gltf = await new Promise((res, rej) => new THREE.GLTFLoader().parse(buf, '', res, rej));
+    const ext = gltf.parser.json.extensions || {}, map = {};
+    if (ext.VRMC_vrm) for (const [k, b] of Object.entries(ext.VRMC_vrm.humanoid.humanBones)) map[k] = b.node;
+    else if (ext.VRM) for (const b of ext.VRM.humanoid.humanBones) map[b.bone] = b.node;
+    else throw new Error('VRMの骨情報がありません（VRM形式ではない?）');
+    const bones = {};
+    for (const k of BN) if (map[k] !== undefined) bones[k] = await gltf.parser.getDependency('node', map[k]);
+    if (!bones.hips || !bones.head || !bones.leftUpperArm || !bones.rightUpperArm) throw new Error('必要な骨（hips/head/腕）が見つかりません');
+    if (vrm){ holder.remove(vrm.root); vrm = null; }
+    const root = gltf.scene;
+    root.traverse(o => {
+      if (!o.isMesh) return; o.frustumCulled = false;
+      for (const m of [].concat(o.material)){
+        // このゲームはリニア出力なので、テクスチャ色をそのまま出す（暗くならないように）
+        for (const k of ['map', 'emissiveMap']) if (m[k]) m[k].encoding = THREE.LinearEncoding;
+        if (m.isMeshStandardMaterial){ m.metalness = 0; m.roughness = Math.max(m.roughness, .8); }
+        m.needsUpdate = true;
+      }
+    });
+    av.rotation.set(0, 0, 0); holder.rotation.set(0, 0, 0); holder.scale.setScalar(1); holder.add(root);
+    av.updateMatrixWorld(true);
+    if (avPos(bones.rightUpperArm).x < avPos(bones.leftUpperArm).x) holder.rotation.y = Math.PI;   // 右手が+X = モンスター(-Z)向き＝背中がこちら
+    av.updateMatrixWorld(true);
+    const hh = avPos(bones.head).y; if (hh < 1 || hh > 2) holder.scale.setScalar(1.45/hh);   // 極端に大きい/小さいモデルだけ身長を合わせる
+    av.updateMatrixWorld(true);
+    const rest = {}, dir = {};
+    for (const k in bones) rest[k] = { q:bones[k].quaternion.clone(), aq:avQuat(bones[k]) };
+    for (const [a, b] of Object.entries(LIMB)) if (bones[a] && bones[b]) dir[a] = avPos(bones[b]).sub(avPos(bones[a])).normalize();
+    vrm = { root, bones, rest, dir, name }; prim.visible = false;
+    if (save) idbPut({ buf, name });
+    vrmStat('✔ ' + name + '（' + (ext.VRMC_vrm ? 'VRM 1.0' : 'VRM 0.x') + '）');
+  } catch (e){ console.error(e); vrmStat('✖ ' + (e && e.message || e)); }
+}
+// 前回読み込んだVRMをブラウザ内(IndexedDB)に保存し、ページを開き直しても使えるようにする
+function idb(){ return new Promise((res, rej) => { const r = indexedDB.open('cw_vrm', 1); r.onupgradeneeded = () => r.result.createObjectStore('f'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function idbPut(v){ try { (await idb()).transaction('f', 'readwrite').objectStore('f').put(v, 'vrm'); } catch (e){} }
+async function idbGet(){ try { const db = await idb(); return await new Promise(res => { const q = db.transaction('f').objectStore('f').get('vrm'); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); }); } catch (e){ return null; } }
+let vrmRestoring = false;
+async function restoreVRM(){ if (vrm || vrmRestoring) return; vrmRestoring = true; const v = await idbGet(); if (v && v.buf && !vrm) await loadVRM(v.buf, v.name || '保存済みVRM', false); vrmRestoring = false; }
+$('vrmFile').onchange = async e => { const f = e.target.files[0]; if (f) loadVRM(await f.arrayBuffer(), f.name, true); };
+$('poseCam').onchange = e => { pose.cam = e.target.value; poseRecenter(); };
+$('poseOn').onchange = e => { pose.on = e.target.checked; };
+$('poseMove').onchange = e => { pose.move = e.target.checked; };
+
+// ----- 骨を回す（すべて av 空間で「休止姿勢(Tポーズ)からの回転 D」を求め、親の向きで割ってローカル回転にする）-----
+const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _qd = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _m4 = new THREE.Matrix4(), UP = new THREE.Vector3(0, 1, 0);
+function setAv(name, D, k){
+  const b = vrm.bones[name]; if (!b) return;
+  const T = _q.copy(D).multiply(vrm.rest[name].aq), L = avQuat(b.parent, _q2).invert().multiply(T);
+  b.quaternion.slerp(L, k);
+}
+function setDir(name, v, k){ const d = vrm.dir[name]; if (d && vrm.bones[name] && v.lengthSq() > 1e-8) setAv(name, _qd.setFromUnitVectors(d, v.normalize()), k); }
+function relax(name, k){ const b = vrm.bones[name]; if (b) b.quaternion.slerp(vrm.rest[name].q, k); }
+function basisRU(r, u, out){   // 右(r)と上(u)から向きを作る（休止姿勢は 右=+X, 上=+Y）
+  const x = r.clone().normalize(), y = u.clone().sub(x.clone().multiplyScalar(u.dot(x))).normalize();
+  return out.setFromRotationMatrix(_m4.makeBasis(x, y, x.clone().cross(y)));
+}
+function basisRF(r, f, out){   // 右(r)と前(f)から向きを作る（休止姿勢は 前=-Z）
+  const x = r.clone().normalize(), z = f.clone().sub(x.clone().multiplyScalar(f.dot(x))).normalize().negate();
+  return out.setFromRotationMatrix(_m4.makeBasis(x, z.clone().cross(x), z));
+}
+function poseApply(dt){
+  if (!vrm) return;
+  const k = 1 - Math.exp(-dt*14), live = pose.on && pose.seen && pose.w;
+  if (live){
+    // MediaPipe(x右,y下,z奥) → av空間。正面撮り:Y軸180°回転して後ろ姿に / 背後撮り:そのまま
+    const w = pose.w, s = pose.cam === 'front' ? [-1, -1, 1] : [1, -1, -1];
+    const P_ = i => new THREE.Vector3(w[i].x*s[0], w[i].y*s[1], w[i].z*s[2]), vis = i => (pose.n[i].visibility ?? 1) > .5;
+    const hL = P_(23), hR = P_(24), sL = P_(11), sR = P_(12), hM = hL.clone().add(hR).multiplyScalar(.5), sM = sL.clone().add(sR).multiplyScalar(.5);
+    setAv('hips', basisRU(hR.clone().sub(hL), UP, _qb), k);
+    setAv('spine', basisRU(sR.clone().sub(sL), sM.clone().sub(hM), _qb), k);
+    for (const b of ['chest', 'upperChest', 'neck']) relax(b, k);
+    const eL = P_(7), eR = P_(8), eM = eL.clone().add(eR).multiplyScalar(.5), fw = P_(0).sub(eM); fw.y += .03;   // 鼻は耳より少し下にあるぶん補正
+    setAv('head', basisRF(eR.clone().sub(eL), fw, _qb), k);
+    for (const [sd, a, b, c] of [['left', 11, 13, 15], ['right', 12, 14, 16]]){
+      setDir(sd + 'UpperArm', P_(b).sub(P_(a)), k); setDir(sd + 'LowerArm', P_(c).sub(P_(b)), k);
+    }
+    for (const [sd, a, b, c] of [['left', 23, 25, 27], ['right', 24, 26, 28]]){
+      if (vis(b) && vis(c)){ setDir(sd + 'UpperLeg', P_(b).sub(P_(a)), k); setDir(sd + 'LowerLeg', P_(c).sub(P_(b)), k); }
+      else { relax(sd + 'UpperLeg', k); relax(sd + 'LowerLeg', k); }   // 足が映っていなければ直立
+    }
+  } else {   // 未認識：腕を下ろした待機姿勢。頭だけ視点に合わせる
+    setAv('hips', _qb.identity(), k); setAv('spine', _qb.identity(), k);
+    for (const b of ['chest', 'upperChest', 'neck']) relax(b, k);
+    setAv('head', _qb.setFromAxisAngle(UP, -mouse.nx*.5), k);
+    setDir('leftUpperArm', new THREE.Vector3(-.25, -1, .05), k); setDir('leftLowerArm', new THREE.Vector3(-.12, -1, -.3), k);
+    setDir('rightUpperArm', new THREE.Vector3(.25, -1, .05), k); setDir('rightLowerArm', new THREE.Vector3(.12, -1, -.3), k);
+    for (const b of ['leftUpperLeg', 'leftLowerLeg', 'rightUpperLeg', 'rightLowerLeg']) relax(b, k);
+  }
+  for (const b of ['leftHand', 'rightHand', 'leftFoot', 'rightFoot']) relax(b, k);
+}
+restoreVRM();   // 起動時に前回のVRMを復元
+
+function toggleMenu(f){ menuOn = f === undefined ? !menuOn : f; $('menu').classList.toggle('on', menuOn); }
+
+// ===== 指先カーソル（メニュー表示中のみ）: 人差し指の先で指して、Wiiリモコンの A で決定 =====
+// HC.X0/Y0 = カメラ映像の端からこの割合は使わない（指を画面端まで伸ばさなくても届くように）
+const HC = { X0:.2, Y0:.15, MARGIN:24, SMOOTH:14, EDGE:60, SCROLL:700 };
+const hc = { seen:-1e9, tx:.5, ty:.5, x:0, y:0, init:false, hover:null, drag:null, flash:0 };
+const hcPick = el => { const t = el && el.closest('#menu button, #menu summary, #menu input, #menu label'); return t && !t.disabled ? t : null; };
+function hcSetRange(t){
+  const r = t.getBoundingClientRect(), min = +t.min || 0, max = +(t.max || 100), st = +t.step || 1;
+  const f = Math.max(0, Math.min(1, (hc.x - r.left)/r.width)), v = Math.round(f*(max - min)/st)*st + min;
+  if (+t.value !== v){ t.value = v; t.dispatchEvent(new Event('input', { bubbles:true })); }
+}
+function hcStep(now, dt){
+  const c = $('hCur'), M = $('menu');
+  if (!menuOn || now - hc.seen > 500){
+    if (hc.init){ c.classList.remove('on', 'down'); if (hc.hover) hc.hover.classList.remove('hHover'); hc.hover = hc.drag = null; hc.init = false; }
+    return;
+  }
+  const r = M.getBoundingClientRect(), px = r.left - HC.MARGIN + hc.tx*(r.width + HC.MARGIN*2), py = r.top + hc.ty*r.height;
+  if (!hc.init){ hc.x = px; hc.y = py; hc.init = true; c.classList.add('on'); }
+  const k = 1 - Math.exp(-dt*HC.SMOOTH); hc.x += (px - hc.x)*k; hc.y += (py - hc.y)*k;
+  const down = !!(wii.a && hc.drag) || now < hc.flash;
+  c.classList.toggle('down', down); c.style.transform = `translate(${hc.x}px,${hc.y}px)` + (down ? ' scale(.75)' : '');
+  // メニュー上下の端に寄せると自動スクロール
+  if (hc.y < r.top + HC.EDGE) M.scrollTop -= HC.SCROLL*dt*(1 - (hc.y - r.top)/HC.EDGE);
+  else if (hc.y > r.bottom - HC.EDGE) M.scrollTop += HC.SCROLL*dt*(1 - (r.bottom - hc.y)/HC.EDGE);
+  // スライダーは A を押している間だけドラッグ
+  if (hc.drag){ if (wii.a) { hcSetRange(hc.drag); return; } hc.drag = null; }
+  const t = hcPick(document.elementFromPoint(hc.x, hc.y));
+  if (t !== hc.hover){ if (hc.hover) hc.hover.classList.remove('hHover'); hc.hover = t; if (t) t.classList.add('hHover'); }
+}
+function hcClick(){
+  const t = hc.hover; if (!menuOn || !hc.init || !t) return;
+  hc.flash = performance.now() + 150;
+  if (t.type === 'range'){ hc.drag = t; hcSetRange(t); return; }
+  const rg = t.tagName === 'LABEL' && t.querySelector('input[type=range]');
+  if (rg){ hc.drag = rg; hcSetRange(rg); return; }   // ラベルの文字部分を指していてもスライダー操作にする
+  t.click();
+}
+async function flipFaceCam(){   // フロント(顔)とバック(背景)のカメラを入れ替える
+  const f = frontId(), b = backId(); if (!f || !b || f === b) return;
+  if (face.stream){ face.stream.getTracks().forEach(t => t.stop()); face.stream = null; }
+  if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  faceSel.value = b; camSel.value = f;
+  if (bgMode === 'cam' || tp) await openCam(f);
+  if (face.on && !tp) await openFaceCam();
+  listCams();
+}
+function faceMirror(){ const t = $('faceType').value; return t === 'auto' ? (face.src === vid ? camMirror : face.fm !== false) : t === 'front'; }
+const sPary = new Audio('sound/pary.mp3'); let vol = .8; sPary.preload = 'auto';
+const sAtk = new Audio('sound/atack.mp3'); sAtk.preload = 'auto';
+function playAtk(){ try { const a = sAtk.cloneNode(); a.volume = vol; a.play().catch(() => {}); } catch (e){} }
+// 戦闘BGM（ループ）
+const bgm = new Audio('sound/battle.mp3'); bgm.loop = true; bgm.preload = 'auto'; bgm.volume = .5;
+function bgmPlay(restart){ try { if (restart) bgm.currentTime = 0; bgm.play().catch(() => {}); } catch (e){} }
+function bgmStop(){ try { bgm.pause(); } catch (e){} }
+// ガード音（素材なしのため簡易合成）
+let actx = null;
+function playGuard(){ try {
+  actx = actx || new AudioContext(); const t = actx.currentTime, o = actx.createOscillator(), g = actx.createGain();
+  o.type = 'square'; o.frequency.setValueAtTime(240, t); o.frequency.exponentialRampToValueAtTime(70, t + .15);
+  g.gain.setValueAtTime(.25*vol + .001, t); g.gain.exponentialRampToValueAtTime(.001, t + .18);
+  o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + .2);
+} catch (e){} }
+function playPary(){ try { const a = sPary.cloneNode(); a.volume = vol; a.play().catch(() => {}); } catch (e){} }
+$('viewBtn').onclick = () => setView(!tp); $('mView').onclick = () => setView(!tp);
+$('aimBtn').onclick = $('mAim').onclick = () => setViewCtl(!viewCtl); $('menuBtn').onclick = () => toggleMenu();
+$('mClose').onclick = () => toggleMenu(false); $('mFace').onclick = $('faceFlip').onclick = flipFaceCam;
+$('mVol').oninput = e => vol = +e.target.value; $('mBgm').oninput = e => bgm.volume = +e.target.value;
+$('mRestart').onclick = () => { toggleMenu(false); startBattle(); };
+$('mTitle').onclick = () => location.href = 'parytitle.html';
+const JOB = 'sword';   // このHTMLの職業
+for (const [k, id, url] of [['sword', 'jSword', 'pary_game.html'], ['wiz', 'jWiz', 'Connectworld_Wizard.html']]){
+  const b = $(id); if (k === JOB){ b.textContent = '✔ ' + b.textContent; b.style.borderColor = '#ffd35a'; b.onclick = () => toggleMenu(false); }
+  else b.onclick = () => location.href = url + '?start=1';   // 別HTMLへ移動して自動スタート
+}
+$('jobBtn').onclick = () => $('jobs').classList.toggle('on');
+
+// ===== ゲーム状態 =====
+const keys = {}, mouse = { nx:0, ny:0 }, ray = new THREE.Raycaster(), tmp = new THREE.Vector3();
+const PMAX = 250;   // プレイヤー最大HP（旧100）
+const P = { armed:false, x:0, hp:PMAX, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, dir:1, counter:0, cBig:0, guard:false };
+const B = { x:0, z:-16, vz:0, s:'enter', t:1, wt:1, hp:800, max:800, hit:false, weak:0, flash:0, combo:0, stun:false, phase:1, wob:0, time:0, unp:false };
+let state = 'title', hitstop = 0, shake = 0, fovp = 0, flash = 0, vr = false, endAt = 0;
+function reset(){
+  Object.assign(P, { armed:false, x:0, hp:PMAX, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, counter:0, guard:false });
+  Object.assign(B, { x:0, z:-16, vz:0, s:'enter', t:1, hp:800, hit:false, weak:0, combo:0, stun:false, phase:1, unp:false });
+  bossG.visible = true; sb.n = 0; sb.ready = false; sb.active = false; anim = null; sk.st = 0; sbDraw();
+}
+function titleMsg(){
+  setMsg([['GIANT SLIME RAID', '#ffd35a', 72], ['左クリック: 斬る / 長押し: ガード　右クリック: パリィ', '#fff', 30],
+          ['紫に光る攻撃はパリィ不可 → ガードで防ぐ　A / D: 回避', '#c06bff', 28],
+          ['赤く光っている間に右クリック → 弾き返してスタン → 大ダメージ', '#fff', 28],
+          ['Wii: 振る=斬る / B+振り上げ=パリィ / A長押し=ガード', '#ffd35a', 26],
+          ['Wii: 縦→横=バーチカル / 突き / 縦横縦横 / 一回転 など（−:ジャイロ再調整）', '#ffd35a', 22],
+          ['顔を動かして狙う　C:中心リセット　V:VR　T:俯瞰/一人称　F:視点操作ON/OFF　M:メニュー', '#7ae7ff', 24],
+          ['クリックでスタート（Webカメラを使います）', '#7ae7ff', 34]]);
+}
+titleMsg();
+
+function hurtBoss(d, at, big){
+  if (!sb.active) sbHit();
+  B.hp -= d; B.flash = .12; B.wob = .25;
+  burst(at, big ? 0xffd35a : 0xffffff, big ? 40 : 22, 6);
+  popup(String(Math.round(d)), big ? '#ffd35a' : '#ffffff', tmp.copy(at).add(new THREE.Vector3(0, .6, 0)).clone(), big ? 1.1 : .8);
+  shake = Math.max(shake, .12); hitstop = Math.max(hitstop, .05);
+  if (B.hp <= 0){
+    B.hp = 0; B.s = 'dead'; state = 'win'; bgmStop(); endAt = performance.now(); bossG.visible = false; lane.visible = false;
+    burst(bossG.position, 0x5fe07a, 200, 12); ring(bossG.position, 8, 0x5fe07a, .8); shake = .6;
+    setMsg([['VICTORY!', '#ffd35a', 80], ['ジャイアントスライムを倒した', '#fff', 34], ['クリックでもう一度', '#7ae7ff', 32]]);
+  }
+}
+const SW_T = .32;   // 斬りモーションの長さ（旧.22。長く・大きくして見やすく）
+function attack(){
+  if (P.swingCd > 0 || P.par > 0 || P.armed || P.guard || sb.active) return;
+  if (sb.ready){ startStarburst(); return; }
+  playAtk();
+  P.swingCd = .4; P.swing = SW_T; P.dir *= -1;
+  arc.position.x = mouse.nx*1.5; arc.position.y = mouse.ny*1.0;
+  ray.setFromCamera(new THREE.Vector2(mouse.nx, mouse.ny), camera);
+  const cnt = P.counter > 0;   // パリィ後の1撃だけ大ダメージ（当たったら消費）
+  let hit = ray.ray.intersectSphere(new THREE.Sphere(bossG.position.clone(), R*1.4), new THREE.Vector3());
+  if (!hit && cnt && B.s !== 'dead') hit = bossG.position.clone();   // カウンター中は目線が外れていても振れば命中（パリィ成功で視線が外れるため）
+  if (hit && B.s !== 'dead' && ray.ray.origin.distanceTo(hit) < 25){
+    hurtBoss(cnt ? P.cBig : B.weak > 0 ? 9 : 6, hit, cnt);
+    if (cnt){ P.counter = 0; shake = .5; hitstop = .15; popCam('COUNTER!!', '#ffd35a', 1.2, 1); }
+  }
+}
+// 赤く光っている間(予兆〜突進)に押せば、突進が当たる瞬間までパリィが有効（armed）
+function parry(){ if (P.parCd > 0 || P.par > 0 || P.armed || P.guard) return; P.par = .3; P.parAge = 0; P.parCd = .7; P.armed = (B.s === 'wind' || B.s === 'charge') && !B.unp; }
+function parried(){
+  playPary(); const perfect = P.parAge < .45, at = rig.localToWorld(new THREE.Vector3(0, 0, -2.4));
+  hitstop = perfect ? .22 : .14; shake = perfect ? .5 : .3; fovp = perfect ? 14 : 8; flash = perfect ? .8 : .4; flashM.material.color.set(0xfff2b0);
+  ring(at, perfect ? 6 : 4, 0xffd35a, .5); ring(at, 2.5, 0xffffff, .3); burst(at, 0xffd35a, perfect ? 90 : 55, 9);
+  popCam(perfect ? 'PERFECT!' : 'PARRY!', '#ffd35a', perfect ? 1.3 : 1, 1);
+  P.inv = .5; P.par = 0; P.armed = false; P.parCd = .15; wiiRumble(perfect ? 300 : 200);
+  B.s = 'knock'; B.stun = true; B.t = perfect ? 3 : 2.2; B.vz = perfect ? -24 : -17;
+  P.counter = B.t; P.cBig = perfect ? 140 : 90;
+  popup('反撃チャンス!', '#7ae7ff', new THREE.Vector3(0, -.6, -3), .7, 1.2, camera);
+}
+// ガード成功：ダメージ無効。突進を受け止めてボスを押し返す
+function guarded(){
+  playGuard(); wiiRumble(220);
+  const at = rig.localToWorld(new THREE.Vector3(0, 0, -2.2));
+  ring(at, 4, 0x7ae7ff, .45); ring(at, 2.2, 0xffffff, .25); burst(at, 0x7ae7ff, 45, 7);
+  hitstop = .08; shake = .3; fovp = 5; flash = .35; flashM.material.color.set(0x9fe8ff);
+  popCam('GUARD!', '#7ae7ff', 1, .9);
+  P.inv = .5; P.counter = 0;
+  B.s = 'knock'; B.stun = false; B.t = 1.0; B.vz = -12;
+}
+function hurtPlayer(mult = 1){
+  if (sb.n > 0 || sb.ready){ sb.n = 0; sb.ready = false; sbDraw(); }   // 被ダメでスターバーストの連撃カウントがリセット
+  P.hp -= [20, 25, 30][B.phase-1]*mult; P.inv = 1.2; P.counter = 0; P.armed = false; shake = .8*mult; flash = .6*mult; flashM.material.color.set(0xff2a3a);
+  burst(rig.localToWorld(new THREE.Vector3(0, 0, -2)), 0xff4d5e, 60, 8);
+  B.s = 'knock'; B.stun = false; B.t = 1.2; B.vz = -10;
+  if (P.hp <= 0){
+    P.hp = 0; state = 'over'; bgmStop(); endAt = performance.now();
+    setMsg([['GAME OVER', '#ff4d5e', 80], [`スライムの残りHP ${Math.ceil(B.hp)}`, '#fff', 34], ['クリックでリトライ', '#7ae7ff', 32]]);
+  }
+}
+
+function bossAI(dt){
+  B.t -= dt; B.weak -= dt;
+  const ph = B.hp/B.max > .6 ? 1 : B.hp/B.max > .3 ? 2 : 3;
+  if (ph > B.phase){ B.phase = ph; popCam('RAGE!!', '#ff4d5e', 1.2, 1.4); shake = .5; }
+  const idleT = () => (ph === 3 && B.combo % 2 === 1) ? .45 : [2.1, 1.5, 1.1][ph-1] + Math.random()*.5;
+  if (B.s === 'enter'){
+    B.z += (HOVER - B.z)*Math.min(1, dt*2.2);
+    if (B.z > HOVER - .25){ B.s = 'idle'; B.t = idleT(); }
+  } else if (B.s === 'idle'){
+    B.z += (HOVER - B.z)*dt*3; B.x += (Math.sin(B.time*.8)*2.2 + P.x*.4 - B.x)*dt*1.5;
+    if (B.t <= 0){
+      B.s = 'wind'; P.armed = false; B.t = B.wt = [1.1, .9, .7][ph-1];
+      B.unp = Math.random() < [.25, .33, .4][ph-1];   // パリィ不可攻撃（紫）をランダムで選ぶ
+      popup(B.unp ? '!!' : '!', B.unp ? '#c06bff' : '#ff4d5e', new THREE.Vector3(B.x, 4.6, B.z), 1.2, B.wt);
+      if (B.unp) popCam('パリィ不可！ ガード！', '#c06bff', .8, 1);
+    }
+  } else if (B.s === 'wind'){
+    if (B.t > .3) B.x += (P.x - B.x)*Math.min(1, dt*5);
+    if (B.t <= 0){ B.s = 'charge'; B.hit = false; }
+  } else if (B.s === 'charge'){
+    B.z += [17, 20, 24][ph-1]*dt;
+    if (!B.hit && B.z + R >= -1.3){
+      B.hit = true;
+      if (Math.abs(B.x - P.x) < R*.8 + .35 && P.inv <= 0){
+        if (B.unp){   // パリィ不可：ガード中なら無効、それ以外は被弾
+          if (P.guard) guarded(); else { if (P.par > 0) popCam('パリィ不可!', '#c06bff', .9, .8); hurtPlayer(); }
+        } else if (P.par > 0 || P.armed) parried();
+        else if (P.guard) guarded();   // 通常突進もガードでダメージ無効
+        else hurtPlayer();
+        B.combo++;
+      }
+      else if (P.inv <= 0) popCam('回避!', '#7ae7ff', .9, .8);
+    }
+    if (B.s === 'charge' && B.z > 3){ B.combo++; B.s = 'enter'; B.z = -16; B.x = (Math.random()-.5)*5; B.weak = 2.5; P.armed = false; }
+  } else if (B.s === 'knock'){
+    B.z += B.vz*dt; B.vz *= Math.pow(.04, dt);
+    if (B.stun) B.z += (HOVER - B.z)*dt*.5;
+    if (B.t <= 0){ B.s = 'idle'; B.stun = false; B.t = idleT(); }
+  }
+}
+
+function bossAnim(dt){
+  B.time += dt; B.flash -= dt; B.wob = Math.max(0, B.wob - dt);
+  let sy = 1 + .05*Math.sin(B.time*3), zs = 1, hop = 0, k = 0;
+  if (B.s === 'enter') hop = Math.abs(Math.sin(B.time*6))*.5;
+  if (B.s === 'wind'){ k = 1 - B.t/B.wt; sy = 1 - .35*k; }
+  if (B.s === 'charge'){ sy = .8; zs = 1.4; }
+  if (B.s === 'knock' && B.stun) sy = 1 + .08*Math.sin(B.time*14);
+  sy += B.wob*Math.sin(B.time*40);
+  const sx = 1/Math.sqrt(sy), blink = Math.sin(B.time*40) > 0 ? 1 : .4;
+  bMat.emissive.setRGB(.04 + .7*k*blink + (B.flash > 0 ? .8 : 0), .23*(1-k) + (B.flash > 0 ? .8 : 0), .09*(1-k) + (B.flash > 0 ? .8 : 0));
+  const stunned = B.s === 'knock' && B.stun;
+  bossG.position.set(B.x, R*sy + hop, B.z); bossG.scale.set(R*sx, R*sy, R*sx*zs);
+  bossG.rotation.set(0, Math.atan2(P.x - B.x, -B.z)*.5, stunned ? Math.sin(B.time*6)*.18 : 0);
+  stars.visible = stunned; stars.rotation.y += dt*5; for (const p of pupils) p.visible = !stunned;
+  if (B.unp && (B.s === 'wind' || B.s === 'charge')){   // パリィ不可は紫に光る
+    const kk = B.s === 'charge' ? 1 : k, fl = B.flash > 0 ? .8 : 0;
+    bMat.emissive.setRGB(.04 + .5*kk*blink + fl, .04 + fl, .09 + .85*kk*blink + fl);
+  }
+  for (const e of eyes) e.material.color.set(B.s === 'wind' ? (B.unp ? 0xb04dff : 0xff4d5e) : 0xffffff);
+  shadow.position.set(B.x, .02, B.z); shadow.scale.setScalar(R*2.4);
+  lane.visible = B.s === 'wind';
+  if (lane.visible){ lane.material.color.setHex(B.unp ? 0xb04dff : 0xff3a4a); const zs0 = B.z + R; lane.scale.set(R*1.8, -zs0, 1); lane.position.set(B.x, .03, zs0/2); lane.material.opacity = .22 + .25*blink*k; }
+  jiggle(B.time, B.s === 'knock' && B.stun ? .08 : .04);
+}
+
+sword.rotation.order = 'YXZ';   // 一回転(メテオブレイク)用にY軸回転を最後に適用
+let anim = null;   // ソードスキルのモーション列 { seq:[{type,d,on,...}], i, t }
+function startAnim(seq){ anim = { seq, i:0, t:0 }; if (seq[0].on) seq[0].on(); }
+function stepAnim(dt){
+  if (!anim) return null;
+  anim.t += dt;
+  while (anim && anim.t >= anim.seq[anim.i].d){
+    anim.t -= anim.seq[anim.i].d; anim.i++;
+    if (anim.i >= anim.seq.length){ anim = null; return null; }
+    if (anim.seq[anim.i].on) anim.seq[anim.i].on();
+  }
+  return anim ? { seg:anim.seq[anim.i], k:Math.min(1, anim.t/anim.seq[anim.i].d) } : null;
+}
+// スキル用ポーズ（カメラ座標。blade は +Y 方向、rx<0 で切っ先が前へ、rz>0 で左へ）
+function skPose(seg, k){
+  const e = 1 - Math.pow(1 - k, 3), P0 = { tx:.9, ty:-1.1, tz:-1.9, rx:-.95, rz:.3, ry:0 };
+  switch (seg.type){
+    case 'chopWind':  return { tx:.9 - .3*e, ty:-1.1 + .9*e, tz:-1.9, rx:-.95 + 1.85*e, rz:.3 - .2*e, ry:0 };         // 振りかぶる
+    case 'chop':      return { tx:.6 - .1*e, ty:-.2 - 1.1*e, tz:-1.9 + .2*e, rx:.9 - 2.8*e, rz:.1, ry:0 };           // 縦に振り下ろす
+    case 'sweepWind': return { tx:.9 - 2.2*e, ty:-1.0, tz:-1.9, rx:-1.1, rz:.3 + 1.7*e, ry:0 };                      // 左へ構える(居合)
+    case 'sweepR':    return { tx:-1.5 + 3.1*e, ty:-1.0, tz:-1.9, rx:-1.1 + .4*Math.sin(k*Math.PI), rz:2.2 - 4.4*e, ry:0 };  // 左→右
+    case 'sweepL':    return { tx:1.5 - 3.1*e, ty:-1.0, tz:-1.9, rx:-1.1 + .4*Math.sin(k*Math.PI), rz:-2.2 + 4.4*e, ry:0 }; // 右→左
+    case 'thrustWind':return { tx:.9 - .7*e, ty:-1.1 + .4*e, tz:-1.9 + 1.1*e, rx:-.95 - .55*e, rz:.3 - .3*e, ry:0 };   // 引く
+    case 'thrustOut': return { tx:.2, ty:-.7, tz:-.8 - 3.0*e, rx:-1.5, rz:0, ry:0 };                                  // 突き出す
+    case 'thrustBack':return { tx:.2, ty:-.7, tz:-3.8 + 1.9*e, rx:-1.5 + .55*e, rz:0, ry:0 };                         // 戻す
+    case 'spin':      return { tx:0, ty:-.9, tz:-1.6, rx:0, rz:1.57, ry:Math.PI*2*(seg.k0 + (seg.k1 - seg.k0)*k) };    // 一回転
+    case 'flurry':    return { tx:seg.x0 + (seg.x1 - seg.x0)*e, ty:-1.0 + seg.dy, tz:-1.9, rx:-1.0 + seg.rv, rz:seg.a0 + (seg.a1 - seg.a0)*e, ry:0 };
+  }
+  return P0;
+}
+function updSword(dt){
+  steel.emissive.setHex(sb.ready ? 0xffd35a : P.counter > 0 ? 0xff9a20 : 0x2a6f88);
+  let tx = .9 + mouse.nx*.3, ty = -1.1 + mouse.ny*.2, tz = -1.9, rx = -.95, rz = .3, ry = 0, rate = 14, sc = 1;
+  const an = stepAnim(dt);
+  if (an){
+    const p = skPose(an.seg, an.k); tx = p.tx; ty = p.ty; tz = p.tz; rx = p.rx; rz = p.rz; ry = p.ry; rate = 60; sc = 1.3;
+    arc.material.opacity = 0;
+  } else if (P.swing > 0){
+    const t = 1 - P.swing/SW_T, a = 1 - Math.pow(1 - t, 3);
+    rz = P.dir*(2.1 - 4.2*a); rx = -1.0 + .5*Math.sin(t*Math.PI); tx = .2 + P.dir*(-1.5 + 3.0*a); ty = -1.0; rate = 60; sc = 1.3;   // 旧: 回転±1.5rad・位置固定 → 大きく横に払う
+    const kk = P.swing/SW_T, base = P.dir > 0 ? .2 : Math.PI + .2;
+    arc.material.opacity = kk*.9; arc.rotation.z = base - P.dir*(1 - kk)*.9; arc.scale.setScalar(1.5);
+  } else { arc.material.opacity = 0; if (P.par > 0 || P.armed || P.guard){ tx = .1; ty = -.8; tz = -1.7; rx = -.2; rz = .1; rate = 40; } }
+  const k = Math.min(1, dt*rate);
+  sword.position.x += (tx - sword.position.x)*k; sword.position.y += (ty - sword.position.y)*k; sword.position.z += (tz - sword.position.z)*k;
+  sword.rotation.x += (rx - sword.rotation.x)*k; sword.rotation.z += (rz - sword.rotation.z)*k;
+  sword.rotation.y = ry;   // スピン角はそのまま適用（2πで元に戻る）
+  sword.scale.setScalar(sword.scale.x + (sc - sword.scale.x)*Math.min(1, dt*20));
+  gShield.visible = P.guard; shield.visible = P.par > 0 || P.armed; if (shield.visible){ const s = .6 + .5*Math.min(1, P.parAge/.1); shield.scale.setScalar(s); }
+}
+
+function update(dt){
+  if (hitstop > 0){ hitstop -= dt; dt *= .05; }
+  shake *= Math.pow(.002, dt); fovp *= Math.pow(.001, dt); flash = Math.max(0, flash - dt*2.5);
+  flashM.material.opacity = flash;
+  if (state === 'play' && !menuOn){
+    const mv = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
+    const nowMs = performance.now();   // 長押し判定：マウス左 or Wii Aボタン
+    const gIn = ctl.mode === 'mouse' ? (mdn.on && nowMs - mdn.t >= GUARD_MS) : (wii.a && nowMs - wii.aT >= 150);
+    P.guard = gIn && P.par <= 0 && !P.armed && P.swing <= 0;
+    P.x = Math.max(-3.2, Math.min(3.2, P.x + mv*(P.par > 0 || P.guard ? 3 : 6)*dt));
+    if (tp && pose.move && poseReady() && !mv) P.x += ((qrFeetOK() ? Math.max(-3.2, Math.min(3.2, qr.feetX)) : pose.tx) - P.x)*Math.min(1, dt*8);   // QR配置済みなら床の上の実際の位置(m)   // 俯瞰：体を左右に動かして回避
+    P.counter -= dt; P.swing -= dt; P.swingCd -= dt; P.inv -= dt; P.parCd -= dt;
+    if (P.par > 0 || P.armed) P.parAge += dt;
+    if (P.par > 0) P.par -= dt;
+    bossAI(dt);
+  } else if (state === 'title'){ B.z += (HOVER - B.z)*Math.min(1, dt*2); B.s = 'enter'; }
+  if (!(state === 'play' && !menuOn)) P.guard = false;
+  faceUpdate(dt); poseAimUpdate(dt);
+  if (!viewCtl) mouse.nx = mouse.ny = 0;   // 視点操作OFF：画面は正面固定
+  bossAnim(dt); updSword(dt); updFX(dt); updSkillFx(dt); skTick();
+  { const fa = viewCtl && (tp ? poseAimActive() : faceActive()); reticle.visible = fa && state === 'play';
+    if (fa){ const asp = vr ? W/2/H : W/H, hh = Math.tan((70 - fovp)*Math.PI/360)*3;
+      reticle.position.set(mouse.nx*hh*asp, mouse.ny*hh, -3); reticle.scale.setScalar(.4); } }
+  const sh = (Math.random()-.5)*shake;
+  aim.position.set(P.x, EYE, 0); aim.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0);
+  av.position.x = P.x; av.rotation.y = vrm ? 0 : -mouse.nx*.3; headM.rotation.y = -mouse.nx*.5;   // 顔の向きにアバターも向く
+  if (tp) poseApply(dt);   // VRMの骨を全身ポーズに合わせる
+  av.visible = tp && !qrARActive();   // AR確認表示では本物のプレイヤーが映るのでアバターを隠す
+  if (qrARActive()) qrCamApply();   // 実カメラと同じ位置・向きから描く
+  else if (tp){ camera.rotation.set(mouse.ny*.12 - .22, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + 1.5 + sh*.6, 4.2); }
+  else { camera.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + sh*.6, 0); }
+  bossBar.scale.x = Math.max(.0001, B.hp/B.max); pBar.scale.x = Math.max(.0001, P.hp/PMAX);
+  parBar.scale.x = Math.max(.0001, P.parCd > 0 ? 1 - P.parCd/.7 : 1);
+  hud.visible = state === 'play'; $('ui').style.display = vr ? 'none' : '';
+  const asp = vr ? W/2/H : W/H, mw = Math.min(7, 5.3*asp);
+  const hk = qrARActive() ? Math.tan(qrFov()*Math.PI/360)/Math.tan(35*Math.PI/180) : 1;   // AR表示は画角が狭いのでHUDを縮める
+  hud.scale.setScalar(hk); msg.scale.set(mw*hk, mw/2*hk, 1);
+}
+
+function view(x, y, w, h){ renderer.setViewport(x, y, w, h); renderer.setScissor(x, y, w, h); }
+function render(){
+  camera.fov = qrARActive() ? qrFov() : 70 - fovp; const bx = camera.position.x;
+  if (!vr){ view(0, 0, W, H); camera.aspect = W/H; camera.updateProjectionMatrix(); cover(W/H); renderer.render(scene, camera); }
+  else {
+    const w = W/2; camera.aspect = w/H; camera.updateProjectionMatrix(); cover(w/H);
+    for (const e of [-1, 1]){ camera.position.x = bx + e*.032; view(e < 0 ? 0 : w, 0, w, H); renderer.render(scene, camera); }
+    camera.position.x = bx;
+  }
+}
+
+// ===== 入力 =====
+addEventListener('keydown', e => { const k = e.key.toLowerCase(); keys[k] = true; if (state === 'play' && bgm.paused && !menuOn) bgmPlay(); if (k === 'v') vr = !vr; if (k === 'c'){ faceRecenter(); poseRecenter(); } if (k === 'f') setViewCtl(!viewCtl); if (k === 'm') toggleMenu(); if (k === 't') setView(!tp); if (k === 'escape' && menuOn) toggleMenu(false); if (k === 'enter' && menuOn && hc.hover){ e.preventDefault(); hcClick(); } });
+addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+function setMouse(e){
+  if (!viewCtl || (tp ? poseAimActive() : faceActive())) return;   // 顔/頭で操作中・視点操作OFF中はマウスで視点を動かさない
+  const w = vr ? W/2 : W; mouse.nx = ((e.clientX % w)/w)*2 - 1; mouse.ny = -((e.clientY/H)*2 - 1);
+}
+addEventListener('mousemove', setMouse);
+// ===== 操作切替（マウス / Wiiリモコン）=====
+const GUARD_MS = 200;   // マウス左ボタンをこの時間(ms)以上押し続けるとガード
+const ctl = { mode:'mouse' }, mdn = { on:false, t:0 };
+const WVID = 0x057e, WPIDS = [0x0306, 0x0330];
+const wii = { dev:null, leds:1, a:false, b:false, aT:0, pA:false, pPlus:false, pHome:false,
+              gx:0, gy:0, gz:1, gok:false, lastSw:0, lastNeg:-1e9, th:2.2, rt:0,
+              mode:0x35, modeT:0, pMinus:false,
+              mp:{ state:'off', ok:false, calibrated:false, zero:[8192, 8192, 8192], cal:null, calPct:0, up:null, upT:0, lastValid:0, sw:null, ring:[], to:0 } };
+function wiiMsg(t){ $('wiiStat').textContent = t; }
+function setCtl(m){
+  ctl.mode = m; mdn.on = false; wii.a = wii.b = false;
+  const t = m === 'wii' ? '🎮 Wiiリモコン' : '🖱 マウス';
+  $('ctrlBtn').textContent = t; $('mCtrl').textContent = '操作: ' + t;
+  if (m === 'mouse' && !wii.dev) wiiMsg('');
+}
+const wsend = async (id, bytes) => { if (!wii.dev) return; try { await wii.dev.sendReport(id, new Uint8Array(bytes)); } catch (e){} };
+const wLed = (r = 0) => wsend(0x11, [(wii.leds << 4) | r]);
+function wiiRumble(ms){ if (!wii.dev) return; wLed(1); clearTimeout(wii.rt); wii.rt = setTimeout(() => wLed(0), ms); }
+async function openWii(d){
+  wii.dev = d; if (!d.opened) await d.open();
+  d.oninputreport = onWii;   // 再接続しても二重登録にならないよう代入式にする
+  wii.gok = false;
+  await wiiEnableMP();
+  await wLed();
+  setCtl('wii'); wiiMsg('🎮 Wii: 接続中');
+}
+// MotionPlus有効化: 0xA600FE ← 0x04 → ステータス応答(0x20)でレポートモード0x35を再設定。一定時間データが来なければ従来の0x31(加速度のみ)へフォールバック
+async function wiiEnableMP(){
+  const m = wii.mp; clearTimeout(m.to);
+  m.ok = false; m.state = 'activating'; m.calibrated = false; m.cal = null; m.up = null; m.sw = null; m.ring.length = 0; m.lastValid = 0;
+  wii.mode = 0x35; dbg('MotionPlus有効化…');
+  await wsend(0x12, [0x04, 0x35]);
+  const b = new Array(21).fill(0); b[0] = 0x04; b[1] = 0xA6; b[2] = 0x00; b[3] = 0xFE; b[4] = 1; b[5] = 0x04;
+  await wsend(0x16, b);
+  await new Promise(r => setTimeout(r, 150));
+  await wsend(0x15, [0x00]);
+  m.to = setTimeout(() => {
+    if (m.ok || !wii.dev) return;
+    wii.mode = 0x31; m.state = 'none'; wsend(0x12, [0x04, 0x31]);
+    wiiMsg('🎮 Wii: ジャイロなし（加速度のみ・従来操作）'); dbg('ジャイロを検出できず → 加速度のみ(従来動作)');
+  }, 3000);
+}
+function wiiRecal(){ if (!wii.dev) return; if (wii.mp.ok) calStart(); else wiiEnableMP(); }
+async function connectWii(){
+  if (!('hid' in navigator)){ wiiMsg('🎮 WebHID非対応です（Chrome / Edge を使用）'); return false; }
+  try {
+    const [d] = await navigator.hid.requestDevice({ filters: WPIDS.map(p => ({ vendorId:WVID, productId:p })) });
+    if (!d) return false; await openWii(d); return true;
+  } catch (e){ wiiMsg('🎮 接続できません: ' + e.message); return false; }
+}
+async function toggleCtl(){
+  if (ctl.mode === 'wii'){ setCtl('mouse'); return; }
+  if (!wii.dev && !(await connectWii())) return;
+  setCtl('wii');
+}
+$('ctrlBtn').onclick = $('mCtrl').onclick = toggleCtl;
+$('mWiiTh').oninput = e => wii.th = +e.target.value;
+if ('hid' in navigator){
+  navigator.hid.getDevices().then(l => { const d = l.find(x => x.vendorId === WVID && WPIDS.includes(x.productId)); if (d) openWii(d).catch(() => {}); });
+  navigator.hid.addEventListener('disconnect', e => { if (e.device === wii.dev){ wii.dev = null; setCtl('mouse'); wiiMsg('🎮 Wiiリモコンが切断されました'); } });
+}
+function onWii(e){
+  const d = e.data, id = e.reportId, now = performance.now(), ts = e.timeStamp || now;
+  if (id === 0x20){ wsend(0x12, [0x04, wii.mode]); return; }   // ステータス応答(MotionPlus有効化後にも来る)でモードが戻るので再設定
+  if (id !== 0x31 && id !== 0x35) return;
+  if (id !== wii.mode && now - wii.modeT > 1000){ wii.modeT = now; wsend(0x12, [0x04, wii.mode]); }
+  const b0 = d.getUint8(0), b1 = d.getUint8(1);
+  const A = !!(b1 & 0x08), Bb = !!(b1 & 0x04), plus = !!(b0 & 0x10), home = !!(b1 & 0x80), minus = !!(b1 & 0x10);
+  if (A && !wii.pA) wii.aT = now;
+  const pressA = A && !wii.pA;
+  const pressStart = (A && !wii.pA) || (plus && !wii.pPlus), pressHome = home && !wii.pHome;
+  wii.pA = A; wii.pPlus = plus; wii.pHome = home; wii.a = A; wii.b = Bb;
+  if (pressHome) toggleMenu();
+  if (minus && !wii.pMinus) wiiRecal();
+  wii.pMinus = minus;
+  if (pressStart && state !== 'play' && !menuOn && !(state !== 'title' && now - endAt < 600)) startGame();
+  if (pressA && menuOn) hcClick();   // 指先カーソルで指している項目を決定
+  // 加速度（0g=128, 1g≒26）
+  const x = (d.getUint8(2) - 128)/26, y = (d.getUint8(3) - 128)/26, z = (d.getUint8(4) - 128)/26, m = Math.hypot(x, y, z);
+  if (Math.abs(m - 1) < .12){   // ほぼ静止している時だけ重力方向を更新
+    if (!wii.gok){ wii.gx = x; wii.gy = y; wii.gz = z; wii.gok = true; }
+    else { wii.gx += (x - wii.gx)*.2; wii.gy += (y - wii.gy)*.2; wii.gz += (z - wii.gz)*.2; }
+  }
+  if (id === 0x35 && d.byteLength >= 11) wiiGyro(d, x, y, z, m, ts, A || Bb);   // ジャイロ(縦横判定)。通常攻撃/パリィの加速度判定とは独立
+  if (ctl.mode !== 'wii' || state !== 'play' || menuOn) return;
+  // 重力方向(=上)に沿った動的加速度。持ち方に依存せず「上向きに加速」を検出できる
+  const gl = Math.hypot(wii.gx, wii.gy, wii.gz) || 1;
+  const up = ((x - wii.gx)*wii.gx + (y - wii.gy)*wii.gy + (z - wii.gz)*wii.gz)/gl;
+  const upTh = wii.th*.65;
+  if (up < -upTh*.7) wii.lastNeg = now;   // 直前に下向きの勢いがあった = 振り下ろしの減速なので除外
+  if (now - wii.lastSw < 450) return;
+  if (wii.b){   // B押しながら振り上げ → パリィ
+    if (up > upTh && now - wii.lastNeg > 220){ wii.lastSw = now + 200; parry(); }
+  } else if (!wii.a && m > wii.th){ wii.lastSw = now; attack(); }   // 振り → 通常攻撃
+}
+
+// ===== ソードスキル（MotionPlusのジャイロで 縦斬り→横斬り を判定）=====
+// ジャイロ積分で「上向きベクトル」を追い、角速度を 水平軸まわり(=縦斬り成分) と 鉛直軸まわり(=横斬り成分) に分解する。
+// 握りが回っても縦/横を判定できる（センサー軸 yaw/roll/pitch は縦横に一対一対応しないため）。
+const sk = { on:true, win:1.5, sqWin:1.1, rB:.18, rA:.30, minPk:600, mult:5, dbg:true, st:0, last:null, armedAt:0, lastHead:'',
+             heavyV:650, heavyH:260, spin:360, thrustA:4.0, thrustRot:150, thrustPk:800, lastR:null };
+const GY = { SLOW:440/8192, FAST:2000/440, PRE:120, HOLD:150, MAXSW:1500, CAL_MS:1000, CAL_STD:80, UP_GAIN:.03, UP_TOL:.15 };
+// ==== MP-BEGIN ====
+function calStart(){
+  const m = wii.mp; m.cal = { n:0, sum:[0,0,0], sq:[0,0,0], t0:null }; m.calibrated = false; m.state = 'cal'; m.calPct = 0; m.sw = null; m.ring.length = 0;
+  wiiMsg('🎮 Wii: ジャイロ調整中…静止してください'); dbg('キャリブレーション開始（リモコンを静止）');
+}
+function calFeed(raw, slow, t){
+  const m = wii.mp, c = m.cal; if (!c) return;
+  const restart = () => { c.n = 0; c.sum = [0,0,0]; c.sq = [0,0,0]; c.t0 = null; m.calPct = 0; };
+  if (!slow[0] || !slow[1] || !slow[2]){ restart(); return; }
+  if (c.t0 == null) c.t0 = t;
+  c.n++; for (let i = 0; i < 3; i++){ c.sum[i] += raw[i]; c.sq[i] += raw[i]*raw[i]; }
+  const el = t - c.t0; m.calPct = Math.min(99, Math.round(el/GY.CAL_MS*100));
+  if (el < GY.CAL_MS || c.n < 20) return;
+  const mean = c.sum.map(v => v/c.n), std = c.sq.map((v, i) => Math.sqrt(Math.max(0, v/c.n - mean[i]*mean[i])));
+  if (Math.max(...std) > GY.CAL_STD){ restart(); return; }
+  m.zero = mean; m.calibrated = true; m.cal = null; m.state = 'ready'; m.up = null;
+  wiiMsg('🎮 Wii: ジャイロ有効（縦→横でソードスキル）'); dbg('ゼロ点OK yaw/roll/pitch=' + mean.map(v => v.toFixed(0)).join('/'));
+}
+// 上向きベクトル更新（センサー X,Y,Z = pitch,roll,yaw / 右手系）。|a|≈1g の時だけ加速度で補正
+function gyOrient(wyrp, ax, ay, az, a, t){
+  const m = wii.mp, w = [wyrp[2], wyrp[1], wyrp[0]];
+  if (!m.up){ m.up = a > .5 ? [ax/a, ay/a, az/a] : [0, 0, 1]; m.upT = t; }
+  const dt = Math.min(.05, Math.max(0, (t - m.upT)/1000)); m.upT = t;
+  const r = Math.PI/180, W = [w[0]*r, w[1]*r, w[2]*r], u = m.up;
+  let n = [u[0] - (W[1]*u[2] - W[2]*u[1])*dt, u[1] - (W[2]*u[0] - W[0]*u[2])*dt, u[2] - (W[0]*u[1] - W[1]*u[0])*dt];
+  let l = Math.hypot(n[0], n[1], n[2]) || 1; n = n.map(v => v/l);
+  if (Math.abs(a - 1) < GY.UP_TOL){
+    n = [n[0] + GY.UP_GAIN*(ax/a - n[0]), n[1] + GY.UP_GAIN*(ay/a - n[1]), n[2] + GY.UP_GAIN*(az/a - n[2])];
+    l = Math.hypot(n[0], n[1], n[2]) || 1; n = n.map(v => v/l);
+  }
+  m.up = n;
+  const wv = w[0]*n[0] + w[1]*n[1] + w[2]*n[2];
+  return [wv, Math.hypot(w[0] - wv*n[0], w[1] - wv*n[1], w[2] - wv*n[2])];
+}
+function wiiGyro(d, ax, ay, az, a, t, held){
+  const m = wii.mp, e = []; for (let i = 0; i < 6; i++) e.push(d.getUint8(5 + i));
+  const valid = !e.every(v => v === 0xff) && !e.every(v => v === 0) && (e[5] & 3) === 2;   // byte5下位2bit=10 がMotionPlusデータ
+  if (!valid){ if (m.ok && t - m.lastValid > 1000){ m.ok = false; m.state = 'lost'; m.sw = null; dbg('ジャイロのデータが止まりました'); } return; }
+  m.lastValid = t;
+  const raw = [e[0] | ((e[3] & 0xfc) << 6), e[1] | ((e[4] & 0xfc) << 6), e[2] | ((e[5] & 0xfc) << 6)];   // yaw, roll, pitch
+  const slow = [!!(e[3] & 2), !!(e[4] & 2), !!(e[3] & 1)];
+  if (!m.ok){
+    m.ok = true; clearTimeout(m.to); dbg('MotionPlusデータ検出');
+    if (m.calibrated) m.state = 'ready'; else calStart();
+  }
+  if (m.cal){ calFeed(raw, slow, t); return; }
+  if (!m.calibrated) return;
+  const w = raw.map((v, i) => (v - m.zero[i])*GY.SLOW*(slow[i] ? 1 : GY.FAST));
+  const [wv, wh] = gyOrient(w, ax, ay, az, a, t);
+  gySwing({ t, a, wv, wh }, held);
+}
+function gyInteg(o, s){
+  if (s.a > o.pa) o.pa = s.a;
+  if (o.last){ const dt = Math.min(.05, (s.t - o.last.t)/1000); if (dt > 0){ o.iv += s.wv*dt; o.ih += s.wh*dt; } }
+  if (Math.abs(s.wv) > Math.abs(o.pv)) o.pv = s.wv;
+  if (s.wh > o.ph) o.ph = s.wh;
+  o.last = s;
+}
+// |a|がしきい値(Wii振り感度)を超えた所から、しきい値未満が150ms続くまでを1回の斬りとする（開始120ms前から積分）
+function gySwing(s, held){
+  const m = wii.mp;
+  if (!(ctl.mode === 'wii' && state === 'play' && !menuOn)){ m.sw = null; m.ring.length = 0; return; }
+  if (!m.sw){
+    m.ring.push(s); while (m.ring.length && s.t - m.ring[0].t > GY.PRE) m.ring.shift();
+    if (s.a >= wii.th){
+      const o = m.sw = { t0:m.ring[0].t, iv:0, ih:0, pv:0, ph:0, pa:0, last:null, lastHigh:s.t, held:held };
+      for (const r of m.ring) gyInteg(o, r);
+      m.ring.length = 0;
+    }
+  } else {
+    const o = m.sw; gyInteg(o, s); if (held) o.held = true;
+    if (s.a >= wii.th) o.lastHigh = s.t;
+    if (s.t - o.lastHigh >= GY.HOLD || s.t - o.t0 > GY.MAXSW){ m.sw = null; gyFinish(o, s.t); }
+  }
+}
+function gyFinish(o, tEnd){
+  const pk = Math.max(Math.abs(o.pv), o.ph), tot = Math.abs(o.iv) + o.ih, ratio = tot > 0 ? Math.abs(o.iv)/tot : 0, dur = (tEnd - o.t0)/1000;
+  const f = v => Math.round(v), rot = o.ih + Math.abs(o.iv);
+  if (o.held){ dbg(`斬り除外(A/B押下中) pk${f(pk)}`); return; }
+  const r = { t0:o.t0, t1:tEnd, pk, ratio, iv:o.iv, ih:o.ih, dur, pa:o.pa, rot, kind:'' };
+  if (Math.abs(o.iv) >= sk.spin && ratio >= .5) r.kind = '回転';                                                                  // 水平に一回転
+  else if (o.pa >= sk.thrustA && pk < sk.thrustPk && rot < sk.thrustRot) r.kind = '突';                                        // 回転が小さく加速度が大きい=突き（minPk未満に限らない）
+  else if (pk < sk.minPk) r.kind = '小';
+  else if (ratio >= sk.rB) r.kind = Math.abs(o.iv) >= sk.heavyH ? '横重' : '横';
+  else r.kind = o.ih >= sk.heavyV ? '縦重' : '縦';
+  sk.lastR = r;   // 「基準を登録」用に直近の斬りを保持
+  dbg(`斬り[${r.kind}] 横度${ratio.toFixed(2)} ∫縦${f(o.ih)} ∫横${f(Math.abs(o.iv))} 計${f(rot)}° pk${f(pk)}°/s ${o.pa.toFixed(1)}g ${dur.toFixed(2)}s`);
+  skStroke(r);
+}
+// 単発系(突き/回転/重撃)は即発動。縦横は連携: st1=縦待ち→横で「バーチカル」 / st2=バーチカル後 / st3=縦横+縦→横で「ホリゾンタルスクエア」
+// 構え直しの「小」は無視して状態を保持。縦候補は横度が rA 未満なら何でもOK（甘め）
+function skStroke(r){
+  const k = r.kind;
+  if (k === '小') return;
+  if (k === '突'){ sk.st = 0; cast('vorpal', r); return; }
+  if (k === '回転'){ sk.st = 0; cast('meteor', r); return; }
+  if (k === '縦重'){ sk.st = 0; cast('sonic', r); return; }
+  if (k === '横重'){ sk.st = 0; cast('lotus', r); return; }
+  const gap = sk.last ? (r.t0 - sk.last.t1)/1000 : 1e9;
+  if (sk.st === 1 && gap > sk.win) sk.st = 0;
+  if ((sk.st === 2 || sk.st === 3) && gap > sk.sqWin) sk.st = 0;
+  const isA = r.ratio < sk.rA, isB = k === '横';
+  if (sk.st === 1){ if (isB){ sk.st = 2; cast('vertical', r); } else sk.st = isA ? 1 : 0; }
+  else if (sk.st === 2) sk.st = isA ? 3 : 0;
+  else if (sk.st === 3){ if (isB){ sk.st = 0; cast('square', r); } else sk.st = isA ? 3 : 0; }
+  else sk.st = isA ? 1 : 0;
+  sk.last = r; sk.armedAt = performance.now();
+  if (sk.st === 1 || sk.st === 3) dbg(`${sk.st === 3 ? '縦横+縦' : '縦'}OK → 横を`);
+}
+// ==== MP-END ====
+const dbgLines = [], SK_T0 = performance.now();
+function dbg(t){ dbgLines.push(((performance.now() - SK_T0)/1000).toFixed(1) + ' ' + t); if (dbgLines.length > 9) dbgLines.shift(); dbgDraw(); try { console.log('[wii] ' + t); } catch (e){} }
+function skHead(){
+  const m = wii.mp;
+  let t = !wii.dev ? 'Wii未接続' : m.state === 'none' ? 'ジャイロ: なし（加速度のみ）' : m.state === 'cal' ? 'ジャイロ: 静止して調整中 ' + m.calPct + '%'
+        : m.state === 'ready' ? 'ジャイロ: 有効' + (m.sw ? ' / 斬り中' : '') + (sk.st === 1 || sk.st === 3 ? ' / 縦OK→横を！' : sk.st === 2 ? ' / 続けて縦横でスクエア' : ' / 待機')
+        : m.state === 'lost' ? 'ジャイロ: データ停止' : 'ジャイロ: 有効化中…';
+  return t + (sk.on ? '' : '（スキルOFF）') + (sb.ready ? ' / STARBURST READY' : sb.n ? ' / CHAIN ' + sb.n + '/16' : '');
+}
+function dbgDraw(){ const el = $('wiiDbg'); el.style.display = sk.dbg ? '' : 'none'; if (sk.dbg) el.textContent = (sk.lastHead = skHead()) + '\n' + dbgLines.join('\n'); }
+function skTick(){
+  if (sk.st && !wii.mp.sw && performance.now() - sk.armedAt > sk.win*1000 + 100) sk.st = 0;
+  if (sk.dbg && skHead() !== sk.lastHead) dbgDraw();
+}
+// ---- 斬撃エフェクト（カメラ前の光る線）----
+const skMat = c => new THREE.MeshBasicMaterial({ color:c, transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthTest:false, depthWrite:false });
+const skFxList = [];
+function fxLine(ang, sx, sy, len, hex, dur = .35, th = .22, delay = 0){
+  const g = new THREE.PlaneGeometry(len, th); g.translate(len/2, 0, 0);
+  const m = new THREE.Mesh(g, skMat(hex)); m.position.set(sx, sy, -3); m.rotation.z = ang; m.renderOrder = 12; m.scale.x = .001; m.visible = false; camera.add(m);
+  skFxList.push({ m, t:0, dur, delay });
+}
+function updSkillFx(dt){
+  for (let i = skFxList.length - 1; i >= 0; i--){
+    const f = skFxList[i]; f.t += dt; const k = (f.t - f.delay)/f.dur;
+    if (k < 0) continue;
+    if (k >= 1){ camera.remove(f.m); f.m.geometry.dispose(); f.m.material.dispose(); skFxList.splice(i, 1); continue; }
+    f.m.visible = true; f.m.scale.x = Math.min(1, k*4) + .001; f.m.material.opacity = k < .35 ? 1 : (1 - k)/.65;
+  }
+}
+const fxDown = hex => fxLine(-Math.PI/2, 0, 3.2, 6.4, hex), fxRight = hex => fxLine(0, -3.2, 0, 6.4, hex), fxLeft = hex => fxLine(Math.PI, 3.2, 0, 6.4, hex);
+// ---- スキル定義 ----
+const SKD = {
+  vertical:{ en:'VERTICAL', jp:'バーチカル', c:'#7ae7ff' }, vorpal:{ en:'VORPAL STRIKE', jp:'ヴォーパルストライク', c:'#b8f0ff' },
+  sonic:{ en:'SONIC LEAP', jp:'ソニックリープ', c:'#ffd35a' }, lotus:{ en:'LOTUS SLASH', jp:'ロータススラッシュ', c:'#ff9ae0' },
+  square:{ en:'HORIZONTAL SQUARE', jp:'ホリゾンタルスクエア', c:'#7ae7ff' }, meteor:{ en:'METEOR BREAK', jp:'メテオブレイク', c:'#ff9a20' },
+  starburst:{ en:'STARBURST STREAM', jp:'スターバーストストライク', c:'#ffd35a' } };
+function skBanner(k){ const d = SKD[k]; popCam(d.en, d.c, 1.4, 1.5); popup(d.jp, '#ffffff', new THREE.Vector3(0, -.15, -3), .6, 1.5, camera); }
+// 倍率mのダメージ（通常攻撃6/弱点9 × m × 設定倍率/5）。照準に関わらずボスへ命中（オートロック）
+const skHit = (m, big = true) => { if (state !== 'play' || B.s === 'dead') return; hurtBoss((B.weak > 0 ? 9 : 6)*m*sk.mult/5, bossG.position.clone(), big); playAtk(); };
+function skImpact(fl, sh, fov, col){ flash = Math.max(flash, fl); flashM.material.color.set(col || 0xbfefff); shake = Math.max(shake, sh); hitstop = Math.max(hitstop, .12); fovp = Math.max(fovp, fov); }
+function cast(name, r){
+  const d = SKD[name];
+  if (!sk.on){ dbg('（スキルOFFのため ' + d.jp + ' は発動せず）'); return; }
+  if (state !== 'play' || B.s === 'dead' || sb.active) return;
+  if (sb.ready){ startStarburst(); return; }
+  const at = () => bossG.position, ring2 = (rr, hex) => { ring(at(), rr, hex, .5); ring(at(), rr*.5, 0xffffff, .3); };
+  dbg(`★ ${d.jp}（${d.en}）` + (name === 'vertical' || name === 'square' ? ` 間隔${sk.last ? ((r.t0 - sk.last.t1)/1000).toFixed(2) : '-'}s` : ''));
+  skBanner(name); P.swing = 0; P.swingCd = Math.max(P.swingCd, .5);
+  let seq;
+  if (name === 'vertical') seq = [
+    { type:'chop', d:.2, on:() => { skHit(2.5); fxDown(0xdff6ff); skImpact(.3, .3, 4); } },
+    { type:'sweepR', d:.22, on:() => { skHit(2.5); fxRight(0xffd35a); skImpact(.3, .3, 4); burst(at(), 0x7ae7ff, 50, 8); } } ];
+  else if (name === 'square') seq = [
+    { type:'chop', d:.2, on:() => { skHit(3); fxDown(0xdff6ff); skImpact(.3, .3, 3); } },
+    { type:'sweepR', d:.2, on:() => { skHit(3); fxRight(0xffd35a); skImpact(.3, .3, 3); } },
+    { type:'chop', d:.2, on:() => { skHit(3); fxDown(0xdff6ff); skImpact(.3, .3, 3); } },
+    { type:'sweepL', d:.24, on:() => { skHit(3); fxLeft(0xffd35a); skImpact(.6, .6, 10); ring2(6, 0x7ae7ff); burst(at(), 0xffd35a, 90, 10); } } ];
+  else if (name === 'vorpal') seq = [
+    { type:'thrustWind', d:.14 }, { type:'thrustOut', d:.1 },
+    { type:'thrustBack', d:.3, on:() => { skHit(6); skImpact(.6, .5, 12); ring2(5, 0xb8f0ff); burst(at(), 0xb8f0ff, 80, 12); for (let i = 0; i < 3; i++){ const a = i*Math.PI/3 + .2; fxLine(a, -Math.cos(a)*2, -Math.sin(a)*2, 4, 0xb8f0ff, .3, .14); } } } ];
+  else if (name === 'sonic') seq = [
+    { type:'chopWind', d:.24 },
+    { type:'chop', d:.22, on:() => { skHit(5); skImpact(.6, .7, 14, 0xfff2b0); fxDown(0xffd35a); fxLine(-Math.PI/2, -.5, 3.2, 6.4, 0xffffff, .3, .12); ring2(6, 0xffd35a); burst(at(), 0xffd35a, 90, 10); } } ];
+  else if (name === 'lotus') seq = [
+    { type:'sweepWind', d:.26 },
+    { type:'sweepR', d:.16, on:() => { skHit(5); skImpact(.6, .6, 10, 0xffd0f0); fxRight(0xff9ae0); fxLine(0, -3.2, .5, 6.4, 0xffffff, .3, .12); ring2(6, 0xff9ae0); burst(at(), 0xff9ae0, 90, 10); } } ];
+  else seq = [   // meteor: 3ヒットで一回転
+    { type:'spin', k0:0, k1:.34, d:.2, on:() => { skHit(2.3); skImpact(.4, .4, 6, 0xffd0a0); ring2(6, 0xff9a20); burst(at(), 0xff9a20, 50, 9); } },
+    { type:'spin', k0:.34, k1:.67, d:.2, on:() => { skHit(2.3); skImpact(.4, .4, 6, 0xffd0a0); ring2(7, 0xff9a20); } },
+    { type:'spin', k0:.67, k1:1, d:.2, on:() => { skHit(2.4); skImpact(.7, .7, 12, 0xffd0a0); ring2(9, 0xffd35a); burst(at(), 0xff9a20, 110, 12); } } ];
+  startAnim(seq); wiiRumble(380);
+}
+// ---- スターバーストストライク: 被ダメ0で16ヒット → READY → 次に振ると16連撃 ----
+const sb = { n:0, ready:false, active:false };
+let chainS = null;
+function sbDraw(){
+  if (chainS){ hud.remove(chainS); chainS.material.map.dispose(); chainS.material.dispose(); chainS = null; }
+  if (sb.n <= 0 && !sb.ready) return;
+  chainS = mkSprite(sb.ready ? 'STARBURST READY! 振って発動' : 'CHAIN ' + sb.n + ' / 16', sb.ready ? '#ffd35a' : '#7ae7ff', .32);
+  chainS.position.set(0, 1.28, -3); hud.add(chainS);
+}
+function sbHit(){
+  if (sb.ready || sb.active || state !== 'play') return;
+  sb.n++; sbDraw();
+  if (sb.n >= 16){ sb.ready = true; sbDraw(); popCam('STARBURST READY!', '#ffd35a', 1.2, 1.4); dbg('★ 16連撃達成 → STARBURST READY（次の斬りで発動）'); wiiRumble(200); }
+}
+function startStarburst(){
+  if (state !== 'play' || B.s === 'dead') return;
+  sb.ready = false; sb.active = true; sb.n = 0; sbDraw();
+  P.inv = Math.max(P.inv, 2.2); P.swingCd = 2; P.swing = 0;
+  dbg('★ スターバーストストライク 16連撃！'); skBanner('starburst');
+  skImpact(.6, .3, 8, 0xfff2b0);
+  const seq = [];
+  for (let i = 0; i < 16; i++){
+    const sg = i % 2 ? -1 : 1, a0 = sg*(1.2 + Math.random()), last = i === 15;
+    seq.push({ type:'flurry', d:.1, a0, a1:-a0, x0:-sg*1.3, x1:sg*1.3, dy:(Math.random() - .5)*.6, rv:(Math.random() - .5)*.8,
+      on:() => {
+        skHit(1.5, false); hitstop = 0;
+        const ang = Math.random()*Math.PI, len = 6.4, cx = (Math.random() - .5)*1.6, cy = (Math.random() - .5)*1.2;
+        fxLine(ang, cx - Math.cos(ang)*len/2, cy - Math.sin(ang)*len/2, len, i % 2 ? 0xffd35a : 0xdff6ff, .25, .14);
+        burst(bossG.position, 0xffffff, 12, 7); shake = Math.max(shake, .15);
+        if (i % 4 === 0) wiiRumble(80);
+        if (last){ skImpact(.9, .8, 14, 0xfff2b0); ring(bossG.position, 8, 0xffd35a, .6); burst(bossG.position, 0xffd35a, 160, 14); }
+      } });
+  }
+  seq.push({ type:'idle', d:.25, on:() => { sb.active = false; } });
+  startAnim(seq);
+}
+// メニュー設定（sk[key] ⇔ スライダー ⇔ 表示ラベル）
+const f2 = v => v.toFixed(2), f1 = v => v.toFixed(1);
+const SK_UI = { win:['skWin','skWinV'], rB:['skRB','skRBV',f2], rA:['skRA','skRAV',f2], minPk:['skPk','skPkV'], mult:['skMul','skMulV'], sqWin:['skSq','skSqV'],
+  heavyV:['skHV','skHVV'], heavyH:['skHH','skHHV'], spin:['skSp','skSpV'], thrustA:['skTA','skTAV',f1], thrustRot:['skTR','skTRV'], thrustPk:['skTP','skTPV'] };
+function skSet(key, v){ const [i, l, fm] = SK_UI[key], el = $(i); el.value = v; sk[key] = +el.value; $(l).textContent = fm ? fm(sk[key]) : sk[key]; }
+for (const key in SK_UI) $(SK_UI[key][0]).oninput = e => skSet(key, +e.target.value);
+// 直近の斬りを基準にしきい値を登録（実際の動きに合わせる）
+function skLearn(n){
+  const r = sk.lastR, f = Math.round;
+  if (!r){ dbg('登録できる斬りがありません（先に1回振ってください）'); return; }
+  if (n === 1){ skSet('heavyV', Math.round(r.ih*.85/10)*10); dbg(`①縦重撃を登録: ∫縦${f(r.ih)}° → しきい値${sk.heavyV}°（これ以上の縦斬りで発動）`); }
+  else if (n === 2){
+    skSet('thrustA', Math.max(2.5, Math.floor(r.pa*.85*10)/10)); skSet('thrustRot', Math.max(60, Math.ceil(r.rot*1.4/10)*10)); skSet('thrustPk', Math.max(400, Math.ceil(r.pk*1.4/50)*50));
+    dbg(`②突きを登録: ${r.pa.toFixed(1)}g/回転${f(r.rot)}°/pk${f(r.pk)} → 加速度≥${sk.thrustA}g 回転<${sk.thrustRot}° 速度<${sk.thrustPk}`); }
+  else if (n === 3){ skSet('heavyH', Math.max(100, Math.round(Math.abs(r.iv)*.85/10)*10)); dbg(`③横重撃を登録: ∫横${f(Math.abs(r.iv))}° → しきい値${sk.heavyH}°`); }
+  else if (n === 4){ skSet('spin', Math.max(150, Math.round(Math.abs(r.iv)*.85/10)*10)); dbg(`④一回転を登録: ∫横${f(Math.abs(r.iv))}° → しきい値${sk.spin}°`); }
+}
+for (let n = 1; n <= 4; n++) $('skL' + n).onclick = () => skLearn(n);
+addEventListener('keydown', e => { if (e.key >= '1' && e.key <= '4') skLearn(+e.key); });
+$('skOn').onchange = e => { sk.on = e.target.checked; dbgDraw(); };
+$('skDbg').onchange = e => { sk.dbg = e.target.checked; dbgDraw(); };
+$('skCal').onclick = wiiRecal;
+dbgDraw();
+
+function startBattle(){ reset(); state = 'play'; setMsg(null); bgmPlay(true); }
+function startGame(){
+  (async () => { if (!camStream && (tp || bgMode === 'cam')) await openCam(camSel.value || null); applyBg(); if (tp) enterTP(); else if (face.on && !face.stream) startFace(); else faceRecenter(); })();
+  startBattle();
+}
+addEventListener('mousedown', e => {
+  if (state === 'play' && bgm.paused && !menuOn) bgmPlay();
+  if (menuOn) return;
+  setMouse(e);
+  if (state !== 'play'){
+    if (state !== 'title' && performance.now() - endAt < 600) return;
+    startGame(); return;
+  }
+  if (ctl.mode !== 'mouse') return;   // Wiiモード中はクリックで戦闘操作しない
+  if (e.button === 0){ mdn.on = true; mdn.t = performance.now(); }   // 短押し=斬る(離した時) / 長押し=ガード
+  else if (e.button === 2) parry();
+});
+addEventListener('mouseup', e => {
+  if (e.button !== 0 || !mdn.on) return;
+  mdn.on = false;
+  if (performance.now() - mdn.t < GUARD_MS && state === 'play' && !menuOn) attack();
+});
+
+// ===== 処理負荷の目安（FPS / 各処理の時間 / 開いているカメラ数）=====
+let mlFrame = false;
+const perf = { n:0, t0:performance.now(), face:0, hand:0, pose:0, rend:0 };
+function perfTick(now){
+  perf.n++;
+  if (now - perf.t0 < 1000) return;
+  const n = perf.n, fps = n*1000/(now - perf.t0), cams = (camStream ? 1 : 0) + (face.stream ? 1 : 0), f = v => (v/n).toFixed(1);
+  $('perfStat').textContent = `FPS ${fps.toFixed(0)} | 顔${f(perf.face)} 手${f(perf.hand)}` + (tp ? ` 全身${f(perf.pose)}` : '') + ` 描画${f(perf.rend)}ms/フレーム | カメラ${cams}台`
+    + (bgMode === 'video' && bgVidTex ? '+背景動画' : bgMode === 'image' && bgImgTex ? '+背景画像' : '');
+  $('perfStat').style.color = fps < 30 ? '#ff4d5e' : fps < 50 ? '#ffd35a' : '#9fffb0';
+  perf.n = perf.face = perf.hand = perf.pose = perf.rend = 0; perf.t0 = now;
+}
+function setQuality(k){
+  Q = QP[k] || QP.std; renderer.setPixelRatio(Math.min(devicePixelRatio, Q.pr)); resize();
+  if (camStream) camStream.getVideoTracks()[0].applyConstraints({ width:{ ideal:Q.bgW }, height:{ ideal:Q.bgH } }).catch(() => {});
+}
+$('qMode').onchange = e => setQuality(e.target.value);
+let last = performance.now();
+function loop(now){
+  const dt = Math.min(.033, (now - last)/1000); last = now;
+  mlFrame = false; faceStep(now); poseStep(now); handStep(now); perfTick(now); hcStep(now, dt); palmUI(now); faceDraw(); qrTick(now); update(dt);
+  const _t = performance.now(); render(); perf.rend += performance.now() - _t; requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+// タイトル画面(parytitle.html)から ?start=1 で来たら自動スタート
+if (/[?&]start=1/.test(location.search)) setTimeout(() => dispatchEvent(new MouseEvent('mousedown', { button:0, clientX:innerWidth/2, clientY:innerHeight/2 })), 500);
+</script>
+</body>
+</html>
