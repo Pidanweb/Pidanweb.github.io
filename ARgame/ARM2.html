@@ -78,6 +78,14 @@
     <label>カメラの画角 <b id="bcFovV">65</b>°<input type="range" id="bcFovIn" min="35" max="110" step="1" value="65"><small>カメラの仕様（対角でなく水平の画角）が分かれば合わせる</small></label>
     <label>ボスまでの距離 <b id="bcBossV">8.5</b> m<input type="range" id="bcBoss" min="3" max="12" step="0.5" value="8.5"></label>
     <div><button id="bcStart">🧍 キャリブレーション開始</button> <button id="bcReset">リセット</button></div>
+    <div id="bcTune" hidden style="margin:6px 0;padding:6px 8px;border:1px dashed #7ae7ff66;border-radius:6px">
+      <b style="color:#7ae7ff">✏️ 微調整（プレビューのマス目を見ながら）</b>
+      <label>床を上下 <b id="bcTFV">0</b> cm<input type="range" id="bcTF" min="-40" max="40" step="1" value="0"><small>＋でマス目が上がる / −で下がる</small></label>
+      <label>前後の傾き <b id="bcTTV">0.0</b>°<input type="range" id="bcTT" min="-12" max="12" step="0.2" value="0"></label>
+      <label>左右の傾き <b id="bcTPV">0.0</b>°<input type="range" id="bcTP" min="-12" max="12" step="0.2" value="0"></label>
+      <small>画角のスライダーも、ここでその場で反映されます。結果は自動で保存され、次回は読み込まれます。</small>
+      <button id="bcTuneReset">微調整を0に戻す</button>
+    </div>
     <label><input type="checkbox" id="bcAR"> AR確認表示（カメラ映像にゲームの床とボスを重ねる）</label>
     <div id="bcStat" style="font-size:12px;color:#ffd35a">未設定</div>
     <small>足元まで全身が映るようにして「開始」→ 5秒のカウントダウン中にプレイする位置へ移動 → 3秒まっすぐ立つ（前かがみ・ひざ曲げは数えません）。左下のプレビューに床のマス目（1m間隔）が出るので、実際の床と合っているか確認してください。</small>
@@ -635,7 +643,7 @@ function poseStep(now){
   let r; try { r = pose.lm.detectForVideo(v, now); } catch (e){ console.error(e); return; } finally { perf.pose += performance.now() - _t; }
   const n = r.landmarks && r.landmarks[0], w = r.worldLandmarks && r.worldLandmarks[0];
   if (!n || !w){ pose.seen = false; setBadge('🧍 全身が見つかりません（カメラから離れて全身を映す）'); return; }
-  pose.seen = true; pose.n = n; pose.w = w; bcPose(n);
+  pose.seen = true; pose.n = n; pose.w = w; bcLoadSaved(); bcPose(n);
   const hx = (n[23].x + n[24].x)/2, ex = (n[7].x + n[8].x)/2, ey = (n[7].y + n[8].y)/2, ed = Math.max(.01, Math.hypot(n[7].x - n[8].x, n[7].y - n[8].y));
   const hr = (n[0].x - ex)/ed, hp = (n[0].y - ey)/ed;   // 耳の中点から見た鼻の位置 = 頭の向き
   if (pose.cx === null){
@@ -792,7 +800,7 @@ function bcStart(){
   if (!pose.lm){ bcSay('全身認識の読み込みを待っています。少ししてからもう一度押してください'); return; }
   bc.height = +$('bcH').value/100; bc.camH = +$('bcCamH').value/100; bc.autoFov = $('bcAutoFov').checked;
   if (!(bc.height > 1 && bc.height < 2.3)){ bcSay('身長を正しく入れてください'); return; }
-  bc.state = 'count'; bc.cd = 0; bc.t0 = performance.now(); bc.obsA = []; bc.obs = []; bc.lastF = bc.lastH = null;
+  bc.state = 'count'; bc.res = null; bcTuneUI(); bc.cd = 0; bc.t0 = performance.now(); bc.obsA = []; bc.obs = []; bc.lastF = bc.lastH = null;
   HOVER = -8.5; applyBg();
   bcSay('5秒後に測定を始めます。プレイする位置に移動してください');
 }
@@ -817,26 +825,71 @@ function bcFinish(obs){
   const px = r.rms*bcFocal(vid.videoWidth);
   console.log(`[体キャリブ] 計算結果: 高さ ${r.h.toFixed(2)}m 下向き ${(r.th*180/Math.PI).toFixed(1)}° 傾き ${(r.ph*180/Math.PI).toFixed(1)}° 画角 ${bc.hfov}° 誤差 ${px.toFixed(1)}px（観測${obs.length}件）`);
   if (px > 25 || r.h < .2 || r.h > 3.4){ bc.state = 'off'; bcSay(`うまく測れませんでした（誤差 ${px.toFixed(0)}px）。測定中に姿勢が変わった可能性があります。身長・カメラの高さを確認して、もう一度`); return; }
-  bc.res = r;
-  // 床座標 F をカメラ座標(three.js)で作る
-  const Uc = bcUp(r.th, r.ph), U = new THREE.Vector3(Uc[0], -Uc[1], -Uc[2]).normalize();   // OpenCV → three.js
-  const back = new THREE.Vector3(0, 0, 1); back.addScaledVector(U, -back.dot(U)).normalize();   // カメラの後ろ向きの水平成分
-  const X = new THREE.Vector3().crossVectors(U, back), O = U.clone().multiplyScalar(-r.h);
-  bc.camF.makeBasis(X, U, back).setPosition(O);
-  bc.FfromCam.copy(bc.camF).invert();
-  // 立ち位置 = 最後に立った場所のかかとの平均
-  const m = bcMean(bc.obs.length ? bc.obs : bc.obsA), p = bcRay(m);   // 最後に立った場所
-  if (!p){ bc.state = 'off'; bcSay('立ち位置を計算できませんでした。もう一度'); return; }
-  bc.origin = p;
-  // ゲームの前方: 正面撮り → カメラの方 / 背後撮り → カメラの向く方
-  const th = pose.cam === 'front' ? Math.PI : 0;
-  bc.FfromG.makeRotationY(th).setPosition(p.x, 0, p.z);
-  bc.GfromF.copy(bc.FfromG).invert();
-  bc.GfromCam.multiplyMatrices(bc.GfromF, bc.FfromCam);
-  bc.state = 'locked'; HOVER = -bc.boss; applyBg();
+  bc.res = { th:r.th, ph:r.ph, h:r.h };
+  bc.tune = { floor:0, th:0, ph:0 }; bcTuneUI();
+  // 立ち位置 = 最後に立った場所のかかとの平均（画角を変えても使えるよう、画面上の位置で覚える）
+  const m = bcMean(bc.obs.length ? bc.obs : bc.obsA), f0 = bcFocal(vid.videoWidth);
+  bc.originUV = [m.fx*f0/vid.videoWidth + .5, m.fy*f0/vid.videoHeight + .5];
+  bc.poseCam = pose.cam;
+  if (!bcApply()){ bc.state = 'off'; bcSay('立ち位置を計算できませんでした。もう一度'); return; }
+  const p = bc.origin;
+  bc.state = 'locked'; HOVER = -bc.boss; applyBg(); bcSave();
   const dist = Math.hypot(p.x, p.z);
   bcSay(`完了: カメラの高さ ${r.h.toFixed(2)}m・下向き ${(r.th*180/Math.PI).toFixed(0)}°・立ち位置まで ${dist.toFixed(1)}m（誤差 ${px.toFixed(1)}px）` + (bc.fovNote ? '・' + bc.fovNote : ''), 'キャリブレーション完了');
 }
+
+// 計算結果（bc.res）＋手動の微調整（bc.tune）＋画角 から、床とゲーム座標を作り直す
+function bcApply(){
+  const r = bc.res, t = bc.tune, W_ = vid.videoWidth, H_ = vid.videoHeight;
+  if (!r || !W_ || !bc.originUV) return false;
+  const th = r.th + t.th*Math.PI/180, ph = r.ph + t.ph*Math.PI/180, h = Math.max(.2, r.h - t.floor);
+  const Uc = bcUp(th, ph), U = new THREE.Vector3(Uc[0], -Uc[1], -Uc[2]).normalize();   // OpenCV → three.js
+  const back = new THREE.Vector3(0, 0, 1); back.addScaledVector(U, -back.dot(U)).normalize();   // カメラの後ろ向きの水平成分
+  const X = new THREE.Vector3().crossVectors(U, back), O = U.clone().multiplyScalar(-h);
+  bc.camF.makeBasis(X, U, back).setPosition(O);
+  bc.FfromCam.copy(bc.camF).invert();
+  const f = bcFocal(W_), p = bcRay({ fx:(bc.originUV[0] - .5)*W_/f, fy:(bc.originUV[1] - .5)*H_/f });
+  if (!p) return false;
+  bc.origin = p;
+  // ゲームの前方: 正面撮り → カメラの方 / 背後撮り → カメラの向く方
+  bc.FfromG.makeRotationY((bc.poseCam || pose.cam) === 'front' ? Math.PI : 0).setPosition(p.x, 0, p.z);
+  bc.GfromF.copy(bc.FfromG).invert();
+  bc.GfromCam.multiplyMatrices(bc.GfromF, bc.FfromCam);
+  return true;
+}
+// --- 微調整・保存 ---
+const BC_KEY = 'connectworld_bodycal_v1';
+function bcTuneUI(){
+  const t = bc.tune || { floor:0, th:0, ph:0 };
+  $('bcTF').value = Math.round(t.floor*100); $('bcTFV').textContent = Math.round(t.floor*100);
+  $('bcTT').value = t.th; $('bcTTV').textContent = t.th.toFixed(1);
+  $('bcTP').value = t.ph; $('bcTPV').textContent = t.ph.toFixed(1);
+  $('bcTune').hidden = bc.state !== 'locked' && !bc.res;
+}
+function bcSave(){
+  try { localStorage.setItem(BC_KEY, JSON.stringify({ res:bc.res, tune:bc.tune, hfov:bc.hfov, originUV:bc.originUV, poseCam:bc.poseCam, boss:bc.boss, height:bc.height })); } catch (e){}
+}
+function bcLoadSaved(){   // 前回の結果を読み込む（カメラを動かしていなければそのまま使える）
+  if (bc.state !== 'off' || !tp || !vid.videoWidth || bc.triedLoad) return;
+  bc.triedLoad = true;
+  let d = null; try { d = JSON.parse(localStorage.getItem(BC_KEY) || 'null'); } catch (e){}
+  if (!d || !d.res || !d.originUV) return;
+  Object.assign(bc, { res:d.res, tune:d.tune || { floor:0, th:0, ph:0 }, hfov:d.hfov || bc.hfov, originUV:d.originUV, poseCam:d.poseCam, boss:d.boss || bc.boss });
+  $('bcFovIn').value = Math.round(bc.hfov); $('bcFovV').textContent = bc.hfov.toFixed(1);
+  $('bcBoss').value = bc.boss; $('bcBossV').textContent = bc.boss.toFixed(1);
+  if (d.height) $('bcH').value = Math.round(d.height*100);
+  if (!bcApply()) return;
+  bc.state = 'locked'; HOVER = -bc.boss; applyBg(); bcTuneUI();
+  bcSay('前回のキャリブレーションを読み込みました（カメラを動かしたら測り直してください）');
+}
+function bcTuneInput(){
+  if (!bc.res) return;
+  bc.tune = { floor:+$('bcTF').value/100, th:+$('bcTT').value, ph:+$('bcTP').value };
+  $('bcTFV').textContent = $('bcTF').value; $('bcTTV').textContent = (+$('bcTT').value).toFixed(1); $('bcTPV').textContent = (+$('bcTP').value).toFixed(1);
+  if (bcApply()) bcSave();
+}
+for (const id of ['bcTF', 'bcTT', 'bcTP']) $(id).addEventListener('input', bcTuneInput);
+$('bcTuneReset').onclick = () => { bc.tune = { floor:0, th:0, ph:0 }; bcTuneUI(); if (bcApply()) bcSave(); };
 // 正規化画像座標のかかと → 床との交点（F座標）
 function bcRay(o){
   if (!o) return null;
@@ -857,7 +910,7 @@ function bcFov(){   // 背景の切り抜き（cover）と同じ範囲になる�
   return 2*Math.atan(((a > vw/vh ? vw/a : vh)/2)/f)*180/Math.PI;
 }
 function bcCamApply(){ bc.GfromCam.decompose(camera.position, camera.quaternion, new THREE.Vector3()); }
-function bcReset(){ bc.state = 'off'; HOVER = -8.5; applyBg(); bcSay('リセットしました（ボスは通常の位置）'); }
+function bcReset(){ bc.state = 'off'; bc.res = null; HOVER = -8.5; applyBg(); try { localStorage.removeItem(BC_KEY); } catch (e){} bcTuneUI(); bcSay('リセットしました（保存した結果も消しました。ボスは通常の位置）'); }
 // 認識プレビューに床のグリッド・立ち位置を重ねる（X, Y: 0〜1 → プレビュー座標）
 function bcDrawPrev(X, Y){
   if (bc.state !== 'locked') return;
@@ -873,8 +926,8 @@ function bcDrawPrev(X, Y){
 }
 $('bcStart').onclick = bcStart;
 $('bcReset').onclick = bcReset;
-$('bcFovIn').oninput = e => { bc.hfov = +e.target.value; $('bcFovV').textContent = bc.hfov; };
-$('bcBoss').oninput = e => { bc.boss = +e.target.value; $('bcBossV').textContent = bc.boss.toFixed(1); if (bc.state === 'locked') HOVER = -bc.boss; };
+$('bcFovIn').oninput = e => { bc.hfov = +e.target.value; $('bcFovV').textContent = bc.hfov; if (bc.state === 'locked' && bcApply()) bcSave(); };
+$('bcBoss').oninput = e => { bc.boss = +e.target.value; $('bcBossV').textContent = bc.boss.toFixed(1); if (bc.state === 'locked'){ HOVER = -bc.boss; bcSave(); } };
 $('bcAR').onchange = e => { bc.ar = e.target.checked; applyBg(); };
 
 // ----- VRM 読み込み（three-vrm は使わず GLTFLoader + VRMの骨情報だけ読む。VRM0.x / 1.0 両対応）-----
