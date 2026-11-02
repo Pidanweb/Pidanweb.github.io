@@ -28,6 +28,10 @@
   #logHead .btn{padding:2px 8px;font-size:12px}
   #log{margin:0;padding:6px 8px;height:170px;overflow-y:auto;font:11px/1.45 monospace;white-space:pre-wrap;word-break:break-all;color:#cfe}
   #log .w{color:var(--gold)} #log .e{color:#ff8a96} #log .ok{color:#9fffb0}
+  #bar{position:fixed;right:10px;bottom:10px;z-index:20;padding:10px 14px;background:#000d;border:1px solid #7ae7ff55;border-radius:10px;text-align:center;min-width:240px}
+  #barMsg{color:var(--gold);font-weight:bold}
+  #barMsg.ok{color:#9fffb0}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
   #start{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:var(--bg);text-align:center;padding:20px;box-sizing:border-box}
   #start h1{margin:0;color:var(--gold);font-size:26px}
   #start p{margin:0;color:#9fdcea;line-height:1.7;max-width:30em}
@@ -38,7 +42,7 @@
 <body>
 <div id="start">
   <h1>QRスライム配置テスト</h1>
-  <p>印刷したQRコード（0〜3）をカメラに映すと、その上にスライムが乗ります。<br>使うカメラは右上の「📷 カメラ設定」で選べます。</p>
+  <p>カメラを固定して、床に置いたQRを一度だけ映します。<br>位置が決まったら、QRが見えなくなってもスライムはその場所に残ります。<br>使うカメラは右上の「📷 カメラ設定」で選べます。</p>
   <button class="btn" id="startBtn">カメラを開始</button>
 </div>
 
@@ -55,21 +59,42 @@
     <div id="camInfo"></div>
   </div>
   <div id="panel" class="panel" hidden>
-    <label>スライムを出すQR
-      <select id="target"><option value="*">すべてのQR</option><option value="0">QR 0</option><option value="1">QR 1</option><option value="2">QR 2</option><option value="3">QR 3</option></select>
+    <label>基準にするQR
+      <select id="ref"><option value="auto">自動（最初に見つけたQR）</option><option value="0">QR 0</option><option value="1">QR 1</option><option value="2">QR 2</option><option value="3">QR 3</option></select>
     </label>
-    <label>スライムの大きさ <b id="sizeV">1.4</b>×QR
-      <input type="range" id="size" min="0.4" max="4" step="0.1" value="1.4">
+    <label>QRの印刷サイズ（黒い部分の1辺） <b id="qrV">10</b> cm
+      <input type="range" id="qr" min="3" max="40" step="0.5" value="10">
+      <small>実寸を測って合わせると、距離と大きさが正確になります</small>
+    </label>
+    <label>スライムの高さ <b id="hV">0.5</b> m
+      <input type="range" id="hgt" min="0.2" max="4" step="0.1" value="0.5">
+      <small>ゲーム本編のジャイアントスライムは約3.6m</small>
+    </label>
+    <label>QRから奥へずらす <b id="dzV">0.0</b> m
+      <input type="range" id="dz" min="-1" max="6" step="0.1" value="0">
+    </label>
+    <label>QRから左右へずらす <b id="dxV">0.0</b> m
+      <input type="range" id="dx" min="-3" max="3" step="0.1" value="0">
     </label>
     <label>カメラの画角 <b id="fovV">65</b>°
       <input type="range" id="fov" min="35" max="110" step="1" value="65">
-      <small>スライムが傾く・浮く・沈むときに調整（一般的なWebカメラは60〜78°）</small>
+      <small>床のグリッドが床に沿わず傾くときに調整（一般的なWebカメラは60〜78°）</small>
     </label>
+    <label>QRの解析サイズ
+      <select id="detSel"><option value="960">960（軽い・近距離向け）</option><option value="1280" selected>1280（標準）</option><option value="1920">1920（重い・遠くのQRも読める）</option></select>
+    </label>
+    <label><input type="checkbox" id="autoLock" checked> 安定したら自動で固定</label>
+    <label><input type="checkbox" id="autoFix"> 固定後もQRが見えたら少しずつ補正<small>カメラがずれた時用。OFFなら固定後はQR検出を止めて軽くなります</small></label>
+    <label><input type="checkbox" id="grid" checked> 床のグリッドを表示</label>
     <label><input type="checkbox" id="mirror"> 映像を左右反転（見た目だけ）</label>
     <label><input type="checkbox" id="dbg" checked> 検出枠と番号を表示</label>
   </div>
 </div>
 <div id="stat" hidden>待機中</div>
+<div id="bar" hidden>
+  <div id="barMsg">QRを映してください</div>
+  <div class="row" style="justify-content:center"><button class="btn" id="lockBtn" disabled>📌 ここで固定</button><button class="btn" id="resetBtn">🔄 置き直す</button></div>
+</div>
 <div id="logBox">
   <div id="logHead"><span>システムログ</span><span><button class="btn" id="logCopy">コピー</button> <button class="btn" id="logClear">消去</button></span></div>
   <pre id="log"></pre>
@@ -160,8 +185,7 @@ if (!window.THREE) log('three.js を読み込めませんでした。インタ�
 // 流れ: カメラ映像 → Worker(jsQR)でQRの4隅を検出 → 4隅からQRの傾き・距離を計算 → その上にスライムを立たせる
 const $ = id => document.getElementById(id);
 const vid = $('vid'), stage = $('stage');
-const DET_MAX = 960;          // 検出に使う映像の最大幅（大きいほど遠くのQRも読めるが重い）
-const LOST_MS = 600;          // この時間見失ったらスライムを引っ込める
+const LOST_MS = 600;          // この時間QRが見えなければ「見失った」扱い
 
 // ---------- three.js ----------
 const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
@@ -214,20 +238,6 @@ function createSlime(){
   return { root, body, eyes, shadow, jiggle };
 }
 
-// ---------- QRごとの追跡データ ----------
-// marker: QRの位置・傾き（カメラ座標）/ stand: QRの面を床として+Yを上に向けた座標
-const tracks = new Map();
-function getTrack(id){
-  if (tracks.has(id)) return tracks.get(id);
-  const marker = new THREE.Group(); marker.matrixAutoUpdate = false; scene.add(marker);
-  const stand = new THREE.Group(); stand.rotation.x = -Math.PI/2; marker.add(stand);
-  const slime = createSlime(); stand.add(slime.root);
-  const label = mkLabel('QR ' + id); stand.add(label);
-  const t = { id, marker, stand, slime, label, corners:null, seen:-1e9, pos:new THREE.Vector3(), quat:new THREE.Quaternion(),
-              tPos:new THREE.Vector3(), tQuat:new THREE.Quaternion(), fresh:true, appear:0, yaw:0, time:Math.random()*10, blinkAt:0 };
-  tracks.set(id, t); return t;
-}
-
 // ---------- 4隅 → 姿勢（ホモグラフィ分解）----------
 function solve(A, b){
   const n = b.length;
@@ -276,16 +286,24 @@ function poseFromCorners(c, w, h, f, retry = true){
 }
 
 // ---------- 設定 ----------
-const cfg = { target:'*', size:1.4, hfov:65, dbg:true };
+const cfg = { ref:'auto', qr:.10, height:.5, dz:0, dx:0, hfov:65, detMax:1280, autoLock:true, autoFix:false, grid:true, dbg:true };
 const toggle = (id, others) => { const p = $(id); p.hidden = !p.hidden; if (!p.hidden) others.forEach(o => $(o).hidden = true); };
 $('camBtn').onclick = () => { toggle('camPanel', ['panel']); if (!$('camPanel').hidden) listCams(); };
 $('panelBtn').onclick = () => toggle('panel', ['camPanel']);
 $('logBtn').onclick = () => { $('logBox').hidden = !$('logBox').hidden; };
 $('logClear').onclick = () => { LOG.innerHTML = ''; };
 $('logCopy').onclick = () => navigator.clipboard.writeText(LOG.innerText).then(() => log('ログをクリップボードにコピーしました', 'ok'), e => log('コピー失敗: ' + e.message, 'e'));
-$('target').onchange = e => { cfg.target = e.target.value; log('スライムを出すQR: ' + (cfg.target === '*' ? 'すべて' : cfg.target)); };
-$('size').oninput = e => { cfg.size = +e.target.value; $('sizeV').textContent = cfg.size.toFixed(1); };
-$('fov').oninput = e => { cfg.hfov = +e.target.value; $('fovV').textContent = cfg.hfov; layout(); };
+const slider = (id, key, out, k = 1, dec = 1, after) => $(id).oninput = e => { cfg[key] = +e.target.value*k; $(out).textContent = (+e.target.value).toFixed(dec); after && after(); };
+slider('qr', 'qr', 'qrV', .01, 1, () => resetLock('QRサイズを変更'));
+slider('hgt', 'height', 'hV');
+slider('dz', 'dz', 'dzV');
+slider('dx', 'dx', 'dxV');
+slider('fov', 'hfov', 'fovV', 1, 0, () => { layout(); resetLock('画角を変更'); });
+$('detSel').onchange = e => { cfg.detMax = +e.target.value; layout(); log('QRの解析サイズ: ' + det.width + '×' + det.height); };
+$('ref').onchange = e => { cfg.ref = e.target.value; resetLock('基準QRを変更'); };
+$('autoLock').onchange = e => cfg.autoLock = e.target.checked;
+$('autoFix').onchange = e => { cfg.autoFix = e.target.checked; log('固定後の補正: ' + (cfg.autoFix ? 'ON' : 'OFF（検出停止）')); };
+$('grid').onchange = e => cfg.grid = e.target.checked;
 $('mirror').onchange = e => stage.classList.toggle('mir', e.target.checked);
 $('dbg').onchange = e => cfg.dbg = e.target.checked;
 
@@ -321,7 +339,7 @@ async function listCams(){
 async function startWith(deviceId){
   try {
     await openCam(deviceId);
-    $('start').hidden = true; $('stat').hidden = false;
+    $('start').hidden = true; $('stat').hidden = false; $('bar').hidden = false;
     if (!running){ running = true; requestAnimationFrame(loop); log('描画ループ開始', 'ok'); }
   } catch (err){
     log(`カメラを開けません: ${err.name} ${err.message}`, 'e');
@@ -345,7 +363,7 @@ function layout(){
   const sc = Math.min(innerWidth/vw, innerHeight/vh), W = Math.round(vw*sc), H = Math.round(vh*sc);
   stage.style.width = W + 'px'; stage.style.height = H + 'px';
   renderer.setSize(W, H, false); dbgCv.width = W; dbgCv.height = H;
-  const ds = Math.min(1, DET_MAX/vw); det.width = Math.round(vw*ds); det.height = Math.round(vh*ds);
+  const ds = Math.min(1, cfg.detMax/vw); det.width = Math.round(vw*ds); det.height = Math.round(vh*ds);
   focal = (det.width/2)/Math.tan(cfg.hfov*Math.PI/360);
   camera.aspect = det.width/det.height;
   camera.fov = 2*Math.atan((det.height/2)/focal)*180/Math.PI;
@@ -384,10 +402,11 @@ function fallbackMain(){
 startWorker();
 let frames = 0;
 function pump(){
+  if (S.state === 'locked' && !cfg.autoFix) return;   // 固定後は検出を止めて軽くする
   if (busy || !vid.videoWidth || vid.readyState < 2 || (mode !== 'worker' && mode !== 'main')) return;
   dctx.drawImage(vid, 0, 0, det.width, det.height);
   const img = dctx.getImageData(0, 0, det.width, det.height), now = performance.now();
-  const rois = [...tracks.values()].filter(t => now - t.seen < LOST_MS && t.corners).map(t => t.corners);
+  const rois = [...seenQR].filter(([id]) => now - seenAt.get(id) < LOST_MS).map(([, c]) => c);
   tile = (tile + 1) % TILES.length; if (rois.length && tile === 0) tile = 1;   // 追跡中は重い全画面タイルを飛ばす
   if (++frames === 1) log(`QR検出を開始（解析サイズ ${det.width}×${det.height}）`, 'ok');
   if (mode === 'worker'){
@@ -397,73 +416,172 @@ function pump(){
     try { onFound(scanFrame(jsQR, img.data, det.width, det.height, rois, tile)); } catch (e){ log('検出エラー: ' + e.message, 'e'); }
   }
 }
+// ---------- 空間に固定する仕組み ----------
+// world  : 基準QRの位置・傾き（カメラ座標, メートル）。固定後はQRが見えなくても動かさない
+// floorG : QRの面を床として +Y を上に向けた座標。スライム・グリッドはここに置く
+const world = new THREE.Group(); world.matrixAutoUpdate = false; world.visible = false; scene.add(world);
+const floorG = new THREE.Group(); floorG.rotation.x = -Math.PI/2; world.add(floorG);
+const slime = createSlime(); floorG.add(slime.root);
+const slimeMats = []; slime.root.traverse(o => { if (o.material) slimeMats.push([o.material, o.material.opacity, o.material.transparent]); });
+const setGhost = g => slimeMats.forEach(([m, op, tr]) => { m.transparent = g || tr; m.opacity = g ? op*.45 : op; });
+const grid = new THREE.GridHelper(8, 16, 0xffd35a, 0x7ae7ff);
+grid.material.transparent = true; grid.material.opacity = .35; grid.material.depthWrite = false; floorG.add(grid);
+const qrFrame = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI/2)), new THREE.LineBasicMaterial({ color:0xffd35a }));
+qrFrame.position.y = .002; floorG.add(qrFrame);
+
+const S = {
+  state:'calib', ref:null, samples:[],
+  pos:new THREE.Vector3(), quat:new THREE.Quaternion(),          // 固定した姿勢
+  live:{ pos:new THREE.Vector3(), quat:new THREE.Quaternion(), seen:-1e9, fresh:true },   // いま見えている基準QR
+  show:new THREE.Vector3(), showQ:new THREE.Quaternion(),         // 画面に出す姿勢（平滑化後）
+  fwd:new THREE.Vector3(0, 0, -1), appear:0, time:0, yaw:0, blinkAt:0, progress:0
+};
+const seenQR = new Map();   // 検出枠の表示・追跡用 { id: 4隅 }, 時刻は seenAt
+const seenAt = new Map();
+const NEED = 15;            // 平均に使う検出回数（最大）
+const MIN_N = 6, MIN_MS = 800;   // 固定の条件: 6回以上 かつ 0.8秒以上 安定して見えている
+
+function meanPose(list){
+  const p = new THREE.Vector3(), q0 = list[0].quat, q = new THREE.Quaternion(0, 0, 0, 0);
+  for (const s of list){
+    p.add(s.pos);
+    const sg = (s.quat.x*q0.x + s.quat.y*q0.y + s.quat.z*q0.z + s.quat.w*q0.w) < 0 ? -1 : 1;
+    q.x += s.quat.x*sg; q.y += s.quat.y*sg; q.z += s.quat.z*sg; q.w += s.quat.w*sg;
+  }
+  return { pos:p.divideScalar(list.length), quat:q.normalize() };
+}
+function lock(by){
+  if (S.samples.length < 3){ log('まだQRを十分に認識できていません', 'w'); return; }
+  const m = meanPose(S.samples.slice(-NEED));
+  S.pos.copy(m.pos); S.quat.copy(m.quat); S.show.copy(m.pos); S.showQ.copy(m.quat);
+  S.state = 'locked'; S.time = 0;
+  setGhost(false);
+  // カメラから見て「奥」の方向を床の上で決めて固定（奥へずらす設定に使う）
+  world.matrix.compose(S.pos, S.quat, new THREE.Vector3(1, 1, 1)); world.updateMatrixWorld(true);
+  const c = floorG.worldToLocal(new THREE.Vector3());
+  S.fwd.set(-c.x, 0, -c.z); if (S.fwd.lengthSq() < 1e-6) S.fwd.set(0, 0, -1); S.fwd.normalize();
+  const d = S.pos.length();
+  log(`QR「${S.ref}」の位置で固定しました（${by}）。カメラからの距離 ${d.toFixed(2)}m。QRが見えなくてもスライムは残ります`, 'ok');
+  if (!cfg.autoFix) log('固定中はQR検出を止めています（補正ONで再開）');
+}
+function resetLock(why){
+  S.state = 'calib'; S.samples = []; S.progress = 0; S.live.fresh = true; S.appear = 0;
+  if (cfg.ref === 'auto') S.ref = null; else S.ref = cfg.ref;
+  setGhost(true);
+  if (why) log(`置き直し（${why}）。QRを映してください`, 'w');
+}
+$('lockBtn').onclick = () => lock('手動');
+$('resetBtn').onclick = () => resetLock('ボタン');
+resetLock();
+
 function onFound(found){
   busy = false; detN++;
   const now = performance.now();
   for (const f of found){
-    const m = poseFromCorners(f.c, det.width, det.height, focal);
-    if (!m){ log(`QR ${f.data}: 姿勢を計算できません（角度が急すぎる）`, 'w'); continue; }
-    const isNew = !tracks.has(f.data), t = getTrack(f.data);
-    if (isNew || now - t.seen > LOST_MS) log(`QR「${f.data}」を${isNew ? '発見' : '再発見'}`, 'ok');
-    t.corners = f.c; t.seen = now; t.lostLogged = false;
-    m.decompose(t.tPos, t.tQuat, new THREE.Vector3());
-    if (t.fresh){ t.pos.copy(t.tPos); t.quat.copy(t.tQuat); t.fresh = false; }
+    if (!seenAt.has(f.data) || now - seenAt.get(f.data) > LOST_MS) log(`QR「${f.data}」を認識`, 'ok');
+    seenQR.set(f.data, f.c); seenAt.set(f.data, now);
+  }
+  if (!S.ref && cfg.ref === 'auto' && found.length){ S.ref = found[0].data; log(`基準QRを「${S.ref}」に決定`); }
+  const f = found.find(x => x.data === S.ref); if (!f) return;
+  const m = poseFromCorners(f.c, det.width, det.height, focal);
+  if (!m){ log(`QR ${f.data}: 姿勢を計算できません（角度が急すぎる）`, 'w'); return; }
+  const pos = new THREE.Vector3(), quat = new THREE.Quaternion();
+  m.decompose(pos, quat, new THREE.Vector3());
+  pos.multiplyScalar(cfg.qr);   // QR1辺=1 の単位 → メートル
+  if (now - S.live.seen > LOST_MS) S.samples = [];   // 途切れたら数え直し
+  S.live.pos.copy(pos); S.live.quat.copy(quat); S.live.seen = now;
+  if (S.live.fresh){ S.show.copy(pos); S.showQ.copy(quat); S.live.fresh = false; }
+
+  if (S.state === 'calib'){
+    S.samples.push({ pos, quat, t:now }); if (S.samples.length > NEED) S.samples.shift();
+    // ばらつきが小さければ（＝手ブレ・誤検出なし）固定
+    const mp = meanPose(S.samples), dist = mp.pos.length();
+    let spread = 0, ang = 0;
+    for (const s of S.samples){ spread = Math.max(spread, s.pos.distanceTo(mp.pos)); ang = Math.max(ang, 2*Math.acos(Math.min(1, Math.abs(s.quat.dot(mp.quat))))); }
+    const stable = spread < dist*.04 && ang < .15;
+    const prog = Math.min(S.samples.length/MIN_N, (now - S.samples[0].t)/MIN_MS, 1);
+    S.progress = stable ? prog : Math.min(prog, .5);
+    if (cfg.autoLock && stable && prog >= 1) lock('自動');
+  } else if (cfg.autoFix){
+    const jump = pos.distanceTo(S.pos);
+    if (jump > .5) log(`QRの位置が ${jump.toFixed(2)}m ずれています。カメラが動いたなら「置き直す」を押してください`, 'w');
+    else { S.pos.lerp(pos, .05); S.quat.slerp(quat, .05); }
   }
 }
 
 // ---------- 描画ループ ----------
 const easeOutBack = x => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3*Math.pow(x-1, 3) + c1*Math.pow(x-1, 2); };
-const ONE = new THREE.Vector3(1, 1, 1), ORIGIN = new THREE.Vector3();
-let last = performance.now();
+let last = performance.now(), lastMsg = '';
 function loop(){
   requestAnimationFrame(loop);
   const now = performance.now(), dt = Math.min(.1, (now - last)/1000); last = now;
   pump();
 
-  const a = 1 - Math.exp(-dt*14);   // 揺れを抑える平滑化
-  for (const t of tracks.values()){
-    const visible = now - t.seen < LOST_MS && (cfg.target === '*' || cfg.target === t.id);
-    t.appear = Math.max(0, Math.min(1, t.appear + (visible ? dt/.5 : -dt/.2)));
-    if (now - t.seen >= LOST_MS && !t.lostLogged){ t.lostLogged = true; log(`QR「${t.id}」を見失いました`, 'w'); }
-    if (!visible && t.appear === 0){ t.marker.visible = false; t.fresh = true; continue; }
-    t.marker.visible = true;
-    t.pos.lerp(t.tPos, a); t.quat.slerp(t.tQuat, a);
-    t.marker.matrix.compose(t.pos, t.quat, ONE); t.marker.matrixWorldNeedsUpdate = true;
+  const liveOK = now - S.live.seen < LOST_MS;
+  // 表示する姿勢: 調整中は見えているQRに追従 / 固定後は固定した姿勢
+  const tgtP = S.state === 'locked' ? S.pos : S.live.pos, tgtQ = S.state === 'locked' ? S.quat : S.live.quat;
+  const a = 1 - Math.exp(-dt*12);
+  S.show.lerp(tgtP, a); S.showQ.slerp(tgtQ, a);
+  world.matrix.compose(S.show, S.showQ, new THREE.Vector3(1, 1, 1)); world.matrixWorldNeedsUpdate = true;
+  world.visible = S.state === 'locked' || liveOK;
+  world.updateMatrixWorld(true);
 
-    // スライムの動き（待機中のぷるぷる＋カメラの方を向く）
-    const s = t.slime, R = cfg.size/2, k = Math.max(.001, easeOutBack(t.appear));
-    t.time += dt;
-    const sy = 1 + Math.sin(t.time*3)*.06, sx = 1/Math.sqrt(sy);
-    s.jiggle(t.time, .035);
-    s.body.scale.set(R*sx*k, R*sy*k, R*sx*k);
-    s.body.position.y = R*sy*k;
-    s.shadow.scale.setScalar(R*k);
-    t.stand.updateWorldMatrix(true, false);
-    const cam = t.stand.worldToLocal(ORIGIN.clone());
-    const want = Math.atan2(cam.x, cam.z);
-    let d = want - t.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); t.yaw += d*Math.min(1, dt*6);
-    s.body.rotation.y = t.yaw;
-    if (now > t.blinkAt) t.blinkAt = now + 2000 + Math.random()*3000;
-    const blink = t.blinkAt - now < 110 ? .15 : 1; s.eyes.forEach(e => e.scale.y = blink);
-    t.label.visible = cfg.dbg; t.label.position.y = R*2*k + .35;
+  // 調整中は「奥」方向をその都度計算
+  if (S.state === 'calib' && world.visible){
+    const c = floorG.worldToLocal(new THREE.Vector3());
+    if (c.x*c.x + c.z*c.z > 1e-6) S.fwd.set(-c.x, 0, -c.z).normalize();
   }
+  const right = new THREE.Vector3(-S.fwd.z, 0, S.fwd.x);
+  const R = cfg.height/2, qs = cfg.qr;
+  qrFrame.scale.set(qs, 1, qs);
+  grid.visible = cfg.grid;
+
+  // スライム
+  const target = S.state === 'locked' ? 1 : (liveOK ? 1 : 0);
+  S.appear = Math.max(0, Math.min(1, S.appear + (target ? dt/.5 : -dt/.2)));
+  S.time += dt;
+  const s = slime, k = Math.max(.001, easeOutBack(S.appear));
+  const sy = 1 + Math.sin(S.time*3)*.06, sx = 1/Math.sqrt(sy);
+  s.jiggle(S.time, .035);
+  s.root.position.copy(S.fwd).multiplyScalar(cfg.dz).addScaledVector(right, cfg.dx);
+  s.body.scale.set(R*sx*k, R*sy*k, R*sx*k);
+  s.body.position.y = R*sy*k;
+  s.shadow.scale.setScalar(R*k);
+  const cam = s.root.worldToLocal(new THREE.Vector3());
+  let d = Math.atan2(cam.x, cam.z) - S.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); S.yaw += d*Math.min(1, dt*6);
+  s.body.rotation.y = S.yaw;
+  if (now > S.blinkAt) S.blinkAt = now + 2000 + Math.random()*3000;
+  const blink = S.blinkAt - now < 110 ? .15 : 1; s.eyes.forEach(e => e.scale.y = blink);
   renderer.render(scene, camera);
 
   // デバッグ: 検出したQRの枠
   dbg.clearRect(0, 0, dbgCv.width, dbgCv.height);
   if (cfg.dbg){
     const sc = dbgCv.width/det.width;
-    for (const t of tracks.values()){
-      if (now - t.seen > LOST_MS || !t.corners) continue;
-      dbg.strokeStyle = '#7ae7ff'; dbg.lineWidth = 3; dbg.beginPath();
-      t.corners.forEach((p, i) => i ? dbg.lineTo(p.x*sc, p.y*sc) : dbg.moveTo(p.x*sc, p.y*sc)); dbg.closePath(); dbg.stroke();
-      dbg.fillStyle = '#ffd35a'; dbg.beginPath(); dbg.arc(t.corners[0].x*sc, t.corners[0].y*sc, 5, 0, 7); dbg.fill();
+    dbg.font = 'bold 16px sans-serif';
+    for (const [id, c] of seenQR){
+      if (now - seenAt.get(id) > LOST_MS) continue;
+      dbg.strokeStyle = id === S.ref ? '#ffd35a' : '#7ae7ff'; dbg.lineWidth = 3; dbg.beginPath();
+      c.forEach((p, i) => i ? dbg.lineTo(p.x*sc, p.y*sc) : dbg.moveTo(p.x*sc, p.y*sc)); dbg.closePath(); dbg.stroke();
+      dbg.fillStyle = dbg.strokeStyle; dbg.fillText('QR ' + id + (id === S.ref ? '（基準）' : ''), c[0].x*sc, c[0].y*sc - 8);
     }
   }
 
+  // 状態表示
+  let msg, ok = false;
+  if (S.state === 'locked'){ msg = 'スライムを固定中（QRが見えなくてもOK）'; ok = true; }
+  else if (!liveOK) msg = S.ref ? `QR「${S.ref}」を映してください` : '床に置いたQRを映してください';
+  else msg = cfg.autoLock ? `QR「${S.ref}」を認識中… 固定まで ${Math.round(S.progress*100)}%（カメラを動かさないで）` : `QR「${S.ref}」を認識中。「ここで固定」を押してください`;
+  if (msg !== lastMsg){ $('barMsg').textContent = msg; $('barMsg').className = ok ? 'ok' : ''; lastMsg = msg; }
+  $('lockBtn').disabled = !(S.state === 'calib' && liveOK && S.samples.length >= 3);
+
   if (now - detT > 1000){ detFps = detN*1000/(now - detT); detN = 0; detT = now; }
-  const live = [...tracks.values()].filter(t => now - t.seen < LOST_MS).map(t => t.id).sort();
-  $('stat').textContent = `エンジン: ${({worker:'Worker',main:'メイン',loading:'読込中',init:'読込中',dead:'読込失敗'})[mode]}\n検出中のQR: ${live.length ? live.join(', ') : 'なし'}\n検出 ${detFps.toFixed(1)} 回/秒  解析 ${det.width}×${det.height}`;
+  const live = [...seenAt].filter(([, t]) => now - t < LOST_MS).map(([id]) => id).sort();
+  const dist = S.state === 'locked' ? S.pos.length() : liveOK ? S.live.pos.length() : 0;
+  $('stat').textContent = `エンジン: ${({worker:'Worker',main:'メイン',loading:'読込中',init:'読込中',dead:'読込失敗'})[mode]}${S.state === 'locked' && !cfg.autoFix ? '（固定中は停止）' : ''}\n`
+    + `見えているQR: ${live.length ? live.join(', ') : 'なし'}\n`
+    + `基準QRまで: ${dist ? dist.toFixed(2) + ' m' : '—'}\n`
+    + `検出 ${detFps.toFixed(1)} 回/秒  解析 ${det.width}×${det.height}`;
 }
 </script>
 </body>
