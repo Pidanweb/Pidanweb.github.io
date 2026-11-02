@@ -82,6 +82,17 @@ td.en{color:var(--ink-soft);font-family:var(--latin);font-size:12.5px}
 .thumbs figure{margin:0;text-align:center;font-size:12px;color:var(--ink-soft)}
 .thumbs canvas{width:100%;aspect-ratio:3/4;border-radius:10px;background:var(--stage);display:block;margin-bottom:4px}
 .hint{font-size:12.5px;color:var(--ink-soft);margin:10px 0 0}
+.editor{margin-top:14px;padding:12px;border-radius:12px;background:var(--bg2);display:grid;gap:10px}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+.seg label{cursor:pointer}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg span{display:block;padding:6px 14px;border-radius:999px;border:1px solid var(--line);font-size:13.5px;background:var(--panel)}
+.seg input:checked+span{background:var(--amber);border-color:var(--amber);color:var(--amber-ink);font-weight:700}
+.seg input:focus-visible+span{outline:2px solid var(--bone);outline-offset:2px}
+label.range{flex-direction:row;align-items:center;gap:10px}
+label.range input{flex:1;max-width:260px;accent-color:var(--amber)}
+#liveRow{margin-top:10px}
+canvas.ov.editing{cursor:crosshair;touch-action:none}
 .placeholder{color:var(--ink-soft);font-size:13.5px;margin:0}
 </style>
 <script type="importmap">
@@ -95,15 +106,14 @@ td.en{color:var(--ink-soft);font-family:var(--latin);font-size:12.5px}
 <header>
   <div class="brand">
     <h1>Avatar Scan 3D</h1>
-    <p>USBカメラで正面・横・背中をスキャンして、ボーン入りの3Dアバター（VRM）を作ります</p>
+    <p>USBカメラで正面・横・背中を順にスキャン・確認して、ボーン入りの3Dアバター（VRM）を作ります</p>
   </div>
   <ol class="steps" id="steps">
     <li data-k="camera"><b>1</b>カメラ</li>
     <li data-k="front"><b>2</b>正面・骨格</li>
     <li data-k="side"><b>3</b>横</li>
     <li data-k="back"><b>4</b>背中</li>
-    <li data-k="build"><b>5</b>3D化</li>
-    <li data-k="live"><b>6</b>リンク</li>
+    <li data-k="live"><b>5</b>リンク</li>
   </ol>
 </header>
 
@@ -128,6 +138,25 @@ td.en{color:var(--ink-soft);font-family:var(--latin);font-size:12.5px}
       <div class="row">
         <button class="btn primary link-start" id="primaryBtn">Link Start</button>
         <button class="btn" id="secondaryBtn" hidden></button>
+      </div>
+      <div id="liveRow" class="row" hidden>
+        <button class="btn" data-retake="front">正面を撮り直す</button>
+        <button class="btn" data-retake="side">横を撮り直す</button>
+        <button class="btn" data-retake="back">背中を撮り直す</button>
+        <button class="btn" id="restartBtn">最初からやり直す</button>
+      </div>
+      <div id="editTools" class="editor" hidden>
+        <div class="seg" role="radiogroup" aria-label="切り抜きの道具">
+          <label><input type="radio" name="tool" value="lasso" checked><span>囲んで追加</span></label>
+          <label><input type="radio" name="tool" value="add"><span>ブラシで追加</span></label>
+          <label><input type="radio" name="tool" value="erase"><span>ブラシで消す</span></label>
+        </div>
+        <label class="sel range">ブラシの太さ<input type="range" id="brushSize" min="4" max="80" value="24"></label>
+        <div class="row">
+          <button class="btn" id="undoBtn">元に戻す</button>
+          <button class="btn" id="autoBtn">自動の切り抜きに戻す</button>
+        </div>
+        <p class="hint" style="margin:0">「囲んで追加」は、欠けている服の部分をぐるっと指やマウスでなぞると、その内側を人物にします。背景を拾ってしまった所は「ブラシで消す」で消してください。</p>
       </div>
       <div class="settings">
         <div class="row">
@@ -169,7 +198,7 @@ td.en{color:var(--ink-soft);font-family:var(--latin);font-size:12.5px}
           <figure><canvas id="th-side" width="150" height="200"></canvas>横</figure>
           <figure><canvas id="th-back" width="150" height="200"></canvas>背中</figure>
         </div>
-        <p class="placeholder" id="bodyEmpty">3D化が終わると、測った体の幅と厚みがここに出ます。</p>
+        <p class="placeholder" id="bodyEmpty">正面スキャンが終わると、測った体の幅と厚みがここに出ます。</p>
         <table id="bodyTable" hidden><thead><tr><th>部位</th><th style="text-align:right">幅</th><th style="text-align:right">厚み</th></tr></thead><tbody></tbody></table>
       </div>
       <p class="hint">数値はAIの推定なので、実寸と数cmずれることがあります。</p>
@@ -632,35 +661,36 @@ function glbToVrm(glb, name) {
   return out.buffer;
 }
 /*CORE-END*/
-
 /* ===================== ここから画面・カメラ・3D表示 ===================== */
 const MP_VER = '0.10.14';
 const MP_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/vision_bundle.mjs`;
 const MP_WASM = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/wasm`;
-const SEG_MODEL = 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite';
-let segmenter = null;
 const MODEL = k => `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${k}/float16/1/pose_landmarker_${k}.task`;
+const SEG_MODEL = 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite';
 
 const $ = s => document.querySelector(s);
 const video = $('#video'), ov = $('#overlay'), octx = ov.getContext('2d');
 const off = document.createElement('canvas'), offCtx = off.getContext('2d', { willReadFrequently: true });
+const NAMES = { front: '正面', side: '横', back: '背中' }, ORDER = ['front', 'side', 'back'];
+const isObj = v => v && v !== 'skip';
 
-let landmarker = null, stream = null, lastVT = -1;
-let phase = 'idle', sub = 'ready';          // phase: idle / front / side / back / build / live
-let cur = null, holdT = 0, cdStart = 0, capStart = 0, capCount = 0;
-let frames = [], snaps = [];
-const scans = { front: null, side: null, back: null };
+let landmarker = null, segmenter = null, stream = null, lastVT = -1;
+let phase = 'idle', view = null, sub = null;   // phase: idle / scan / live, sub: ready / countdown / capture / review
+let cur = null, holdT = 0, cdStart = 0, capStart = 0, capCount = 0, frames = [], snaps = [];
+const scans = { front: null, side: null, back: null };   // null=未撮影, 'skip', {snap}
 let C = null, rig = null, avatar = null, bodyMesh = null, outlineMesh = null, helper = null, markers = null;
-let smoothRaw = null, buildStart = 0, bodyStats = null, buildFromView = null;
-const BUILD_MS = matchMedia('(prefers-reduced-motion: reduce)').matches ? 600 : 3400;
+let smoothRaw = null, bodyStats = null, revealStart = -1;
+const REVEAL_MS = matchMedia('(prefers-reduced-motion: reduce)').matches ? 300 : 1600;
 const CD = { front: 3000, side: 5000, back: 5000 };
 
 /* ---------- UI ---------- */
 function setStep(k) {
-  const order = ['camera', 'front', 'side', 'back', 'build', 'live'], n = order.indexOf(k);
+  const order = ['camera', 'front', 'side', 'back', 'live'], n = order.indexOf(k);
   document.querySelectorAll('#steps li').forEach((li, i) => {
-    li.classList.toggle('done', i < n); li.classList.toggle('now', i === n);
-    li.classList.toggle('skip', i < n && scans[li.dataset.k] === 'skip');
+    const sk = scans[li.dataset.k];
+    li.classList.toggle('done', i < n || (k === 'live') || isObj(sk) && i !== n);
+    li.classList.toggle('now', i === n);
+    li.classList.toggle('skip', sk === 'skip');
   });
 }
 function say(t, b, isErr) { $('#msgTitle').textContent = t; const el = $('#msgBody'); el.textContent = b; el.classList.toggle('err', !!isErr); }
@@ -682,7 +712,7 @@ function showTab(k) {
 $('#primaryBtn').onclick = linkStart;
 async function linkStart() {
   $('#primaryBtn').disabled = true; setStep('camera');
-  say('接続中', 'カメラの使用を許可してください。続けて骨格を読むAIモデルを読み込みます。');
+  say('接続中', 'カメラの使用を許可してください。続けて骨格と人物切り抜きのAIモデルを読み込みます。');
   try { await startCamera(); }
   catch (e) {
     say('カメラに接続できません', `カメラの許可がブロックされたか、ほかのアプリが使用中です（${e.name || e}）。ブラウザのカメラ設定を確認して、もう一度押してください。`, true);
@@ -694,7 +724,7 @@ async function linkStart() {
     say('AIモデルを読み込めません', 'インターネット接続を確認してください。モデルは jsdelivr.net と storage.googleapis.com から読み込みます。', true);
     $('#primaryBtn').disabled = false; return;
   }
-  toFront();
+  startScan('front');
 }
 async function loadModel(kind) {
   const vision = await import(MP_URL);
@@ -712,11 +742,7 @@ async function loadModel(kind) {
     } catch (e) { console.warn('人物切り抜きモデルを読み込めません', e); }
   }
 }
-$('#modelSelect').onchange = async e => {
-  if (!landmarker) return;
-  const keep = landmarker; landmarker = null;
-  try { landmarker = keep; await loadModel(e.target.value); } catch (err) { console.error(err); landmarker = keep; }
-};
+$('#modelSelect').onchange = async e => { if (landmarker) { try { await loadModel(e.target.value); } catch (err) { console.error(err); } } };
 async function startCamera(deviceId) {
   if (stream) stream.getTracks().forEach(t => t.stop());
   const size = { width: { ideal: 1280 }, height: { ideal: 720 } };
@@ -731,24 +757,35 @@ async function startCamera(deviceId) {
 }
 $('#camSelect').onchange = e => startCamera(e.target.value).catch(err => say('カメラを切り替えられません', String(err), true));
 
-/* ---------- 各スキャンの開始 ---------- */
-function toFront() {
-  clearAll();
-  phase = 'front'; sub = 'ready'; holdT = 0; scans.front = scans.side = scans.back = null; setStep('front');
-  say('正面スキャン（骨格）', 'カメラの方を向いて全身を映し、両腕を水平に広げたTポーズで止まってください。ポーズが揃うと3秒数えて自動で撮影します。');
-  buttons(['いますぐスキャン', () => { if (cur && fullBody(cur)) startCountdown(); else chip('全身が映っていません'); }]);
-}
-function toSide() {
-  phase = 'side'; sub = 'ready'; setStep('side');
-  say('横向きスキャン', '体の横をカメラに向けて、Tポーズのまま立ってください。体の厚みと横顔・後ろ髪の形を取ります。ボタンを押してから5秒あるので、その間に向きを変えてください。');
-  buttons(['5秒後に横向きを撮影', startCountdown], ['横をスキップ', () => { scans.side = 'skip'; toBack(); }]);
-}
-function toBack() {
-  phase = 'back'; sub = 'ready'; setStep('back');
-  say('背中スキャン', 'カメラに背中を向けて、Tポーズで立ってください。背中側の服と髪の色を取ります。ボタンを押してから5秒で撮影します。');
-  buttons(['5秒後に背中を撮影', startCountdown], ['背中をスキップ', () => { scans.back = 'skip'; build(); }]);
+/* ---------- 撮影の流れ ---------- */
+function nextView() { return ORDER.find(k => scans[k] === null); }
+function startScan(v) {
+  phase = 'scan'; view = v; sub = 'ready'; holdT = 0; setStep(v); hideEditor(); $('#liveRow').hidden = true;
+  const had = isObj(scans[v]);
+  const cancel = had ? ['やめて前の撮影を使う', resume] : null;
+  if (v === 'front') {
+    say('正面スキャン（骨格）', 'カメラの方を向いて全身を映し、両腕を水平に広げたTポーズで止まってください。ポーズが揃うと3秒数えて自動で撮影します。');
+    buttons(['いますぐスキャン', () => { if (cur && fullBody(cur)) startCountdown(); else chip('全身が映っていません'); }], cancel);
+  } else {
+    say(v === 'side' ? '横向きスキャン' : '背中スキャン', v === 'side'
+      ? '体の横をカメラに向けて、Tポーズのまま立ってください。体の厚みと横顔・後ろ髪の形を取ります。ボタンを押してから5秒あるので、その間に向きを変えてください。'
+      : 'カメラに背中を向けて、Tポーズで立ってください。背中側の服と髪の色を取ります。ボタンを押してから5秒で撮影します。');
+    buttons([`5秒後に${NAMES[v]}を撮影`, startCountdown], cancel || [`${NAMES[v]}をスキップ`, () => skipView(v)]);
+  }
 }
 function startCountdown() { sub = 'countdown'; cdStart = performance.now(); buttons(null); }
+function resume() { hideEditor(); const nv = nextView(); nv ? startScan(nv) : goLive(); }
+function skipView(v) { scans[v] = 'skip'; rebuildAvatar(false); resume(); }
+function startOver() { ORDER.forEach(k => scans[k] = null); clearRig(); startScan('front'); }
+function goLive() {
+  phase = 'live'; view = null; sub = null; setStep('live'); hideEditor();
+  $('#liveRow').hidden = false; buttons(null);
+  const guessed = ORDER.filter(k => isObj(scans[k]) && scans[k].snap.maskSrc === 'guess' && !scans[k].snap.edited).map(k => NAMES[k]);
+  say('リンク中', `カメラの前で動くとアバターも動きます（推定身長 約${Math.round(bodyStats.height * 100)}cm）。気になる向きがあれば、下のボタンでその向きだけ撮り直せます。` +
+    (guessed.length ? ` ${guessed.join('・')} は自動の切り抜きに失敗したため、形が推定のままです。` : ''), guessed.length > 0);
+}
+document.querySelectorAll('[data-retake]').forEach(b => b.onclick = () => startScan(b.dataset.retake));
+$('#restartBtn').onclick = startOver;
 
 /* ---------- 判定 ---------- */
 function fullBody(c) {
@@ -765,10 +802,10 @@ const copyLm = a => a.map(p => ({ x: p.x, y: p.y, z: p.z, v: p.visibility ?? 1 }
 function onResult(res) {
   if (!res.landmarks || !res.landmarks.length) { cur = null; return; }
   cur = { lm: copyLm(res.landmarks[0]), wl: copyLm(res.worldLandmarks[0]) };
-  if (sub === 'capture' && (phase === 'front' || phase === 'side' || phase === 'back')) {
+  if (phase === 'scan' && sub === 'capture') {
     capCount++;
-    if (phase === 'front') frames.push(cur);
-    const m = res.segmentationMasks && res.segmentationMasks[0], every = phase === 'front' ? 6 : 3;
+    if (view === 'front') frames.push(cur);
+    const m = res.segmentationMasks && res.segmentationMasks[0], every = view === 'front' ? 6 : 3;
     if (capCount % every === (every >> 1)) {
       const cands = [];
       if (m) { try { cands.push({ mask: new Float32Array(m.getAsFloat32Array()), mw: m.width, mh: m.height, src: 'pose' }); } catch (e) { console.warn(e); } }
@@ -780,35 +817,33 @@ function onResult(res) {
 }
 
 function updatePhase(now) {
-  if (phase === 'front' || phase === 'side' || phase === 'back') {
+  if (phase === 'scan') {
     if (sub === 'ready') {
-      if (phase !== 'front') { chip(phase === 'side' ? '横向き・Tポーズで準備してください' : '背中を向けて準備してください'); return; }
+      if (view !== 'front') { chip(view === 'side' ? '横向き・Tポーズで準備してください' : '背中を向けて準備してください'); return; }
       if (!cur) { chip('人が映っていません'); holdT = 0; return; }
       if (!fullBody(cur)) { chip('頭からつま先まで映るように下がってください'); holdT = 0; return; }
       if (!tPose(cur)) { chip('両腕を肩の高さで水平に広げてください'); holdT = 0; return; }
       chip('そのまま止まってください', true);
       if (!holdT) holdT = now; else if (now - holdT > 900) startCountdown();
     } else if (sub === 'countdown') {
-      if (phase === 'front' && (!cur || !fullBody(cur))) { sub = 'ready'; holdT = 0; buttons(['いますぐスキャン', () => { if (cur && fullBody(cur)) startCountdown(); }]); return; }
-      chip(phase === 'front' ? '動かないでください' : 'Tポーズで止まってください', true);
-      if (now - cdStart > CD[phase]) { sub = 'capture'; frames = []; snaps = []; capStart = now; capCount = 0; }
+      if (view === 'front' && (!cur || !fullBody(cur))) { startScan('front'); return; }
+      chip(view === 'front' ? '動かないでください' : 'Tポーズで止まってください', true);
+      if (now - cdStart > CD[view]) { sub = 'capture'; frames = []; snaps = []; capStart = now; capCount = 0; }
     } else if (sub === 'capture') {
-      const goal = phase === 'front' ? 36 : 12, got = phase === 'front' ? frames.length : capCount;
+      const goal = view === 'front' ? 36 : 12, got = view === 'front' ? frames.length : capCount;
       chip(`スキャン中 ${Math.min(100, Math.round(got / goal * 100))}%`, true);
       if (got >= goal) finishScan();
       else if (now - capStart > 7000) failScan();
-    }
-  } else if (phase === 'build') chip('シルエットと色から3Dモデルを組み立てています', true);
-  else if (phase === 'live') chip(cur ? 'リンク中：動きがアバターに反映されます' : '人を見失いました', !!cur);
+    } else if (sub === 'review') chip('水色の範囲が人物として使われます。欠けていたら直してください', true);
+  } else if (phase === 'live') chip(cur ? 'リンク中：動きがアバターに反映されます' : '人を見失いました', !!cur);
   else chip(null);
 }
 function failScan() {
-  chip('うまく読み取れませんでした');
-  const p = phase; sub = 'ready';
+  const v = view; startScan(v);
   say('もう一度撮影します', '人がうまく映っていませんでした。全身が画面に入っているか、部屋が暗すぎないか確認してください。', true);
-  if (p === 'front') toFront(); else if (p === 'side') toSide(); else toBack();
 }
-/* シルエット（人物マスク）を決める：骨格AIのマスク → 人物切り抜きAI → 骨格から作る推定マスク の順に試す */
+
+/* ---------- シルエット（人物マスク）を決める ---------- */
 function scoreMask(c, lm, inv) {
   const at = (x, y) => { const xi = Math.round(x * c.mw), yi = Math.round(y * c.mh); if (xi < 0 || yi < 0 || xi >= c.mw || yi >= c.mh) return 0; const v = c.mask[yi * c.mw + xi]; return inv ? 1 - v : v; };
   let cover = 0; const st = Math.max(1, Math.floor(c.mask.length / 20000));
@@ -841,7 +876,6 @@ function syntheticMask(s) {
   return { mask, mw, mh, src: 'guess' };
 }
 function resolveMask(s) {
-  if (s.mask) return;
   const cands = [...(s.cands || [])];
   if (segmenter) {
     try {
@@ -860,18 +894,20 @@ function resolveMask(s) {
   let c;
   if (best) { c = best.c; if (best.inv) c.mask = c.mask.map(v => 1 - v); }
   else c = syntheticMask(s);
-  Object.assign(s, { mask: c.mask, mw: c.mw, mh: c.mh, maskSrc: c.src }); delete s.cands;
+  Object.assign(s, { mask: c.mask, mw: c.mw, mh: c.mh, maskSrc: c.src, autoMask: c.mask.slice() }); delete s.cands;
 }
 function finishScan() {
   if (!snaps.length) return failScan();
-  resolveMask(snaps[snaps.length >> 1]);
-  if (phase === 'front') { scans.front = snaps; finishFront(); }
-  else if (phase === 'side') { scans.side = snaps; drawThumb('side', snaps); toBack(); }
-  else { scans.back = snaps; drawThumb('back', snaps); build(); }
+  const s = snaps[snaps.length >> 1];
+  resolveMask(s);
+  if (view === 'front') makeRig();
+  scans[view] = { snap: s };
+  enterReview();
 }
 
-/* ---------- 正面スキャン完了 → 骨格 ---------- */
-function finishFront() {
+/* ---------- 正面から骨格を作る ---------- */
+function makeRig() {
+  clearRig();
   const n = frames.length;
   const avg = Array.from({ length: 33 }, (_, i) => { const v = new THREE.Vector3(); frames.forEach(f => v.add(new THREE.Vector3(f.wl[i].x, -f.wl[i].y, -f.wl[i].z))); return v.divideScalar(n); });
   C = canonFrom(jointsFrom(avg));
@@ -883,10 +919,81 @@ function finishFront() {
   const mg = new THREE.SphereGeometry(.018, 12, 8), mm = new THREE.MeshBasicMaterial({ color: 0xf5ad48, depthTest: false, transparent: true });
   HB.forEach(() => { const s = new THREE.Mesh(mg, mm); s.renderOrder = 11; markers.add(s); });
   smoothRaw = frames[n - 1].wl.map(p => new THREE.Vector3(p.x, p.y, p.z));
-  frameCamera(); fillBoneTable(); drawThumb('front', snaps); showTab('bones');
-  toSide();
-  say('骨格ができました → 横向きスキャン', `${HB.length}本のボーンを作りました。右の画面の骨格はもうあなたの動きに合わせて動きます。次は体の厚みを取るため、横向きで撮影します。ボタンを押してから5秒で撮影します。`);
+  fillBoneTable();
 }
+
+/* ---------- 確認と切り抜き修正 ---------- */
+function enterReview() {
+  sub = 'review';
+  showEditor(scans[view].snap);
+  rebuildAvatar(true);
+  lookFrom(view);
+  const nv = nextView();
+  say(`${NAMES[view]}の確認`, '左の画面の水色が、人物として使う範囲です。服が背景にまぎれて欠けているところは「囲んで追加」やブラシで塗ってください。直すたびに右の3Dアバターに反映されます。');
+  buttons([nv ? `決定して${NAMES[nv]}へ` : '決定してリンク', resume], ['撮り直す', () => startScan(view)]);
+}
+const editor = { s: null, img: null, tint: null, tool: 'lasso', drawing: false, path: [], last: null, hover: null, undo: [], timer: 0 };
+function showEditor(s) {
+  Object.assign(editor, { s, img: imgCanvas(s), tint: maskCanvas(s), undo: [], path: [], drawing: false });
+  $('#editTools').hidden = false; ov.classList.add('editing');
+}
+function hideEditor() { $('#editTools').hidden = true; ov.classList.remove('editing'); editor.s = null; }
+document.querySelectorAll('input[name="tool"]').forEach(r => r.onchange = () => editor.tool = r.value);
+function toMask(e) {
+  const r = ov.getBoundingClientRect(), W = ov.width, H = ov.height, sc = Math.min(r.width / W, r.height / H);
+  const cx = (e.clientX - r.left - (r.width - W * sc) / 2) / sc, cy = (e.clientY - r.top - (r.height - H * sc) / 2) / sc;
+  const s = editor.s;
+  return { cx, cy, mx: (W - cx) * s.mw / W, my: cy * s.mh / H };
+}
+function pushUndo() { editor.undo.push(editor.s.mask.slice()); if (editor.undo.length > 20) editor.undo.shift(); }
+function paint(p, val) {
+  const s = editor.s, r = +$('#brushSize').value * s.mw / ov.width, r2 = r * r;
+  const x0 = Math.max(0, Math.floor(p.mx - r)), x1 = Math.min(s.mw - 1, Math.ceil(p.mx + r)), y0 = Math.max(0, Math.floor(p.my - r)), y1 = Math.min(s.mh - 1, Math.ceil(p.my + r));
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if ((x - p.mx) ** 2 + (y - p.my) ** 2 <= r2) s.mask[y * s.mw + x] = val;
+  const t = editor.tint.getContext('2d');
+  t.save(); t.beginPath(); t.arc(p.mx, p.my, r, 0, 7);
+  t.globalCompositeOperation = 'destination-out'; t.fill();
+  if (val) { t.globalCompositeOperation = 'source-over'; t.fillStyle = 'rgba(67,205,238,.47)'; t.fill(); }
+  t.restore();
+}
+function strokeTo(p) {
+  const val = editor.tool === 'add' ? 1 : 0, a = editor.last || p, d = Math.hypot(p.mx - a.mx, p.my - a.my);
+  const step = Math.max(1, +$('#brushSize').value * editor.s.mw / ov.width * .4), n = Math.ceil(d / step);
+  for (let i = 1; i <= n; i++) paint({ mx: a.mx + (p.mx - a.mx) * i / n, my: a.my + (p.my - a.my) * i / n }, val);
+  if (!n) paint(p, val);
+  editor.last = p;
+}
+function fillLasso() {
+  const s = editor.s, path = editor.path; if (path.length < 3) return;
+  const c = document.createElement('canvas'); c.width = s.mw; c.height = s.mh;
+  const x = c.getContext('2d'); x.beginPath(); path.forEach((p, i) => i ? x.lineTo(p.mx, p.my) : x.moveTo(p.mx, p.my)); x.closePath(); x.fill();
+  const a = x.getImageData(0, 0, s.mw, s.mh).data;
+  for (let i = 0; i < s.mask.length; i++) if (a[i * 4 + 3] > 127) s.mask[i] = 1;
+  editor.tint = maskCanvas(s);
+}
+function changed() { editor.s.edited = true; clearTimeout(editor.timer); editor.timer = setTimeout(() => rebuildAvatar(false), 250); }
+ov.addEventListener('pointerdown', e => {
+  if (!editor.s) return;
+  e.preventDefault(); ov.setPointerCapture(e.pointerId);
+  pushUndo(); editor.drawing = true; const p = toMask(e); editor.last = null;
+  if (editor.tool === 'lasso') editor.path = [p]; else strokeTo(p);
+});
+ov.addEventListener('pointermove', e => {
+  if (!editor.s) return;
+  const p = toMask(e); editor.hover = p;
+  if (!editor.drawing) return;
+  if (editor.tool === 'lasso') editor.path.push(p); else strokeTo(p);
+});
+const endStroke = () => {
+  if (!editor.s || !editor.drawing) return;
+  editor.drawing = false;
+  if (editor.tool === 'lasso') { fillLasso(); editor.path = []; }
+  changed();
+};
+ov.addEventListener('pointerup', endStroke); ov.addEventListener('pointercancel', endStroke);
+ov.addEventListener('pointerleave', () => { editor.hover = null; });
+$('#undoBtn').onclick = () => { const m = editor.undo.pop(); if (!m || !editor.s) return; editor.s.mask = m; editor.tint = maskCanvas(editor.s); changed(); };
+$('#autoBtn').onclick = () => { if (!editor.s) return; pushUndo(); editor.s.mask = editor.s.autoMask.slice(); editor.tint = maskCanvas(editor.s); changed(); };
 
 /* ---------- 3D表示 ---------- */
 const host = $('#three');
@@ -911,14 +1018,29 @@ new ResizeObserver(() => {
   const w = host.clientWidth, h = host.clientHeight; if (!w || !h) return;
   renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
 }).observe(host);
-function frameCamera() {
-  const top = C.Y.ear + .15;
-  controls.target.set(0, top * .52, 0);
-  camera.position.set(top * .45, top * .62, top * 2.1);
+
+let camTween = null;
+function lookFrom(v) {
+  if (!C) return;
+  const top = C.Y.ear + .15, target = new THREE.Vector3(0, top * .52, 0), dist = top * 2.1;
+  let ang = 0;
+  if (v === 'back') ang = Math.PI;
+  if (v === 'side') { const S = isObj(scans.side) ? makeView(scans.side.snap, 'side', C) : null; ang = S && S.face > 0 ? -Math.PI / 2 : Math.PI / 2; }
+  const a0 = Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z);
+  let d = ang - a0; d = Math.atan2(Math.sin(d), Math.cos(d));
+  camTween = { a0, d, t0: performance.now(), target, from: controls.target.clone(), h0: camera.position.y, h1: top * .62, r0: Math.hypot(camera.position.x - controls.target.x, camera.position.z - controls.target.z), r1: dist };
+}
+function stepCam(now) {
+  if (!camTween) return;
+  const k = camTween, t = Math.min(1, (now - k.t0) / 900), e = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  controls.target.lerpVectors(k.from, k.target, e);
+  const a = k.a0 + k.d * e, r = lerp(k.r0, k.r1, e);
+  camera.position.set(controls.target.x + Math.sin(a) * r, lerp(k.h0, k.h1, e), controls.target.z + Math.cos(a) * r);
+  if (t >= 1) camTween = null;
 }
 
 const clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), 100);
-const grad = new THREE.DataTexture(new Uint8Array([110, 180, 255]), 3, 1, THREE.RedFormat);
+const grad = new THREE.DataTexture(new Uint8Array([120, 190, 255]), 3, 1, THREE.RedFormat);
 grad.minFilter = grad.magFilter = THREE.NearestFilter; grad.needsUpdate = true;
 const bodyMat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: grad, clippingPlanes: [clip] });
 const outlineMat = new THREE.MeshBasicMaterial({ color: 0x15161d, side: THREE.BackSide, clippingPlanes: [clip] });
@@ -934,25 +1056,24 @@ function clearBody() {
   bodyMesh = outlineMesh = null;
   $('#vrmBtn').disabled = $('#glbBtn').disabled = $('#shotBtn').disabled = true;
 }
-function clearAll() {
+function clearRig() {
   clearBody();
-  if (avatar) scene.remove(avatar); if (helper) { scene.remove(helper); helper.dispose?.(); } if (markers) scene.remove(markers);
+  if (avatar) scene.remove(avatar);
+  if (helper) { scene.remove(helper); helper.dispose?.(); }
+  if (markers) scene.remove(markers);
   avatar = rig = helper = markers = smoothRaw = C = null;
 }
 
-/* ---------- 3D化 ---------- */
-function build() {
-  if (!rig || !scans.front) return toFront();
-  phase = 'build'; setStep('build'); buttons(null);
-  say('3D化しています', '3方向のシルエットから体の幅と厚みを測り、映像の色を頂点に塗っています。');
-  const pick = a => a[a.length >> 1];
-  const F = makeView(pick(scans.front), 'front', C);
-  const S = Array.isArray(scans.side) ? makeView(pick(scans.side), 'side', C) : null;
-  const B = Array.isArray(scans.back) ? makeView(pick(scans.back), 'back', C) : null;
-  buildFromView = F;
+/* ---------- その時点の撮影でアバターを組み立てる ---------- */
+function rebuildAvatar(reveal) {
+  if (!rig || !isObj(scans.front)) return;
+  const F = makeView(scans.front.snap, 'front', C);
+  const S = isObj(scans.side) ? makeView(scans.side.snap, 'side', C) : null;
+  const B = isObj(scans.back) ? makeView(scans.back.snap, 'back', C) : null;
   clearBody();
   const { geo, stats } = buildBody(rig, F, S, B);
   bodyStats = stats;
+  const saved = HB.map(n => rig.bones[n].quaternion.clone()), hp = rig.bones.hips.position.clone();
   restPose(rig); avatar.updateMatrixWorld(true);
   bodyMesh = new THREE.SkinnedMesh(geo, bodyMat); bodyMesh.name = 'Body'; bodyMesh.frustumCulled = false;
   avatar.add(bodyMesh); bodyMesh.bind(rig.skeleton, new THREE.Matrix4());
@@ -961,22 +1082,12 @@ function build() {
   og.deleteAttribute('color');
   outlineMesh = new THREE.SkinnedMesh(og, outlineMat); outlineMesh.frustumCulled = false;
   avatar.add(outlineMesh); outlineMesh.bind(rig.skeleton, new THREE.Matrix4());
-  buildStart = performance.now(); clip.constant = -.05; ring.visible = true;
-  helper.visible = markers.visible = true;
-  fillBodyTable(); showTab('body');
-}
-function finishBuild() {
-  phase = 'live'; setStep('live');
-  clip.constant = 100; ring.visible = false; buildFromView = null;
-  helper.visible = markers.visible = $('#showBones').checked;
-  helper.material.opacity = markers.children[0].material.opacity = 1;
+  HB.forEach((n, i) => rig.bones[n].quaternion.copy(saved[i])); rig.bones.hips.position.copy(hp);
+  if (reveal) { revealStart = performance.now(); clip.constant = -.05; ring.visible = true; }
   $('#vrmBtn').disabled = $('#glbBtn').disabled = $('#shotBtn').disabled = false;
-  const guessed = ['front', 'side', 'back'].filter(k => Array.isArray(scans[k]) && scans[k][scans[k].length >> 1].maskSrc === 'guess').map(k => ({ front: '正面', side: '横', back: '背中' })[k]);
-  say('リンク完了', `3Dアバターができました（推定身長 約${Math.round(bodyStats.height * 100)}cm、${bodyStats.verts.toLocaleString()}頂点）。カメラの前で動くとアバターも動きます。` +
-    (guessed.length ? `ただし ${guessed.join('・')} は人物の切り抜きに失敗したので、形は骨格からの推定です。背景を無地にするか、部屋を明るくして撮り直すと形と色が正確になります。` : 'VRMで保存すると、VRM対応のアプリや自作アプリに読み込めます。'), guessed.length > 0);
-  buttons(['最初からスキャンし直す', toFront], ['横と背中を撮り直す', () => { clearBody(); helper.visible = markers.visible = true; toSide(); }]);
+  fillBodyTable(); drawThumbs();
 }
-$('#showBones').onchange = e => { if (phase === 'live' && helper) helper.visible = markers.visible = e.target.checked; };
+$('#showBones').onchange = () => {};
 
 /* ---------- ライブで動かす ---------- */
 const _w = new THREE.Vector3();
@@ -994,27 +1105,30 @@ function poseFromLive() {
   hips.position.y += .025 - minY;
   avatar.updateMatrixWorld(true);
 }
-function updateMarkers() { if (!markers) return; HB.forEach((n, i) => rig.bones[n].getWorldPosition(markers.children[i].position)); }
 function update3D(now) {
+  stepCam(now);
   if (!rig) { pad.rotation.z = now / 2000; return; }
-  if (phase === 'build') {
-    restPose(rig); avatar.updateMatrixWorld(true); updateMarkers();
-    const t = Math.min(1, (now - buildStart) / BUILD_MS), top = bodyStats.height + .05;
-    const e = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-    clip.constant = -.05 + e * top; ring.position.y = clip.constant;
-    helper.material.opacity = markers.children[0].material.opacity = 1 - e * .85;
-    if (t >= 1) finishBuild();
-    return;
+  if (phase === 'scan' && sub === 'review') { restPose(rig); avatar.updateMatrixWorld(true); }
+  else if (smoothRaw) poseFromLive();
+  HB.forEach((n, i) => rig.bones[n].getWorldPosition(markers.children[i].position));
+  let bonesOp = 1;
+  if (revealStart >= 0) {
+    const t = Math.min(1, (now - revealStart) / REVEAL_MS), e = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    clip.constant = -.05 + e * (bodyStats.height + .05); ring.position.y = clip.constant; bonesOp = 1 - e * .85;
+    if (t >= 1) { revealStart = -1; clip.constant = 100; ring.visible = false; }
   }
-  if (smoothRaw) { poseFromLive(); updateMarkers(); }
+  const show = !bodyMesh || revealStart >= 0 || $('#showBones').checked;
+  helper.visible = markers.visible = show;
+  helper.material.opacity = markers.children[0].material.opacity = revealStart >= 0 ? bonesOp : 1;
 }
 
 /* ---------- 保存 ---------- */
 function exportGLB(asVrm) {
+  const saved = HB.map(n => rig.bones[n].quaternion.clone()), hp = rig.bones.hips.position.clone();
   restPose(rig); avatar.updateMatrixWorld(true);
   const std = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9, metalness: 0 });
   bodyMesh.material = std; avatar.remove(outlineMesh);
-  const done = () => { bodyMesh.material = bodyMat; avatar.add(outlineMesh); std.dispose(); };
+  const done = () => { bodyMesh.material = bodyMat; avatar.add(outlineMesh); std.dispose(); HB.forEach((n, i) => rig.bones[n].quaternion.copy(saved[i])); rig.bones.hips.position.copy(hp); };
   new GLTFExporter().parse(avatar, glb => {
     done();
     const buf = asVrm ? glbToVrm(glb, 'Scanned Avatar') : glb;
@@ -1040,7 +1154,6 @@ function fillBodyTable() {
     ['頂点数', s.verts.toLocaleString(), ''], ['ポリゴン数', s.tris.toLocaleString(), '']];
   $('#bodyTable tbody').innerHTML = rows.map(([a, b, c]) => `<tr><td>${a}</td><td class="num">${b}</td><td class="num">${c}</td></tr>`).join('');
   $('#bodyTable').hidden = false; $('#bodyEmpty').hidden = true;
-  for (const k of ['side', 'back']) if (scans[k] === 'skip') drawThumb(k, null);
 }
 const imgCanvas = s => { const c = document.createElement('canvas'); c.width = s.img.width; c.height = s.img.height; c.getContext('2d').putImageData(s.img, 0, 0); return c; };
 const maskCanvas = s => {
@@ -1049,31 +1162,42 @@ const maskCanvas = s => {
   for (let i = 0; i < s.mask.length; i++) { id.data[i * 4] = 67; id.data[i * 4 + 1] = 205; id.data[i * 4 + 2] = 238; id.data[i * 4 + 3] = s.mask[i] > .5 ? 120 : 0; }
   x.putImageData(id, 0, 0); return c;
 };
-function drawThumb(k, arr) {
-  const cv = $('#th-' + k), x = cv.getContext('2d'); x.clearRect(0, 0, cv.width, cv.height);
-  if (!arr) { x.fillStyle = '#8fa6ba'; x.font = '14px "Zen Kaku Gothic New", sans-serif'; x.textAlign = 'center'; x.fillText('スキップ', cv.width / 2, cv.height / 2); return; }
-  const s = arr[arr.length >> 1], ic = imgCanvas(s), mc = maskCanvas(s);
-  const sc = Math.max(cv.width / ic.width, cv.height / ic.height), w = ic.width * sc, h = ic.height * sc;
-  x.save(); x.translate(cv.width, 0); x.scale(-1, 1);
-  x.drawImage(ic, (cv.width - w) / 2, (cv.height - h) / 2, w, h); x.drawImage(mc, (cv.width - w) / 2, (cv.height - h) / 2, w, h); x.restore();
+function drawThumbs() {
+  for (const k of ORDER) {
+    const cv = $('#th-' + k), x = cv.getContext('2d'); x.clearRect(0, 0, cv.width, cv.height);
+    if (!isObj(scans[k])) {
+      x.fillStyle = '#8fa6ba'; x.font = '14px "Zen Kaku Gothic New", sans-serif'; x.textAlign = 'center';
+      x.fillText(scans[k] === 'skip' ? 'スキップ' : '未撮影', cv.width / 2, cv.height / 2); continue;
+    }
+    const s = scans[k].snap, ic = imgCanvas(s), mc = maskCanvas(s);
+    const sc = Math.max(cv.width / ic.width, cv.height / ic.height), w = ic.width * sc, h = ic.height * sc;
+    x.save(); x.translate(cv.width, 0); x.scale(-1, 1);
+    x.drawImage(ic, (cv.width - w) / 2, (cv.height - h) / 2, w, h); x.drawImage(mc, (cv.width - w) / 2, (cv.height - h) / 2, w, h); x.restore();
+  }
 }
 
 /* ---------- カメラ側のオーバーレイ ---------- */
 const LINES = [['hipC', 'spine', '上半身'], ['spine', 'shC', ''], ['shC', 'neck', '首'], ['neck', 'head', '頭'],
   ['shC', 'lSh', ''], ['lSh', 'lEl', '左腕'], ['lEl', 'lWr', '左ひじ'], ['lWr', 'lHand', ''], ['shC', 'rSh', ''], ['rSh', 'rEl', '右腕'], ['rEl', 'rWr', '右ひじ'], ['rWr', 'rHand', ''],
   ['hipC', 'lHip', ''], ['lHip', 'lKn', '左足'], ['lKn', 'lAn', '左ひざ'], ['lAn', 'lToe', ''], ['hipC', 'rHip', ''], ['rHip', 'rKn', '右足'], ['rKn', 'rAn', '右ひざ'], ['rAn', 'rToe', '']];
-let buildBg = null;
+function drawReview() {
+  const W = ov.width, H = ov.height;
+  octx.save(); octx.translate(W, 0); octx.scale(-1, 1);
+  octx.drawImage(editor.img, 0, 0, W, H); octx.drawImage(editor.tint, 0, 0, W, H);
+  octx.restore();
+  if (editor.path.length > 1) {
+    octx.save(); octx.strokeStyle = '#f5ad48'; octx.lineWidth = Math.max(2, W / 400); octx.setLineDash([8, 6]);
+    octx.beginPath(); editor.path.forEach((p, i) => i ? octx.lineTo(p.cx, p.cy) : octx.moveTo(p.cx, p.cy)); octx.closePath(); octx.stroke(); octx.restore();
+  }
+  if (editor.hover && editor.tool !== 'lasso') {
+    octx.strokeStyle = editor.tool === 'add' ? '#43cdee' : '#ff8a80'; octx.lineWidth = 2;
+    octx.beginPath(); octx.arc(editor.hover.cx, editor.hover.cy, +$('#brushSize').value, 0, 7); octx.stroke();
+  }
+}
 function drawOverlay(now) {
   const W = ov.width, H = ov.height; if (!W) return;
   octx.clearRect(0, 0, W, H);
-  if (phase === 'build' && buildFromView) {
-    const s = buildFromView.s;
-    if (!buildBg) buildBg = [imgCanvas(s), maskCanvas(s)];
-    octx.save(); octx.translate(W, 0); octx.scale(-1, 1);
-    octx.drawImage(buildBg[0], 0, 0, W, H); octx.globalAlpha = .55 + .35 * Math.sin(now / 220); octx.drawImage(buildBg[1], 0, 0, W, H);
-    octx.restore(); return;
-  }
-  buildBg = null;
+  if (editor.s) return drawReview();
   if (cur) {
     const J = jointsFrom(cur.lm.map(p => new THREE.Vector3((1 - p.x) * W, p.y * H, 0)));
     const fs = Math.max(11, W / 80);
@@ -1081,7 +1205,7 @@ function drawOverlay(now) {
     LINES.forEach(([a, b]) => { octx.beginPath(); octx.moveTo(J[a].x, J[a].y); octx.lineTo(J[b].x, J[b].y); octx.stroke(); });
     octx.shadowBlur = 0; octx.fillStyle = '#f5ad48';
     new Set(LINES.flatMap(l => [l[0], l[1]])).forEach(k => { octx.beginPath(); octx.arc(J[k].x, J[k].y, Math.max(3, W / 260), 0, 7); octx.fill(); });
-    if (phase === 'front') {
+    if (phase === 'scan' && view === 'front') {
       octx.font = `500 ${fs}px "Zen Kaku Gothic New", sans-serif`; octx.textAlign = 'center'; octx.textBaseline = 'middle';
       LINES.forEach(([a, b, nm]) => {
         if (!nm) return;
@@ -1091,12 +1215,12 @@ function drawOverlay(now) {
       });
     }
   }
-  if (sub === 'countdown' && (phase === 'front' || phase === 'side' || phase === 'back')) {
-    const n = Math.max(1, Math.ceil((CD[phase] - (now - cdStart)) / 1000));
+  if (phase === 'scan' && sub === 'countdown') {
+    const n = Math.max(1, Math.ceil((CD[view] - (now - cdStart)) / 1000));
     octx.font = `700 ${H / 3.2}px Saira, sans-serif`; octx.fillStyle = 'rgba(245,173,72,.92)'; octx.textAlign = 'center'; octx.textBaseline = 'middle';
     octx.fillText(n, W / 2, H / 2);
   }
-  if (sub === 'capture' && (phase === 'front' || phase === 'side' || phase === 'back')) {
+  if (phase === 'scan' && sub === 'capture') {
     const y = ((now - capStart) / 900 % 1) * H, g = octx.createLinearGradient(0, y - H * .12, 0, y);
     g.addColorStop(0, 'rgba(67,205,238,0)'); g.addColorStop(1, 'rgba(67,205,238,.35)');
     octx.fillStyle = g; octx.fillRect(0, y - H * .12, W, H * .12);
@@ -1113,7 +1237,8 @@ function tick() {
     try { landmarker.detectForVideo(video, now, onResult); } catch (e) { console.warn(e); }
   }
   updatePhase(now); drawOverlay(now); update3D(now);
-  controls.update(); renderer.render(scene, camera);
+  if (!camTween) controls.update();
+  renderer.render(scene, camera);
 }
 setStep('camera');
 tick();
