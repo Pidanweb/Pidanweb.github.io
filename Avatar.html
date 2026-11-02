@@ -318,6 +318,14 @@ function makeView(s, kind, C) {
   const P = i => new V2(s.lm[i].x * W, s.lm[i].y * H);
   const v = { kind, s, W, H, P };
   v.m = (x, y) => { const xi = Math.round(x), yi = Math.round(y); return (xi < 0 || yi < 0 || xi >= W || yi >= H) ? 0 : s.mask[yi * W + xi]; };
+  v.colorRaw = (x, y) => {
+    let r = 0, g = 0, b = 0;
+    for (const [ox, oy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      const xi = Math.min(iw - 1, Math.max(0, Math.round(x * sx) + ox)), yi = Math.min(ih - 1, Math.max(0, Math.round(y * sy) + oy)), i = (yi * iw + xi) * 4;
+      r += data[i]; g += data[i + 1]; b += data[i + 2];
+    }
+    return [r / 4, g / 4, b / 4];
+  };
   v.color = (x, y) => {
     if (v.m(x, y) < .5) return null;
     let r = 0, g = 0, b = 0;
@@ -368,7 +376,7 @@ function runAt(v, x, y, nx, ny, maxP, maxN) {
 function sampleToward(v, cx, cy, dx, dy) {
   if (!v) return null;
   for (const k of [1, .85, .7, .5, .3, 0]) { const c = v.color(cx + dx * k, cy + dy * k); if (c) return c; }
-  return null;
+  return v.colorRaw(cx + dx * .5, cy + dy * .5);
 }
 function mixC(list) {
   let r = 0, g = 0, b = 0, W = 0;
@@ -629,6 +637,8 @@ function glbToVrm(glb, name) {
 const MP_VER = '0.10.14';
 const MP_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/vision_bundle.mjs`;
 const MP_WASM = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/wasm`;
+const SEG_MODEL = 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite';
+let segmenter = null;
 const MODEL = k => `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${k}/float16/1/pose_landmarker_${k}.task`;
 
 const $ = s => document.querySelector(s);
@@ -695,6 +705,12 @@ async function loadModel(kind) {
   try { lm = await vision.PoseLandmarker.createFromOptions(fileset, opts('GPU')); }
   catch (e) { console.warn('GPU不可、CPUで実行', e); lm = await vision.PoseLandmarker.createFromOptions(fileset, opts('CPU')); }
   landmarker = lm; if (old) old.close();
+  if (!segmenter) {
+    try {
+      segmenter = await vision.ImageSegmenter.createFromOptions(fileset, { baseOptions: { modelAssetPath: SEG_MODEL, delegate: 'CPU' },
+        runningMode: 'IMAGE', outputConfidenceMasks: true, outputCategoryMask: false });
+    } catch (e) { console.warn('人物切り抜きモデルを読み込めません', e); }
+  }
 }
 $('#modelSelect').onchange = async e => {
   if (!landmarker) return;
@@ -753,10 +769,11 @@ function onResult(res) {
     capCount++;
     if (phase === 'front') frames.push(cur);
     const m = res.segmentationMasks && res.segmentationMasks[0], every = phase === 'front' ? 6 : 3;
-    if (m && capCount % every === (every >> 1)) {
-      const mask = new Float32Array(m.getAsFloat32Array());
+    if (capCount % every === (every >> 1)) {
+      const cands = [];
+      if (m) { try { cands.push({ mask: new Float32Array(m.getAsFloat32Array()), mw: m.width, mh: m.height, src: 'pose' }); } catch (e) { console.warn(e); } }
       offCtx.drawImage(video, 0, 0, off.width, off.height);
-      snaps.push({ lm: cur.lm, mask, mw: m.width, mh: m.height, img: offCtx.getImageData(0, 0, off.width, off.height) });
+      snaps.push({ lm: cur.lm, cands, img: offCtx.getImageData(0, 0, off.width, off.height) });
     }
   }
   if (smoothRaw) cur.wl.forEach((p, i) => smoothRaw[i].lerp(new THREE.Vector3(p.x, p.y, p.z), .5));
@@ -791,8 +808,63 @@ function failScan() {
   say('もう一度撮影します', '人がうまく映っていませんでした。全身が画面に入っているか、部屋が暗すぎないか確認してください。', true);
   if (p === 'front') toFront(); else if (p === 'side') toSide(); else toBack();
 }
+/* シルエット（人物マスク）を決める：骨格AIのマスク → 人物切り抜きAI → 骨格から作る推定マスク の順に試す */
+function scoreMask(c, lm, inv) {
+  const at = (x, y) => { const xi = Math.round(x * c.mw), yi = Math.round(y * c.mh); if (xi < 0 || yi < 0 || xi >= c.mw || yi >= c.mh) return 0; const v = c.mask[yi * c.mw + xi]; return inv ? 1 - v : v; };
+  let cover = 0; const st = Math.max(1, Math.floor(c.mask.length / 20000));
+  for (let i = 0; i < c.mask.length; i += st) if ((inv ? 1 - c.mask[i] : c.mask[i]) >= .5) cover++;
+  cover /= Math.ceil(c.mask.length / st);
+  const pts = [[11, 12], [23, 24], [11, 23], [12, 24], [7, 8]].map(([a, b]) => [(lm[a].x + lm[b].x) / 2, (lm[a].y + lm[b].y) / 2]);
+  const hits = pts.filter(([x, y]) => at(x, y) >= .5).length;
+  return { ok: cover > .015 && cover < .7 && hits >= 4, cover, hits };
+}
+function syntheticMask(s) {
+  const mw = Math.round(s.img.width / 2), mh = Math.round(s.img.height / 2), mask = new Float32Array(mw * mh);
+  const P = i => [s.lm[i].x * mw, s.lm[i].y * mh], shW = Math.hypot(P(11)[0] - P(12)[0], P(11)[1] - P(12)[1]) || mw * .1;
+  const cap = (a, b, r) => {
+    const x0 = Math.max(0, Math.floor(Math.min(a[0], b[0]) - r)), x1 = Math.min(mw - 1, Math.ceil(Math.max(a[0], b[0]) + r));
+    const y0 = Math.max(0, Math.floor(Math.min(a[1], b[1]) - r)), y1 = Math.min(mh - 1, Math.ceil(Math.max(a[1], b[1]) + r));
+    const dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy || 1;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      let t = ((x - a[0]) * dx + (y - a[1]) * dy) / L2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      if ((x - a[0] - dx * t) ** 2 + (y - a[1] - dy * t) ** 2 <= r * r) mask[y * mw + x] = 1;
+    }
+  };
+  const m2 = (a, b) => [(P(a)[0] + P(b)[0]) / 2, (P(a)[1] + P(b)[1]) / 2];
+  const ear = m2(7, 8), sh = m2(11, 12), hp = m2(23, 24);
+  cap([ear[0], ear[1] - shW * .25], [ear[0], ear[1] + shW * .1], shW * .38);
+  cap(sh, ear, shW * .18);
+  for (let t = 0; t <= 1; t += .1) cap([P(11)[0] + (P(23)[0] - P(11)[0]) * t, P(11)[1] + (P(23)[1] - P(11)[1]) * t], [P(12)[0] + (P(24)[0] - P(12)[0]) * t, P(12)[1] + (P(24)[1] - P(12)[1]) * t], shW * .12);
+  cap(sh, hp, shW * .35);
+  for (const [a, b, c, d] of [[11, 13, 15, 19], [12, 14, 16, 20]]) { cap(P(a), P(b), shW * .14); cap(P(b), P(c), shW * .11); cap(P(c), P(d), shW * .09); }
+  for (const [a, b, c, d] of [[23, 25, 27, 31], [24, 26, 28, 32]]) { cap(P(a), P(b), shW * .2); cap(P(b), P(c), shW * .15); cap(P(c), P(d), shW * .09); }
+  return { mask, mw, mh, src: 'guess' };
+}
+function resolveMask(s) {
+  if (s.mask) return;
+  const cands = [...(s.cands || [])];
+  if (segmenter) {
+    try {
+      segmenter.segment(imgCanvas(s), r => {
+        const cm = r.confidenceMasks && r.confidenceMasks[r.confidenceMasks.length - 1];
+        if (cm) cands.push({ mask: new Float32Array(cm.getAsFloat32Array()), mw: cm.width, mh: cm.height, src: 'seg' });
+      });
+    } catch (e) { console.warn(e); }
+  }
+  let best = null;
+  for (const c of cands) for (const inv of [false, true]) {
+    const sc = scoreMask(c, s.lm, inv);
+    console.log('mask', c.src, inv ? '反転' : '', sc);
+    if (sc.ok && (!best || sc.hits > best.sc.hits)) best = { c, inv, sc };
+  }
+  let c;
+  if (best) { c = best.c; if (best.inv) c.mask = c.mask.map(v => 1 - v); }
+  else c = syntheticMask(s);
+  Object.assign(s, { mask: c.mask, mw: c.mw, mh: c.mh, maskSrc: c.src }); delete s.cands;
+}
 function finishScan() {
   if (!snaps.length) return failScan();
+  resolveMask(snaps[snaps.length >> 1]);
   if (phase === 'front') { scans.front = snaps; finishFront(); }
   else if (phase === 'side') { scans.side = snaps; drawThumb('side', snaps); toBack(); }
   else { scans.back = snaps; drawThumb('back', snaps); build(); }
@@ -899,7 +971,9 @@ function finishBuild() {
   helper.visible = markers.visible = $('#showBones').checked;
   helper.material.opacity = markers.children[0].material.opacity = 1;
   $('#vrmBtn').disabled = $('#glbBtn').disabled = $('#shotBtn').disabled = false;
-  say('リンク完了', `3Dアバターができました（推定身長 約${Math.round(bodyStats.height * 100)}cm、${bodyStats.verts.toLocaleString()}頂点）。カメラの前で動くとアバターも動きます。VRMで保存すると、VRM対応のアプリや自作アプリに読み込めます。`);
+  const guessed = ['front', 'side', 'back'].filter(k => Array.isArray(scans[k]) && scans[k][scans[k].length >> 1].maskSrc === 'guess').map(k => ({ front: '正面', side: '横', back: '背中' })[k]);
+  say('リンク完了', `3Dアバターができました（推定身長 約${Math.round(bodyStats.height * 100)}cm、${bodyStats.verts.toLocaleString()}頂点）。カメラの前で動くとアバターも動きます。` +
+    (guessed.length ? `ただし ${guessed.join('・')} は人物の切り抜きに失敗したので、形は骨格からの推定です。背景を無地にするか、部屋を明るくして撮り直すと形と色が正確になります。` : 'VRMで保存すると、VRM対応のアプリや自作アプリに読み込めます。'), guessed.length > 0);
   buttons(['最初からスキャンし直す', toFront], ['横と背中を撮り直す', () => { clearBody(); helper.visible = markers.visible = true; toSide(); }]);
 }
 $('#showBones').onchange = e => { if (phase === 'live' && helper) helper.visible = markers.visible = e.target.checked; };
