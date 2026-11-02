@@ -50,6 +50,9 @@
   #secret h2{margin:.35em 0 0;font-size:2.1em;letter-spacing:.12em;color:#fff;opacity:0;animation:secTi .5s ease-out forwards}
   @keyframes secLn{from{opacity:0;transform:translateY(.5em);filter:blur(4px)}to{opacity:1;transform:none;filter:none}}
   @keyframes secTi{from{opacity:0;transform:scale(1.8);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
+  #secret.live h2{margin:.1em 0 .25em} #secret .lines p{animation-duration:.3s}
+  #secret b{color:var(--c);font-weight:bold;text-shadow:0 0 6px #000,0 0 14px var(--c),0 0 26px var(--c)}
+  #secret p.zz{font-size:1.6em;margin:.15em 0}
   #hcList{font-size:12px;color:#e6b8ff;white-space:pre-line}
 </style>
 </head>
@@ -1154,6 +1157,7 @@ function showSecret(title, lines, hex, label){
 }
 
 function castHidden(c){
+  if (live){ clearTimeout(live.tm); live = null; }
   CD[c.id] = HC_CD; colR = c.hex; kick = .25; flash = .7; flashM.material.color.set(0xffffff);
   const t = showSecret(c.title, c.lines, c.hex, `隠し必殺 ×${HC_MULT}`);
   ring(orbPos(), 5, c.hex, .7); burst(orbPos(), c.hex, 90, 7); wiiRumble(300);
@@ -1275,6 +1279,124 @@ function castSteal(){
   popup(`恥ずかしくて攻撃できない！（${SHY_SEC}秒）`, '#ff9ad5', new THREE.Vector3(0, -.45, -3), .6, 1.6, camera);
 }
 
+// ===== 自由詠唱：唱えた言葉をそのまま画面に書いていく =====
+// 名乗り爆裂：「我が名は○○」で始めると名前がでかく出る → 途中は何を言ってもOK（「△△魔法」と言えばその行がでかく出る）→「エクスプロージョン」で発動
+// 体は○○  ：「体は○○で出来ている」で始める → 途中は自由 →「…○○で出来ていた」で○○が一致したら発動
+// 画面に出すのはプレイヤーが実際に言った言葉（音声認識の結果）だけ
+const LIVE_CD = 45, LIVE_IDLE = 15000;
+let live = null;
+CD.live_nanori = CD.live_body = 0; CDMAX.live_nanori = CDMAX.live_body = LIVE_CD;
+const wordHex = w => /炎|火|焔|爆|ほのお|ひ/.test(w) ? 0xff5a2a : /水|海|みず|うみ/.test(w) ? 0x4aa8ff : /氷|雪|こおり|ゆき/.test(w) ? 0xbfe8ff
+  : /雷|いかずち|かみなり/.test(w) ? 0xffe14a : /闇|黒|やみ|くろ/.test(w) ? 0xb04dff : /花|桜|はな|さくら/.test(w) ? 0xffb7e0
+  : /光|聖|ひかり/.test(w) ? 0xfff2b0 : /剣|刀|刃|鉄|鋼|けん|つるぎ/.test(w) ? 0xb8d0ff : 0xffd35a;
+const isBlade = w => /剣|刀|刃|つるぎ|ぶれいど|blade|sword/.test(hnorm(w));
+// 文章の中の word を色付きで強調した要素を作る
+function hiNode(tag, text, word, cls){
+  const el = document.createElement(tag); if (cls) el.className = cls;
+  const i = word ? text.indexOf(word) : -1;
+  if (i < 0){ el.textContent = text; return el; }
+  const b = document.createElement('b'); b.textContent = word;
+  el.append(text.slice(0, i), b, text.slice(i + word.length)); return el;
+}
+function liveOpen(type, hex, label){
+  hideSecret(); const el = $('secret'); el.style.setProperty('--c', hx(hex)); el.classList.add('on', 'live');
+  const sm = document.createElement('small'); sm.textContent = label; el.append(sm);
+  const ls = document.createElement('div'); ls.className = 'lines'; el.append(ls);
+  live = { type, hex, el, ls, n:0, word:'', z:'', needName:false, tm:0 };
+  liveTouch(); colR = hex; burst(orbPos(), hex, 30, 3);
+}
+function liveTouch(){ clearTimeout(live.tm); live.tm = setTimeout(() => { if (!live) return; popCam('詠唱が途切れた…', '#aaaaaa', .7, 1); liveEnd(); }, LIVE_IDLE); }
+function liveEnd(){ if (!live) return; clearTimeout(live.tm); live = null; const el = $('secret'); el.classList.add('out'); clearTimeout(secT); secT = setTimeout(hideSecret, 950); }
+function liveAdd(node){
+  live.ls.append(node); while (live.ls.children.length > 7) live.ls.firstChild.remove();
+  live.n++; burst(orbPos(), live.hex, 8, 2);
+}
+function liveBig(text, word, sc){   // でかい見出し（プレイヤーの言葉）
+  const h = hiNode('h2', text, word); h.style.fontSize = sc + 'em'; live.el.insertBefore(h, live.ls); return h;
+}
+function liveSeg(s, k){
+  if (state !== 'play' || menuOn) return false;
+  const raw = (s.txt[k][0] || '').replace(/\s+/g, ''); if (!raw) return false;
+  const h = hnorm(raw);
+  if (!live){
+    let m;
+    if ((m = raw.match(/(?:我が|わが|吾が|我)(?:名|な)[はわ](.*)/))){
+      if (CD.live_nanori > 0){ popCam('名乗り 待機中 ' + Math.ceil(CD.live_nanori) + 's', '#aaaaaa', .6, .8); return true; }
+      liveOpen('nanori', 0xff3a1a, '名乗り');
+      const name = m[1].split(/[、。！!？?]|随一/)[0].slice(0, 12);
+      if (name) liveName(name, raw); else live.needName = true;
+      return true;
+    }
+    if ((m = raw.match(/(?:体|身体|からだ)[はわ](.{1,10}?)で(?:でき|出来)て[いぃ]?る/))){
+      if (CD.live_body > 0){ popCam('待機中 ' + Math.ceil(CD.live_body) + 's', '#aaaaaa', .6, .8); return true; }
+      const w = m[1]; liveOpen('body', wordHex(w), '詠唱'); live.word = w; live.hex = wordHex(w);
+      liveBig(raw, w, 1.7); popCam(w, hx(live.hex), 1.2, 1.2);
+      return true;
+    }
+    return false;
+  }
+  liveTouch();
+  if (live.type === 'nanori'){
+    if (live.needName){ live.needName = false; liveName(raw.split(/[、。！!？?]|随一/)[0].slice(0, 12), raw); return true; }
+    const bang = h.search(/えくすぷろ|くすぷろじょん|explosion/);
+    const z = raw.match(/([^、。！!？?]{1,8}?)魔法/);
+    const zw = z ? z[1].split(/[はがを]/).pop() : '';
+    if (zw && !live.z && !/^[のな]|の$/.test(zw)){ live.z = zw; live.hex = wordHex(zw); live.el.style.setProperty('--c', hx(live.hex)); liveAdd(hiNode('p', raw, zw + '魔法', 'zz')); }
+    else if (bang < 0 || h.length > 10) liveAdd(hiNode('p', raw, live.z));
+    if (bang >= 0) liveFire();
+    return true;
+  }
+  // body：終わりの「○○で出来ていた」
+  const e = raw.match(/^(.*?)で(?:でき|出来)て[いぃ]?た/);
+  if (e){
+    const cap = e[1].split(/きっと|は/).pop(), a = hnorm(cap), b = hnorm(live.word);
+    const ok = a && b && (a.includes(b) || b.includes(a) || dice(grams(a, 1), grams(b, 1)) >= .6);
+    if (ok){ liveAdd(hiNode('p', raw, cap, 'zz')); liveFire(cap); }
+    else { liveAdd(hiNode('p', raw, cap)); popCam(`「${cap}」…${live.word} じゃない！`, '#aaaaaa', .7, 1.2); }
+    return true;
+  }
+  liveAdd(hiNode('p', raw, live.word));
+  return true;
+}
+function liveName(name, raw){
+  live.word = name;
+  const h = document.createElement('h2'); h.textContent = name; h.style.fontSize = '3.2em'; live.el.insertBefore(h, live.ls);
+  liveAdd(hiNode('p', raw, name));
+  popCam(name, '#ffd35a', 1.4, 1.4); shake = Math.max(shake, .2);
+}
+function liveFire(endWord){
+  const L = live, id = 'live_' + L.type; clearTimeout(L.tm); live = null;
+  CD[id] = LIVE_CD; colR = L.hex; kick = .25; flash = .7; flashM.material.color.set(0xffffff); ring(orbPos(), 5, L.hex, .7); burst(orbPos(), L.hex, 90, 7); wiiRumble(300);
+  if (L.type === 'nanori'){ const t = document.createElement('h2'); t.textContent = 'エクスプロージョン！'; t.style.fontSize = '2.6em'; L.el.append(t); }
+  else { const t = document.createElement('h2'); t.textContent = endWord || L.word; t.style.fontSize = '3.4em'; L.el.append(t); }
+  if (B.s !== 'dead'){ B.s = 'knock'; B.stun = true; B.t = 3.5; B.vz = 0; lane.visible = false; P.armed = false; }
+  let d = ULTS[0].dmg*HC_MULT;
+  if (P.counter > 0){ d += P.cBig; P.counter = 0; popup('COUNTER!!', '#ffd35a', V3(0, -.4, -3), 1.1, 1, camera); }
+  later(500, () => {
+    if (L.type === 'nanori') HC_FX.explosion(d);
+    else if (isBlade(L.word)) HC_FX.swords(d);
+    else wordRain(d, L.word, L.hex);
+  });
+  clearTimeout(secT); secT = setTimeout(() => { L.el.classList.add('out'); secT = setTimeout(hideSecret, 950); }, 4500);
+}
+// 剣以外なら、その言葉そのものがボスに降り注ぐ（例：体はプリンで出来ている → 「プリン」が降ってくる）
+function wordRain(d, word, hex){
+  const N = 30, dur = 3.2, g = new THREE.Group(), base = mkSprite(word, hx(hex), .9), geo = base.geometry.clone(), it = [];
+  for (let i = 0; i < N; i++){
+    const sp = new THREE.Sprite(base.material); sp.geometry = geo; sp.scale.copy(base.scale); sp.renderOrder = 16; sp.visible = false; g.add(sp);
+    it.push({ sp, t0:i*.07 + Math.random()*.08, from:V3((Math.random()-.5)*10, 6 + Math.random()*4, 1 + Math.random()*2), off:V3((Math.random()-.5)*3.4, .5 + Math.random()*1.8, (Math.random()-.5)*2.4), hit:false, i });
+  }
+  addUfx(g, dur, 1, (k) => {
+    const tt = k*dur;
+    for (const s of it){
+      const kk = (tt - s.t0)/.4; if (kk < 0) continue;
+      const from = s.from.clone(); from.x += P.x; const to = V3(bossG.position.x, 0, bossG.position.z).add(s.off);
+      s.sp.visible = kk < 1.6; s.sp.position.lerpVectors(from, to, Math.min(1, kk));
+      if (kk >= 1 && !s.hit){ s.hit = true; burst(to, hex, 12, 4); if (s.i % 6 === 5){ ultHit(d/5, to); shake = Math.max(shake, .35); wiiRumble(120); } }
+    }
+  }, () => { ring(bossG.position, 8, hex, .6); burst(bossG.position, hex, 100, 10); });
+}
+
 function castUlt(u){
   CD[u.id] = u.cd; for (const c of u.cps){ c.lit = false; c.el.classList.remove('lit'); } ultDraw(u);
   colR = u.hex; kick = .25; flash = .6; flashM.material.color.set(0xffffff);
@@ -1290,7 +1412,7 @@ function clearFx(){
 }
 function wizReset(){
   clearFx(); for (const k in CD) CD[k] = 0;
-  P.aias = 0; B.shy = 0; setAias(0); hideSecret();
+  P.aias = 0; B.shy = 0; setAias(0); if (live){ clearTimeout(live.tm); live = null; } hideSecret();
   for (const u of ULTS){ for (const c of u.cps){ c.lit = false; c.el.classList.remove('lit'); } ultDraw(u); }
 }
 function wizUpdate(dt){
@@ -1388,6 +1510,7 @@ function castDown(){
 function evalSeg(s, k){
   if (s.done[k] || !s.txt[k]) return; s.done[k] = 1;
   if (k < s.ign) return;
+  if (liveSeg(s, k)) return;   // 名乗り爆裂 / 体は○○ の自由詠唱中
   const t = s.txt[k].map(norm);
   if (t.some(y => ALLRX.some(rx => rx.test(y)))) return;   // 必殺の詠唱中の言葉は通常魔法にしない
   if (s.hp > 0) return;   // 隠し呪文を唱えている途中も通常魔法にしない
