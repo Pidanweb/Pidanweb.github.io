@@ -1,0 +1,1048 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Avatar Scan 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#e6ecf1; --bg2:#d3dde6; --panel:rgba(255,255,255,.88); --ink:#1c2833; --ink-soft:#56687a;
+  --line:rgba(28,40,51,.13); --amber:#f0a030; --amber-ink:#4a2a00; --bone:#17a9cc; --warn:#cf4a45;
+  --stage:#0e1824; --stage-ink:#d8e6f2;
+  --latin:"Saira","Zen Kaku Gothic New",system-ui,sans-serif;
+  --jp:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  color-scheme:light; box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --bg:#0a111d; --bg2:#111b2d; --panel:rgba(20,30,50,.9); --ink:#e3ebf4; --ink-soft:#91a3b7;
+  --line:rgba(227,235,244,.13); --amber:#f5ad48; --amber-ink:#2a1700; --bone:#43cdee; color-scheme:dark; } }
+:root[data-theme="dark"]{ --bg:#0a111d; --bg2:#111b2d; --panel:rgba(20,30,50,.9); --ink:#e3ebf4; --ink-soft:#91a3b7;
+  --line:rgba(227,235,244,.13); --amber:#f5ad48; --amber-ink:#2a1700; --bone:#43cdee; color-scheme:dark; }
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:radial-gradient(120% 80% at 50% -10%,var(--bg2),var(--bg) 60%);color:var(--ink);font-family:var(--jp);font-size:15px;line-height:1.65;min-height:100vh}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding:20px clamp(14px,3vw,32px) 12px}
+.brand h1{margin:0;font-family:var(--latin);font-weight:700;font-size:clamp(26px,3.4vw,38px);letter-spacing:.04em;line-height:1}
+.brand p{margin:6px 0 0;color:var(--ink-soft);font-size:13px}
+ol.steps{display:flex;gap:6px;margin:0;padding:0;list-style:none;flex-wrap:wrap}
+ol.steps li{display:flex;align-items:center;gap:7px;padding:5px 12px 5px 6px;border-radius:999px;background:var(--panel);border:1px solid var(--line);font-size:12.5px;color:var(--ink-soft)}
+ol.steps li b{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1.5px solid currentColor;font-family:var(--latin);font-size:12px}
+ol.steps li.done{color:var(--ink)}
+ol.steps li.done b{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+ol.steps li.skip{text-decoration:line-through}
+ol.steps li.now{color:var(--amber-ink);background:var(--amber);border-color:var(--amber)}
+ol.steps li.now b{border-color:var(--amber-ink)}
+main{padding:0 clamp(14px,3vw,32px) 28px;display:grid;gap:14px}
+.stages{display:grid;gap:14px;grid-template-columns:1fr}
+@media (min-width:900px){.stages{grid-template-columns:1fr 1fr}}
+.stage{position:relative;aspect-ratio:4/3;border-radius:18px;overflow:hidden;background:var(--stage);color:var(--stage-ink);box-shadow:0 0 0 1px rgba(67,205,238,.18) inset}
+@media (min-width:900px){.stage{aspect-ratio:16/11}}
+.stage video,.stage canvas.ov{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.stage video{transform:scaleX(-1)}
+.stage .chip{position:absolute;left:12px;top:12px;padding:4px 11px;border-radius:999px;background:rgba(14,24,36,.72);border:1px solid rgba(67,205,238,.35);font-size:12.5px;backdrop-filter:blur(6px);max-width:calc(100% - 24px)}
+.stage .chip.ok{border-color:rgba(35,160,102,.85)}
+.stage .empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:#8fa6ba;font-size:14px}
+.stage .empty strong{display:block;font-family:var(--latin);font-size:22px;color:var(--stage-ink);letter-spacing:.06em;margin-bottom:4px}
+#three{position:absolute;inset:0}
+#three canvas{display:block;width:100%!important;height:100%!important}
+.console{display:grid;gap:14px;grid-template-columns:1fr}
+@media (min-width:900px){.console{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;backdrop-filter:blur(10px)}
+.panel h2{margin:0 0 4px;font-size:19px;font-weight:700}
+.panel .body{margin:0 0 14px;color:var(--ink-soft);max-width:62ch}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+button,select{font:inherit;color:inherit}
+.btn{appearance:none;border:1px solid var(--line);background:transparent;border-radius:999px;padding:9px 18px;cursor:pointer;font-weight:500}
+.btn:hover{border-color:var(--ink-soft)}
+.btn.primary{background:var(--amber);border-color:var(--amber);color:var(--amber-ink);font-weight:700;padding:10px 22px}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible,select:focus-visible,input:focus-visible,.tabs button:focus-visible{outline:2px solid var(--bone);outline-offset:2px}
+.link-start{font-family:var(--latin);letter-spacing:.12em}
+label.sel{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ink-soft)}
+select{background:transparent;border:1px solid var(--line);border-radius:8px;padding:6px 8px;min-width:180px;max-width:100%}
+select option{background:var(--bg);color:var(--ink)}
+.settings{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);display:grid;gap:12px}
+.toggle{display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer}
+.err{color:var(--warn)!important;font-weight:500}
+.tabs{display:flex;gap:4px;margin-bottom:10px}
+.tabs button{border:none;background:none;padding:4px 10px;border-radius:8px;cursor:pointer;color:var(--ink-soft);font-weight:500}
+.tabs button[aria-selected="true"]{background:var(--bg2);color:var(--ink)}
+.scroll{overflow:auto;max-height:340px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:500;color:var(--ink-soft);font-size:12px}
+td.num{font-family:var(--latin);font-variant-numeric:tabular-nums;text-align:right}
+td.en{color:var(--ink-soft);font-family:var(--latin);font-size:12.5px}
+.thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.thumbs figure{margin:0;text-align:center;font-size:12px;color:var(--ink-soft)}
+.thumbs canvas{width:100%;aspect-ratio:3/4;border-radius:10px;background:var(--stage);display:block;margin-bottom:4px}
+.hint{font-size:12.5px;color:var(--ink-soft);margin:10px 0 0}
+.placeholder{color:var(--ink-soft);font-size:13.5px;margin:0}
+</style>
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <h1>Avatar Scan 3D</h1>
+    <p>USBカメラで正面・横・背中をスキャンして、ボーン入りの3Dアバター（VRM）を作ります</p>
+  </div>
+  <ol class="steps" id="steps">
+    <li data-k="camera"><b>1</b>カメラ</li>
+    <li data-k="front"><b>2</b>正面・骨格</li>
+    <li data-k="side"><b>3</b>横</li>
+    <li data-k="back"><b>4</b>背中</li>
+    <li data-k="build"><b>5</b>3D化</li>
+    <li data-k="live"><b>6</b>リンク</li>
+  </ol>
+</header>
+
+<main>
+  <section class="stages">
+    <div class="stage" aria-label="カメラ映像">
+      <video id="video" playsinline muted></video>
+      <canvas class="ov" id="overlay"></canvas>
+      <div class="empty" id="camEmpty"><div><strong>NO SIGNAL</strong>下の「Link Start」でカメラを起動します</div></div>
+      <div class="chip" id="camChip" hidden></div>
+    </div>
+    <div class="stage" aria-label="3Dアバター表示">
+      <div id="three"></div>
+      <div class="chip">ドラッグで回転・ホイールでズーム</div>
+    </div>
+  </section>
+
+  <section class="console">
+    <div class="panel">
+      <h2 id="msgTitle">準備</h2>
+      <p class="body" id="msgBody">カメラから2〜3m離れ、頭からつま先までが映る位置に立てるようにしてください。スキャンは正面・横・背中の3回です。無地の背景と明るい部屋だと、体の形と色がきれいに取れます。</p>
+      <div class="row">
+        <button class="btn primary link-start" id="primaryBtn">Link Start</button>
+        <button class="btn" id="secondaryBtn" hidden></button>
+      </div>
+      <div class="settings">
+        <div class="row">
+          <label class="sel">カメラ
+            <select id="camSelect" disabled><option>起動後に選べます</option></select>
+          </label>
+          <label class="sel">骨格モデル
+            <select id="modelSelect">
+              <option value="full">標準</option>
+              <option value="heavy">高精度（重い）</option>
+              <option value="lite">軽量（低スペック向け）</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label class="toggle"><input type="checkbox" id="mirror" checked> 鏡のように動かす</label>
+          <label class="toggle"><input type="checkbox" id="showBones"> ボーンを表示</label>
+        </div>
+        <div class="row">
+          <button class="btn" id="vrmBtn" disabled>VRMで保存</button>
+          <button class="btn" id="glbBtn" disabled>GLBで保存</button>
+          <button class="btn" id="shotBtn" disabled>画像で保存</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" data-tab="bones">ボーン</button>
+        <button role="tab" aria-selected="false" data-tab="body">体型・スキャン</button>
+      </div>
+      <div id="tab-bones" class="scroll">
+        <p class="placeholder" id="bonesEmpty">正面スキャンが終わると、ボーンの一覧と長さがここに出ます。名前はMMD風、右の列はVRMでの名前です。</p>
+        <table id="boneTable" hidden><thead><tr><th>ボーン</th><th>VRM</th><th style="text-align:right">長さ</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div id="tab-body" class="scroll" hidden>
+        <div class="thumbs">
+          <figure><canvas id="th-front" width="150" height="200"></canvas>正面</figure>
+          <figure><canvas id="th-side" width="150" height="200"></canvas>横</figure>
+          <figure><canvas id="th-back" width="150" height="200"></canvas>背中</figure>
+        </div>
+        <p class="placeholder" id="bodyEmpty">3D化が終わると、測った体の幅と厚みがここに出ます。</p>
+        <table id="bodyTable" hidden><thead><tr><th>部位</th><th style="text-align:right">幅</th><th style="text-align:right">厚み</th></tr></thead><tbody></tbody></table>
+      </div>
+      <p class="hint">数値はAIの推定なので、実寸と数cmずれることがあります。</p>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+/*CORE-START*/
+const V3 = THREE.Vector3, V2 = THREE.Vector2;
+const mid = (a, b) => a.clone().add(b).multiplyScalar(.5);
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = (v, lo, hi, d) => Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
+const sstep = (e0, e1, x) => { let t = (x - e0) / (e1 - e0); t = t < 0 ? 0 : t > 1 ? 1 : t; return t * t * (3 - 2 * t); };
+const median = a => { const b = a.filter(Number.isFinite).sort((x, y) => x - y); return b.length ? b[b.length >> 1] : NaN; };
+
+function jointsFrom(P) {
+  const g = i => P[i].clone();
+  const j = {
+    nose: g(0), lEar: g(7), rEar: g(8),
+    lSh: g(11), rSh: g(12), lEl: g(13), rEl: g(14), lWr: g(15), rWr: g(16),
+    lHand: mid(P[17], P[19]), rHand: mid(P[18], P[20]),
+    lHip: g(23), rHip: g(24), lKn: g(25), rKn: g(26), lAn: g(27), rAn: g(28), lToe: g(31), rToe: g(32),
+  };
+  j.hipC = mid(j.lHip, j.rHip); j.shC = mid(j.lSh, j.rSh); j.spine = mid(j.hipC, j.shC);
+  j.head = mid(j.lEar, j.rEar); j.neck = j.shC.clone().lerp(j.head, .4);
+  return j;
+}
+function swapLR(J) {
+  const o = {};
+  for (const k in J) {
+    if (/^[lr][A-Z]/.test(k)) o[(k[0] === 'l' ? 'r' : 'l') + k.slice(1)] = J[k]; else o[k] = J[k];
+  }
+  return o;
+}
+
+/* スキャンした長さから、正規化したTポーズ骨格（m単位・Y上・+Z正面・+Xが左）を作る */
+function canonFrom(J) {
+  const d = (a, b) => J[a].distanceTo(J[b]), av = (a, b, c, e) => (d(a, b) + d(c, e)) / 2;
+  const L = {
+    thigh: clamp(av('lHip','lKn','rHip','rKn'), .3, .6, .42), shin: clamp(av('lKn','lAn','rKn','rAn'), .3, .55, .4),
+    upper: clamp(av('lSh','lEl','rSh','rEl'), .2, .4, .28), fore: clamp(av('lEl','lWr','rEl','rWr'), .17, .35, .25),
+    hand: clamp(av('lWr','lHand','rWr','rHand') * 2.1, .12, .24, .17), foot: clamp(av('lAn','lToe','rAn','rToe'), .12, .24, .17),
+    torso: clamp(d('hipC','shC'), .35, .65, .5), neckHead: clamp(d('shC','head'), .12, .3, .2),
+    shHalf: clamp(d('lSh','rSh') / 2, .13, .25, .18), hipHalf: clamp(d('lHip','rHip') / 2, .06, .15, .09),
+  };
+  const Y = { an: .08 }; Y.kn = Y.an + L.shin; Y.hip = Y.kn + L.thigh; Y.sh = Y.hip + L.torso; Y.ear = Y.sh + L.neckHead;
+  return { L, Y };
+}
+
+const HB = ['hips','spine','chest','neck','head',
+  'leftShoulder','leftUpperArm','leftLowerArm','leftHand','rightShoulder','rightUpperArm','rightLowerArm','rightHand',
+  'leftUpperLeg','leftLowerLeg','leftFoot','leftToes','rightUpperLeg','rightLowerLeg','rightFoot','rightToes'];
+const PARENT = { spine: 'hips', chest: 'spine', neck: 'chest', head: 'neck' };
+for (const s of ['left', 'right']) Object.assign(PARENT, {
+  [s + 'Shoulder']: 'chest', [s + 'UpperArm']: s + 'Shoulder', [s + 'LowerArm']: s + 'UpperArm', [s + 'Hand']: s + 'LowerArm',
+  [s + 'UpperLeg']: 'hips', [s + 'LowerLeg']: s + 'UpperLeg', [s + 'Foot']: s + 'LowerLeg', [s + 'Toes']: s + 'Foot' });
+const JP = { hips: 'センター/下半身', spine: '上半身', chest: '上半身2', neck: '首', head: '頭',
+  leftShoulder: '左肩', leftUpperArm: '左腕', leftLowerArm: '左ひじ', leftHand: '左手首', rightShoulder: '右肩', rightUpperArm: '右腕', rightLowerArm: '右ひじ', rightHand: '右手首',
+  leftUpperLeg: '左足', leftLowerLeg: '左ひざ', leftFoot: '左足首', leftToes: '左つま先', rightUpperLeg: '右足', rightLowerLeg: '右ひざ', rightFoot: '右足首', rightToes: '右つま先' };
+
+function buildRig(C) {
+  const { L, Y } = C, P = {};
+  P.hips = new V3(0, Y.hip, 0); P.spine = new V3(0, lerp(Y.hip, Y.sh, .3), 0); P.chest = new V3(0, lerp(Y.hip, Y.sh, .65), 0);
+  P.neck = new V3(0, Y.sh + .02, 0); P.head = new V3(0, Y.sh + (Y.ear - Y.sh) * .55, 0);
+  const dir = {};
+  for (const [s, g] of [['left', 1], ['right', -1]]) {
+    P[s + 'Shoulder'] = new V3(g * .03, Y.sh - .01, 0);
+    P[s + 'UpperArm'] = new V3(g * L.shHalf, Y.sh, 0);
+    P[s + 'LowerArm'] = new V3(g * (L.shHalf + L.upper), Y.sh, 0);
+    P[s + 'Hand'] = new V3(g * (L.shHalf + L.upper + L.fore), Y.sh, 0);
+    P[s + 'UpperLeg'] = new V3(g * L.hipHalf, Y.hip, 0);
+    P[s + 'LowerLeg'] = new V3(g * L.hipHalf, Y.kn, 0);
+    P[s + 'Foot'] = new V3(g * L.hipHalf, Y.an, 0);
+    P[s + 'Toes'] = new V3(g * L.hipHalf, .025, L.foot * .7);
+    dir[s + 'UpperArm'] = P[s + 'LowerArm'].clone().sub(P[s + 'UpperArm']).normalize();
+    dir[s + 'LowerArm'] = P[s + 'Hand'].clone().sub(P[s + 'LowerArm']).normalize();
+    dir[s + 'Hand'] = new V3(g, 0, 0);
+    dir[s + 'UpperLeg'] = P[s + 'LowerLeg'].clone().sub(P[s + 'UpperLeg']).normalize();
+    dir[s + 'LowerLeg'] = P[s + 'Foot'].clone().sub(P[s + 'LowerLeg']).normalize();
+    dir[s + 'Foot'] = P[s + 'Toes'].clone().sub(P[s + 'Foot']).normalize();
+  }
+  const bones = {};
+  HB.forEach(n => { const b = new THREE.Bone(); b.name = n; bones[n] = b; });
+  HB.forEach(n => { const p = PARENT[n]; if (p) { bones[p].add(bones[n]); bones[n].position.copy(P[n]).sub(P[p]); } else bones[n].position.copy(P[n]); });
+  bones.hips.updateMatrixWorld(true);
+  const skeleton = new THREE.Skeleton(HB.map(n => bones[n]));
+  const restLocal = Object.fromEntries(HB.map(n => [n, bones[n].position.clone()]));
+  return { C, P, bones, skeleton, dir, restLocal };
+}
+
+/* ライブの関節位置 → 各ボーンの回転 */
+const _bx = new V3(), _by = new V3(), _bz = new V3(), _bm = new THREE.Matrix4();
+function basisQ(y, side) {
+  _by.copy(y).normalize(); if (_by.lengthSq() < 1e-8) _by.set(0, 1, 0);
+  _bx.copy(side).addScaledVector(_by, -side.dot(_by)); if (_bx.lengthSq() < 1e-8) _bx.set(1, 0, 0); _bx.normalize();
+  _bz.crossVectors(_bx, _by); _bm.makeBasis(_bx, _by, _bz); return new THREE.Quaternion().setFromRotationMatrix(_bm);
+}
+function basisYZ(y, front) {
+  _by.copy(y).normalize(); if (_by.lengthSq() < 1e-8) _by.set(0, 1, 0);
+  _bz.copy(front).addScaledVector(_by, -front.dot(_by)); if (_bz.lengthSq() < 1e-8) _bz.set(0, 0, 1); _bz.normalize();
+  _bx.crossVectors(_by, _bz); _bm.makeBasis(_bx, _by, _bz); return new THREE.Quaternion().setFromRotationMatrix(_bm);
+}
+function swingQ(qp, rest, live) {
+  const r = rest.clone().applyQuaternion(qp).normalize(), l = live.clone();
+  if (l.lengthSq() < 1e-10) return qp.clone();
+  return new THREE.Quaternion().setFromUnitVectors(r, l.normalize()).multiply(qp);
+}
+function retarget(rig, J) {
+  const q = {}, sub = (a, b) => J[a].clone().sub(J[b]);
+  const shSide = sub('lSh', 'rSh'), hipSide = sub('lHip', 'rHip');
+  q.hips = basisQ(sub('spine', 'hipC'), hipSide);
+  q.spine = basisQ(sub('shC', 'hipC'), hipSide.clone().normalize().add(shSide.clone().normalize()));
+  q.chest = basisQ(sub('shC', 'spine'), shSide);
+  q.neck = basisQ(sub('head', 'shC'), shSide);
+  q.head = basisYZ(sub('head', 'neck'), sub('nose', 'head'));
+  for (const s of ['left', 'right']) {
+    const k = s[0];
+    q[s + 'Shoulder'] = q.chest;
+    q[s + 'UpperArm'] = swingQ(q.chest, rig.dir[s + 'UpperArm'], sub(k + 'El', k + 'Sh'));
+    q[s + 'LowerArm'] = swingQ(q[s + 'UpperArm'], rig.dir[s + 'LowerArm'], sub(k + 'Wr', k + 'El'));
+    q[s + 'Hand'] = swingQ(q[s + 'LowerArm'], rig.dir[s + 'Hand'], sub(k + 'Hand', k + 'Wr'));
+    q[s + 'UpperLeg'] = swingQ(q.hips, rig.dir[s + 'UpperLeg'], sub(k + 'Kn', k + 'Hip'));
+    q[s + 'LowerLeg'] = swingQ(q[s + 'UpperLeg'], rig.dir[s + 'LowerLeg'], sub(k + 'An', k + 'Kn'));
+    q[s + 'Foot'] = swingQ(q[s + 'LowerLeg'], rig.dir[s + 'Foot'], sub(k + 'Toe', k + 'An'));
+    q[s + 'Toes'] = q[s + 'Foot'];
+  }
+  for (const n of HB) {
+    const p = PARENT[n];
+    rig.bones[n].quaternion.copy(p ? q[p].clone().invert().multiply(q[n]) : q[n]);
+  }
+}
+function restPose(rig) { for (const n of HB) { rig.bones[n].quaternion.identity(); rig.bones[n].position.copy(rig.restLocal[n]); } }
+
+/* ---- 1枚の撮影（マスク＋画像＋2D関節）を扱う ---- */
+function interpPts(pts, k) {
+  if (k <= pts[0][0]) return pts[0][1];
+  for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1]; if (k <= b[0]) return a[1] + (b[1] - a[1]) * ((k - a[0]) / ((b[0] - a[0]) || 1)); }
+  return pts[pts.length - 1][1];
+}
+function makeView(s, kind, C) {
+  const W = s.mw, H = s.mh, iw = s.img.width, ih = s.img.height, sx = iw / W, sy = ih / H, data = s.img.data, Y = C.Y;
+  const P = i => new V2(s.lm[i].x * W, s.lm[i].y * H);
+  const v = { kind, s, W, H, P };
+  v.m = (x, y) => { const xi = Math.round(x), yi = Math.round(y); return (xi < 0 || yi < 0 || xi >= W || yi >= H) ? 0 : s.mask[yi * W + xi]; };
+  v.color = (x, y) => {
+    if (v.m(x, y) < .5) return null;
+    let r = 0, g = 0, b = 0;
+    for (const [ox, oy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      const xi = Math.min(iw - 1, Math.max(0, Math.round(x * sx) + ox)), yi = Math.min(ih - 1, Math.max(0, Math.round(y * sy) + oy)), i = (yi * iw + xi) * 4;
+      r += data[i]; g += data[i + 1]; b += data[i + 2];
+    }
+    return [r / 4, g / 4, b / 4];
+  };
+  const rA = (a, b) => (P(a).y + P(b).y) / 2, cA = (a, b) => (P(a).x + P(b).x) / 2;
+  v.rows = { an: rA(27, 28), kn: rA(25, 26), hip: rA(23, 24), sh: rA(11, 12), ear: rA(7, 8) };
+  v.cols = { hip: cA(23, 24), sh: cA(11, 12), ear: cA(7, 8) };
+  v.mpp = (Y.sh - Y.an) / Math.max(20, v.rows.an - v.rows.sh);
+  let anc = [[Y.an, v.rows.an], [Y.kn, v.rows.kn], [Y.hip, v.rows.hip], [Y.sh, v.rows.sh], [Y.ear, v.rows.ear]];
+  if (!anc.every((a, i) => i === 0 || a[1] < anc[i - 1][1] - 2)) anc = [[Y.an, v.rows.an], [Y.sh, v.rows.sh]];
+  const last = anc[anc.length - 1], first = anc[0];
+  v.rowOf = y => y <= first[0] ? first[1] + (first[0] - y) / v.mpp : y >= last[0] ? last[1] - (y - last[0]) / v.mpp : interpPts(anc, y);
+  const inv = anc.map(([a, b]) => [b, a]).reverse();
+  v.yOf = r => r >= inv[inv.length - 1][0] ? inv[inv.length - 1][1] - (r - inv[inv.length - 1][0]) * v.mpp : r <= inv[0][0] ? inv[0][1] + (inv[0][0] - r) * v.mpp : interpPts(inv, r);
+  const cpts = [[v.rows.ear, v.cols.ear], [v.rows.sh, v.cols.sh], [v.rows.hip, v.cols.hip]].sort((a, b) => a[0] - b[0]);
+  v.centerCol = r => interpPts(cpts, r);
+  const arm = (a, b, c, d, e) => { const wr = P(c); return [P(a), P(b), wr, wr.clone().add(P(d).add(P(e)).multiplyScalar(.5).sub(wr).multiplyScalar(2.1))]; };
+  const A = arm(11, 13, 15, 17, 19), Bm = arm(12, 14, 16, 18, 20);
+  const leg = (h, k, a, t) => ({ hip: P(h), kn: P(k), an: P(a), toe: P(t) });
+  const LA = leg(23, 25, 27, 31), LB = leg(24, 26, 28, 32);
+  const plusIsLeft = kind !== 'back';               // 正面：本人の左は画像の右側、背面：左側
+  const aLeft = (A[2].x > Bm[2].x) === plusIsLeft;
+  v.arm = { left: aLeft ? A : Bm, right: aLeft ? Bm : A };
+  const lLeft = (LA.an.x + LA.kn.x > LB.an.x + LB.kn.x) === plusIsLeft;
+  v.leg = { left: lLeft ? LA : LB, right: lLeft ? LB : LA };
+  v.legAvg = { hip: mid(LA.hip, LB.hip), kn: mid(LA.kn, LB.kn), an: mid(LA.an, LB.an), toe: mid(LA.toe, LB.toe) };
+  const fd = P(0).x - v.cols.ear; v.face = Math.abs(fd) < 1 ? 1 : Math.sign(fd);   // 横向き：顔が画像の右(+1)/左(-1)
+  return v;
+}
+function runAt(v, x, y, nx, ny, maxP, maxN) {
+  maxN = maxN ?? maxP;
+  let ox = x, oy = y, found = false;
+  for (let d = 0; d <= 10 && !found; d++) for (const sg of [1, -1]) {
+    const tx = x + nx * d * sg, ty = y + ny * d * sg;
+    if (v.m(tx, ty) >= .5) { ox = tx; oy = ty; found = true; break; }
+  }
+  if (!found) return null;
+  let p = 0, n = 0;
+  while (p < maxP && v.m(ox + nx * (p + 1), oy + ny * (p + 1)) >= .5) p++;
+  while (n < maxN && v.m(ox - nx * (n + 1), oy - ny * (n + 1)) >= .5) n++;
+  return { p, n, half: (p + n) / 2, cx: ox + nx * (p - n) / 2, cy: oy + ny * (p - n) / 2 };
+}
+function sampleToward(v, cx, cy, dx, dy) {
+  if (!v) return null;
+  for (const k of [1, .85, .7, .5, .3, 0]) { const c = v.color(cx + dx * k, cy + dy * k); if (c) return c; }
+  return null;
+}
+function mixC(list) {
+  let r = 0, g = 0, b = 0, W = 0;
+  for (const [c, w] of list) if (c && w > 0) { r += c[0] * w; g += c[1] * w; b += c[2] * w; W += w; }
+  return W > 0 ? [r / W, g / W, b / W] : null;
+}
+function polyAt(pts, segs, s) {
+  let i = 0;
+  while (i < segs.length - 1 && s > segs[i]) { s -= segs[i]; i++; }
+  const a = pts[i], b = pts[i + 1], t = s / segs[i];
+  const d = b.clone().sub(a); const len = d.length() || 1; d.divideScalar(len);
+  const n = new V2(-d.y, d.x); if (n.y > 0) n.multiplyScalar(-1);
+  return { P: a.clone().add(b.clone().sub(a).multiplyScalar(t)), n };
+}
+function legCol(leg, r) { return interpPts([[leg.hip.y, leg.hip.x], [leg.kn.y, leg.kn.x], [leg.an.y, leg.an.x]].sort((a, b) => a[0] - b[0]), r); }
+function chainW(ch, s, w) {
+  for (let i = 1; i < ch.length; i++) if (Math.abs(s - ch[i][0]) < w) { const t = (s - ch[i][0] + w) / (2 * w); return [[ch[i - 1][1], 1 - t], [ch[i][1], t]]; }
+  let k = 0; for (let i = 0; i < ch.length; i++) if (s >= ch[i][0]) k = i;
+  return [[ch[k][1], 1]];
+}
+function blendIn(ws, name, w) { if (w <= 0) return ws; return [...ws.map(([n, x]) => [n, x * (1 - w)]), [name, w]]; }
+function fillSmooth(arr, key, def, win = 2) {
+  const n = arr.length; let lastV = NaN;
+  for (let i = 0; i < n; i++) { if (Number.isFinite(arr[i][key])) lastV = arr[i][key]; else arr[i][key] = lastV; }
+  lastV = NaN;
+  for (let i = n - 1; i >= 0; i--) { if (Number.isFinite(arr[i][key])) lastV = arr[i][key]; else arr[i][key] = Number.isFinite(lastV) ? lastV : def; }
+  const src = arr.map(a => a[key]);
+  for (let i = 0; i < n; i++) { let s = 0, c = 0; for (let k = -win; k <= win; k++) { const j = i + k; if (j >= 0 && j < n) { s += src[j]; c++; } } arr[i][key] = s / c; }
+}
+const toLin = c => c.map(v => { v /= 255; return v <= .04045 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); });
+
+/* ---- 3視点から体のメッシュを作る ---- */
+function buildBody(rig, F, S, B) {
+  const { L, Y } = rig.C, P = rig.P, bi = n => HB.indexOf(n);
+  const pos = [], col = [], sI = [], sW = [], idx = [];
+  const addV = (x, y, z, c, ws) => {
+    pos.push(x, y, z); const lc = toLin(c); col.push(lc[0], lc[1], lc[2]);
+    const arr = ws.filter(w => w[1] > 1e-4).sort((a, b) => b[1] - a[1]).slice(0, 4);
+    const t = arr.reduce((s, w) => s + w[1], 0);
+    for (let k = 0; k < 4; k++) { const w = arr[k]; sI.push(w ? bi(w[0]) : 0); sW.push(w && t > 0 ? w[1] / t : (k === 0 && !t ? 1 : 0)); }
+    return pos.length / 3 - 1;
+  };
+  const vp = i => new V3(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
+  const ringCenter = r => r.reduce((s, i) => s.add(vp(i)), new V3()).divideScalar(r.length);
+  const avgColor = r => { const c = [0, 0, 0]; r.forEach(i => { c[0] += col[i * 3]; c[1] += col[i * 3 + 1]; c[2] += col[i * 3 + 2]; }); return c.map(v => Math.round(Math.pow(v / r.length, 1 / 2.2) * 255)); };
+  const tube = (rings, capStart, capEnd, wStart, wEnd) => {
+    const R = rings.length, m = rings[0].length;
+    const r0 = Math.min(R - 2, R >> 1), a = vp(rings[r0][0]), b = vp(rings[r0][1]), c = vp(rings[r0 + 1][0]);
+    const nrm = c.clone().sub(a).cross(b.clone().sub(a)), flip = nrm.dot(a.clone().sub(ringCenter(rings[r0]))) < 0;
+    for (let r = 0; r < R - 1; r++) for (let j = 0; j < m; j++) {
+      const A = rings[r][j], Bq = rings[r][(j + 1) % m], Cq = rings[r + 1][j], D = rings[r + 1][(j + 1) % m];
+      if (!flip) idx.push(A, Cq, Bq, Bq, Cq, D); else idx.push(A, Bq, Cq, Bq, D, Cq);
+    }
+    const cap = (ring, next, ws) => {
+      const cen = ringCenter(ring), out = cen.clone().sub(ringCenter(next)).normalize();
+      const ci = addV(cen.x + out.x * .004, cen.y + out.y * .004, cen.z + out.z * .004, avgColor(ring), ws);
+      const t0 = vp(ring[0]).sub(vp(ci)), t1 = vp(ring[1]).sub(vp(ci));
+      const f = t0.cross(t1).dot(out) < 0;
+      for (let j = 0; j < m; j++) { const p = ring[j], q = ring[(j + 1) % m]; if (!f) idx.push(ci, p, q); else idx.push(ci, q, p); }
+    };
+    if (capStart) cap(rings[0], rings[1], wStart);
+    if (capEnd) cap(rings[R - 1], rings[R - 2], wEnd);
+  };
+  const stats = {};
+  const DEF = [140, 140, 150];
+
+  /* 胴体〜頭（1本のチューブ） */
+  {
+    const shHalfF = Math.abs(F.P(11).x - F.P(12).x) / 2, shHalfB = B ? Math.abs(B.P(11).x - B.P(12).x) / 2 : 0;
+    const crotch = Y.hip - .05;
+    let top = Y.ear + .13;
+    { const r0 = F.rowOf(Y.ear), c = F.centerCol(r0); let r = Math.round(r0);
+      while (r > 1 && (F.m(c, r - 1) >= .5 || F.m(c - 3, r - 1) >= .5 || F.m(c + 3, r - 1) >= .5)) r--;
+      top = clamp(F.yOf(r), Y.ear + .07, Y.ear + .22, top); }
+    const neckTop = Y.sh + (Y.ear - Y.sh) * .45;
+    const TR = [];
+    for (let y = crotch; y <= top - .008; y += .009) {
+      const R = { y, rx: NaN, rz: NaN, zc: NaN };
+      R.fr = F.rowOf(y); const fc0 = F.centerCol(R.fr);
+      const rf = runAt(F, fc0, R.fr, 1, 0, y < Y.sh ? shHalfF * 1.04 : .12 / F.mpp);
+      R.fc = rf ? rf.cx : fc0; if (rf) R.rx = rf.half * F.mpp;
+      if (S) { R.sr = S.rowOf(y); const g = S.centerCol(R.sr); const rs = runAt(S, g, R.sr, 1, 0, .2 / S.mpp);
+        R.sc = rs ? rs.cx : g; if (rs) { R.rz = rs.half * S.mpp; R.zc = S.face * (rs.cx - S.cols.hip) * S.mpp; } }
+      if (B) { R.br = B.rowOf(y); const g = B.centerCol(R.br); const rb = runAt(B, g, R.br, 1, 0, y < Y.sh ? shHalfB * 1.04 : .12 / B.mpp); R.bc = rb ? rb.cx : g; }
+      TR.push(R);
+    }
+    fillSmooth(TR, 'rx', .12);
+    TR.forEach(R => {
+      const head = R.y > neckTop, neck = R.y > Y.sh && !head;
+      R.rx = clamp(R.rx, head ? .035 : neck ? .035 : .07, head ? .12 : neck ? .1 : .28, .1);
+      const [lo, hi, df] = R.y < Y.sh ? [.42, 1, .66] : neck ? [.7, 1.3, 1] : [.85, 1.4, 1.15];
+      R.rz = R.rx * clamp(Number.isFinite(R.rz) ? R.rz / R.rx : NaN, lo, hi, df);
+      if (!Number.isFinite(R.zc)) R.zc = head ? .015 : 0;
+      R.zc = clamp(R.zc, -.12, .12, 0);
+    });
+    fillSmooth(TR, 'rz', .1); fillSmooth(TR, 'zc', 0, 3);
+    for (let i = TR.length - 4; i < TR.length; i++) if (i >= 0) { const k = (TR.length - i) / 5; TR[i].rx *= .55 + .45 * k; TR[i].rz *= .55 + .45 * k; }
+    const chain = [[Y.hip, 'hips'], [P.spine.y, 'spine'], [P.chest.y, 'chest'], [P.neck.y, 'neck'], [P.head.y, 'head']];
+    const M = 48, rings = []; let last = DEF;
+    for (const R of TR) {
+      const ring = [];
+      for (let j = 0; j < M; j++) {
+        const th = j / M * Math.PI * 2, si = Math.sin(th), co = Math.cos(th), x = R.rx * si, z = R.zc + R.rz * co;
+        const cf = sampleToward(F, R.fc, R.fr, x / F.mpp * .9, 0);
+        const cs = S ? sampleToward(S, R.sc, R.sr, S.face * R.rz * co * .9 / S.mpp, 0) : sampleToward(F, R.fc, R.fr, Math.sign(x || 1) * R.rx * .85 / F.mpp, 0);
+        const cb = B ? sampleToward(B, R.bc, R.br, -x / B.mpp * .9, 0) : S ? sampleToward(S, R.sc, R.sr, -S.face * R.rz * .85 / S.mpp, 0) : cs;
+        const c = mixC([[cf, Math.max(co, 0) ** 2], [cb, Math.max(-co, 0) ** 2], [cs, si * si]]) || last; last = c;
+        let ws = chainW(chain, R.y, .035);
+        const sd = x >= 0 ? 'left' : 'right';
+        ws = blendIn(ws, sd + 'UpperArm', sstep(.62, 1.05, Math.abs(x) / L.shHalf) * sstep(Y.sh - .12, Y.sh - .03, R.y) * (R.y < Y.sh + .04 ? .65 : 0));
+        ws = blendIn(ws, sd + 'UpperLeg', sstep(.25, .95, Math.abs(x) / L.hipHalf) * sstep(Y.hip + .02, Y.hip - .06, R.y) * .6);
+        ring.push(addV(x, R.y, z, c, ws));
+      }
+      rings.push(ring);
+    }
+    tube(rings, true, true, [['hips', 1]], [['head', 1]]);
+    const near = y => TR.reduce((a, b) => Math.abs(b.y - y) < Math.abs(a.y - y) ? b : a);
+    const ch = near(lerp(Y.hip, Y.sh, .75)), wa = near(lerp(Y.hip, Y.sh, .4)), hp = near(Y.hip), hd = near(Y.ear);
+    Object.assign(stats, { chestW: ch.rx * 2, chestD: ch.rz * 2, waistW: wa.rx * 2, waistD: wa.rz * 2, hipW: hp.rx * 2, hipD: hp.rz * 2, headW: hd.rx * 2, headD: hd.rz * 2, height: top });
+  }
+
+  /* 腕 */
+  for (const [sd, g] of [['left', 1], ['right', -1]]) {
+    const fa = F.arm[sd], ba = B ? B.arm[sd] : null, aS = L.shHalf, segs = [L.upper, L.fore, L.hand], tot = aS + L.upper + L.fore + L.hand;
+    const AR = [];
+    for (let a = aS * .55; a <= tot - .003; a += .01) {
+      const ac = Math.max(a - aS, .05), isHand = a - aS > L.upper + L.fore;
+      const fp = polyAt(fa, segs, ac), bp = ba ? polyAt(ba, segs, ac) : null;
+      const rr = runAt(F, fp.P.x, fp.P.y, fp.n.x, fp.n.y, .09 / F.mpp);
+      const R = { a, isHand, fp, bp, ry: NaN, yc: NaN };
+      if (rr) { R.ry = rr.half * F.mpp; R.yc = ((rr.cx - fp.P.x) * fp.n.x + (rr.cy - fp.P.y) * fp.n.y) * F.mpp; }
+      AR.push(R);
+    }
+    fillSmooth(AR, 'ry', .04); fillSmooth(AR, 'yc', 0);
+    AR.forEach(R => {
+      R.ry = R.isHand ? clamp(R.ry, .02, .055, .035) : clamp(R.ry, .026, .075, .04);
+      R.ry *= .35 + .65 * sstep(tot, tot - .035, R.a);
+      R.yc = clamp(R.yc, -.035, .035, 0);
+    });
+    const ch = [[aS, sd + 'UpperArm'], [aS + L.upper, sd + 'LowerArm'], [aS + L.upper + L.fore, sd + 'Hand']];
+    const M = 20, rings = []; let last = DEF;
+    for (const R of AR) {
+      const ring = [], rz = R.isHand ? R.ry * .6 : R.ry * .92;
+      for (let j = 0; j < M; j++) {
+        const ph = j / M * Math.PI * 2, si = Math.sin(ph), co = Math.cos(ph);
+        const off = R.yc + R.ry * si * .88;
+        const cf = sampleToward(F, R.fp.P.x + R.fp.n.x * R.yc / F.mpp, R.fp.P.y + R.fp.n.y * R.yc / F.mpp, R.fp.n.x * R.ry * si * .88 / F.mpp, R.fp.n.y * R.ry * si * .88 / F.mpp);
+        const cb = R.bp ? sampleToward(B, R.bp.P.x + R.bp.n.x * R.yc / B.mpp, R.bp.P.y + R.bp.n.y * R.yc / B.mpp, R.bp.n.x * R.ry * si * .88 / B.mpp, R.bp.n.y * R.ry * si * .88 / B.mpp) : cf;
+        const c = mixC([[cf, Math.max(co, 0) ** 2 + .4 * si * si], [cb, Math.max(-co, 0) ** 2]]) || last; last = c;
+        let ws = chainW(ch, R.a, .03);
+        ws = blendIn(ws, 'chest', 1 - sstep(aS * .55, aS * .97, R.a));
+        ring.push(addV(g * R.a, Y.sh + R.yc + R.ry * si, rz * co, c, ws));
+        void off;
+      }
+      rings.push(ring);
+    }
+    tube(rings, false, true, null, [[sd + 'Hand', 1]]);
+    if (sd === 'left') { const u = AR.find(R => R.a > aS + L.upper * .4); stats.armD = u ? u.ry * 2 : NaN; }
+  }
+
+  /* 脚 */
+  for (const [sd, g] of [['left', 1], ['right', -1]]) {
+    const fl = F.leg[sd], bl = B ? B.leg[sd] : null, x0 = g * L.hipHalf, LR = [];
+    const lim = (v, leg, c, base) => { let mp = .13 / v.mpp, mn = .13 / v.mpp; const inner = Math.max(3, Math.abs(c - base) - 1); if (leg.an.x + leg.kn.x > 2 * base) mn = Math.min(mn, inner); else mp = Math.min(mp, inner); return [mp, mn]; };
+    for (let y = Y.hip + .03; y >= Y.an - .012; y -= .012) {
+      const R = { y, rx: NaN, xo: NaN, rz: NaN, zo: NaN };
+      R.fr = F.rowOf(y); const c = legCol(fl, R.fr); const [mp, mn] = lim(F, fl, c, F.cols.hip);
+      const rf = runAt(F, c, R.fr, 1, 0, mp, mn); R.fc = rf ? rf.cx : c;
+      if (rf) { R.rx = rf.half * F.mpp; R.xo = (rf.cx - c) * F.mpp; }
+      if (S) { R.sr = S.rowOf(y); const gc = legCol(S.legAvg, R.sr); const rs = runAt(S, gc, R.sr, 1, 0, .15 / S.mpp);
+        R.sc = rs ? rs.cx : gc; if (rs) { R.rz = rs.half * S.mpp; R.zo = S.face * (rs.cx - gc) * S.mpp; } }
+      if (B) { R.br = B.rowOf(y); const bc = legCol(bl, R.br); const [bp, bn] = lim(B, bl, bc, B.cols.hip); const rb = runAt(B, bc, R.br, 1, 0, bp, bn); R.bc = rb ? rb.cx : bc; }
+      LR.push(R);
+    }
+    fillSmooth(LR, 'rx', .065); fillSmooth(LR, 'xo', 0);
+    LR.forEach(R => {
+      R.rx = clamp(R.rx, .035, .11, .065); R.xo = clamp(R.xo, -.04, .04, 0);
+      R.rz = R.rx * clamp(Number.isFinite(R.rz) ? R.rz / R.rx : NaN, .7, 1.4, .95); R.zo = clamp(R.zo, -.05, .05, 0);
+    });
+    fillSmooth(LR, 'rz', .06); fillSmooth(LR, 'zo', 0);
+    const ch = [[-Y.hip, sd + 'UpperLeg'], [-Y.kn, sd + 'LowerLeg'], [-Y.an, sd + 'Foot']];
+    const M = 24, rings = []; let last = DEF;
+    for (const R of LR) {
+      const ring = [];
+      for (let j = 0; j < M; j++) {
+        const th = j / M * Math.PI * 2, si = Math.sin(th), co = Math.cos(th);
+        const cf = sampleToward(F, R.fc, R.fr, R.rx * si * .88 / F.mpp, 0);
+        const cb = B ? sampleToward(B, R.bc, R.br, -R.rx * si * .88 / B.mpp, 0) : cf;
+        const cs = S ? sampleToward(S, R.sc, R.sr, S.face * R.rz * co * .88 / S.mpp, 0) : null;
+        const c = mixC([[cf, Math.max(co, 0) ** 2 + (S ? 0 : .5 * si * si)], [cb, Math.max(-co, 0) ** 2 + (S ? 0 : .5 * si * si)], [cs, S ? si * si : 0]]) || last; last = c;
+        let ws = chainW(ch, -R.y, .035);
+        ws = blendIn(ws, 'hips', sstep(Y.hip - .05, Y.hip + .03, R.y) * .6);
+        ring.push(addV(x0 + R.xo + R.rx * si, R.y, R.zo + R.rz * co, c, ws));
+      }
+      rings.push(ring);
+    }
+    tube(rings, false, true, null, [[sd + 'Foot', 1]]);
+    if (sd === 'left') { const t = LR.find(R => R.y < lerp(Y.kn, Y.hip, .6)); stats.thighW = t ? t.rx * 2 : NaN; }
+
+    /* 足（靴） */
+    const pts = []; const lg = F.leg[sd];
+    for (let t = .2; t <= 1.001; t += .2) for (const o of [-2, 0, 2]) { const p = lg.an.clone().lerp(lg.toe, t); const c = F.color(p.x + o, p.y); if (c) pts.push(c); }
+    const shoe = pts.length >= 3 ? [0, 1, 2].map(k => median(pts.map(p => p[k]))) : [45, 45, 52];
+    const FR = [], fz0 = -.055, fz1 = L.foot;
+    for (let z = fz0; z <= fz1 + 1e-6; z += .015) FR.push(z);
+    const rings2 = [];
+    for (const z of FR) {
+      const t = (z - fz0) / (fz1 - fz0), rx = .045 * (1 - .15 * t) * (t > .85 ? .6 + .4 * (1 - t) / .15 : 1), ry = .042 * (1 - .5 * t), cy = .043 - .013 * t;
+      const ring = [];
+      for (let j = 0; j < 16; j++) {
+        const ph = j / 16 * Math.PI * 2;
+        ring.push(addV(x0 + rx * Math.sin(ph), Math.max(.004, cy + ry * Math.cos(ph)), z, shoe, z > L.foot * .65 ? [[sd + 'Foot', .5], [sd + 'Toes', .5]] : [[sd + 'Foot', 1]]));
+      }
+      rings2.push(ring);
+    }
+    tube(rings2, true, true, [[sd + 'Foot', 1]], [[sd + 'Toes', 1]]);
+    if (sd === 'left') stats.shoe = shoe;
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(sI, 4));
+  geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sW, 4));
+  geo.setIndex(idx); geo.computeVertexNormals();
+  stats.verts = pos.length / 3; stats.tris = idx.length / 3;
+  return { geo, stats };
+}
+
+/* GLBにVRM 1.0の情報を書き足す */
+function glbToVrm(glb, name) {
+  const dv = new DataView(glb), jsonLen = dv.getUint32(12, true);
+  const json = JSON.parse(new TextDecoder().decode(new Uint8Array(glb, 20, jsonLen)));
+  const rest = new Uint8Array(glb, 20 + jsonLen);
+  const humanBones = {};
+  HB.forEach(n => { const i = json.nodes.findIndex(nd => nd.name === n); if (i >= 0) humanBones[n] = { node: i }; });
+  json.extensionsUsed = [...new Set([...(json.extensionsUsed || []), 'VRMC_vrm'])];
+  json.extensions = Object.assign(json.extensions || {}, { VRMC_vrm: {
+    specVersion: '1.0',
+    meta: { name, version: '1', authors: ['Avatar Scan'], licenseUrl: 'https://vrm.dev/licenses/1.0/',
+      avatarPermission: 'onlyAuthor', allowExcessivelyViolentUsage: false, allowExcessivelySexualUsage: false,
+      commercialUsage: 'personalNonProfit', allowPoliticalOrReligiousUsage: false, allowAntisocialOrHateUsage: false,
+      creditNotation: 'required', allowRedistribution: false, modification: 'allowModification' },
+    humanoid: { humanBones },
+  } });
+  let jb = new TextEncoder().encode(JSON.stringify(json));
+  const pad = (4 - jb.length % 4) % 4;
+  if (pad) { const t = new Uint8Array(jb.length + pad); t.set(jb); t.fill(0x20, jb.length); jb = t; }
+  const total = 12 + 8 + jb.length + rest.length, out = new Uint8Array(total), o = new DataView(out.buffer);
+  o.setUint32(0, 0x46546C67, true); o.setUint32(4, 2, true); o.setUint32(8, total, true);
+  o.setUint32(12, jb.length, true); o.setUint32(16, 0x4E4F534A, true);
+  out.set(jb, 20); out.set(rest, 20 + jb.length);
+  return out.buffer;
+}
+/*CORE-END*/
+
+/* ===================== ここから画面・カメラ・3D表示 ===================== */
+const MP_VER = '0.10.14';
+const MP_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/vision_bundle.mjs`;
+const MP_WASM = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/wasm`;
+const MODEL = k => `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${k}/float16/1/pose_landmarker_${k}.task`;
+
+const $ = s => document.querySelector(s);
+const video = $('#video'), ov = $('#overlay'), octx = ov.getContext('2d');
+const off = document.createElement('canvas'), offCtx = off.getContext('2d', { willReadFrequently: true });
+
+let landmarker = null, stream = null, lastVT = -1;
+let phase = 'idle', sub = 'ready';          // phase: idle / front / side / back / build / live
+let cur = null, holdT = 0, cdStart = 0, capStart = 0, capCount = 0;
+let frames = [], snaps = [];
+const scans = { front: null, side: null, back: null };
+let C = null, rig = null, avatar = null, bodyMesh = null, outlineMesh = null, helper = null, markers = null;
+let smoothRaw = null, buildStart = 0, bodyStats = null, buildFromView = null;
+const BUILD_MS = matchMedia('(prefers-reduced-motion: reduce)').matches ? 600 : 3400;
+const CD = { front: 3000, side: 5000, back: 5000 };
+
+/* ---------- UI ---------- */
+function setStep(k) {
+  const order = ['camera', 'front', 'side', 'back', 'build', 'live'], n = order.indexOf(k);
+  document.querySelectorAll('#steps li').forEach((li, i) => {
+    li.classList.toggle('done', i < n); li.classList.toggle('now', i === n);
+    li.classList.toggle('skip', i < n && scans[li.dataset.k] === 'skip');
+  });
+}
+function say(t, b, isErr) { $('#msgTitle').textContent = t; const el = $('#msgBody'); el.textContent = b; el.classList.toggle('err', !!isErr); }
+function buttons(p, s) {
+  const pb = $('#primaryBtn'), sb = $('#secondaryBtn');
+  pb.classList.remove('link-start');
+  if (p) { pb.hidden = false; pb.textContent = p[0]; pb.onclick = p[1]; pb.disabled = false; } else pb.hidden = true;
+  if (s) { sb.hidden = false; sb.textContent = s[0]; sb.onclick = s[1]; } else sb.hidden = true;
+}
+let chipText = null;
+function chip(t, ok) { const c = $('#camChip'); if (t === chipText) return; chipText = t; c.hidden = !t; c.textContent = t || ''; c.classList.toggle('ok', !!ok); }
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+function showTab(k) {
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === k));
+  $('#tab-bones').hidden = k !== 'bones'; $('#tab-body').hidden = k !== 'body';
+}
+
+/* ---------- 起動 ---------- */
+$('#primaryBtn').onclick = linkStart;
+async function linkStart() {
+  $('#primaryBtn').disabled = true; setStep('camera');
+  say('接続中', 'カメラの使用を許可してください。続けて骨格を読むAIモデルを読み込みます。');
+  try { await startCamera(); }
+  catch (e) {
+    say('カメラに接続できません', `カメラの許可がブロックされたか、ほかのアプリが使用中です（${e.name || e}）。ブラウザのカメラ設定を確認して、もう一度押してください。`, true);
+    $('#primaryBtn').disabled = false; return;
+  }
+  try { await loadModel($('#modelSelect').value); }
+  catch (e) {
+    console.error(e);
+    say('AIモデルを読み込めません', 'インターネット接続を確認してください。モデルは jsdelivr.net と storage.googleapis.com から読み込みます。', true);
+    $('#primaryBtn').disabled = false; return;
+  }
+  toFront();
+}
+async function loadModel(kind) {
+  const vision = await import(MP_URL);
+  const fileset = await vision.FilesetResolver.forVisionTasks(MP_WASM);
+  const opts = d => ({ baseOptions: { modelAssetPath: MODEL(kind), delegate: d }, runningMode: 'VIDEO', numPoses: 1,
+    outputSegmentationMasks: true, minPoseDetectionConfidence: .5, minPosePresenceConfidence: .5, minTrackingConfidence: .5 });
+  const old = landmarker; let lm;
+  try { lm = await vision.PoseLandmarker.createFromOptions(fileset, opts('GPU')); }
+  catch (e) { console.warn('GPU不可、CPUで実行', e); lm = await vision.PoseLandmarker.createFromOptions(fileset, opts('CPU')); }
+  landmarker = lm; if (old) old.close();
+}
+$('#modelSelect').onchange = async e => {
+  if (!landmarker) return;
+  const keep = landmarker; landmarker = null;
+  try { landmarker = keep; await loadModel(e.target.value); } catch (err) { console.error(err); landmarker = keep; }
+};
+async function startCamera(deviceId) {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  const size = { width: { ideal: 1280 }, height: { ideal: 720 } };
+  stream = await navigator.mediaDevices.getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId }, ...size } : size, audio: false });
+  video.srcObject = stream; await video.play();
+  ov.width = off.width = video.videoWidth; ov.height = off.height = video.videoHeight;
+  $('#camEmpty').hidden = true;
+  const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+  const sel = $('#camSelect'), curId = stream.getVideoTracks()[0].getSettings().deviceId;
+  sel.innerHTML = ''; devs.forEach((d, i) => { const o = new Option(d.label || `カメラ ${i + 1}`, d.deviceId); o.selected = d.deviceId === curId; sel.add(o); });
+  sel.disabled = devs.length < 2;
+}
+$('#camSelect').onchange = e => startCamera(e.target.value).catch(err => say('カメラを切り替えられません', String(err), true));
+
+/* ---------- 各スキャンの開始 ---------- */
+function toFront() {
+  clearAll();
+  phase = 'front'; sub = 'ready'; holdT = 0; scans.front = scans.side = scans.back = null; setStep('front');
+  say('正面スキャン（骨格）', 'カメラの方を向いて全身を映し、両腕を水平に広げたTポーズで止まってください。ポーズが揃うと3秒数えて自動で撮影します。');
+  buttons(['いますぐスキャン', () => { if (cur && fullBody(cur)) startCountdown(); else chip('全身が映っていません'); }]);
+}
+function toSide() {
+  phase = 'side'; sub = 'ready'; setStep('side');
+  say('横向きスキャン', '体の横をカメラに向けて、Tポーズのまま立ってください。体の厚みと横顔・後ろ髪の形を取ります。ボタンを押してから5秒あるので、その間に向きを変えてください。');
+  buttons(['5秒後に横向きを撮影', startCountdown], ['横をスキップ', () => { scans.side = 'skip'; toBack(); }]);
+}
+function toBack() {
+  phase = 'back'; sub = 'ready'; setStep('back');
+  say('背中スキャン', 'カメラに背中を向けて、Tポーズで立ってください。背中側の服と髪の色を取ります。ボタンを押してから5秒で撮影します。');
+  buttons(['5秒後に背中を撮影', startCountdown], ['背中をスキップ', () => { scans.back = 'skip'; build(); }]);
+}
+function startCountdown() { sub = 'countdown'; cdStart = performance.now(); buttons(null); }
+
+/* ---------- 判定 ---------- */
+function fullBody(c) {
+  return [0, 11, 12, 15, 16, 23, 24, 27, 28].every(i => { const p = c.lm[i]; return p.v > .5 && p.x > .01 && p.x < .99 && p.y > .01 && p.y < .995; });
+}
+function tPose(c) {
+  const l = c.lm, shY = (l[11].y + l[12].y) / 2, shW = Math.abs(l[11].x - l[12].x);
+  return Math.abs(l[15].y - shY) < .1 && Math.abs(l[16].y - shY) < .1 && Math.abs(l[13].y - shY) < .08 && Math.abs(l[14].y - shY) < .08
+    && Math.abs(l[15].x - l[16].x) > shW * 2.4;
+}
+
+/* ---------- 検出 ---------- */
+const copyLm = a => a.map(p => ({ x: p.x, y: p.y, z: p.z, v: p.visibility ?? 1 }));
+function onResult(res) {
+  if (!res.landmarks || !res.landmarks.length) { cur = null; return; }
+  cur = { lm: copyLm(res.landmarks[0]), wl: copyLm(res.worldLandmarks[0]) };
+  if (sub === 'capture' && (phase === 'front' || phase === 'side' || phase === 'back')) {
+    capCount++;
+    if (phase === 'front') frames.push(cur);
+    const m = res.segmentationMasks && res.segmentationMasks[0], every = phase === 'front' ? 6 : 3;
+    if (m && capCount % every === (every >> 1)) {
+      const mask = new Float32Array(m.getAsFloat32Array());
+      offCtx.drawImage(video, 0, 0, off.width, off.height);
+      snaps.push({ lm: cur.lm, mask, mw: m.width, mh: m.height, img: offCtx.getImageData(0, 0, off.width, off.height) });
+    }
+  }
+  if (smoothRaw) cur.wl.forEach((p, i) => smoothRaw[i].lerp(new THREE.Vector3(p.x, p.y, p.z), .5));
+}
+
+function updatePhase(now) {
+  if (phase === 'front' || phase === 'side' || phase === 'back') {
+    if (sub === 'ready') {
+      if (phase !== 'front') { chip(phase === 'side' ? '横向き・Tポーズで準備してください' : '背中を向けて準備してください'); return; }
+      if (!cur) { chip('人が映っていません'); holdT = 0; return; }
+      if (!fullBody(cur)) { chip('頭からつま先まで映るように下がってください'); holdT = 0; return; }
+      if (!tPose(cur)) { chip('両腕を肩の高さで水平に広げてください'); holdT = 0; return; }
+      chip('そのまま止まってください', true);
+      if (!holdT) holdT = now; else if (now - holdT > 900) startCountdown();
+    } else if (sub === 'countdown') {
+      if (phase === 'front' && (!cur || !fullBody(cur))) { sub = 'ready'; holdT = 0; buttons(['いますぐスキャン', () => { if (cur && fullBody(cur)) startCountdown(); }]); return; }
+      chip(phase === 'front' ? '動かないでください' : 'Tポーズで止まってください', true);
+      if (now - cdStart > CD[phase]) { sub = 'capture'; frames = []; snaps = []; capStart = now; capCount = 0; }
+    } else if (sub === 'capture') {
+      const goal = phase === 'front' ? 36 : 12, got = phase === 'front' ? frames.length : capCount;
+      chip(`スキャン中 ${Math.min(100, Math.round(got / goal * 100))}%`, true);
+      if (got >= goal) finishScan();
+      else if (now - capStart > 7000) failScan();
+    }
+  } else if (phase === 'build') chip('シルエットと色から3Dモデルを組み立てています', true);
+  else if (phase === 'live') chip(cur ? 'リンク中：動きがアバターに反映されます' : '人を見失いました', !!cur);
+  else chip(null);
+}
+function failScan() {
+  chip('うまく読み取れませんでした');
+  const p = phase; sub = 'ready';
+  say('もう一度撮影します', '人がうまく映っていませんでした。全身が画面に入っているか、部屋が暗すぎないか確認してください。', true);
+  if (p === 'front') toFront(); else if (p === 'side') toSide(); else toBack();
+}
+function finishScan() {
+  if (!snaps.length) return failScan();
+  if (phase === 'front') { scans.front = snaps; finishFront(); }
+  else if (phase === 'side') { scans.side = snaps; drawThumb('side', snaps); toBack(); }
+  else { scans.back = snaps; drawThumb('back', snaps); build(); }
+}
+
+/* ---------- 正面スキャン完了 → 骨格 ---------- */
+function finishFront() {
+  const n = frames.length;
+  const avg = Array.from({ length: 33 }, (_, i) => { const v = new THREE.Vector3(); frames.forEach(f => v.add(new THREE.Vector3(f.wl[i].x, -f.wl[i].y, -f.wl[i].z))); return v.divideScalar(n); });
+  C = canonFrom(jointsFrom(avg));
+  rig = buildRig(C);
+  avatar = new THREE.Group(); avatar.add(rig.bones.hips); scene.add(avatar);
+  helper = new THREE.SkeletonHelper(rig.bones.hips);
+  helper.material.depthTest = false; helper.material.transparent = true; helper.renderOrder = 10; scene.add(helper);
+  markers = new THREE.Group(); scene.add(markers);
+  const mg = new THREE.SphereGeometry(.018, 12, 8), mm = new THREE.MeshBasicMaterial({ color: 0xf5ad48, depthTest: false, transparent: true });
+  HB.forEach(() => { const s = new THREE.Mesh(mg, mm); s.renderOrder = 11; markers.add(s); });
+  smoothRaw = frames[n - 1].wl.map(p => new THREE.Vector3(p.x, p.y, p.z));
+  frameCamera(); fillBoneTable(); drawThumb('front', snaps); showTab('bones');
+  toSide();
+  say('骨格ができました → 横向きスキャン', `${HB.length}本のボーンを作りました。右の画面の骨格はもうあなたの動きに合わせて動きます。次は体の厚みを取るため、横向きで撮影します。ボタンを押してから5秒で撮影します。`);
+}
+
+/* ---------- 3D表示 ---------- */
+const host = $('#three');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.localClippingEnabled = true;
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+host.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0e1824);
+scene.fog = new THREE.Fog(0x0e1824, 4, 10);
+const camera = new THREE.PerspectiveCamera(35, 1, .05, 50);
+camera.position.set(0, 1.2, 4.2);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, .9, 0); controls.enableDamping = true; controls.maxDistance = 9; controls.minDistance = .5;
+scene.add(new THREE.HemisphereLight(0xe6f2ff, 0x2a3442, 1.5));
+const sun = new THREE.DirectionalLight(0xffffff, 2); sun.position.set(1.2, 3, 2.5); scene.add(sun);
+const rim = new THREE.DirectionalLight(0x8fdcff, .8); rim.position.set(-2, 2, -2.5); scene.add(rim);
+const grid = new THREE.GridHelper(8, 32, 0x2e7f98, 0x1a3445); grid.material.transparent = true; grid.material.opacity = .55; scene.add(grid);
+const pad = new THREE.Mesh(new THREE.RingGeometry(.42, .46, 64), new THREE.MeshBasicMaterial({ color: 0x43cdee, transparent: true, opacity: .5 }));
+pad.rotation.x = -Math.PI / 2; pad.position.y = .002; scene.add(pad);
+new ResizeObserver(() => {
+  const w = host.clientWidth, h = host.clientHeight; if (!w || !h) return;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}).observe(host);
+function frameCamera() {
+  const top = C.Y.ear + .15;
+  controls.target.set(0, top * .52, 0);
+  camera.position.set(top * .45, top * .62, top * 2.1);
+}
+
+const clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), 100);
+const grad = new THREE.DataTexture(new Uint8Array([110, 180, 255]), 3, 1, THREE.RedFormat);
+grad.minFilter = grad.magFilter = THREE.NearestFilter; grad.needsUpdate = true;
+const bodyMat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: grad, clippingPlanes: [clip] });
+const outlineMat = new THREE.MeshBasicMaterial({ color: 0x15161d, side: THREE.BackSide, clippingPlanes: [clip] });
+const ring = new THREE.Group();
+{
+  const t = new THREE.Mesh(new THREE.TorusGeometry(.55, .006, 8, 96), new THREE.MeshBasicMaterial({ color: 0x43cdee }));
+  const d = new THREE.Mesh(new THREE.CircleGeometry(.55, 64), new THREE.MeshBasicMaterial({ color: 0x43cdee, transparent: true, opacity: .12, side: THREE.DoubleSide, depthWrite: false }));
+  t.rotation.x = d.rotation.x = Math.PI / 2; ring.add(t, d); ring.visible = false; scene.add(ring);
+}
+
+function clearBody() {
+  for (const m of [bodyMesh, outlineMesh]) if (m) { m.parent && m.parent.remove(m); m.geometry.dispose(); }
+  bodyMesh = outlineMesh = null;
+  $('#vrmBtn').disabled = $('#glbBtn').disabled = $('#shotBtn').disabled = true;
+}
+function clearAll() {
+  clearBody();
+  if (avatar) scene.remove(avatar); if (helper) { scene.remove(helper); helper.dispose?.(); } if (markers) scene.remove(markers);
+  avatar = rig = helper = markers = smoothRaw = C = null;
+}
+
+/* ---------- 3D化 ---------- */
+function build() {
+  if (!rig || !scans.front) return toFront();
+  phase = 'build'; setStep('build'); buttons(null);
+  say('3D化しています', '3方向のシルエットから体の幅と厚みを測り、映像の色を頂点に塗っています。');
+  const pick = a => a[a.length >> 1];
+  const F = makeView(pick(scans.front), 'front', C);
+  const S = Array.isArray(scans.side) ? makeView(pick(scans.side), 'side', C) : null;
+  const B = Array.isArray(scans.back) ? makeView(pick(scans.back), 'back', C) : null;
+  buildFromView = F;
+  clearBody();
+  const { geo, stats } = buildBody(rig, F, S, B);
+  bodyStats = stats;
+  restPose(rig); avatar.updateMatrixWorld(true);
+  bodyMesh = new THREE.SkinnedMesh(geo, bodyMat); bodyMesh.name = 'Body'; bodyMesh.frustumCulled = false;
+  avatar.add(bodyMesh); bodyMesh.bind(rig.skeleton, new THREE.Matrix4());
+  const og = geo.clone(), p = og.attributes.position, nrm = og.attributes.normal;
+  for (let i = 0; i < p.count; i++) p.setXYZ(i, p.getX(i) + nrm.getX(i) * .006, p.getY(i) + nrm.getY(i) * .006, p.getZ(i) + nrm.getZ(i) * .006);
+  og.deleteAttribute('color');
+  outlineMesh = new THREE.SkinnedMesh(og, outlineMat); outlineMesh.frustumCulled = false;
+  avatar.add(outlineMesh); outlineMesh.bind(rig.skeleton, new THREE.Matrix4());
+  buildStart = performance.now(); clip.constant = -.05; ring.visible = true;
+  helper.visible = markers.visible = true;
+  fillBodyTable(); showTab('body');
+}
+function finishBuild() {
+  phase = 'live'; setStep('live');
+  clip.constant = 100; ring.visible = false; buildFromView = null;
+  helper.visible = markers.visible = $('#showBones').checked;
+  helper.material.opacity = markers.children[0].material.opacity = 1;
+  $('#vrmBtn').disabled = $('#glbBtn').disabled = $('#shotBtn').disabled = false;
+  say('リンク完了', `3Dアバターができました（推定身長 約${Math.round(bodyStats.height * 100)}cm、${bodyStats.verts.toLocaleString()}頂点）。カメラの前で動くとアバターも動きます。VRMで保存すると、VRM対応のアプリや自作アプリに読み込めます。`);
+  buttons(['最初からスキャンし直す', toFront], ['横と背中を撮り直す', () => { clearBody(); helper.visible = markers.visible = true; toSide(); }]);
+}
+$('#showBones').onchange = e => { if (phase === 'live' && helper) helper.visible = markers.visible = e.target.checked; };
+
+/* ---------- ライブで動かす ---------- */
+const _w = new THREE.Vector3();
+function liveJoints() {
+  const mir = $('#mirror').checked;
+  const J = jointsFrom(smoothRaw.map(p => new THREE.Vector3(mir ? -p.x : p.x, -p.y, -p.z)));
+  return mir ? swapLR(J) : J;
+}
+function poseFromLive() {
+  retarget(rig, liveJoints());
+  const hips = rig.bones.hips; hips.position.copy(rig.restLocal.hips);
+  avatar.updateMatrixWorld(true);
+  let minY = Infinity;
+  for (const n of ['leftFoot', 'rightFoot', 'leftToes', 'rightToes']) minY = Math.min(minY, rig.bones[n].getWorldPosition(_w).y);
+  hips.position.y += .025 - minY;
+  avatar.updateMatrixWorld(true);
+}
+function updateMarkers() { if (!markers) return; HB.forEach((n, i) => rig.bones[n].getWorldPosition(markers.children[i].position)); }
+function update3D(now) {
+  if (!rig) { pad.rotation.z = now / 2000; return; }
+  if (phase === 'build') {
+    restPose(rig); avatar.updateMatrixWorld(true); updateMarkers();
+    const t = Math.min(1, (now - buildStart) / BUILD_MS), top = bodyStats.height + .05;
+    const e = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    clip.constant = -.05 + e * top; ring.position.y = clip.constant;
+    helper.material.opacity = markers.children[0].material.opacity = 1 - e * .85;
+    if (t >= 1) finishBuild();
+    return;
+  }
+  if (smoothRaw) { poseFromLive(); updateMarkers(); }
+}
+
+/* ---------- 保存 ---------- */
+function exportGLB(asVrm) {
+  restPose(rig); avatar.updateMatrixWorld(true);
+  const std = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9, metalness: 0 });
+  bodyMesh.material = std; avatar.remove(outlineMesh);
+  const done = () => { bodyMesh.material = bodyMat; avatar.add(outlineMesh); std.dispose(); };
+  new GLTFExporter().parse(avatar, glb => {
+    done();
+    const buf = asVrm ? glbToVrm(glb, 'Scanned Avatar') : glb;
+    download(new Blob([buf], { type: 'model/gltf-binary' }), asVrm ? 'scanned-avatar.vrm' : 'scanned-avatar.glb');
+  }, err => { done(); say('保存できませんでした', String(err), true); }, { binary: true });
+}
+$('#vrmBtn').onclick = () => exportGLB(true);
+$('#glbBtn').onclick = () => exportGLB(false);
+$('#shotBtn').onclick = () => { renderer.render(scene, camera); renderer.domElement.toBlob(b => download(b, 'avatar.png')); };
+function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000); }
+
+/* ---------- 表とサムネイル ---------- */
+function fillBoneTable() {
+  const kids = {}; HB.forEach(n => { const p = PARENT[n]; if (p && !kids[p]) kids[p] = n; });
+  const len = n => n === 'hips' ? rig.P.spine.distanceTo(rig.P.hips) : kids[n] ? rig.P[n].distanceTo(rig.P[kids[n]]) : n.endsWith('Hand') ? C.L.hand : NaN;
+  $('#boneTable tbody').innerHTML = HB.map(n => { const l = len(n); return `<tr><td>${JP[n]}</td><td class="en">${n}</td><td class="num">${Number.isFinite(l) ? (l * 100).toFixed(1) + ' cm' : '—'}</td></tr>`; }).join('');
+  $('#boneTable').hidden = false; $('#bonesEmpty').hidden = true;
+}
+function fillBodyTable() {
+  const s = bodyStats, cm = v => Number.isFinite(v) ? (v * 100).toFixed(1) + ' cm' : '—';
+  const rows = [['推定身長', cm(s.height), ''], ['肩幅', cm(C.L.shHalf * 2), ''], ['頭', cm(s.headW), cm(s.headD)], ['胸', cm(s.chestW), cm(s.chestD)],
+    ['おなか', cm(s.waistW), cm(s.waistD)], ['腰', cm(s.hipW), cm(s.hipD)], ['二の腕', cm(s.armD), ''], ['太もも', cm(s.thighW), ''],
+    ['頂点数', s.verts.toLocaleString(), ''], ['ポリゴン数', s.tris.toLocaleString(), '']];
+  $('#bodyTable tbody').innerHTML = rows.map(([a, b, c]) => `<tr><td>${a}</td><td class="num">${b}</td><td class="num">${c}</td></tr>`).join('');
+  $('#bodyTable').hidden = false; $('#bodyEmpty').hidden = true;
+  for (const k of ['side', 'back']) if (scans[k] === 'skip') drawThumb(k, null);
+}
+const imgCanvas = s => { const c = document.createElement('canvas'); c.width = s.img.width; c.height = s.img.height; c.getContext('2d').putImageData(s.img, 0, 0); return c; };
+const maskCanvas = s => {
+  const c = document.createElement('canvas'); c.width = s.mw; c.height = s.mh;
+  const x = c.getContext('2d'), id = x.createImageData(s.mw, s.mh);
+  for (let i = 0; i < s.mask.length; i++) { id.data[i * 4] = 67; id.data[i * 4 + 1] = 205; id.data[i * 4 + 2] = 238; id.data[i * 4 + 3] = s.mask[i] > .5 ? 120 : 0; }
+  x.putImageData(id, 0, 0); return c;
+};
+function drawThumb(k, arr) {
+  const cv = $('#th-' + k), x = cv.getContext('2d'); x.clearRect(0, 0, cv.width, cv.height);
+  if (!arr) { x.fillStyle = '#8fa6ba'; x.font = '14px "Zen Kaku Gothic New", sans-serif'; x.textAlign = 'center'; x.fillText('スキップ', cv.width / 2, cv.height / 2); return; }
+  const s = arr[arr.length >> 1], ic = imgCanvas(s), mc = maskCanvas(s);
+  const sc = Math.max(cv.width / ic.width, cv.height / ic.height), w = ic.width * sc, h = ic.height * sc;
+  x.save(); x.translate(cv.width, 0); x.scale(-1, 1);
+  x.drawImage(ic, (cv.width - w) / 2, (cv.height - h) / 2, w, h); x.drawImage(mc, (cv.width - w) / 2, (cv.height - h) / 2, w, h); x.restore();
+}
+
+/* ---------- カメラ側のオーバーレイ ---------- */
+const LINES = [['hipC', 'spine', '上半身'], ['spine', 'shC', ''], ['shC', 'neck', '首'], ['neck', 'head', '頭'],
+  ['shC', 'lSh', ''], ['lSh', 'lEl', '左腕'], ['lEl', 'lWr', '左ひじ'], ['lWr', 'lHand', ''], ['shC', 'rSh', ''], ['rSh', 'rEl', '右腕'], ['rEl', 'rWr', '右ひじ'], ['rWr', 'rHand', ''],
+  ['hipC', 'lHip', ''], ['lHip', 'lKn', '左足'], ['lKn', 'lAn', '左ひざ'], ['lAn', 'lToe', ''], ['hipC', 'rHip', ''], ['rHip', 'rKn', '右足'], ['rKn', 'rAn', '右ひざ'], ['rAn', 'rToe', '']];
+let buildBg = null;
+function drawOverlay(now) {
+  const W = ov.width, H = ov.height; if (!W) return;
+  octx.clearRect(0, 0, W, H);
+  if (phase === 'build' && buildFromView) {
+    const s = buildFromView.s;
+    if (!buildBg) buildBg = [imgCanvas(s), maskCanvas(s)];
+    octx.save(); octx.translate(W, 0); octx.scale(-1, 1);
+    octx.drawImage(buildBg[0], 0, 0, W, H); octx.globalAlpha = .55 + .35 * Math.sin(now / 220); octx.drawImage(buildBg[1], 0, 0, W, H);
+    octx.restore(); return;
+  }
+  buildBg = null;
+  if (cur) {
+    const J = jointsFrom(cur.lm.map(p => new THREE.Vector3((1 - p.x) * W, p.y * H, 0)));
+    const fs = Math.max(11, W / 80);
+    octx.lineCap = 'round'; octx.lineWidth = Math.max(2, W / 360); octx.strokeStyle = 'rgba(67,205,238,.95)'; octx.shadowColor = '#43cdee'; octx.shadowBlur = 8;
+    LINES.forEach(([a, b]) => { octx.beginPath(); octx.moveTo(J[a].x, J[a].y); octx.lineTo(J[b].x, J[b].y); octx.stroke(); });
+    octx.shadowBlur = 0; octx.fillStyle = '#f5ad48';
+    new Set(LINES.flatMap(l => [l[0], l[1]])).forEach(k => { octx.beginPath(); octx.arc(J[k].x, J[k].y, Math.max(3, W / 260), 0, 7); octx.fill(); });
+    if (phase === 'front') {
+      octx.font = `500 ${fs}px "Zen Kaku Gothic New", sans-serif`; octx.textAlign = 'center'; octx.textBaseline = 'middle';
+      LINES.forEach(([a, b, nm]) => {
+        if (!nm) return;
+        const mx = (J[a].x + J[b].x) / 2, my = (J[a].y + J[b].y) / 2, w = octx.measureText(nm).width + fs * .8;
+        octx.fillStyle = 'rgba(14,24,36,.72)'; octx.beginPath(); octx.roundRect ? octx.roundRect(mx - w / 2, my - fs * .75, w, fs * 1.5, fs * .75) : octx.rect(mx - w / 2, my - fs * .75, w, fs * 1.5); octx.fill();
+        octx.fillStyle = '#d8e6f2'; octx.fillText(nm, mx, my);
+      });
+    }
+  }
+  if (sub === 'countdown' && (phase === 'front' || phase === 'side' || phase === 'back')) {
+    const n = Math.max(1, Math.ceil((CD[phase] - (now - cdStart)) / 1000));
+    octx.font = `700 ${H / 3.2}px Saira, sans-serif`; octx.fillStyle = 'rgba(245,173,72,.92)'; octx.textAlign = 'center'; octx.textBaseline = 'middle';
+    octx.fillText(n, W / 2, H / 2);
+  }
+  if (sub === 'capture' && (phase === 'front' || phase === 'side' || phase === 'back')) {
+    const y = ((now - capStart) / 900 % 1) * H, g = octx.createLinearGradient(0, y - H * .12, 0, y);
+    g.addColorStop(0, 'rgba(67,205,238,0)'); g.addColorStop(1, 'rgba(67,205,238,.35)');
+    octx.fillStyle = g; octx.fillRect(0, y - H * .12, W, H * .12);
+    octx.fillStyle = '#9fe9ff'; octx.fillRect(0, y - 1.5, W, 3);
+  }
+}
+
+/* ---------- メインループ ---------- */
+function tick() {
+  requestAnimationFrame(tick);
+  const now = performance.now();
+  if (landmarker && video.readyState >= 2 && video.currentTime !== lastVT) {
+    lastVT = video.currentTime;
+    try { landmarker.detectForVideo(video, now, onResult); } catch (e) { console.warn(e); }
+  }
+  updatePhase(now); drawOverlay(now); update3D(now);
+  controls.update(); renderer.render(scene, camera);
+}
+setStep('camera');
+tick();
+</script>
+</body>
+</html>
