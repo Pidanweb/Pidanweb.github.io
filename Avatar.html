@@ -179,7 +179,8 @@ canvas.ov.editing{cursor:crosshair;touch-action:none}
           <label class="toggle"><input type="checkbox" id="showBones"> ボーンを表示</label>
         </div>
         <div class="row">
-          <button class="btn" id="vrmBtn" disabled>VRMで保存</button>
+          <button class="btn" id="vrmBtn" disabled>VRMで保存（0.x・対応アプリ多め）</button>
+          <button class="btn" id="vrm1Btn" disabled>VRM 1.0で保存</button>
           <button class="btn" id="glbBtn" disabled>GLBで保存</button>
           <button class="btn" id="shotBtn" disabled>画像で保存</button>
         </div>
@@ -441,43 +442,23 @@ function fillSmooth(arr, key, def, win = 2) {
 }
 const toLin = c => c.map(v => { v /= 255; return v <= .04045 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); });
 
-/* ---- 3視点から体のメッシュを作る ---- */
+/* ---- 3視点から体のメッシュとテクスチャを作る ---- */
+// 数値・2Dベクトル・入れ子のオブジェクトをまとめて補間する（リングの間を細かく塗るため）
+function lerpR(a, b, t) {
+  if (a == null || b == null) return a;
+  if (typeof a === 'number') return a + (b - a) * t;
+  if (a.isVector2) return a.clone().lerp(b, t);
+  if (typeof a === 'object') { const o = {}; for (const k in a) o[k] = lerpR(a[k], b[k], t); return o; }
+  return t < .5 ? a : b;
+}
+const TEXEL = .0025;   // テクスチャ1画素あたり 2.5mm
 function buildBody(rig, F, S, B, opts = {}) {
   const { L, Y } = rig.C, P = rig.P, bi = n => HB.indexOf(n);
-  const pos = [], col = [], sI = [], sW = [], idx = [];
-  const addV = (x, y, z, c, ws) => {
-    pos.push(x, y, z); const lc = toLin(c); col.push(lc[0], lc[1], lc[2]);
-    const arr = ws.filter(w => w[1] > 1e-4).sort((a, b) => b[1] - a[1]).slice(0, 4);
-    const t = arr.reduce((s, w) => s + w[1], 0);
-    for (let k = 0; k < 4; k++) { const w = arr[k]; sI.push(w ? bi(w[0]) : 0); sW.push(w && t > 0 ? w[1] / t : (k === 0 && !t ? 1 : 0)); }
-    return pos.length / 3 - 1;
-  };
-  const vp = i => new V3(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
-  const ringCenter = r => r.reduce((s, i) => s.add(vp(i)), new V3()).divideScalar(r.length);
-  const avgColor = r => { const c = [0, 0, 0]; r.forEach(i => { c[0] += col[i * 3]; c[1] += col[i * 3 + 1]; c[2] += col[i * 3 + 2]; }); return c.map(v => Math.round(Math.pow(v / r.length, 1 / 2.2) * 255)); };
-  const tube = (rings, capStart, capEnd, wStart, wEnd) => {
-    const R = rings.length, m = rings[0].length;
-    const r0 = Math.min(R - 2, R >> 1), a = vp(rings[r0][0]), b = vp(rings[r0][1]), c = vp(rings[r0 + 1][0]);
-    const nrm = c.clone().sub(a).cross(b.clone().sub(a)), flip = nrm.dot(a.clone().sub(ringCenter(rings[r0]))) < 0;
-    for (let r = 0; r < R - 1; r++) for (let j = 0; j < m; j++) {
-      const A = rings[r][j], Bq = rings[r][(j + 1) % m], Cq = rings[r + 1][j], D = rings[r + 1][(j + 1) % m];
-      if (!flip) idx.push(A, Cq, Bq, Bq, Cq, D); else idx.push(A, Bq, Cq, Bq, D, Cq);
-    }
-    const cap = (ring, next, ws) => {
-      const cen = ringCenter(ring), out = cen.clone().sub(ringCenter(next)).normalize();
-      const ci = addV(cen.x + out.x * .004, cen.y + out.y * .004, cen.z + out.z * .004, avgColor(ring), ws);
-      const t0 = vp(ring[0]).sub(vp(ci)), t1 = vp(ring[1]).sub(vp(ci));
-      const f = t0.cross(t1).dot(out) < 0;
-      for (let j = 0; j < m; j++) { const p = ring[j], q = ring[(j + 1) % m]; if (!f) idx.push(ci, p, q); else idx.push(ci, q, p); }
-    };
-    if (capStart) cap(rings[0], rings[1], wStart);
-    if (capEnd) cap(rings[R - 1], rings[R - 2], wEnd);
-  };
-  const stats = {};
-  const DEF = [140, 140, 150];
-  let headOut = null;
+  const parts = [], stats = {};
+  const DEF = [140, 140, 150], TAU = Math.PI * 2;
+  const chain = [[Y.hip, 'hips'], [P.spine.y, 'spine'], [P.chest.y, 'chest'], [P.neck.y, 'neck'], [P.head.y, 'head']];
 
-  /* 頭の寸法（目の高さ・頭の幅と奥行き・頭頂・あご）を先に決める */
+  /* 頭の寸法（目の高さ・頭の幅と奥行き・頭頂・あご） */
   const fo = opts.face || { chin: .85 };
   const eyeRowF = (F.P(2).y + F.P(5).y) / 2, eyeY = F.yOf(eyeRowF);
   const he = runAt(F, F.centerCol(eyeRowF), eyeRowF, 1, 0, .12 / F.mpp);
@@ -492,6 +473,7 @@ function buildBody(rig, F, S, B, opts = {}) {
   { let r = Math.round(eyeRowF); const c = headFc;
     while (r > 1 && (F.m(c, r - 1) >= .5 || F.m(c - 3, r - 1) >= .5 || F.m(c + 3, r - 1) >= .5)) r--;
     topY = clamp(F.yOf(r), eyeY + .085, eyeY + .15, topY); }
+  if (fo.top) topY = clamp(Math.max(topY, eyeY + fo.top * headRx * 2 * .88), eyeY + .085, eyeY + .17, topY);
   const cheekW = headRx * 2 * .88, chinY = eyeY - clamp(fo.chin, .6, 1.15, .85) * cheekW;
   const neckR = clamp(headRx * .68, .042, .062, .052), neckZc = headZc - headRz * .3, neckTop = eyeY - .01;
   const hBot = chinY - .008, hcy = (topY + hBot) / 2, hry = (topY - hBot) / 2;
@@ -502,30 +484,30 @@ function buildBody(rig, F, S, B, opts = {}) {
   };
   const mouthRowF = (F.P(9).y + F.P(10).y) / 2, chinRowF = mouthRowF + (mouthRowF - eyeRowF) * .8;
 
-  /* 胴体〜首（1本のチューブ。首から上は頭の中で閉じる） */
+  /* ---------- 胴体〜首 ---------- */
   {
     const shHalfF = Math.abs(F.P(11).x - F.P(12).x) / 2, shHalfB = B ? Math.abs(B.P(11).x - B.P(12).x) / 2 : 0;
     const crotch = Y.hip - .05, shStart = Y.sh - .035;
     const TR = [];
-    for (let y = crotch; y <= neckTop + 1e-6; y += .009) {
+    for (let y = crotch; y <= neckTop + 1e-6; y += .006) {
       const R = { y, rx: NaN, rz: NaN, zc: NaN };
       R.fr = F.rowOf(y); const fc0 = F.centerCol(R.fr);
       const rf = runAt(F, fc0, R.fr, 1, 0, shHalfF * 1.04);
       R.fc = rf ? rf.cx : fc0; if (rf) R.rx = rf.half * F.mpp;
       if (y > Y.sh) { R.fr = Math.max(R.fr, chinRowF + 3); R.fc = headFc; }
+      R.sr = 0; R.sc = 0; R.br = 0; R.bc = 0;
       if (S) { R.sr = S.rowOf(y); const g = S.centerCol(R.sr); const rs = runAt(S, g, R.sr, 1, 0, .2 / S.mpp);
         R.sc = rs ? rs.cx : g; if (rs) { R.rz = rs.half * S.mpp; R.zc = S.face * (rs.cx - S.cols.hip) * S.mpp; } }
       if (B) { R.br = B.rowOf(y); const g = B.centerCol(R.br); const rb = runAt(B, g, R.br, 1, 0, shHalfB * 1.04); R.bc = rb ? rb.cx : g; }
       TR.push(R);
     }
-    fillSmooth(TR, 'rx', .12);
+    fillSmooth(TR, 'rx', .12, 3);
     TR.forEach(R => {
       R.rx = clamp(R.rx, .07, .28, .12);
       R.rz = R.rx * clamp(Number.isFinite(R.rz) ? R.rz / R.rx : NaN, .42, 1, .66);
       R.zc = clamp(R.zc, -.12, .12, 0);
     });
-    fillSmooth(TR, 'rz', .1); fillSmooth(TR, 'zc', 0, 3);
-    // 肩から首へ：なめらかに細くして、決まった太さの首にする
+    fillSmooth(TR, 'rz', .1, 3); fillSmooth(TR, 'zc', 0, 4);
     const base = TR.reduce((a, b) => Math.abs(b.y - shStart) < Math.abs(a.y - shStart) ? b : a);
     const b0 = { rx: base.rx, rz: base.rz, zc: base.zc };
     TR.forEach(R => {
@@ -534,97 +516,83 @@ function buildBody(rig, F, S, B, opts = {}) {
       R.rx = lerp(b0.rx, neckR, k); R.rz = lerp(b0.rz, neckR * 1.08, k); R.zc = lerp(b0.zc, neckZc, t);
       if (S) R.sc = lerp(R.sc, headSc - S.face * (headZc - neckZc) / S.mpp, t);
     });
-    const chain = [[Y.hip, 'hips'], [P.spine.y, 'spine'], [P.chest.y, 'chest'], [P.neck.y, 'neck'], [P.head.y, 'head']];
-    const M = 48, rings = []; let last = DEF;
-    for (const R of TR) {
-      const ring = [];
-      for (let j = 0; j < M; j++) {
-        const th = j / M * Math.PI * 2, si = Math.sin(th), co = Math.cos(th), x = R.rx * si, z = R.zc + R.rz * co;
+    parts.push({ name: 'trunk', R: TR, M: 72, len: neckTop - crotch, cap: [true, true], wCap: [[['hips', 1]], [['neck', .5], ['head', .5]]],
+      pos: (R, th) => [R.rx * Math.sin(th), R.y, R.zc + R.rz * Math.cos(th)],
+      col: (R, th) => {
+        const si = Math.sin(th), co = Math.cos(th), x = R.rx * si;
         const cf = sampleToward(F, R.fc, R.fr, x / F.mpp * .9, 0);
         const cs = S ? sampleToward(S, R.sc, R.sr, S.face * R.rz * co * .9 / S.mpp, 0) : sampleToward(F, R.fc, R.fr, Math.sign(x || 1) * R.rx * .85 / F.mpp, 0);
         const cb = B ? sampleToward(B, R.bc, R.br, -x / B.mpp * .9, 0) : S ? sampleToward(S, R.sc, R.sr, -S.face * R.rz * .85 / S.mpp, 0) : cs;
-        const c = mixC([[cf, Math.max(co, 0) ** 2], [cb, Math.max(-co, 0) ** 2], [cs, si * si]]) || last; last = c;
-        let ws = chainW(chain, R.y, .035);
-        const sd = x >= 0 ? 'left' : 'right';
+        return mixC([[cf, Math.max(co, 0) ** 2], [cb, Math.max(-co, 0) ** 2], [cs, si * si]]);
+      },
+      w: (R, th, x) => {
+        let ws = chainW(chain, R.y, .035); const sd = x >= 0 ? 'left' : 'right';
         ws = blendIn(ws, sd + 'UpperArm', sstep(.62, 1.05, Math.abs(x) / L.shHalf) * sstep(Y.sh - .12, Y.sh - .03, R.y) * (R.y < Y.sh ? .65 : 0));
-        ws = blendIn(ws, sd + 'UpperLeg', sstep(.25, .95, Math.abs(x) / L.hipHalf) * sstep(Y.hip + .02, Y.hip - .06, R.y) * .6);
-        ring.push(addV(x, R.y, z, c, ws));
-      }
-      rings.push(ring);
-    }
-    tube(rings, true, true, [['hips', 1]], [['head', 1]]);
+        return blendIn(ws, sd + 'UpperLeg', sstep(.25, .95, Math.abs(x) / L.hipHalf) * sstep(Y.hip + .02, Y.hip - .06, R.y) * .6);
+      } });
     const near = y => TR.reduce((a, b) => Math.abs(b.y - y) < Math.abs(a.y - y) ? b : a);
     const ch = near(lerp(Y.hip, Y.sh, .75)), wa = near(lerp(Y.hip, Y.sh, .4)), hp = near(Y.hip);
     Object.assign(stats, { chestW: ch.rx * 2, chestD: ch.rz * 2, waistW: wa.rx * 2, waistD: wa.rz * 2, hipW: hp.rx * 2, hipD: hp.rz * 2, headW: headRx * 2, headD: headRz * 2, height: topY });
   }
 
-  /* 頭（卵形の閉じたメッシュ。あごに向かって細くする） */
+  /* ---------- 頭（卵形） ---------- */
   {
-    const rings = [], M = 48; let last = DEF;
-    const bRow = B ? (B.P(7).y + B.P(8).y) / 2 : 0, bCol = B ? B.centerCol(bRow) : 0;
-    for (let y = hBot + .004; y <= topY - .004; y += .006) {
-      const h = headAt(y), ring = [];
-      const fr = F.rowOf(y), sr = S ? S.rowOf(y) : 0, br = B ? B.rowOf(y) : 0;
-      const rb = B ? runAt(B, bCol, br, 1, 0, .12 / B.mpp) : null, bc = rb ? rb.cx : bCol;
-      for (let j = 0; j < M; j++) {
-        const th = j / M * Math.PI * 2, si = Math.sin(th), co = Math.cos(th), x = h.rx * si, z = h.zc + h.rz * co;
-        const cf = sampleToward(F, headFc, fr, x / F.mpp * .9, 0);
-        const cs = S ? sampleToward(S, headSc, sr, S.face * (z - headZc) * .9 / S.mpp, 0) : sampleToward(F, headFc, fr, Math.sign(x || 1) * h.rx * .85 / F.mpp, 0);
-        const cb = B ? sampleToward(B, bc, br, -x / B.mpp * .9, 0) : S ? sampleToward(S, headSc, sr, -S.face * headRz * .85 / S.mpp, 0) : cs;
-        const c = mixC([[cf, Math.max(co, 0) ** 2], [cb, Math.max(-co, 0) ** 2], [cs, si * si]]) || last; last = c;
-        ring.push(addV(x, y, z, c, y < chinY + .015 ? [['head', .8], ['neck', .2]] : [['head', 1]]));
-      }
-      rings.push(ring);
+    const bRow = B ? (B.P(7).y + B.P(8).y) / 2 : 0, bCol = B ? B.centerCol(bRow) : 0, HR = [];
+    for (let y = hBot + .003; y <= topY - .003; y += .005) {
+      const h = headAt(y), br = B ? B.rowOf(y) : 0, rb = B ? runAt(B, bCol, br, 1, 0, .12 / B.mpp) : null;
+      HR.push({ y, rx: h.rx, rz: h.rz, zc: h.zc, fr: F.rowOf(y), sr: S ? S.rowOf(y) : 0, br, bc: rb ? rb.cx : bCol });
     }
-    tube(rings, true, true, [['head', 1]], [['head', 1]]);
+    parts.push({ name: 'head', R: HR, M: 64, len: topY - hBot, cap: [true, true], wCap: [[['head', 1]], [['head', 1]]],
+      pos: (R, th) => [R.rx * Math.sin(th), R.y, R.zc + R.rz * Math.cos(th)],
+      col: (R, th) => {
+        const si = Math.sin(th), co = Math.cos(th), x = R.rx * si, z = R.zc + R.rz * co;
+        const cf = sampleToward(F, headFc, R.fr, x / F.mpp * .9, 0);
+        const cs = S ? sampleToward(S, headSc, R.sr, S.face * (z - headZc) * .9 / S.mpp, 0) : sampleToward(F, headFc, R.fr, Math.sign(x || 1) * R.rx * .85 / F.mpp, 0);
+        const cb = B ? sampleToward(B, R.bc, R.br, -x / B.mpp * .9, 0) : S ? sampleToward(S, headSc, R.sr, -S.face * headRz * .85 / S.mpp, 0) : cs;
+        return mixC([[cf, Math.max(co, 0) ** 2], [cb, Math.max(-co, 0) ** 2], [cs, si * si]]);
+      },
+      w: R => R.y < chinY + .015 ? [['head', .8], ['neck', .2]] : [['head', 1]] });
   }
-  headOut = { headAt, eyeY, chinY, topY, cheekW };
 
-  /* 腕 */
+  /* ---------- 腕 ---------- */
   for (const [sd, g] of [['left', 1], ['right', -1]]) {
     const fa = F.arm[sd], ba = B ? B.arm[sd] : null, aS = L.shHalf, segs = [L.upper, L.fore, L.hand], tot = aS + L.upper + L.fore + L.hand;
     const AR = [];
-    for (let a = aS * .55; a <= tot - .003; a += .01) {
-      const ac = Math.max(a - aS, .05), isHand = a - aS > L.upper + L.fore;
+    for (let a = aS * .55; a <= tot - .003; a += .007) {
+      const ac = Math.max(a - aS, .05), isHand = a - aS > L.upper + L.fore ? 1 : 0;
       const fp = polyAt(fa, segs, ac), bp = ba ? polyAt(ba, segs, ac) : null;
       const rr = runAt(F, fp.P.x, fp.P.y, fp.n.x, fp.n.y, .09 / F.mpp);
       const R = { a, isHand, fp, bp, ry: NaN, yc: NaN };
       if (rr) { R.ry = rr.half * F.mpp; R.yc = ((rr.cx - fp.P.x) * fp.n.x + (rr.cy - fp.P.y) * fp.n.y) * F.mpp; }
       AR.push(R);
     }
-    fillSmooth(AR, 'ry', .04); fillSmooth(AR, 'yc', 0);
+    fillSmooth(AR, 'ry', .04, 3); fillSmooth(AR, 'yc', 0, 3);
     AR.forEach(R => {
       R.ry = R.isHand ? clamp(R.ry, .02, .055, .035) : clamp(R.ry, .026, .075, .04);
       R.ry *= .35 + .65 * sstep(tot, tot - .035, R.a);
       R.yc = clamp(R.yc, -.035, .035, 0);
     });
+    fillSmooth(AR, 'ry', .04, 1);
+    AR.forEach(R => R.rz = R.ry * (R.isHand ? .6 : .92));
     const ch = [[aS, sd + 'UpperArm'], [aS + L.upper, sd + 'LowerArm'], [aS + L.upper + L.fore, sd + 'Hand']];
-    const M = 20, rings = []; let last = DEF;
-    for (const R of AR) {
-      const ring = [], rz = R.isHand ? R.ry * .6 : R.ry * .92;
-      for (let j = 0; j < M; j++) {
-        const ph = j / M * Math.PI * 2, si = Math.sin(ph), co = Math.cos(ph);
-        const off = R.yc + R.ry * si * .88;
+    parts.push({ name: sd + 'Arm', R: AR, M: 32, len: tot - aS * .55, cap: [false, true], wCap: [null, [[sd + 'Hand', 1]]],
+      pos: (R, ph) => [g * R.a, Y.sh + R.yc + R.ry * Math.sin(ph), R.rz * Math.cos(ph)],
+      col: (R, ph) => {
+        const si = Math.sin(ph), co = Math.cos(ph);
         const cf = sampleToward(F, R.fp.P.x + R.fp.n.x * R.yc / F.mpp, R.fp.P.y + R.fp.n.y * R.yc / F.mpp, R.fp.n.x * R.ry * si * .88 / F.mpp, R.fp.n.y * R.ry * si * .88 / F.mpp);
         const cb = R.bp ? sampleToward(B, R.bp.P.x + R.bp.n.x * R.yc / B.mpp, R.bp.P.y + R.bp.n.y * R.yc / B.mpp, R.bp.n.x * R.ry * si * .88 / B.mpp, R.bp.n.y * R.ry * si * .88 / B.mpp) : cf;
-        const c = mixC([[cf, Math.max(co, 0) ** 2 + .4 * si * si], [cb, Math.max(-co, 0) ** 2]]) || last; last = c;
-        let ws = chainW(ch, R.a, .03);
-        ws = blendIn(ws, 'chest', 1 - sstep(aS * .55, aS * .97, R.a));
-        ring.push(addV(g * R.a, Y.sh + R.yc + R.ry * si, rz * co, c, ws));
-        void off;
-      }
-      rings.push(ring);
-    }
-    tube(rings, false, true, null, [[sd + 'Hand', 1]]);
+        return mixC([[cf, Math.max(co, 0) ** 2 + .4 * si * si], [cb, Math.max(-co, 0) ** 2]]);
+      },
+      w: R => blendIn(chainW(ch, R.a, .03), 'chest', 1 - sstep(aS * .55, aS * .97, R.a)) });
     if (sd === 'left') { const u = AR.find(R => R.a > aS + L.upper * .4); stats.armD = u ? u.ry * 2 : NaN; }
   }
 
-  /* 脚 */
+  /* ---------- 脚・足 ---------- */
   for (const [sd, g] of [['left', 1], ['right', -1]]) {
     const fl = F.leg[sd], bl = B ? B.leg[sd] : null, x0 = g * L.hipHalf, LR = [];
     const lim = (v, leg, c, base) => { let mp = .13 / v.mpp, mn = .13 / v.mpp; const inner = Math.max(3, Math.abs(c - base) - 1); if (leg.an.x + leg.kn.x > 2 * base) mn = Math.min(mn, inner); else mp = Math.min(mp, inner); return [mp, mn]; };
-    for (let y = Y.hip + .03; y >= Y.an - .012; y -= .012) {
-      const R = { y, rx: NaN, xo: NaN, rz: NaN, zo: NaN };
+    for (let y = Y.hip + .03; y >= Y.an - .012; y -= .008) {
+      const R = { y, rx: NaN, xo: NaN, rz: NaN, zo: NaN, sr: 0, sc: 0, br: 0, bc: 0 };
       R.fr = F.rowOf(y); const c = legCol(fl, R.fr); const [mp, mn] = lim(F, fl, c, F.cols.hip);
       const rf = runAt(F, c, R.fr, 1, 0, mp, mn); R.fc = rf ? rf.cx : c;
       if (rf) { R.rx = rf.half * F.mpp; R.xo = (rf.cx - c) * F.mpp; }
@@ -633,59 +601,126 @@ function buildBody(rig, F, S, B, opts = {}) {
       if (B) { R.br = B.rowOf(y); const bc = legCol(bl, R.br); const [bp, bn] = lim(B, bl, bc, B.cols.hip); const rb = runAt(B, bc, R.br, 1, 0, bp, bn); R.bc = rb ? rb.cx : bc; }
       LR.push(R);
     }
-    fillSmooth(LR, 'rx', .065); fillSmooth(LR, 'xo', 0);
+    fillSmooth(LR, 'rx', .065, 3); fillSmooth(LR, 'xo', 0, 3);
     LR.forEach(R => {
       R.rx = clamp(R.rx, .035, .11, .065); R.xo = clamp(R.xo, -.04, .04, 0);
       R.rz = R.rx * clamp(Number.isFinite(R.rz) ? R.rz / R.rx : NaN, .7, 1.4, .95); R.zo = clamp(R.zo, -.05, .05, 0);
     });
-    fillSmooth(LR, 'rz', .06); fillSmooth(LR, 'zo', 0);
+    fillSmooth(LR, 'rz', .06, 3); fillSmooth(LR, 'zo', 0, 3);
     const ch = [[-Y.hip, sd + 'UpperLeg'], [-Y.kn, sd + 'LowerLeg'], [-Y.an, sd + 'Foot']];
-    const M = 24, rings = []; let last = DEF;
-    for (const R of LR) {
-      const ring = [];
-      for (let j = 0; j < M; j++) {
-        const th = j / M * Math.PI * 2, si = Math.sin(th), co = Math.cos(th);
+    parts.push({ name: sd + 'Leg', R: LR, M: 40, len: Y.hip + .03 - Y.an, cap: [false, true], wCap: [null, [[sd + 'Foot', 1]]],
+      pos: (R, th) => [x0 + R.xo + R.rx * Math.sin(th), R.y, R.zo + R.rz * Math.cos(th)],
+      col: (R, th) => {
+        const si = Math.sin(th), co = Math.cos(th);
         const cf = sampleToward(F, R.fc, R.fr, R.rx * si * .88 / F.mpp, 0);
         const cb = B ? sampleToward(B, R.bc, R.br, -R.rx * si * .88 / B.mpp, 0) : cf;
         const cs = S ? sampleToward(S, R.sc, R.sr, S.face * R.rz * co * .88 / S.mpp, 0) : null;
-        const c = mixC([[cf, Math.max(co, 0) ** 2 + (S ? 0 : .5 * si * si)], [cb, Math.max(-co, 0) ** 2 + (S ? 0 : .5 * si * si)], [cs, S ? si * si : 0]]) || last; last = c;
-        let ws = chainW(ch, -R.y, .035);
-        ws = blendIn(ws, 'hips', sstep(Y.hip - .05, Y.hip + .03, R.y) * .6);
-        ring.push(addV(x0 + R.xo + R.rx * si, R.y, R.zo + R.rz * co, c, ws));
-      }
-      rings.push(ring);
-    }
-    tube(rings, false, true, null, [[sd + 'Foot', 1]]);
+        return mixC([[cf, Math.max(co, 0) ** 2 + (S ? 0 : .5 * si * si)], [cb, Math.max(-co, 0) ** 2 + (S ? 0 : .5 * si * si)], [cs, S ? si * si : 0]]);
+      },
+      w: R => blendIn(chainW(ch, -R.y, .035), 'hips', sstep(Y.hip - .05, Y.hip + .03, R.y) * .6) });
     if (sd === 'left') { const t = LR.find(R => R.y < lerp(Y.kn, Y.hip, .6)); stats.thighW = t ? t.rx * 2 : NaN; }
 
-    /* 足（靴） */
     const pts = []; const lg = F.leg[sd];
     for (let t = .2; t <= 1.001; t += .2) for (const o of [-2, 0, 2]) { const p = lg.an.clone().lerp(lg.toe, t); const c = F.color(p.x + o, p.y); if (c) pts.push(c); }
     const shoe = pts.length >= 3 ? [0, 1, 2].map(k => median(pts.map(p => p[k]))) : [45, 45, 52];
     const FR = [], fz0 = -.055, fz1 = L.foot;
-    for (let z = fz0; z <= fz1 + 1e-6; z += .015) FR.push(z);
-    const rings2 = [];
-    for (const z of FR) {
-      const t = (z - fz0) / (fz1 - fz0), rx = .045 * (1 - .15 * t) * (t > .85 ? .6 + .4 * (1 - t) / .15 : 1), ry = .042 * (1 - .5 * t), cy = .043 - .013 * t;
-      const ring = [];
-      for (let j = 0; j < 16; j++) {
-        const ph = j / 16 * Math.PI * 2;
-        ring.push(addV(x0 + rx * Math.sin(ph), Math.max(.004, cy + ry * Math.cos(ph)), z, shoe, z > L.foot * .65 ? [[sd + 'Foot', .5], [sd + 'Toes', .5]] : [[sd + 'Foot', 1]]));
-      }
-      rings2.push(ring);
+    for (let z = fz0; z <= fz1 + 1e-6; z += .01) {
+      const t = (z - fz0) / (fz1 - fz0);
+      FR.push({ z, rx: .045 * (1 - .15 * t) * (t > .85 ? .6 + .4 * (1 - t) / .15 : 1), ry: .042 * (1 - .5 * t), cy: .043 - .013 * t });
     }
-    tube(rings2, true, true, [[sd + 'Foot', 1]], [[sd + 'Toes', 1]]);
+    parts.push({ name: sd + 'Foot', R: FR, M: 24, len: fz1 - fz0, texW: 8, texH: 8, cap: [true, true], wCap: [[[sd + 'Foot', 1]], [[sd + 'Toes', 1]]],
+      pos: (R, ph) => [x0 + R.rx * Math.sin(ph), Math.max(.004, R.cy + R.ry * Math.cos(ph)), R.z],
+      col: () => shoe,
+      w: R => R.z > L.foot * .65 ? [[sd + 'Foot', .5], [sd + 'Toes', .5]] : [[sd + 'Foot', 1]] });
     if (sd === 'left') stats.shoe = shoe;
+  }
+
+  /* ---------- テクスチャの配置（棚詰め） ---------- */
+  const PADX = 3, AW = 2048;
+  parts.forEach(pt => {
+    if (!pt.texW) {
+      let circ = 0;
+      for (let i = 0; i < pt.R.length; i += 4) { const a = pt.pos(pt.R[i], 0), b = pt.pos(pt.R[i], Math.PI / 2), c = pt.pos(pt.R[i], Math.PI);
+        const rA = Math.hypot(a[0] - c[0], a[1] - c[1], a[2] - c[2]) / 2, rB = Math.hypot(b[0] - (a[0] + c[0]) / 2, b[1] - (a[1] + c[1]) / 2, b[2] - (a[2] + c[2]) / 2);
+        circ = Math.max(circ, TAU * Math.sqrt((rA * rA + rB * rB) / 2)); }
+      pt.texW = Math.min(1024, Math.max(16, Math.ceil(circ / TEXEL)));
+      pt.texH = Math.min(1024, Math.max(16, Math.ceil(pt.len / TEXEL)));
+    }
+  });
+  const order = parts.slice().sort((a, b) => b.texH - a.texH);
+  let sx = 0, sy = 0, shelf = 0;
+  for (const pt of order) {
+    const w = pt.texW + PADX * 2, h = pt.texH + PADX * 2;
+    if (sx + w > AW) { sx = 0; sy += shelf; shelf = 0; }
+    pt.rect = { x: sx + PADX, y: sy + PADX, w: pt.texW, h: pt.texH };
+    sx += w; shelf = Math.max(shelf, h);
+  }
+  let AH = 64; while (AH < sy + shelf) AH *= 2;
+  const tex = { width: AW, height: AH, data: new Uint8ClampedArray(AW * AH * 4) };
+  const TH0 = Math.PI;   // 継ぎ目は背中側（θ=π）に置く
+  for (const pt of parts) {
+    const { x: rx0, y: ry0, w, h } = pt.rect, N = pt.R.length;
+    let last = DEF;
+    for (let py = -PADX; py < h + PADX; py++) {
+      const tt = clamp((py + .5) / h, 0, 1, 0) * (N - 1), i0 = Math.min(N - 2, Math.floor(tt));
+      const R = N > 1 ? lerpR(pt.R[i0], pt.R[i0 + 1], tt - i0) : pt.R[0];
+      for (let px = -PADX; px < w + PADX; px++) {
+        const th = TH0 + (clamp((px + .5) / w, 0, 1, 0)) * TAU;
+        const c = pt.col(R, th) || last; last = c;
+        const o = ((ry0 + py) * AW + rx0 + px) * 4;
+        tex.data[o] = c[0]; tex.data[o + 1] = c[1]; tex.data[o + 2] = c[2]; tex.data[o + 3] = 255;
+      }
+    }
+  }
+
+  /* ---------- 頂点の生成 ---------- */
+  const pos = [], uv = [], sI = [], sW = [], idx = [], seams = [];
+  const addV = (p, u, v, ws) => {
+    pos.push(p[0], p[1], p[2]); uv.push(u / AW, 1 - v / AH);
+    const arr = ws.filter(w => w[1] > 1e-4).sort((a, b) => b[1] - a[1]).slice(0, 4);
+    const t = arr.reduce((s, w) => s + w[1], 0);
+    for (let k = 0; k < 4; k++) { const w = arr[k]; sI.push(w ? bi(w[0]) : 0); sW.push(w && t > 0 ? w[1] / t : (k === 0 && !t ? 1 : 0)); }
+    return pos.length / 3 - 1;
+  };
+  const vp = i => new V3(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
+  const ringCenter = r => r.slice(0, -1).reduce((s, i) => s.add(vp(i)), new V3()).divideScalar(r.length - 1);
+  for (const pt of parts) {
+    const { x: rx0, y: ry0, w, h } = pt.rect, N = pt.R.length, M = pt.M, rings = [];
+    pt.R.forEach((R, r) => {
+      const ring = [], v = ry0 + (N > 1 ? r / (N - 1) : .5) * h;
+      for (let j = 0; j <= M; j++) {
+        const th = TH0 + j / M * TAU, p = pt.pos(R, th);
+        ring.push(addV(p, rx0 + j / M * w, v, pt.w(R, th, p[0])));
+      }
+      seams.push([ring[0], ring[M]]);
+      rings.push(ring);
+    });
+    const r0 = Math.min(N - 2, N >> 1), a = vp(rings[r0][0]), b = vp(rings[r0][1]), c = vp(rings[r0 + 1][0]);
+    const flip = c.clone().sub(a).cross(b.clone().sub(a)).dot(a.clone().sub(ringCenter(rings[r0]))) < 0;
+    for (let r = 0; r < N - 1; r++) for (let j = 0; j < M; j++) {
+      const A = rings[r][j], Bq = rings[r][j + 1], Cq = rings[r + 1][j], D = rings[r + 1][j + 1];
+      if (!flip) idx.push(A, Cq, Bq, Bq, Cq, D); else idx.push(A, Bq, Cq, Bq, D, Cq);
+    }
+    const cap = (ring, next, ws, vRow) => {
+      const cen = ringCenter(ring), out = cen.clone().sub(ringCenter(next)).normalize();
+      const ci = addV([cen.x + out.x * .004, cen.y + out.y * .004, cen.z + out.z * .004], rx0 + w / 2, vRow, ws);
+      const f = vp(ring[0]).sub(vp(ci)).cross(vp(ring[1]).sub(vp(ci))).dot(out) < 0;
+      for (let j = 0; j < M; j++) { const p = ring[j], q = ring[j + 1]; if (!f) idx.push(ci, p, q); else idx.push(ci, q, p); }
+    };
+    if (pt.cap[0]) cap(rings[0], rings[1], pt.wCap[0], ry0);
+    if (pt.cap[1]) cap(rings[N - 1], rings[N - 2], pt.wCap[1], ry0 + h);
   }
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(sI, 4));
   geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sW, 4));
   geo.setIndex(idx); geo.computeVertexNormals();
-  stats.verts = pos.length / 3; stats.tris = idx.length / 3;
-  return { geo, stats, head: headOut };
+  const nr = geo.attributes.normal, nA = new V3(), nB = new V3();
+  for (const [i, j] of seams) { nA.fromBufferAttribute(nr, i); nB.fromBufferAttribute(nr, j); nA.add(nB).normalize(); nr.setXYZ(i, nA.x, nA.y, nA.z); nr.setXYZ(j, nA.x, nA.y, nA.z); }
+  stats.verts = pos.length / 3; stats.tris = idx.length / 3; stats.texSize = `${AW}×${AH}`;
+  return { geo, stats, tex, head: { headAt, eyeY, chinY, topY, cheekW } };
 }
 
 /* 顔写真を頭の前面に貼るための曲面（頭の形に沿わせ、正面から投影したUVを付ける） */
@@ -698,7 +733,7 @@ function buildFacePatch(rig, head, fi) {
   const { Y } = rig.C, P = rig.P, bi = n => HB.indexOf(n);
   const chain = [[Y.hip, 'hips'], [P.spine.y, 'spine'], [P.chest.y, 'chest'], [P.neck.y, 'neck'], [P.head.y, 'head']];
   const pos = [], uv = [], sI = [], sW = [], idx = [];
-  const NR = Math.max(10, Math.round((fi.yTop - fi.yBot) / .004)), NS = 44, TH = 1.4;
+  const NR = Math.max(10, Math.round((fi.yTop - fi.yBot) / .004)), NS = 56, TH = fi.th || 1.4;
   for (let r = 0; r <= NR; r++) {
     const y = lerp(fi.yBot, fi.yTop, r / NR), R = head.headAt(y), ws = [['head', 1]];
     for (let j = 0; j <= NS; j++) {
@@ -722,22 +757,26 @@ function buildFacePatch(rig, head, fi) {
   return geo;
 }
 
-/* GLBにVRM 1.0の情報を書き足す */
-function glbToVrm(glb, name) {
+/* 書き出し用：ライブ中の骨格とは別に、Tポーズの新しい骨格とメッシュを組む（flip=trueでVRM0流の-Z向き） */
+function makeExportRoot(rig, parts, flip) {
+  const rot = new THREE.Matrix4().makeRotationY(flip ? Math.PI : 0);
+  const nb = {};
+  HB.forEach(n => { const b = new THREE.Bone(); b.name = n; b.position.copy(rig.restLocal[n]).applyMatrix4(rot); nb[n] = b; });
+  HB.forEach(n => { const p = PARENT[n]; if (p) nb[p].add(nb[n]); });
+  const root = new THREE.Group(); root.name = 'ScannedAvatar'; root.add(nb.hips); root.updateMatrixWorld(true);
+  const sk = new THREE.Skeleton(HB.map(n => nb[n]));
+  for (const { geo, mat, name } of parts) {
+    const g = geo.clone(); g.applyMatrix4(rot);
+    const m = new THREE.SkinnedMesh(g, mat); m.name = name; root.add(m); m.bind(sk, new THREE.Matrix4());
+  }
+  root.updateMatrixWorld(true);
+  return root;
+}
+function glbPatch(glb, fn) {
   const dv = new DataView(glb), jsonLen = dv.getUint32(12, true);
   const json = JSON.parse(new TextDecoder().decode(new Uint8Array(glb, 20, jsonLen)));
   const rest = new Uint8Array(glb, 20 + jsonLen);
-  const humanBones = {};
-  HB.forEach(n => { const i = json.nodes.findIndex(nd => nd.name === n); if (i >= 0) humanBones[n] = { node: i }; });
-  json.extensionsUsed = [...new Set([...(json.extensionsUsed || []), 'VRMC_vrm'])];
-  json.extensions = Object.assign(json.extensions || {}, { VRMC_vrm: {
-    specVersion: '1.0',
-    meta: { name, version: '1', authors: ['Avatar Scan'], licenseUrl: 'https://vrm.dev/licenses/1.0/',
-      avatarPermission: 'onlyAuthor', allowExcessivelyViolentUsage: false, allowExcessivelySexualUsage: false,
-      commercialUsage: 'personalNonProfit', allowPoliticalOrReligiousUsage: false, allowAntisocialOrHateUsage: false,
-      creditNotation: 'required', allowRedistribution: false, modification: 'allowModification' },
-    humanoid: { humanBones },
-  } });
+  fn(json);
   let jb = new TextEncoder().encode(JSON.stringify(json));
   const pad = (4 - jb.length % 4) % 4;
   if (pad) { const t = new Uint8Array(jb.length + pad); t.set(jb); t.fill(0x20, jb.length); jb = t; }
@@ -746,6 +785,45 @@ function glbToVrm(glb, name) {
   o.setUint32(12, jb.length, true); o.setUint32(16, 0x4E4F534A, true);
   out.set(jb, 20); out.set(rest, 20 + jb.length);
   return out.buffer;
+}
+const nodeIdx = (json, n) => json.nodes.findIndex(nd => nd.name === n);
+/* VRM 1.0（+Z向き） */
+function glbToVrm(glb, name) {
+  return glbPatch(glb, json => {
+    const humanBones = {};
+    HB.forEach(n => { const i = nodeIdx(json, n); if (i >= 0) humanBones[n] = { node: i }; });
+    json.extensionsUsed = [...new Set([...(json.extensionsUsed || []), 'VRMC_vrm'])];
+    json.extensions = Object.assign(json.extensions || {}, { VRMC_vrm: {
+      specVersion: '1.0',
+      meta: { name, version: '1', authors: ['Avatar Scan'], licenseUrl: 'https://vrm.dev/licenses/1.0/',
+        avatarPermission: 'onlyAuthor', allowExcessivelyViolentUsage: false, allowExcessivelySexualUsage: false,
+        commercialUsage: 'personalNonProfit', allowPoliticalOrReligiousUsage: false, allowAntisocialOrHateUsage: false,
+        creditNotation: 'required', allowRedistribution: false, modification: 'allowModification' },
+      humanoid: { humanBones },
+    } });
+  });
+}
+/* VRM 0.x（-Z向き。対応アプリが多い） */
+function glbToVrm0(glb, name) {
+  return glbPatch(glb, json => {
+    const curve = [0, 0, 0, 1, 1, 1, 1, 0];
+    json.extensionsUsed = [...new Set([...(json.extensionsUsed || []), 'VRM'])];
+    json.extensions = Object.assign(json.extensions || {}, { VRM: {
+      exporterVersion: 'AvatarScan-1.0', specVersion: '0.0',
+      meta: { title: name, version: '1', author: 'Avatar Scan', contactInformation: '', reference: '',
+        allowedUserName: 'OnlyAuthor', violentUssageName: 'Disallow', sexualUssageName: 'Disallow', commercialUssageName: 'Disallow',
+        otherPermissionUrl: '', licenseName: 'Redistribution_Prohibited', otherLicenseUrl: '' },
+      humanoid: { humanBones: HB.map(n => ({ bone: n, node: nodeIdx(json, n), useDefaultValues: true })).filter(b => b.node >= 0),
+        armStretch: .05, legStretch: .05, upperArmTwist: .5, lowerArmTwist: .5, upperLegTwist: .5, lowerLegTwist: .5, feetSpacing: 0, hasTranslationDoF: false },
+      firstPerson: { firstPersonBone: nodeIdx(json, 'head'), firstPersonBoneOffset: { x: 0, y: .06, z: 0 }, meshAnnotations: [], lookAtTypeName: 'Bone',
+        lookAtHorizontalInner: { curve, xRange: 90, yRange: 10 }, lookAtHorizontalOuter: { curve, xRange: 90, yRange: 10 },
+        lookAtVerticalDown: { curve, xRange: 90, yRange: 10 }, lookAtVerticalUp: { curve, xRange: 90, yRange: 10 } },
+      blendShapeMaster: { blendShapeGroups: [] },
+      secondaryAnimation: { boneGroups: [], colliderGroups: [] },
+      materialProperties: (json.materials || []).map((m, i) => ({ name: m.name || 'mat' + i, shader: 'VRM_USE_GLTFSHADER', renderQueue: -1,
+        floatProperties: {}, vectorProperties: {}, textureProperties: {}, keywordMap: {}, tagMap: {} })),
+    } });
+  });
 }
 /*CORE-END*/
 /* ===================== ここから画面・カメラ・3D表示 ===================== */
@@ -972,16 +1050,46 @@ function updateFace(now) {
       }
     }
     if (now - capStart > 800) {
-      if (faceBest) { scans.face = { snap: faceBest }; enterFaceReview(); }
+      if (faceBest) { resolveFaceMask(faceBest); scans.face = { snap: faceBest }; enterFaceReview(); }
       else { startScan('face'); say('もう一度撮影します', '撮影中に顔が横を向いたか、画面から外れました。まっすぐカメラを見たまま止まってください。', true); }
     }
   }
 }
+/* 顔写真の「頭に貼る範囲」：人物切り抜きのうち、あごより上・顔の周りだけ（髪を含む） */
+function resolveFaceMask(fs) {
+  const W = fs.img.width, H = fs.img.height, P = i => new THREE.Vector2(fs.lm[i].x * W, fs.lm[i].y * H);
+  const cheek = P(454).distanceTo(P(234)), eye = P(33).add(P(263)).multiplyScalar(.5), chinY = P(152).y;
+  let seg = null;
+  if (segmenter) {
+    try {
+      segmenter.segment(imgCanvas(fs), r => {
+        const cm = r.confidenceMasks && r.confidenceMasks[r.confidenceMasks.length - 1];
+        if (cm) seg = { mask: new Float32Array(cm.getAsFloat32Array()), mw: cm.width, mh: cm.height };
+      });
+    } catch (e) { console.warn(e); }
+  }
+  const mw = seg ? seg.mw : Math.round(W / 2), mh = seg ? seg.mh : Math.round(H / 2), sx = mw / W, sy = mh / H;
+  if (seg) { const n = P(1); if (seg.mask[Math.round(n.y * sy) * mw + Math.round(n.x * sx)] < .5) seg.mask = seg.mask.map(v => 1 - v); }
+  // 楕円の範囲：横は顔幅の1.3倍まで、上は額から顔幅の1.2倍まで、下はあごのすぐ下まで
+  const cx = eye.x * sx, rx = cheek * .68 * sx, top = (eye.y - cheek * 1.25) * sy, bot = (chinY + cheek * .06) * sy;
+  const ecy = (top + bot) / 2, ery = (bot - top) / 2;
+  const mask = new Float32Array(mw * mh);
+  const ovalC = document.createElement('canvas'); ovalC.width = mw; ovalC.height = mh;
+  { const o = ovalC.getContext('2d'); o.beginPath(); FACE_OVAL.forEach((i, k) => { const p = P(i); k ? o.lineTo(p.x * sx, p.y * sy) : o.moveTo(p.x * sx, p.y * sy); }); o.closePath(); o.fill(); }
+  const ov2 = ovalC.getContext('2d').getImageData(0, 0, mw, mh).data;
+  for (let y = 0; y < mh; y++) for (let x = 0; x < mw; x++) {
+    const i = y * mw + x, inE = ((x - cx) / rx) ** 2 + ((y - ecy) / ery) ** 2 <= 1;
+    const person = seg ? seg.mask[i] >= .5 : ((x - cx) / (rx * .85)) ** 2 + ((y - ecy) / (ery * .95)) ** 2 <= 1;
+    mask[i] = (inE && person && y <= bot) || ov2[i * 4 + 3] > 127 ? 1 : 0;
+  }
+  Object.assign(fs, { mask, mw, mh, autoMask: mask.slice(), maskSrc: seg ? 'seg' : 'guess' });
+}
 function enterFaceReview() {
   sub = 'review';
+  showEditor(scans.face.snap);
   rebuildAvatar(true); lookFrom('face');
   const nv = nextView();
-  say('顔の確認', '撮った顔を、骨格スキャンの目の高さと顔の幅に合わせて頭の前面に貼りました。右の3Dで角度を変えて確認してください。ずれていたら撮り直すと、たいてい合います。');
+  say('顔と髪の確認', '左の水色の範囲（顔と髪）が、頭の前側に貼られます。髪が足りなければ「囲んで追加」で髪のてっぺんや横まで囲み、背景が入っていたら「ブラシで消す」で消してください。直すたびに右の3Dに反映されます。');
   buttons([nv ? `決定して${NAMES[nv]}へ` : '決定してリンク', resume], ['撮り直す', () => startScan('face')]);
 }
 
@@ -991,7 +1099,15 @@ function faceRatios() {
   if (!isObj(scans.face)) return null;
   const fs = scans.face.snap, W = fs.img.width, H = fs.img.height, P = i => new THREE.Vector2(fs.lm[i].x * W, fs.lm[i].y * H);
   const eye = P(33).add(P(263)).multiplyScalar(.5), cheek = P(454).distanceTo(P(234));
-  return { chin: (P(152).y - eye.y) / cheek };
+  let top = 0;
+  if (fs.mask) {
+    const sx = fs.mw / W, sy = fs.mh / H, cx = Math.round(eye.x * sx);
+    let r = Math.round(eye.y * sy);
+    const on = (x, y) => [-4, 0, 4].some(d => fs.mask[y * fs.mw + Math.min(fs.mw - 1, Math.max(0, x + d))] >= .5);
+    while (r > 0 && on(cx, r - 1)) r--;
+    top = (eye.y - r / sy) / cheek;
+  }
+  return { chin: (P(152).y - eye.y) / cheek, top };
 }
 function makeFace(head) {
   const fs = scans.face.snap, W = fs.img.width, H = fs.img.height, P = i => new THREE.Vector2(fs.lm[i].x * W, fs.lm[i].y * H);
@@ -999,31 +1115,31 @@ function makeFace(head) {
   const eyeY = head.eyeY;
   const cheek = P(454).distanceTo(P(234)), mpp = head.cheekW / cheek;
   const eye = P(33).add(P(263)).multiplyScalar(.5);
-  const oval = FACE_OVAL.map(P);
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  oval.forEach(p => { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); });
-  const side = Math.max(x1 - x0, y1 - y0) * 1.15, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-  const crop = { x: cx - side / 2, y: cy - side / 2, w: side, h: side };
+  const side = cheek * 3, crop = { x: eye.x - side / 2, y: eye.y - cheek * 1.75, w: side, h: side };
   // 体のスキャンの頬の色に、顔写真の明るさを半分ほど寄せる
   const src = imgCanvas(fs), sctx = src.getContext('2d');
   const meanAt = (ctx, pts, r) => { let a = [0, 0, 0], n = 0; for (const p of pts) { const d = ctx.getImageData(Math.round(p.x - r), Math.round(p.y - r), 2 * r + 1, 2 * r + 1).data; for (let i = 0; i < d.length; i += 4) { a[0] += d[i]; a[1] += d[i + 1]; a[2] += d[i + 2]; n++; } } return a.map(v => v / Math.max(1, n)); };
   const faceC = meanAt(sctx, [P(50), P(280)], Math.max(2, Math.round(cheek * .03)));
   const bodyPts = [7, 8].map(e => F.P(0).clone().lerp(F.P(e), .42)).map(p => F.color(p.x, p.y)).filter(Boolean);
   const gain = bodyPts.length ? [0, 1, 2].map(k => clamp(lerp(1, bodyPts.reduce((s, c) => s + c[k], 0) / bodyPts.length / Math.max(1, faceC[k]), .5), .6, 1.6, 1)) : [1, 1, 1];
-  const S = 512; faceCanvas = document.createElement('canvas'); faceCanvas.width = faceCanvas.height = S;
+  const S = 1024; faceCanvas = document.createElement('canvas'); faceCanvas.width = faceCanvas.height = S;
   const x = faceCanvas.getContext('2d');
   x.drawImage(src, crop.x, crop.y, crop.w, crop.h, 0, 0, S, S);
   const id = x.getImageData(0, 0, S, S);
   for (let i = 0; i < id.data.length; i += 4) for (let k = 0; k < 3; k++) id.data[i + k] = Math.min(255, id.data[i + k] * gain[k]);
   x.putImageData(id, 0, 0);
+  // 範囲マスクを少し内側に縮めてぼかし、ふちを肌や髪になじませる
+  const mc = document.createElement('canvas'); mc.width = fs.mw; mc.height = fs.mh;
+  { const c2 = mc.getContext('2d'), d = c2.createImageData(fs.mw, fs.mh); for (let i = 0; i < fs.mask.length; i++) d.data[i * 4 + 3] = fs.mask[i] >= .5 ? 255 : 0; c2.putImageData(d, 0, 0); }
   const m = document.createElement('canvas'); m.width = m.height = S; const mx = m.getContext('2d');
-  const ctr = oval.reduce((s, p) => s.add(p), new THREE.Vector2()).divideScalar(oval.length);
-  mx.filter = `blur(${Math.round(S * .035)}px)`; mx.fillStyle = '#fff'; mx.beginPath();
-  oval.forEach((p, i) => { const q = ctr.clone().lerp(p, .9), u = (q.x - crop.x) / crop.w * S, v = (q.y - crop.y) / crop.h * S; i ? mx.lineTo(u, v) : mx.moveTo(u, v); });
-  mx.closePath(); mx.fill();
+  const blur = Math.max(2, Math.round(S * .012));
+  mx.filter = `blur(${blur}px)`;
+  mx.drawImage(mc, crop.x / W * fs.mw, crop.y / H * fs.mh, crop.w / W * fs.mw, crop.h / H * fs.mh, 0, 0, S, S);
+  mx.filter = 'none'; mx.globalCompositeOperation = 'destination-in'; mx.filter = `blur(${blur}px)`;
+  mx.drawImage(mc, crop.x / W * fs.mw, crop.y / H * fs.mh, crop.w / W * fs.mw, crop.h / H * fs.mh, 0, 0, S, S);
+  mx.filter = 'none';
   x.globalCompositeOperation = 'destination-in'; x.drawImage(m, 0, 0); x.globalCompositeOperation = 'source-over';
-  const yBot = head.chinY - .012, yTop = Math.min(head.topY - .008, eyeY + (eye.y - P(10).y) * mpp + .03);
-  return { eye, eyeY, mpp, crop, yBot, yTop };
+  return { eye, eyeY, mpp, crop, yBot: head.chinY - .012, yTop: head.topY, th: 1.55 };
 }
 function failScan() {
   const v = view; startScan(v);
@@ -1228,9 +1344,10 @@ function stepCam(now) {
 }
 
 const clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), 100);
-const grad = new THREE.DataTexture(new Uint8Array([120, 190, 255]), 3, 1, THREE.RedFormat);
+const grad = new THREE.DataTexture(new Uint8Array([140, 185, 225, 255]), 4, 1, THREE.RedFormat);
 grad.minFilter = grad.magFilter = THREE.NearestFilter; grad.needsUpdate = true;
-const bodyMat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: grad, clippingPlanes: [clip] });
+const bodyMat = new THREE.MeshToonMaterial({ gradientMap: grad, clippingPlanes: [clip] });
+let atlasTex = null;
 const outlineMat = new THREE.MeshBasicMaterial({ color: 0x15161d, side: THREE.BackSide, clippingPlanes: [clip] });
 const ring = new THREE.Group();
 {
@@ -1243,7 +1360,7 @@ function clearBody() {
   for (const m of [bodyMesh, outlineMesh, faceMesh]) if (m) { m.parent && m.parent.remove(m); m.geometry.dispose(); }
   if (faceMesh) faceMesh.material.dispose(); if (faceTex) faceTex.dispose();
   bodyMesh = outlineMesh = faceMesh = faceTex = null;
-  $('#vrmBtn').disabled = $('#glbBtn').disabled = $('#shotBtn').disabled = true;
+  $('#vrmBtn').disabled = $('#vrm1Btn').disabled = $('#glbBtn').disabled = $('#shotBtn').disabled = true;
 }
 function clearRig() {
   clearBody();
@@ -1260,7 +1377,12 @@ function rebuildAvatar(reveal) {
   const S = isObj(scans.side) ? makeView(scans.side.snap, 'side', C) : null;
   const B = isObj(scans.back) ? makeView(scans.back.snap, 'back', C) : null;
   clearBody();
-  const { geo, stats, head } = buildBody(rig, F, S, B, { face: faceRatios() });
+  const { geo, stats, head, tex } = buildBody(rig, F, S, B, { face: faceRatios() });
+  { const tc = document.createElement('canvas'); tc.width = tex.width; tc.height = tex.height;
+    tc.getContext('2d').putImageData(new ImageData(tex.data, tex.width, tex.height), 0, 0);
+    if (atlasTex) atlasTex.dispose();
+    atlasTex = new THREE.CanvasTexture(tc); atlasTex.colorSpace = THREE.SRGBColorSpace; atlasTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    bodyMat.map = atlasTex; bodyMat.needsUpdate = true; }
   bodyStats = stats;
   const saved = HB.map(n => rig.bones[n].quaternion.clone()), hp = rig.bones.hips.position.clone();
   restPose(rig); avatar.updateMatrixWorld(true);
@@ -1274,7 +1396,7 @@ function rebuildAvatar(reveal) {
   if (isObj(scans.face)) {
     try {
       const fi = makeFace(head);
-      faceTex = new THREE.CanvasTexture(faceCanvas); faceTex.colorSpace = THREE.SRGBColorSpace; faceTex.anisotropy = 4;
+      faceTex = new THREE.CanvasTexture(faceCanvas); faceTex.colorSpace = THREE.SRGBColorSpace; faceTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
       const fm = new THREE.MeshToonMaterial({ map: faceTex, gradientMap: grad, transparent: true, depthWrite: false, clippingPlanes: [clip],
         polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
       faceMesh = new THREE.SkinnedMesh(buildFacePatch(rig, head, fi), fm); faceMesh.name = 'Face'; faceMesh.frustumCulled = false; faceMesh.renderOrder = 2;
@@ -1283,7 +1405,7 @@ function rebuildAvatar(reveal) {
   }
   HB.forEach((n, i) => rig.bones[n].quaternion.copy(saved[i])); rig.bones.hips.position.copy(hp);
   if (reveal) { revealStart = performance.now(); clip.constant = -.05; ring.visible = true; }
-  $('#vrmBtn').disabled = $('#glbBtn').disabled = $('#shotBtn').disabled = false;
+  $('#vrmBtn').disabled = $('#vrm1Btn').disabled = $('#glbBtn').disabled = $('#shotBtn').disabled = false;
   fillBodyTable(); drawThumbs();
 }
 $('#showBones').onchange = () => {};
@@ -1322,22 +1444,22 @@ function update3D(now) {
 }
 
 /* ---------- 保存 ---------- */
-function exportGLB(asVrm) {
-  const saved = HB.map(n => rig.bones[n].quaternion.clone()), hp = rig.bones.hips.position.clone();
-  restPose(rig); avatar.updateMatrixWorld(true);
-  const std = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9, metalness: 0 });
-  bodyMesh.material = std; avatar.remove(outlineMesh);
-  const faceMat = faceMesh ? faceMesh.material : null, fstd = faceMesh ? new THREE.MeshStandardMaterial({ map: faceTex, transparent: true, roughness: .9, metalness: 0 }) : null;
-  if (faceMesh) faceMesh.material = fstd;
-  const done = () => { bodyMesh.material = bodyMat; avatar.add(outlineMesh); std.dispose(); if (faceMesh) { faceMesh.material = faceMat; fstd.dispose(); } HB.forEach((n, i) => rig.bones[n].quaternion.copy(saved[i])); rig.bones.hips.position.copy(hp); };
-  new GLTFExporter().parse(avatar, glb => {
+function exportModel(kind) {   // kind: 'vrm0' / 'vrm1' / 'glb'
+  const mats = [];
+  const parts = [{ geo: bodyMesh.geometry, mat: new THREE.MeshStandardMaterial({ map: atlasTex, roughness: .9, metalness: 0, name: 'Body' }), name: 'Body' }];
+  if (faceMesh) parts.push({ geo: faceMesh.geometry, mat: new THREE.MeshStandardMaterial({ map: faceTex, transparent: true, roughness: .9, metalness: 0, name: 'Face' }), name: 'Face' });
+  parts.forEach(p => { p.mat.name = p.name; mats.push(p.mat); });
+  const root = makeExportRoot(rig, parts, kind === 'vrm0');
+  const done = () => { root.traverse(o => { if (o.isMesh) o.geometry.dispose(); }); mats.forEach(m => m.dispose()); };
+  new GLTFExporter().parse(root, glb => {
     done();
-    const buf = asVrm ? glbToVrm(glb, 'Scanned Avatar') : glb;
-    download(new Blob([buf], { type: 'model/gltf-binary' }), asVrm ? 'scanned-avatar.vrm' : 'scanned-avatar.glb');
+    const buf = kind === 'vrm0' ? glbToVrm0(glb, 'Scanned Avatar') : kind === 'vrm1' ? glbToVrm(glb, 'Scanned Avatar') : glb;
+    download(new Blob([buf], { type: 'model/gltf-binary' }), kind === 'glb' ? 'scanned-avatar.glb' : kind === 'vrm0' ? 'scanned-avatar.vrm' : 'scanned-avatar-vrm1.vrm');
   }, err => { done(); say('保存できませんでした', String(err), true); }, { binary: true });
 }
-$('#vrmBtn').onclick = () => exportGLB(true);
-$('#glbBtn').onclick = () => exportGLB(false);
+$('#vrmBtn').onclick = () => exportModel('vrm0');
+$('#vrm1Btn').onclick = () => exportModel('vrm1');
+$('#glbBtn').onclick = () => exportModel('glb');
 $('#shotBtn').onclick = () => { renderer.render(scene, camera); renderer.domElement.toBlob(b => download(b, 'avatar.png')); };
 function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000); }
 
@@ -1352,7 +1474,7 @@ function fillBodyTable() {
   const s = bodyStats, cm = v => Number.isFinite(v) ? (v * 100).toFixed(1) + ' cm' : '—';
   const rows = [['推定身長', cm(s.height), ''], ['肩幅', cm(C.L.shHalf * 2), ''], ['頭', cm(s.headW), cm(s.headD)], ['胸', cm(s.chestW), cm(s.chestD)],
     ['おなか', cm(s.waistW), cm(s.waistD)], ['腰', cm(s.hipW), cm(s.hipD)], ['二の腕', cm(s.armD), ''], ['太もも', cm(s.thighW), ''],
-    ['頂点数', s.verts.toLocaleString(), ''], ['ポリゴン数', s.tris.toLocaleString(), '']];
+    ['頂点数', s.verts.toLocaleString(), ''], ['ポリゴン数', s.tris.toLocaleString(), ''], ['テクスチャ', s.texSize + ' px', '']];
   $('#bodyTable tbody').innerHTML = rows.map(([a, b, c]) => `<tr><td>${a}</td><td class="num">${b}</td><td class="num">${c}</td></tr>`).join('');
   $('#bodyTable').hidden = false; $('#bodyEmpty').hidden = true;
 }
