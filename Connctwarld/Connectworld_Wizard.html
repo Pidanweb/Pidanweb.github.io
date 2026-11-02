@@ -41,6 +41,16 @@
   #palmRing.on{display:grid}
   #hCur.on{display:block} #hCur.down{background:#ffd35acc;border-color:#fff}
   #menu .hHover{outline:2px solid #ffd35a;outline-offset:2px;box-shadow:0 0 12px #ffd35a88}
+  /* 隠し必殺：呪文全文の表示 */
+  #secret{position:fixed;left:50%;top:44%;transform:translate(-50%,-50%);z-index:8;pointer-events:none;display:none;text-align:center;width:max-content;max-width:92vw;max-height:86vh;overflow:hidden;padding:2.2vh 5vw;
+    background:radial-gradient(closest-side,#000b,#0006 70%,transparent);font:clamp(13px,2.3vh,22px)/1.65 "Hiragino Mincho ProN","Yu Mincho","YuMincho",serif;color:#fff;text-shadow:0 0 3px #000,0 0 10px var(--c),0 0 18px var(--c)}
+  #secret.on{display:block} #secret.out{opacity:0;transition:opacity .9s}
+  #secret small{display:block;font:12px sans-serif;color:var(--c);letter-spacing:.2em;margin-bottom:.5em;opacity:.9}
+  #secret p{margin:0;opacity:0;animation:secLn .45s ease-out forwards}
+  #secret h2{margin:.35em 0 0;font-size:2.1em;letter-spacing:.12em;color:#fff;opacity:0;animation:secTi .5s ease-out forwards}
+  @keyframes secLn{from{opacity:0;transform:translateY(.5em);filter:blur(4px)}to{opacity:1;transform:none;filter:none}}
+  @keyframes secTi{from{opacity:0;transform:scale(1.8);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
+  #hcList{font-size:12px;color:#e6b8ff;white-space:pre-line}
 </style>
 </head>
 <body>
@@ -65,6 +75,10 @@
     <div><button id="micTest">🎙 押している間 認識テスト</button></div>
     <div id="micStat">マイクはゲーム開始時にも自動で起動します</div>
     <div id="micSay"></div>
+    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <label>📜 隠し呪文ファイル（.txt・複数可／画面にドロップでも可）<input type="file" id="hcFile" accept=".txt,text/plain" multiple style="width:100%;margin-top:4px"></label>
+    <div><button id="hcClear">読み込んだ呪文を消す</button></div>
+    <div id="hcList">まだ読み込まれていません</div>
   </div>
   <div id="faceBadge"></div><div id="wiiStat" style="margin-top:4px;font-size:12px;color:#ffd35a;text-shadow:0 0 4px #000"></div></div>
 <div id="menu"><h3 style="margin:0">MENU</h3>
@@ -75,7 +89,7 @@
   <button id="mRestart">↻ リスタート</button><button id="mTitle">⌂ タイトルへ</button>
   <small style="color:#9fdcea">✌ ピースを約1秒キープで開く / 指先でカーソル → Aで決定（スライダーはAを押したまま左右）/ M キーで開閉</small></div>
 <div id="hCur"></div><div id="palmRing">✌</div>
-<div id="chant"></div>
+<div id="chant"></div><div id="secret"></div>
 <div id="castUI"><div id="spells"></div><div id="castSay">ボタン / Space / Wiiの十字キー↓ を押している間に呪文を唱える</div>
   <div class="row"><button id="castJa">🎙 詠唱（長押し / Space / Wii ↓）</button></div></div>
 <canvas id="facePrev" width="320" height="240"></canvas>
@@ -592,6 +606,7 @@ function guarded(){
   B.s = 'knock'; B.stun = false; B.t = 1.0; B.vz = -12;
 }
 function hurtPlayer(mult = 1){
+  if (P.aias > 0){ aiasBlock(); return; }   // ロー・アイアス：残り枚数ぶん自動で防ぐ
   P.hp -= [20, 25, 30][B.phase-1]*mult; P.inv = 1.2; P.counter = 0; P.armed = false; shake = .8*mult; flash = .6*mult; flashM.material.color.set(0xff2a3a);
   burst(rig.localToWorld(new THREE.Vector3(0, 0, -2)), 0xff4d5e, 60, 8);
   B.s = 'knock'; B.stun = false; B.t = 1.2; B.vz = -10;
@@ -602,7 +617,7 @@ function hurtPlayer(mult = 1){
 }
 
 function bossAI(dt){
-  B.t -= dt; B.weak -= dt;
+  B.t -= dt; B.weak -= dt; B.shy = Math.max(0, (B.shy || 0) - dt);
   const ph = B.hp/B.max > .6 ? 1 : B.hp/B.max > .3 ? 2 : 3;
   if (ph > B.phase){ B.phase = ph; popCam('RAGE!!', '#ff4d5e', 1.2, 1.4); shake = .5; }
   const idleT = () => (ph === 3 && B.combo % 2 === 1) ? .45 : [2.1, 1.5, 1.1][ph-1] + Math.random()*.5;
@@ -611,7 +626,8 @@ function bossAI(dt){
     if (B.z > HOVER - .25){ B.s = 'idle'; B.t = idleT(); }
   } else if (B.s === 'idle'){
     B.z += (HOVER - B.z)*dt*3; B.x += (Math.sin(B.time*.8)*2.2 + P.x*.4 - B.x)*dt*1.5;
-    if (B.t <= 0){
+    if (B.t <= 0 && B.shy > 0) B.t = .25;   // スティールされて恥ずかしい間は攻撃してこない
+    else if (B.t <= 0){
       B.s = 'wind'; P.armed = false; B.t = B.wt = [1.1, .9, .7][ph-1];
       B.unp = Math.random() < [.25, .33, .4][ph-1];   // パリィ不可攻撃（紫）をランダムで選ぶ
       popup(B.unp ? '!!' : '!', B.unp ? '#c06bff' : '#ff4d5e', new THREE.Vector3(B.x, 4.6, B.z), 1.2, B.wt);
@@ -659,6 +675,10 @@ function bossAnim(dt){
   if (B.unp && (B.s === 'wind' || B.s === 'charge')){   // パリィ不可は紫に光る
     const kk = B.s === 'charge' ? 1 : k, fl = B.flash > 0 ? .8 : 0;
     bMat.emissive.setRGB(.04 + .5*kk*blink + fl, .04 + fl, .09 + .85*kk*blink + fl);
+  }
+  if (B.shy > 0){   // 恥ずかしがって赤面
+    const k2 = .55 + .25*Math.sin(B.time*9); bMat.emissive.setRGB(k2, .1, .25 + .2*k2);
+    if ((B.shyPop = (B.shyPop || 0) - dt) <= 0){ B.shyPop = .7; popup(Math.random() < .5 ? '///' : '💦', '#ff9ad5', new THREE.Vector3(B.x + (Math.random()-.5)*2.4, 3.4 + Math.random(), B.z), .9, .8); }
   }
   for (const e of eyes) e.material.color.set(B.s === 'wind' ? (B.unp ? 0xb04dff : 0xff4d5e) : 0xffffff);
   shadow.position.set(B.x, .02, B.z); shadow.scale.setScalar(R*2.4);
@@ -819,8 +839,12 @@ const SP = [
   { id:'rfire', n:'レイジングファイヤ', hex:0xff3a1a, cd:5, dmg:36, sc:2.4, big:1, rx:/れ[いえ]じんぐ|raging/ },
   { id:'swater', n:'スプラッシュウォーター', hex:0x7ad0ff, cd:5, dmg:35, count:5, sc:1.1, big:1, rx:/すぷらっしゅ|splash/ },
   { id:'gplant', n:'ジャイアントプラント', hex:0x9dff5a, cd:5, dmg:36, plant:1, big:1, rx:/じゃいあんと|ぷらんと|giant|plant/ },
-  { id:'cure', n:'キュア', hex:0x9dffb0, cd:8, heal:.3, rx:/きゅ[うー]?あ|cure/ }];
-const SPm = SP.slice().sort((a, b) => (b.big ? 1 : 0) - (a.big ? 1 : 0));   // 強攻撃を先に判定
+  { id:'cure', n:'キュア', hex:0x9dffb0, cd:8, heal:.3, rx:/きゅ[うー]?あ|cure/ },
+  // --- 隠し（ボタンには表示しない）---
+  { id:'aias', n:'ロー・アイアス', hex:0xff9ad5, cd:40, hidden:1, run:() => castAias(), rx:/ろ?あいあす|あいやす|aias|ajax|七つの円環|ななつのえんかん|熾天/ },
+  { id:'steal', n:'スティール', hex:0xffd0f0, cd:25, hidden:1, run:() => castSteal(), rx:/すて[いぃ]?る|すちる|steal|捨てる/ },
+  { id:'kachou', n:'花鳥風月', hex:0xffb7e0, cd:16, hidden:1, heal:.6, rx:/花鳥|風月|かちょう?ふう?げつ/ }];   // キュアの2倍回復
+const SPm = SP.slice().sort((a, b) => (b.hidden ? 2 : b.big ? 1 : 0) - (a.hidden ? 2 : a.big ? 1 : 0));   // 隠し → 強攻撃 → 通常 の順に判定   // 強攻撃を先に判定
 const norm = t => t.normalize('NFKC').toLowerCase().replace(/[ーぃィ\s、。,.!！?？'"]/g, '').replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 96));
 
 // ===== 必殺：チェックポイント詠唱 =====
@@ -865,9 +889,10 @@ function chantTexts(s){
   }
   return out;
 }
-function chantCut(s){ s.ign = Math.max(0, s.txt.length - 1); s.pre = (s.txt[s.ign] || []).map(norm); }
+function chantCut(s){ s.ign = Math.max(0, s.txt.length - 1); s.pre = (s.txt[s.ign] || []).map(norm); s.hpre = hnorm((s.txt[s.ign] || [''])[0] || ''); s.hp = 0; s.hint = 0; }
 function chantCheck(s){
   if (state !== 'play' || menuOn) return;
+  if (hiddenCheck(s)) return;   // 隠し必殺を先に判定
   const texts = chantTexts(s);
   if (!texts.length) return;
   for (const u of ULTS){
@@ -880,7 +905,7 @@ function chantCheck(s){
 }
 
 const CD = {}, pills = {}, projs = [], ufx = []; let colR = 0x8fe4ff, rec = null, hold = false, kick = 0;
-for (const x of SP){ const b = document.createElement('span'); b.className = 'sp'; b.style.borderColor = hx(x.hex); b.append(document.createElement('i'), x.n); $('spells').appendChild(b); pills[x.id] = b.firstChild; }
+for (const x of SP){ if (x.hidden) continue; const b = document.createElement('span'); b.className = 'sp'; b.style.borderColor = hx(x.hex); b.append(document.createElement('i'), x.n); $('spells').appendChild(b); pills[x.id] = b.firstChild; }
 const CDMAX = {}; for (const x of [...SP, ...ULTS]){ CD[x.id] = 0; CDMAX[x.id] = x.cd; }
 const orbPos = () => orb.getWorldPosition(new THREE.Vector3());
 
@@ -897,7 +922,9 @@ function cast(sp){
   if (CD[sp.id] > 0){ popCam(sp.n + ' 待機中', '#aaaaaa', .6, .6); return; }
   CD[sp.id] = sp.cd; colR = sp.hex; kick = .25; popCam(sp.n, hx(sp.hex), sp.big ? 1.1 : .9, .9);
   const o = orbPos(); ring(o, 2.2, sp.hex, .4); burst(o, sp.hex, 25, 4);
+  if (sp.run){ sp.run(); return; }
   if (sp.heal){
+    if (sp.hidden) for (let i = 0; i < 5; i++) burst(rig.localToWorld(new THREE.Vector3((Math.random()-.5)*3, Math.random()*1.5 - .5, -2.5)), [0xffb7e0, 0xffffff, 0x9dffb0][i%3], 20, 2);
     const v = Math.round(PMAX*sp.heal); P.hp = Math.min(PMAX, P.hp + v);
     burst(rig.localToWorld(new THREE.Vector3(0, -1, -2)), sp.hex, 60, 3); ring(rig.localToWorld(new THREE.Vector3(0, -.5, -2)), 3, sp.hex, .7);
     popup('HP +' + v, '#9dffb0', new THREE.Vector3(0, -.4, -3), .8, 1.2, camera); return;
@@ -990,6 +1017,264 @@ function growPlant(d){
   });
 }
 
+// ===== 隠し必殺：呪文ファイルから読み込む長詠唱 =====
+// 呪文の本文はHTMLに埋め込まず、プレイヤーが用意した .txt を読み込む（ブラウザに保存して次回も使う）
+// 1つのファイルに複数パターンがある時の区切り：
+//   ・「エクスプロージョン！」だけの行があれば、その行までで1パターン
+//   ・「---」だけの行があれば、そこで区切る
+//   ・空行で区切った各ブロックが3行以上なら、ブロックごとに1パターン（短いブロックばかりなら全体で1つ）
+// 前から順に3行（他のパターンと冒頭が同じなら、違いが出る行まで）聞き取れたら発動。1行だけなら聞き漏らしてもOK
+const HC_KEY = 'cw_hidden_chants', HC_MULT = 2, HC_CD = 60;
+let hcFiles = [], SECRETS = [];
+const hnorm = t => t.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
+  .replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 96)).replace(/[ーぁぃぅぇぉっゃゅょ]/g, '');
+function grams(t, n){ const m = new Map(); if (t.length < n){ if (t) m.set(t, 1); return [m, t ? 1 : 0]; }
+  for (let i = 0; i + n <= t.length; i++){ const g = t.substr(i, n); m.set(g, (m.get(g) || 0) + 1); } return [m, t.length - n + 1]; }
+function dice(A, B){ let x = 0; for (const [k, v] of B[0]){ const a = A[0].get(k); if (a) x += Math.min(a, v); } return 2*x/(A[1] + B[1] || 1); }
+// 認識結果は漢字/かなの揺れがあるので、2文字単位と1文字単位の一致度を半々で見る
+const lnSim = (ln, w) => .5*dice(ln.bi, grams(w, 2)) + .5*dice(ln.uni, grams(w, 1));
+let hcScore = 0;   // 一致した行の似ている度合いの合計（冒頭が同じパターンの見分けに使う）
+function findLine(full, from, ln){
+  const L = ln.s.length; if (!L) return from;
+  const th = L <= 4 ? .56 : L <= 8 ? .5 : .46, lo = Math.max(1, Math.round(L*.6)), hi = Math.round(L*1.4) + 1;
+  for (let st = from; st + lo <= full.length; st++){
+    let bs = 0, be = -1;
+    for (let len = lo; len <= hi && st + len <= full.length; len++){ const sc = lnSim(ln, full.substr(st, len)); if (sc > bs){ bs = sc; be = st + len; } }
+    if (bs >= th){ hcScore += bs; return be; }
+  }
+  return -1;
+}
+function hcMatch(c, full){
+  let pos = 0, got = 0, skip = 0; hcScore = 0;
+  for (let i = 0; i < c.L.length && got < c.need; i++){
+    const r = findLine(full, pos, c.L[i]);
+    if (r < 0){ if (++skip > 1) break; continue; }
+    got++; pos = r;
+  }
+  return got + hcScore/100;   // 行数が同じなら、より似ている方を選ぶ
+}
+function hiddenCheck(s){
+  if (!SECRETS.length) return false;
+  let full = '';
+  for (let k = s.ign; k < s.txt.length; k++){
+    const a = s.txt[k]; if (!a || !a[0]) continue;
+    let t = hnorm(a[0]);
+    if (k === s.ign && s.hpre){ if (!t.startsWith(s.hpre)) continue; t = t.slice(s.hpre.length); }
+    full += t;
+  }
+  full = full.slice(-260);
+  if (full.length < 2) return false;
+  let best = null, bm = 0, mx = 0;
+  for (const c of SECRETS){
+    const m = hcMatch(c, full); mx = Math.max(mx, Math.floor(m));
+    if (Math.floor(m) >= c.need && m > bm){ best = c; bm = m; }
+  }
+  s.hp = mx;
+  if (!best && mx >= 2 && !s.hint){ s.hint = 1; popCam('…何かが共鳴している', '#e6b8ff', .7, 1.2); burst(orbPos(), 0xe6b8ff, 20, 2); }
+  if (!best) return false;
+  chantCut(s);
+  if (CD[best.id] > 0){ popCam(best.title + ' 待機中 ' + Math.ceil(CD[best.id]) + 's', '#aaaaaa', .6, .9); return true; }
+  castHidden(best); return true;
+}
+
+// ---- 呪文ファイルの読み込み ----
+function hcSplit(text){
+  const ls = text.replace(/^\uFEFF/, '').replace(/\r/g, '').split('\n').map(l => l.replace(/^[\s\u3000]+|[\s\u3000]+$/g, ''));
+  const isEx = l => /^エクスプロージョン[!！]*$/.test(l.normalize('NFKC').replace(/\s/g, ''));
+  let out = [];
+  if (ls.some(l => /^-{3,}$/.test(l))){ let cur = []; for (const l of ls){ if (/^-{3,}$/.test(l)){ out.push(cur); cur = []; } else if (l) cur.push(l); } out.push(cur); }
+  else if (ls.some(isEx)){ let cur = []; for (const l of ls){ if (!l) continue; cur.push(l); if (isEx(l)){ out.push(cur); cur = []; } } out.push(cur); }
+  else {
+    const bl = []; let cur = []; for (const l of ls){ if (l) cur.push(l); else if (cur.length){ bl.push(cur); cur = []; } } if (cur.length) bl.push(cur);
+    out = bl.length > 1 && bl.every(b => b.length >= 3) ? bl : [bl.flat()];
+  }
+  return out.filter(c => c.length);
+}
+function hcType(lines, all){
+  const t = lines.join('');
+  if (/エクスプロージョン/.test(t)) return { fx:'explosion', title:'エクスプロージョン', hex:0xff3a1a };
+  if (/黒棺/.test(all)) return { fx:'coffin', title:'黒棺', hex:0xb04dff };
+  if (/剣|blade/i.test(all)) return { fx:'swords', title:'Unlimited Blade Works', hex:0xb8d0ff };
+  return { fx:'generic', title:null, hex:0xffd35a };
+}
+function hcBuild(){
+  SECRETS = [];
+  for (const f of hcFiles){
+    const base = f.name.replace(/\.[^.]+$/, '');
+    hcSplit(f.text).forEach((lines, i) => {
+      const ty = hcType(lines, f.text);
+      SECRETS.push({ id:'hc_' + SECRETS.length, file:f.name, lines, title:ty.title || base, fx:ty.fx, hex:ty.hex,
+        L:lines.map(l => { const s = hnorm(l); return { s, bi:grams(s, 2), uni:grams(s, 1) }; }) });
+    });
+  }
+  for (const c of SECRETS){   // 冒頭が同じパターンがあれば、違いが出る行まで聞く
+    let k = Math.min(3, c.L.length);
+    const same = (o, n) => o !== c && o.L.length >= n && c.L.slice(0, n).every((l, j) => l.s === o.L[j].s);
+    while (k < c.L.length && SECRETS.some(o => same(o, k))) k++;
+    c.need = k; CD[c.id] = CD[c.id] || 0; CDMAX[c.id] = HC_CD;
+  }
+  const by = {}; for (const c of SECRETS) by[c.file] = (by[c.file] || 0) + 1;
+  $('hcList').textContent = SECRETS.length ? Object.entries(by).map(([f, n]) => `✔ ${f}：${n}パターン`).join('\n') + `\n合計 ${SECRETS.length} 個（威力は必殺の${HC_MULT}倍）` : 'まだ読み込まれていません';
+}
+function hcSave(){ try { localStorage.setItem(HC_KEY, JSON.stringify(hcFiles)); } catch (e){} }
+function hcDecode(buf){
+  let t = new TextDecoder('utf-8').decode(buf);
+  if (t.includes('\uFFFD')){ try { t = new TextDecoder('shift_jis').decode(buf); } catch (e){} }
+  return t;
+}
+async function hcLoad(files){
+  for (const f of files){
+    if (!/\.txt$/i.test(f.name) && f.type !== 'text/plain') continue;
+    const text = hcDecode(await f.arrayBuffer());
+    hcFiles = hcFiles.filter(x => x.name !== f.name).concat({ name:f.name, text });
+  }
+  hcBuild(); hcSave();
+}
+$('hcFile').onchange = e => { hcLoad([...e.target.files]); e.target.value = ''; };
+$('hcClear').onclick = () => { hcFiles = []; hcBuild(); hcSave(); };
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer && e.dataTransfer.files.length) hcLoad([...e.dataTransfer.files]); });
+try { const v = JSON.parse(localStorage.getItem(HC_KEY) || '[]'); if (Array.isArray(v)) hcFiles = v; } catch (e){}
+hcBuild();
+
+// ---- 呪文全文の表示 ----
+let secT = 0;
+function hideSecret(){ clearTimeout(secT); const el = $('secret'); el.className = ''; el.innerHTML = ''; }
+function showSecret(title, lines, hex, label){
+  const el = $('secret'); clearTimeout(secT); el.className = ''; el.innerHTML = ''; void el.offsetWidth;
+  el.style.setProperty('--c', hx(hex));
+  const step = Math.min(.14, 1.8/Math.max(1, lines.length));
+  if (label){ const sm = document.createElement('small'); sm.textContent = label; el.append(sm); }
+  lines.forEach((l, i) => { const p = document.createElement('p'); p.textContent = l; p.style.animationDelay = (i*step) + 's'; el.append(p); });
+  if (title){ const h = document.createElement('h2'); h.textContent = title; h.style.animationDelay = (lines.length*step + .1) + 's'; el.append(h); }
+  el.classList.add('on');
+  const stay = Math.min(10, 3 + lines.length*.35) * 1000;
+  secT = setTimeout(() => { el.classList.add('out'); secT = setTimeout(hideSecret, 950); }, stay);
+  return lines.length*step + .3;   // 全行が出そろうまでの秒数
+}
+
+function castHidden(c){
+  CD[c.id] = HC_CD; colR = c.hex; kick = .25; flash = .7; flashM.material.color.set(0xffffff);
+  const t = showSecret(c.title, c.lines, c.hex, `隠し必殺 ×${HC_MULT}`);
+  ring(orbPos(), 5, c.hex, .7); burst(orbPos(), c.hex, 90, 7); wiiRumble(300);
+  // 詠唱の演出中はボスがひるんで動けない
+  if (B.s !== 'dead'){ B.s = 'knock'; B.stun = true; B.t = t + 2.5; B.vz = 0; lane.visible = false; P.armed = false; }
+  let d = ULTS[0].dmg*HC_MULT;
+  if (P.counter > 0){ d += P.cBig; P.counter = 0; popup('COUNTER!!', '#ffd35a', V3(0, -.4, -3), 1.1, 1, camera); }
+  later(t*1000, () => HC_FX[c.fx](d, c));
+}
+const HC_FX = {
+  explosion(d){   // 魔法陣 → 大爆裂
+    const g0 = new THREE.Group(), c1 = new THREE.Mesh(new THREE.RingGeometry(2.6, 3, 64), glowMat(0xff3a1a, .9)), c2 = new THREE.Mesh(new THREE.RingGeometry(1.7, 1.85, 6), glowMat(0xffd35a, .9));
+    c1.rotation.x = c2.rotation.x = -Math.PI/2; g0.add(c1, c2);
+    addUfx(g0, 1.3, 1, (k, o) => { o.position.set(bossG.position.x, .06, bossG.position.z); o.rotation.y = k*4; o.scale.setScalar(.3 + k*1.3);
+      c1.material.opacity = c2.material.opacity = k < .85 ? .9 : (1 - k)/.15*.9; if (Math.random() < .5) burst(o.position, 0xff3a1a, 3, 3); }, () => {});
+    later(1000, () => {
+      const g = new THREE.Group(), core = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), glowMat(0xffffff, 1)),
+        mid = new THREE.Mesh(new THREE.SphereGeometry(1.3, 24, 16), glowMat(0xffa040, .8)), out = new THREE.Mesh(new THREE.SphereGeometry(1.7, 24, 16), glowMat(0xff2a10, .6)),
+        pil = new THREE.Mesh(new THREE.CylinderGeometry(.9, 1.6, 30, 20, 1, true), glowMat(0xff6a2a, .7));
+      pil.position.y = 15; g.add(core, mid, out, pil);
+      addUfx(g, 2.6, .2, (k, o) => {
+        o.position.set(bossG.position.x, R, bossG.position.z);
+        const sc = k < .2 ? .2 + k/.2*4.5 : 4.7 + (k - .2)*2.5; core.scale.setScalar(sc*.6); mid.scale.setScalar(sc*.85); out.scale.setScalar(sc);
+        pil.scale.set(sc*.4, 1, sc*.4);
+        const op = k < .3 ? 1 : Math.max(0, 1 - (k - .3)/.7); core.material.opacity = op; mid.material.opacity = .8*op; out.material.opacity = .6*op; pil.material.opacity = .7*op*op;
+        if (k < .7) burst(bossG.position.clone().add(V3((Math.random()-.5)*6, Math.random()*6, (Math.random()-.5)*6)), Math.random() < .5 ? 0xff6a2a : 0xffd35a, 6, 10);
+      }, () => {
+        ultHit(d, bossAt()); hitstop = .25; shake = 1.5; flash = 1; flashM.material.color.set(0xffffff); fovp = 22; wiiRumble(800);
+        later(140, () => { flash = .8; flashM.material.color.set(0xff5a1a); });
+        for (const [r, c, l] of [[14, 0xff3a1a, 1], [9, 0xffd35a, .7], [5, 0xffffff, .4]]) ring(bossG.position, r, c, l);
+        burst(bossG.position, 0xff6a2a, 250, 16);
+      });
+    });
+  },
+  coffin(d){   // 漆黒の箱が閉じ込め、内側から圧し潰す
+    const g = new THREE.Group(), geo = new THREE.BoxGeometry(5, 5.5, 5),
+      box = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color:0x040006, transparent:true, opacity:0, depthWrite:false })),
+      edge = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color:0xb04dff, transparent:true, opacity:0 }));
+    g.add(box, edge);
+    const tick = (k, big) => { const at = bossAt(); ultHit(d*k, at); shake = big ? 1.1 : .5; ring(at, big ? 8 : 4, 0xb04dff, .5); burst(at, 0xb04dff, big ? 160 : 50, big ? 12 : 6); wiiRumble(big ? 600 : 250); };
+    addUfx(g, 3.2, .86, (k, o) => {
+      const up = Math.min(1, k/.22); o.scale.set(1, up + .001, 1); o.position.set(bossG.position.x, 2.75*up, bossG.position.z);
+      const op = k < .9 ? up : (1 - k)/.1; box.material.opacity = .94*op; edge.material.opacity = op*(.6 + .4*Math.sin(k*80));
+      if (k > .25 && k < .86 && Math.random() < .6) burst(o.position.clone().add(V3((Math.random()-.5)*5.2, (Math.random()-.5)*5.6, 2.6)), 0xb04dff, 3, 2);
+    }, () => { tick(.6, true); flash = .7; flashM.material.color.set(0x6a1aa0); hitstop = .15; });
+    later(1300, () => tick(.2, false)); later(2000, () => tick(.2, false));
+  },
+  swords(d){   // 無数の剣が背後から降り注ぐ
+    const N = 36, g = new THREE.Group(), bl = [], dur = 3.4;
+    const steel = new THREE.MeshStandardMaterial({ color:0xdfe8ff, metalness:.9, roughness:.25, emissive:0x223040 }), gold = M(0xd8b04a, .3), grip = M(0x3a2a20);
+    for (let i = 0; i < N; i++){
+      const b = new THREE.Group();
+      b.add(mk(new THREE.BoxGeometry(.07, 1.7, .2), steel, 0, 0, 0), mk(new THREE.BoxGeometry(.5, .08, .12), gold, 0, .87, 0), mk(new THREE.BoxGeometry(.08, .4, .08), grip, 0, 1.1, 0));
+      b.visible = false; g.add(b);
+      bl.push({ b, t0:i*.06 + Math.random()*.08, from:V3((Math.random()-.5)*10, 5 + Math.random()*4, 1 + Math.random()*2),
+        off:V3((Math.random()-.5)*3.4, .6 + Math.random()*1.6, (Math.random()-.5)*2.4), hit:false, gate:false, i });
+    }
+    addUfx(g, dur, 1, (k, o) => {
+      const tt = k*dur;
+      for (const s of bl){
+        const kk = (tt - s.t0)/.32; if (kk < 0) continue;
+        const from = s.from.clone(); from.x += P.x;
+        if (!s.gate){ s.gate = true; ring(from, .9, 0xffd35a, .5); burst(from, 0xffd35a, 6, 2); }
+        const to = V3(bossG.position.x, 0, bossG.position.z).add(s.off);
+        s.b.visible = true; s.b.position.lerpVectors(from, to, Math.min(1, kk));
+        s.b.quaternion.setFromUnitVectors(V3(0, -1, 0), to.clone().sub(from).normalize());
+        if (kk >= 1 && !s.hit){
+          s.hit = true; burst(to, 0xdfe8ff, 10, 4);
+          if (s.i % 6 === 5){ ultHit(d/6, to); shake = Math.max(shake, .35); wiiRumble(120); }
+        }
+      }
+    }, () => { ring(bossG.position, 8, 0xb8d0ff, .6); burst(bossG.position, 0xffd35a, 80, 10); });
+  },
+  generic(d, c){   // その他のファイル：光の大爆発
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), glowMat(c.hex, .9));
+    addUfx(m, 1.6, .35, (k, o) => { o.position.copy(bossG.position); o.scale.setScalar(k < .35 ? .2 + k/.35*4 : 4.2 + k); o.material.opacity = k < .35 ? .9 : Math.max(0, .9*(1 - (k - .35)/.65)); },
+      () => { ultHit(d, bossAt()); shake = 1; flash = .8; flashM.material.color.set(c.hex); ring(bossG.position, 9, c.hex, .8); burst(bossG.position, c.hex, 180, 12); wiiRumble(500); });
+  } };
+
+// ---- ロー・アイアス（7回自動防御）----
+const aiasG = new THREE.Group(); aiasG.position.set(0, -1.25, -3); camera.add(aiasG);
+for (let i = 0; i < 7; i++){
+  const a = i/7*Math.PI*2 + Math.PI/2, pt = new THREE.Mesh(new THREE.CircleGeometry(.09, 16), new THREE.MeshBasicMaterial({ color:0xff9ad5, transparent:true, opacity:.6, blending:THREE.AdditiveBlending, depthTest:false }));
+  pt.scale.set(1, 1.9, 1); pt.position.set(Math.cos(a)*.2, Math.sin(a)*.2, 0); pt.rotation.z = a - Math.PI/2; pt.renderOrder = 17; pt.visible = false; aiasG.add(pt);
+}
+function setAias(n){ aiasG.children.forEach((p, i) => p.visible = i < n); }
+function aiasFlower(at, sc, life){
+  const g = new THREE.Group();
+  for (let i = 0; i < 7; i++){ const a = i/7*Math.PI*2, pt = new THREE.Mesh(new THREE.CircleGeometry(.5, 20), glowMat(0xff9ad5, .5)); pt.scale.set(1, 2, 1); pt.position.set(Math.cos(a)*1.05, Math.sin(a)*1.05, 0); pt.rotation.z = a - Math.PI/2; g.add(pt); }
+  g.quaternion.copy(camera.getWorldQuaternion(new THREE.Quaternion()));
+  addUfx(g, life, 1, (k, o) => { o.position.copy(at); o.scale.setScalar(sc*(k < .2 ? k/.2 : 1)); o.rotation.z = k*.8; o.children.forEach(p => p.material.opacity = .5*(1 - Math.max(0, k - .6)/.4)); }, () => {});
+}
+function castAias(){
+  P.aias = 7; setAias(7);
+  showSecret('ロー・アイアス', ['熾天覆う七つの円環'], 0xff9ad5, '隠し呪文');
+  aiasFlower(rig.localToWorld(new THREE.Vector3(0, 0, -2.4)), 1, 1.4);
+}
+function aiasBlock(){
+  P.aias--; setAias(P.aias); playGuard(); wiiRumble(220);
+  const at = rig.localToWorld(new THREE.Vector3(0, 0, -2.2));
+  aiasFlower(at, .9, .6); ring(at, 4, 0xff9ad5, .45); burst(at, 0xff9ad5, 50, 7);
+  hitstop = .08; shake = .3; fovp = 5; flash = .35; flashM.material.color.set(0xffc0e8);
+  popCam(P.aias ? `ロー・アイアス 残り${P.aias}枚` : 'ロー・アイアス 砕けた!', '#ff9ad5', .9, .9);
+  P.inv = .5; P.counter = 0;
+  B.s = 'knock'; B.stun = false; B.t = 1.0; B.vz = -12;
+}
+
+// ---- スティール（相手は恥ずかしくて一定時間攻撃できない）----
+const SHY_SEC = 7;
+function castSteal(){
+  if (B.s === 'dead') return;
+  B.shy = SHY_SEC; B.shyPop = 0;
+  if (B.s === 'wind' || B.s === 'charge'){ B.s = 'knock'; B.stun = false; B.t = 1; B.vz = -8; lane.visible = false; P.armed = false; }
+  const sp = mkSprite('🩲', '#ffffff', .9); sp.geometry = sp.geometry.clone();   // 共有ジオメトリを片付け時に壊さないよう複製
+  const from = bossAt();
+  addUfx(sp, .8, 1, (k, o) => { const to = rig.localToWorld(new THREE.Vector3(.5, -.3, -2.2)); o.position.lerpVectors(from, to, k*k); o.position.y += Math.sin(k*Math.PI)*1.5; o.material.rotation = k*12; },
+    () => { popCam('パンツを奪った!', '#ffd0f0', .9, 1.2); });
+  burst(from, 0xffd0f0, 40, 5);
+  popup(`恥ずかしくて攻撃できない！（${SHY_SEC}秒）`, '#ff9ad5', new THREE.Vector3(0, -.45, -3), .6, 1.6, camera);
+}
+
 function castUlt(u){
   CD[u.id] = u.cd; for (const c of u.cps){ c.lit = false; c.el.classList.remove('lit'); } ultDraw(u);
   colR = u.hex; kick = .25; flash = .6; flashM.material.color.set(0xffffff);
@@ -1005,6 +1290,7 @@ function clearFx(){
 }
 function wizReset(){
   clearFx(); for (const k in CD) CD[k] = 0;
+  P.aias = 0; B.shy = 0; setAias(0); hideSecret();
   for (const u of ULTS){ for (const c of u.cps){ c.lit = false; c.el.classList.remove('lit'); } ultDraw(u); }
 }
 function wizUpdate(dt){
@@ -1081,7 +1367,7 @@ function castDown(){
   if (hold) return;
   if (!SRc){ say('このブラウザは音声認識に未対応です（Chrome / Edge を使用）'); return; }
   hold = true; $('castJa').classList.add('on');
-  const s = { txt:[], done:{}, tm:{}, base:0, ign:0, pre:null }, r = rec = new SRc();
+  const s = { txt:[], done:{}, tm:{}, base:0, ign:0, pre:null, hpre:null, hp:0, hint:0 }, r = rec = new SRc();
   r.lang = 'ja-JP'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 3;
   r.onresult = e => {
     for (let i = e.resultIndex; i < e.results.length; i++){
@@ -1104,6 +1390,7 @@ function evalSeg(s, k){
   if (k < s.ign) return;
   const t = s.txt[k].map(norm);
   if (t.some(y => ALLRX.some(rx => rx.test(y)))) return;   // 必殺の詠唱中の言葉は通常魔法にしない
+  if (s.hp > 0) return;   // 隠し呪文を唱えている途中も通常魔法にしない
   const sp = SPm.find(x => t.some(y => x.rx.test(y))); if (sp) cast(sp);
 }
 function castUp(){ hold = false; $('castJa').classList.remove('on'); const r = rec; rec = null; try { r && r.stop(); } catch (e){} }
