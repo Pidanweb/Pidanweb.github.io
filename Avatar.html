@@ -442,7 +442,7 @@ function fillSmooth(arr, key, def, win = 2) {
 const toLin = c => c.map(v => { v /= 255; return v <= .04045 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); });
 
 /* ---- 3視点から体のメッシュを作る ---- */
-function buildBody(rig, F, S, B) {
+function buildBody(rig, F, S, B, opts = {}) {
   const { L, Y } = rig.C, P = rig.P, bi = n => HB.indexOf(n);
   const pos = [], col = [], sI = [], sW = [], idx = [];
   const addV = (x, y, z, c, ws) => {
@@ -475,39 +475,65 @@ function buildBody(rig, F, S, B) {
   };
   const stats = {};
   const DEF = [140, 140, 150];
-  let trunkOut = [];
+  let headOut = null;
 
-  /* 胴体〜頭（1本のチューブ） */
+  /* 頭の寸法（目の高さ・頭の幅と奥行き・頭頂・あご）を先に決める */
+  const fo = opts.face || { chin: .85 };
+  const eyeRowF = (F.P(2).y + F.P(5).y) / 2, eyeY = F.yOf(eyeRowF);
+  const he = runAt(F, F.centerCol(eyeRowF), eyeRowF, 1, 0, .12 / F.mpp);
+  const headRx = clamp(he ? he.half * F.mpp : NaN, .062, .095, .078), headFc = he ? he.cx : F.centerCol(eyeRowF);
+  let headRz = headRx * 1.18, headZc = .02, headSc = 0;
+  if (S) {
+    const r = S.rowOf(eyeY), g = S.centerCol(r), hs = runAt(S, g, r, 1, 0, .16 / S.mpp);
+    headSc = hs ? hs.cx : g;
+    if (hs) { headRz = clamp(hs.half * S.mpp, headRx * 1.02, headRx * 1.4, headRz); headZc = clamp(S.face * (hs.cx - S.cols.hip) * S.mpp, -.06, .14, headZc); }
+  }
+  let topY = eyeY + .11;
+  { let r = Math.round(eyeRowF); const c = headFc;
+    while (r > 1 && (F.m(c, r - 1) >= .5 || F.m(c - 3, r - 1) >= .5 || F.m(c + 3, r - 1) >= .5)) r--;
+    topY = clamp(F.yOf(r), eyeY + .085, eyeY + .15, topY); }
+  const cheekW = headRx * 2 * .88, chinY = eyeY - clamp(fo.chin, .6, 1.15, .85) * cheekW;
+  const neckR = clamp(headRx * .68, .042, .062, .052), neckZc = headZc - headRz * .3, neckTop = eyeY - .01;
+  const hBot = chinY - .008, hcy = (topY + hBot) / 2, hry = (topY - hBot) / 2;
+  const headAt = y => {
+    const u = (y - hcy) / hry, e = Math.sqrt(Math.max(0, 1 - u * u));
+    const low = y < eyeY ? sstep(hBot, eyeY + .01, y) : 1;
+    return { rx: headRx * e * lerp(.7, 1, low), rz: headRz * e * lerp(.8, 1, low), zc: headZc + (y < eyeY ? .006 : 0) - (u > 0 ? u * u * headRz * .08 : 0) };
+  };
+  const mouthRowF = (F.P(9).y + F.P(10).y) / 2, chinRowF = mouthRowF + (mouthRowF - eyeRowF) * .8;
+
+  /* 胴体〜首（1本のチューブ。首から上は頭の中で閉じる） */
   {
     const shHalfF = Math.abs(F.P(11).x - F.P(12).x) / 2, shHalfB = B ? Math.abs(B.P(11).x - B.P(12).x) / 2 : 0;
-    const crotch = Y.hip - .05;
-    let top = Y.ear + .13;
-    { const r0 = F.rowOf(Y.ear), c = F.centerCol(r0); let r = Math.round(r0);
-      while (r > 1 && (F.m(c, r - 1) >= .5 || F.m(c - 3, r - 1) >= .5 || F.m(c + 3, r - 1) >= .5)) r--;
-      top = clamp(F.yOf(r), Y.ear + .07, Y.ear + .22, top); }
-    const neckTop = Y.sh + (Y.ear - Y.sh) * .45;
+    const crotch = Y.hip - .05, shStart = Y.sh - .035;
     const TR = [];
-    for (let y = crotch; y <= top - .008; y += .009) {
+    for (let y = crotch; y <= neckTop + 1e-6; y += .009) {
       const R = { y, rx: NaN, rz: NaN, zc: NaN };
       R.fr = F.rowOf(y); const fc0 = F.centerCol(R.fr);
-      const rf = runAt(F, fc0, R.fr, 1, 0, y < Y.sh ? shHalfF * 1.04 : .12 / F.mpp);
+      const rf = runAt(F, fc0, R.fr, 1, 0, shHalfF * 1.04);
       R.fc = rf ? rf.cx : fc0; if (rf) R.rx = rf.half * F.mpp;
+      if (y > Y.sh) { R.fr = Math.max(R.fr, chinRowF + 3); R.fc = headFc; }
       if (S) { R.sr = S.rowOf(y); const g = S.centerCol(R.sr); const rs = runAt(S, g, R.sr, 1, 0, .2 / S.mpp);
         R.sc = rs ? rs.cx : g; if (rs) { R.rz = rs.half * S.mpp; R.zc = S.face * (rs.cx - S.cols.hip) * S.mpp; } }
-      if (B) { R.br = B.rowOf(y); const g = B.centerCol(R.br); const rb = runAt(B, g, R.br, 1, 0, y < Y.sh ? shHalfB * 1.04 : .12 / B.mpp); R.bc = rb ? rb.cx : g; }
+      if (B) { R.br = B.rowOf(y); const g = B.centerCol(R.br); const rb = runAt(B, g, R.br, 1, 0, shHalfB * 1.04); R.bc = rb ? rb.cx : g; }
       TR.push(R);
     }
     fillSmooth(TR, 'rx', .12);
     TR.forEach(R => {
-      const head = R.y > neckTop, neck = R.y > Y.sh && !head;
-      R.rx = clamp(R.rx, head ? .035 : neck ? .035 : .07, head ? .12 : neck ? .1 : .28, .1);
-      const [lo, hi, df] = R.y < Y.sh ? [.42, 1, .66] : neck ? [.7, 1.3, 1] : [.85, 1.4, 1.15];
-      R.rz = R.rx * clamp(Number.isFinite(R.rz) ? R.rz / R.rx : NaN, lo, hi, df);
-      if (!Number.isFinite(R.zc)) R.zc = head ? .015 : 0;
+      R.rx = clamp(R.rx, .07, .28, .12);
+      R.rz = R.rx * clamp(Number.isFinite(R.rz) ? R.rz / R.rx : NaN, .42, 1, .66);
       R.zc = clamp(R.zc, -.12, .12, 0);
     });
     fillSmooth(TR, 'rz', .1); fillSmooth(TR, 'zc', 0, 3);
-    for (let i = TR.length - 4; i < TR.length; i++) if (i >= 0) { const k = (TR.length - i) / 5; TR[i].rx *= .55 + .45 * k; TR[i].rz *= .55 + .45 * k; }
+    // 肩から首へ：なめらかに細くして、決まった太さの首にする
+    const base = TR.reduce((a, b) => Math.abs(b.y - shStart) < Math.abs(a.y - shStart) ? b : a);
+    const b0 = { rx: base.rx, rz: base.rz, zc: base.zc };
+    TR.forEach(R => {
+      if (R.y <= shStart) return;
+      const t = sstep(shStart, Y.sh + .045, R.y), k = Math.pow(t, .75);
+      R.rx = lerp(b0.rx, neckR, k); R.rz = lerp(b0.rz, neckR * 1.08, k); R.zc = lerp(b0.zc, neckZc, t);
+      if (S) R.sc = lerp(R.sc, headSc - S.face * (headZc - neckZc) / S.mpp, t);
+    });
     const chain = [[Y.hip, 'hips'], [P.spine.y, 'spine'], [P.chest.y, 'chest'], [P.neck.y, 'neck'], [P.head.y, 'head']];
     const M = 48, rings = []; let last = DEF;
     for (const R of TR) {
@@ -520,18 +546,39 @@ function buildBody(rig, F, S, B) {
         const c = mixC([[cf, Math.max(co, 0) ** 2], [cb, Math.max(-co, 0) ** 2], [cs, si * si]]) || last; last = c;
         let ws = chainW(chain, R.y, .035);
         const sd = x >= 0 ? 'left' : 'right';
-        ws = blendIn(ws, sd + 'UpperArm', sstep(.62, 1.05, Math.abs(x) / L.shHalf) * sstep(Y.sh - .12, Y.sh - .03, R.y) * (R.y < Y.sh + .04 ? .65 : 0));
+        ws = blendIn(ws, sd + 'UpperArm', sstep(.62, 1.05, Math.abs(x) / L.shHalf) * sstep(Y.sh - .12, Y.sh - .03, R.y) * (R.y < Y.sh ? .65 : 0));
         ws = blendIn(ws, sd + 'UpperLeg', sstep(.25, .95, Math.abs(x) / L.hipHalf) * sstep(Y.hip + .02, Y.hip - .06, R.y) * .6);
         ring.push(addV(x, R.y, z, c, ws));
       }
       rings.push(ring);
     }
     tube(rings, true, true, [['hips', 1]], [['head', 1]]);
-    trunkOut = TR.map(R => ({ y: R.y, rx: R.rx, rz: R.rz, zc: R.zc }));
     const near = y => TR.reduce((a, b) => Math.abs(b.y - y) < Math.abs(a.y - y) ? b : a);
-    const ch = near(lerp(Y.hip, Y.sh, .75)), wa = near(lerp(Y.hip, Y.sh, .4)), hp = near(Y.hip), hd = near(Y.ear);
-    Object.assign(stats, { chestW: ch.rx * 2, chestD: ch.rz * 2, waistW: wa.rx * 2, waistD: wa.rz * 2, hipW: hp.rx * 2, hipD: hp.rz * 2, headW: hd.rx * 2, headD: hd.rz * 2, height: top });
+    const ch = near(lerp(Y.hip, Y.sh, .75)), wa = near(lerp(Y.hip, Y.sh, .4)), hp = near(Y.hip);
+    Object.assign(stats, { chestW: ch.rx * 2, chestD: ch.rz * 2, waistW: wa.rx * 2, waistD: wa.rz * 2, hipW: hp.rx * 2, hipD: hp.rz * 2, headW: headRx * 2, headD: headRz * 2, height: topY });
   }
+
+  /* 頭（卵形の閉じたメッシュ。あごに向かって細くする） */
+  {
+    const rings = [], M = 48; let last = DEF;
+    const bRow = B ? (B.P(7).y + B.P(8).y) / 2 : 0, bCol = B ? B.centerCol(bRow) : 0;
+    for (let y = hBot + .004; y <= topY - .004; y += .006) {
+      const h = headAt(y), ring = [];
+      const fr = F.rowOf(y), sr = S ? S.rowOf(y) : 0, br = B ? B.rowOf(y) : 0;
+      const rb = B ? runAt(B, bCol, br, 1, 0, .12 / B.mpp) : null, bc = rb ? rb.cx : bCol;
+      for (let j = 0; j < M; j++) {
+        const th = j / M * Math.PI * 2, si = Math.sin(th), co = Math.cos(th), x = h.rx * si, z = h.zc + h.rz * co;
+        const cf = sampleToward(F, headFc, fr, x / F.mpp * .9, 0);
+        const cs = S ? sampleToward(S, headSc, sr, S.face * (z - headZc) * .9 / S.mpp, 0) : sampleToward(F, headFc, fr, Math.sign(x || 1) * h.rx * .85 / F.mpp, 0);
+        const cb = B ? sampleToward(B, bc, br, -x / B.mpp * .9, 0) : S ? sampleToward(S, headSc, sr, -S.face * headRz * .85 / S.mpp, 0) : cs;
+        const c = mixC([[cf, Math.max(co, 0) ** 2], [cb, Math.max(-co, 0) ** 2], [cs, si * si]]) || last; last = c;
+        ring.push(addV(x, y, z, c, y < chinY + .015 ? [['head', .8], ['neck', .2]] : [['head', 1]]));
+      }
+      rings.push(ring);
+    }
+    tube(rings, true, true, [['head', 1]], [['head', 1]]);
+  }
+  headOut = { headAt, eyeY, chinY, topY, cheekW };
 
   /* 腕 */
   for (const [sd, g] of [['left', 1], ['right', -1]]) {
@@ -638,7 +685,7 @@ function buildBody(rig, F, S, B) {
   geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sW, 4));
   geo.setIndex(idx); geo.computeVertexNormals();
   stats.verts = pos.length / 3; stats.tris = idx.length / 3;
-  return { geo, stats, trunk: trunkOut };
+  return { geo, stats, head: headOut };
 }
 
 /* 顔写真を頭の前面に貼るための曲面（頭の形に沿わせ、正面から投影したUVを付ける） */
@@ -647,15 +694,15 @@ function trunkAt(trunk, y) {
   const a = trunk[i], b = trunk[i + 1] || a, t = clamp((y - a.y) / ((b.y - a.y) || 1), 0, 1, 0);
   return { rx: lerp(a.rx, b.rx, t), rz: lerp(a.rz, b.rz, t), zc: lerp(a.zc, b.zc, t) };
 }
-function buildFacePatch(rig, trunk, fi) {
+function buildFacePatch(rig, head, fi) {
   const { Y } = rig.C, P = rig.P, bi = n => HB.indexOf(n);
   const chain = [[Y.hip, 'hips'], [P.spine.y, 'spine'], [P.chest.y, 'chest'], [P.neck.y, 'neck'], [P.head.y, 'head']];
   const pos = [], uv = [], sI = [], sW = [], idx = [];
   const NR = Math.max(10, Math.round((fi.yTop - fi.yBot) / .004)), NS = 44, TH = 1.4;
   for (let r = 0; r <= NR; r++) {
-    const y = lerp(fi.yBot, fi.yTop, r / NR), R = trunkAt(trunk, y), ws = chainW(chain, y, .035);
+    const y = lerp(fi.yBot, fi.yTop, r / NR), R = head.headAt(y), ws = [['head', 1]];
     for (let j = 0; j <= NS; j++) {
-      const th = -TH + 2 * TH * j / NS, x = R.rx * Math.sin(th) * 1.008, z = R.zc + R.rz * Math.cos(th) * 1.008 + .0015;
+      const th = -TH + 2 * TH * j / NS, x = R.rx * Math.sin(th) * 1.01, z = R.zc + R.rz * Math.cos(th) * 1.01 + .001;
       pos.push(x, y, z);
       const px = fi.eye.x + x / fi.mpp, py = fi.eye.y - (y - fi.eyeY) / fi.mpp;
       uv.push((px - fi.crop.x) / fi.crop.w, 1 - (py - fi.crop.y) / fi.crop.h);
@@ -940,12 +987,17 @@ function enterFaceReview() {
 
 /* 顔写真 → テクスチャと貼り付け位置 */
 const FACE_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
-function makeFace(trunk) {
+function faceRatios() {
+  if (!isObj(scans.face)) return null;
+  const fs = scans.face.snap, W = fs.img.width, H = fs.img.height, P = i => new THREE.Vector2(fs.lm[i].x * W, fs.lm[i].y * H);
+  const eye = P(33).add(P(263)).multiplyScalar(.5), cheek = P(454).distanceTo(P(234));
+  return { chin: (P(152).y - eye.y) / cheek };
+}
+function makeFace(head) {
   const fs = scans.face.snap, W = fs.img.width, H = fs.img.height, P = i => new THREE.Vector2(fs.lm[i].x * W, fs.lm[i].y * H);
   const F = makeView(scans.front.snap, 'front', C);
-  const eyeY = F.yOf((F.P(2).y + F.P(5).y) / 2);
-  const R = trunkAt(trunk, eyeY);
-  const cheek = P(454).distanceTo(P(234)), mpp = R.rx * 2 * .9 / cheek;
+  const eyeY = head.eyeY;
+  const cheek = P(454).distanceTo(P(234)), mpp = head.cheekW / cheek;
   const eye = P(33).add(P(263)).multiplyScalar(.5);
   const oval = FACE_OVAL.map(P);
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -966,11 +1018,11 @@ function makeFace(trunk) {
   x.putImageData(id, 0, 0);
   const m = document.createElement('canvas'); m.width = m.height = S; const mx = m.getContext('2d');
   const ctr = oval.reduce((s, p) => s.add(p), new THREE.Vector2()).divideScalar(oval.length);
-  mx.filter = `blur(${Math.round(S * .025)}px)`; mx.fillStyle = '#fff'; mx.beginPath();
-  oval.forEach((p, i) => { const q = ctr.clone().lerp(p, .93), u = (q.x - crop.x) / crop.w * S, v = (q.y - crop.y) / crop.h * S; i ? mx.lineTo(u, v) : mx.moveTo(u, v); });
+  mx.filter = `blur(${Math.round(S * .035)}px)`; mx.fillStyle = '#fff'; mx.beginPath();
+  oval.forEach((p, i) => { const q = ctr.clone().lerp(p, .9), u = (q.x - crop.x) / crop.w * S, v = (q.y - crop.y) / crop.h * S; i ? mx.lineTo(u, v) : mx.moveTo(u, v); });
   mx.closePath(); mx.fill();
   x.globalCompositeOperation = 'destination-in'; x.drawImage(m, 0, 0); x.globalCompositeOperation = 'source-over';
-  const yBot = eyeY - (P(152).y - eye.y) * mpp - .012, yTop = eyeY + (eye.y - P(10).y) * mpp + .025;
+  const yBot = head.chinY - .012, yTop = Math.min(head.topY - .008, eyeY + (eye.y - P(10).y) * mpp + .03);
   return { eye, eyeY, mpp, crop, yBot, yTop };
 }
 function failScan() {
@@ -1208,7 +1260,7 @@ function rebuildAvatar(reveal) {
   const S = isObj(scans.side) ? makeView(scans.side.snap, 'side', C) : null;
   const B = isObj(scans.back) ? makeView(scans.back.snap, 'back', C) : null;
   clearBody();
-  const { geo, stats, trunk } = buildBody(rig, F, S, B);
+  const { geo, stats, head } = buildBody(rig, F, S, B, { face: faceRatios() });
   bodyStats = stats;
   const saved = HB.map(n => rig.bones[n].quaternion.clone()), hp = rig.bones.hips.position.clone();
   restPose(rig); avatar.updateMatrixWorld(true);
@@ -1221,11 +1273,11 @@ function rebuildAvatar(reveal) {
   avatar.add(outlineMesh); outlineMesh.bind(rig.skeleton, new THREE.Matrix4());
   if (isObj(scans.face)) {
     try {
-      const fi = makeFace(trunk);
+      const fi = makeFace(head);
       faceTex = new THREE.CanvasTexture(faceCanvas); faceTex.colorSpace = THREE.SRGBColorSpace; faceTex.anisotropy = 4;
       const fm = new THREE.MeshToonMaterial({ map: faceTex, gradientMap: grad, transparent: true, depthWrite: false, clippingPlanes: [clip],
         polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-      faceMesh = new THREE.SkinnedMesh(buildFacePatch(rig, trunk, fi), fm); faceMesh.name = 'Face'; faceMesh.frustumCulled = false; faceMesh.renderOrder = 2;
+      faceMesh = new THREE.SkinnedMesh(buildFacePatch(rig, head, fi), fm); faceMesh.name = 'Face'; faceMesh.frustumCulled = false; faceMesh.renderOrder = 2;
       avatar.add(faceMesh); faceMesh.bind(rig.skeleton, new THREE.Matrix4());
     } catch (e) { console.error('顔を貼れませんでした', e); }
   }
