@@ -1217,7 +1217,7 @@ $('jobBtn').onclick = () => $('jobs').classList.toggle('on');
 // ===== ゲーム状態 =====
 const keys = {}, mouse = { nx:0, ny:0 }, ray = new THREE.Raycaster(), tmp = new THREE.Vector3();
 const PMAX = 250;   // プレイヤー最大HP（旧100）
-const P = { armed:false, x:0, hp:PMAX, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, dir:1, counter:0, cBig:0, guard:false };
+const P = { z:0, armed:false, x:0, hp:PMAX, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, dir:1, counter:0, cBig:0, guard:false };
 const B = { x:0, z:-16, vz:0, s:'enter', t:1, wt:1, hp:800, max:800, hit:false, weak:0, flash:0, combo:0, stun:false, phase:1, wob:0, time:0, unp:false };
 let state = 'title', hitstop = 0, shake = 0, fovp = 0, flash = 0, vr = false, endAt = 0;
 function reset(){
@@ -1318,7 +1318,7 @@ function bossAI(dt){
     if (B.t <= 0){ B.s = 'charge'; B.hit = false; }
   } else if (B.s === 'charge'){
     B.z += [17, 20, 24][ph-1]*dt;
-    if (!B.hit && B.z + R >= -1.3){
+    if (!B.hit && B.z + R >= P.z - 1.3){
       B.hit = true;
       if (Math.abs(B.x - P.x) < R*.8 + .35 && P.inv <= 0){
         if (B.unp){   // パリィ不可：ガード中なら無効、それ以外は被弾
@@ -1330,7 +1330,7 @@ function bossAI(dt){
       }
       else if (P.inv <= 0) popCam('回避!', '#7ae7ff', .9, .8);
     }
-    if (B.s === 'charge' && B.z > 3){ B.combo++; B.s = 'enter'; B.z = HOVER - 7.5*(R/1.8); B.x = (Math.random()-.5)*5*(R/1.8); B.weak = 2.5; P.armed = false; }
+    if (B.s === 'charge' && B.z > P.z + 3){ B.combo++; B.s = 'enter'; B.z = HOVER - 7.5*(R/1.8); B.x = (Math.random()-.5)*5*(R/1.8); B.weak = 2.5; P.armed = false; }
   } else if (B.s === 'knock'){
     B.z += B.vz*dt; B.vz *= Math.pow(.04, dt);
     if (B.stun) B.z += (HOVER - B.z)*dt*.5;
@@ -1350,7 +1350,7 @@ function bossAnim(dt){
   bMat.emissive.setRGB(.04 + .7*k*blink + (B.flash > 0 ? .8 : 0), .23*(1-k) + (B.flash > 0 ? .8 : 0), .09*(1-k) + (B.flash > 0 ? .8 : 0));
   const stunned = B.s === 'knock' && B.stun;
   bossG.position.set(B.x, R*sy + hop, B.z); bossG.scale.set(R*sx, R*sy, R*sx*zs);
-  bossG.rotation.set(0, Math.atan2(P.x - B.x, -B.z)*.5, stunned ? Math.sin(B.time*6)*.18 : 0);
+  bossG.rotation.set(0, Math.atan2(P.x - B.x, P.z - B.z)*.5, stunned ? Math.sin(B.time*6)*.18 : 0);
   stars.visible = stunned; stars.rotation.y += dt*5; for (const p of pupils) p.visible = !stunned;
   if (B.unp && (B.s === 'wind' || B.s === 'charge')){   // パリィ不可は紫に光る
     const kk = B.s === 'charge' ? 1 : k, fl = B.flash > 0 ? .8 : 0;
@@ -1359,7 +1359,7 @@ function bossAnim(dt){
   for (const e of eyes) e.material.color.set(B.s === 'wind' ? (B.unp ? 0xb04dff : 0xff4d5e) : 0xffffff);
   shadow.position.set(B.x, .02, B.z); shadow.scale.setScalar(R*2.4);
   lane.visible = B.s === 'wind';
-  if (lane.visible){ lane.material.color.setHex(B.unp ? 0xb04dff : 0xff3a4a); const zs0 = B.z + R; lane.scale.set(R*1.8, -zs0, 1); lane.position.set(B.x, .03, zs0/2); lane.material.opacity = .22 + .25*blink*k; }
+  if (lane.visible){ lane.material.color.setHex(B.unp ? 0xb04dff : 0xff3a4a); const zs0 = B.z + R - P.z; lane.scale.set(R*1.8, -zs0, 1); lane.position.set(B.x, .03, P.z + zs0/2); lane.material.opacity = .22 + .25*blink*k; }
   jiggle(B.time, B.s === 'knock' && B.stun ? .08 : .04);
 }
 
@@ -1425,13 +1425,19 @@ function update(dt){
     const gIn = ctl.mode === 'mouse' ? (mdn.on && nowMs - mdn.t >= GUARD_MS) : (wii.a && nowMs - wii.aT >= 150);
     P.guard = gIn && P.par <= 0 && !P.armed && P.swing <= 0;
     P.x = Math.max(-3.2, Math.min(3.2, P.x + mv*(P.par > 0 || P.guard ? 3 : 6)*dt));
-    if (tp && pose.move && poseReady() && !mv) P.x += ((bcFeetOK() ? Math.max(-3.2, Math.min(3.2, bc.feetX)) : pose.tx) - P.x)*Math.min(1, dt*8);   // キャリブレーション済みなら床の上の実際の位置(m)   // 俯瞰：体を左右に動かして回避
+    // 俯瞰：体を左右に動かして回避（体キャリブレーション済みなら床の上の実際の位置 m）
+    if (tp && pose.move && poseReady() && !mv) P.x += ((bcFeetOK() ? Math.max(-3.2, Math.min(3.2, bc.feetX)) : pose.tx) - P.x)*Math.min(1, dt*8);
     P.counter -= dt; P.swing -= dt; P.swingCd -= dt; P.inv -= dt; P.parCd -= dt;
     if (P.par > 0 || P.armed) P.parAge += dt;
     if (P.par > 0) P.par -= dt;
     bossAI(dt);
   } else if (state === 'title'){ B.z += (HOVER - B.z)*Math.min(1, dt*2); B.s = 'enter'; }
   if (!(state === 'play' && !menuOn)) P.guard = false;
+  // 体キャリブレーション済みなら、プレイ中以外（タイトル等）でもアバターを実際の位置に追従させる（確認用）
+  if (state !== 'play' && tp && pose.move && bcFeetOK()) P.x += (Math.max(-3.2, Math.min(3.2, bc.feetX)) - P.x)*Math.min(1, dt*8);
+  // 前後: 体キャリブレーション済みなら実際の足の前後位置（ボスより手前に制限）。それ以外は 0
+  const zT = tp && pose.move && bcFeetOK() ? Math.max(HOVER + R + 1.5, Math.min(3, bc.feetZ)) : 0;
+  P.z += (zT - P.z)*Math.min(1, dt*8);
   faceUpdate(dt); poseAimUpdate(dt);
   if (!viewCtl) mouse.nx = mouse.ny = 0;   // 視点操作OFF：画面は正面固定
   bossAnim(dt); updSword(dt); updFX(dt); updSkillFx(dt); skTick();
@@ -1441,14 +1447,12 @@ function update(dt){
   const sh = (Math.random()-.5)*shake;
   aim.position.set(P.x, EYE, 0); aim.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0);
   av.position.x = P.x; av.rotation.y = vrm ? 0 : -mouse.nx*.3; headM.rotation.y = -mouse.nx*.5;   // 顔の向きにアバターも向く
-  // AR確認表示では、実際の足の前後位置にもアバター（と剣）を合わせる
-  const arZ = bcARActive() && bcFeetOK() ? Math.max(-3, Math.min(3, bc.feetZ)) : 0;
-  av.position.z += (arZ - av.position.z)*Math.min(1, dt*8); aim.position.z = av.position.z;
+  av.position.z = P.z; aim.position.z = P.z;   // 前後位置（体キャリブレーション済みのとき実際に動く）
   if (tp) poseApply(dt);   // VRMの骨を全身ポーズに合わせる
   av.visible = tp && (!bcARActive() || bc.avAR);   // AR確認表示では「アバターを重ねる」がONの時だけ表示
   if (bcARActive()) bcCamApply();   // 実カメラと同じ位置・向きから描く
-  else if (tp){ camera.rotation.set(mouse.ny*.12 - .22, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + 1.5 + sh*.6, 4.2); }
-  else { camera.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + sh*.6, 0); }
+  else if (tp){ camera.rotation.set(mouse.ny*.12 - .22, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + 1.5 + sh*.6, P.z + 4.2); }
+  else { camera.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + sh*.6, P.z); }
   bossBar.scale.x = Math.max(.0001, B.hp/B.max); pBar.scale.x = Math.max(.0001, P.hp/PMAX);
   parBar.scale.x = Math.max(.0001, P.parCd > 0 ? 1 - P.parCd/.7 : 1);
   hud.visible = state === 'play'; $('ui').style.display = vr ? 'none' : '';
