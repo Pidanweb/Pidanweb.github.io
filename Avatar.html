@@ -955,7 +955,11 @@ function parseVRM(buf) {
   const eyeP = prims.find(p => /EyeWhite|EyeIris/i.test(p.name));
   let eyeY = joints.leftEye ? joints.leftEye.y : NaN;
   if (eyeP) { const used = new Set(eyeP.idx); let s = 0; used.forEach(k => s += eyeP.pos[k * 3 + 1]); eyeY = s / used.size; }
-  return { isV1, joints, prims, eyeY, version: isV1 ? '1.0' : '0.x' };
+  // 素体のあごの高さ（顔の肌のいちばん下）
+  let chinY = NaN;
+  const skin = prims.find(p => p.kind === 'face' && /SKIN/i.test(p.name));
+  if (skin) { chinY = Infinity; for (const k of new Set(skin.idx)) if (skin.bw[k][0][0] === 'head') chinY = Math.min(chinY, skin.pos[k * 3 + 1]); if (!Number.isFinite(chinY)) chinY = NaN; }
+  return { isV1, joints, prims, eyeY, chinY, version: isV1 ? '1.0' : '0.x' };
 }
 
 /* 区間ごとの一次補間（範囲外は端の傾きで延長） */
@@ -987,8 +991,20 @@ const regionOf = h => /Arm$|Hand$/.test(h) ? (h.startsWith('left') ? 'leftArm' :
   : h === 'head' ? 'head' : 'trunk';
 
 /* 骨の位置だけを置き直す（素体の肩幅・股関節の幅に合わせる）。長さはスキャンのまま */
-function setRigAnchors(rig, shX, hipX) {
+/* 頭の高さを決める：首の長さは素体の比率（体の倍率で伸縮）を下限にする。
+   カメラの骨格推定は首を短く見積もりがちで、そのままだと頭が肩に埋まるため */
+function placeHead(tpl, rig, hd) {
+  const { Y } = rig.C, T = tpl.joints;
+  const hipJ = (T.leftUpperLeg.y + T.rightUpperLeg.y) / 2, shJ = (T.leftUpperArm.y + T.rightUpperArm.y) / 2;
+  const s = clamp((Y.sh - Y.hip) / (shJ - hipJ), .7, 1.4, 1);
+  const chinT = Number.isFinite(tpl.chinY) ? tpl.chinY : T.neck.y + .04;
+  const neckY = Y.sh + .02, chinTarget = neckY + (chinT - T.neck.y) * s;
+  const dy = Math.max(0, chinTarget - hd.chinY);
+  return { headRx: hd.headRx, headRz: hd.headRz, headZc: hd.headZc, cheekW: hd.cheekW, eyeY: hd.eyeY + dy, chinY: hd.chinY + dy, topY: hd.topY + dy };
+}
+function setRigAnchors(rig, shX, hipX, headY) {
   const { L, Y } = rig.C, P = rig.P;
+  P.head.y = Number.isFinite(headY) ? Math.max(headY, P.neck.y + .03) : Y.sh + (rig.C.Y.ear - Y.sh) * .55;
   for (const [s, g] of [['left', 1], ['right', -1]]) {
     P[s + 'UpperArm'].x = g * shX; P[s + 'LowerArm'].x = g * (shX + L.upper); P[s + 'Hand'].x = g * (shX + L.upper + L.fore);
     for (const n of ['UpperLeg', 'LowerLeg', 'Foot', 'Toes']) P[s + n].x = g * hipX;
@@ -1002,7 +1018,7 @@ function setRigAnchors(rig, shX, hipX) {
 /* 素体の形は保ったまま、骨ごとの一次変換（長さ・太さの倍率）でスキャンの体型に寄せる。
    隣り合う骨の変換は関節で一致するので、ウェイトで混ぜても表面が割れたりとがったりしない */
 function fitTemplate(tpl, rig, body, opts = {}) {
-  const { L, Y } = rig.C, T = tpl.joints, PN = body.parts, hd = opts.shape ? opts.shape.hd : body.head;
+  const { L, Y } = rig.C, T = tpl.joints, PN = body.parts, hd = opts.shape ? opts.shape.hd : (opts.hd || placeHead(tpl, rig, body.head));
   const ax = n => (Math.abs(T['left' + n].x) + Math.abs(T['right' + n].x)) / 2;
   const ay = n => (T['left' + n].y + T['right' + n].y) / 2;
   const pct = (a, q) => { if (!a.length) return NaN; const b = a.slice().sort((x, y) => x - y); return b[Math.min(b.length - 1, Math.floor(q * b.length))]; };
@@ -1071,7 +1087,6 @@ function fitTemplate(tpl, rig, body, opts = {}) {
 
   // 肩と股関節の位置（素体の位置×胴の倍率）。骨格もここに合わせる
   const shX = ax('UpperArm') * S_.chest, hipX = ax('UpperLeg') * S_.hip;
-  setRigAnchors(rig, shX, hipX);
   const P = rig.P;
 
   // --- 変換 ---
@@ -1082,6 +1097,7 @@ function fitTemplate(tpl, rig, body, opts = {}) {
     return [x * hd.headRx / tm.headX, hd.eyeY + (y - eyeT) * sy, hd.headZc + (z - (tm.headZ0 + tm.headZ1) / 2) * hd.headRz / ((tm.headZ1 - tm.headZ0) / 2)];
   };
   const headAtNeckY = headMap(0, T.head.y, 0)[1];
+  setRigAnchors(rig, shX, hipX, headAtNeckY);   // 頭の骨も、合わせた頭の位置に置く
   const trunkS = { hips: [S_.hip, S_.hipD], spine: [S_.waist, S_.waistD], chest: [S_.chest, S_.chestD], leftShoulder: [S_.chest, S_.chestD], rightShoulder: [S_.chest, S_.chestD] };
   const lin = (aT, aO, s) => (x, y, z) => [aO.x + (x - aT.x) * s[0], aO.y + (y - aT.y) * s[1], aO.z + (z - aT.z) * s[2]];
   const xfs = { head: headMap };
@@ -1844,6 +1860,8 @@ function rebuildTemplate(reveal, F, S, B) {
   const body = buildBody(rig, F, S, B, { face: faceRatios(), noMesh: true });
   bodyStats = body.stats;
   const frozen = outfit && calib ? calib.shape : null;
+  const hdUse = placeHead(tplData, rig, frozen ? frozen.hd : body.head);   // 以前の体型データにも首の補正をかける
+  bodyStats.height = hdUse.topY;
   let faceSample = null, faceRec = null;
   const faceFrom = (fi, canvas) => {
     const S2 = canvas.width, fd = canvas.getContext('2d').getImageData(0, 0, S2, S2).data;
@@ -1857,7 +1875,7 @@ function rebuildTemplate(reveal, F, S, B) {
   if (!isObj(scans.face) && calib && calib.face) faceSample = faceFrom(calib.face.fi, calib.face.canvas);
   if (isObj(scans.face)) {
     try {
-      const fi0 = makeFace(frozen ? frozen.hd : body.head);
+      const fi0 = makeFace(hdUse);
       const fi = { eye: { x: fi0.eye.x, y: fi0.eye.y }, eyeY: fi0.eyeY, mpp: fi0.mpp, crop: fi0.crop };
       faceRec = { fi, canvas: faceCanvas };
       const S2 = faceCanvas.width, fd = faceCanvas.getContext('2d').getImageData(0, 0, S2, S2).data;
@@ -1869,7 +1887,7 @@ function rebuildTemplate(reveal, F, S, B) {
       };
     } catch (e) { console.error('顔を焼き込めませんでした', e); }
   }
-  const fit = fitTemplate(tplData, rig, body, { faceSample, shape: frozen, texSize: pr => pr.base || null });
+  const fit = fitTemplate(tplData, rig, body, { faceSample, shape: frozen ? { ...frozen, hd: hdUse } : null, hd: hdUse, texSize: pr => pr.base || null });
   if (!frozen) {   // 体型キャリブレーションとして記録（服だけ撮り直すときに使う）
     calib = { C, shape: fit.shape, face: faceRec || (calib && calib.face) || null };
     $('#calibStatus').textContent = '体型キャリブレーション：済み（このセッション）';
