@@ -1306,7 +1306,7 @@ function bossAI(dt){
     B.z += (HOVER - B.z)*Math.min(1, dt*2.2);
     if (B.z > HOVER - .25){ B.s = 'idle'; B.t = idleT(); }
   } else if (B.s === 'idle'){
-    B.z += (HOVER - B.z)*dt*3; B.x += (Math.sin(B.time*.8)*2.2*(R/1.8) + P.x*.4 - B.x)*dt*1.5;
+    B.z += (HOVER - B.z)*dt*3; B.x += (Math.sin(B.time*.8)*2.2*(R/1.8) + (bc.state === 'locked' ? 0 : P.x*.4) - B.x)*dt*1.5;   // 体キャリブレーション済みなら指定した場所の周りで待機（プレイヤーに寄ってこない）
     if (B.t <= 0){
       B.s = 'wind'; P.armed = false; B.t = B.wt = [1.1, .9, .7][ph-1];
       B.unp = Math.random() < [.25, .33, .4][ph-1];   // パリィ不可攻撃（紫）をランダムで選ぶ
@@ -1451,7 +1451,8 @@ function update(dt){
   if (tp) poseApply(dt);   // VRMの骨を全身ポーズに合わせる
   av.visible = tp && (!bcARActive() || bc.avAR);   // AR確認表示では「アバターを重ねる」がONの時だけ表示
   if (bcARActive()) bcCamApply();   // 実カメラと同じ位置・向きから描く
-  else if (tp){ camera.rotation.set(mouse.ny*.12 - .22, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + 1.5 + sh*.6, P.z + 4.2); }
+  else if (tp){ camera.rotation.set(mouse.ny*.12 - .22, -mouse.nx*.2, 0); const fix = bc.state === 'locked';   // 体キャリブレーション済み: カメラは床に固定（現実の部屋と同じく、動くのは自分だけ）
+    camera.position.set((fix ? 0 : P.x) + sh, EYE + 1.5 + sh*.6, (fix ? 0 : P.z) + 4.2); }
   else { camera.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + sh*.6, P.z); }
   bossBar.scale.x = Math.max(.0001, B.hp/B.max); pBar.scale.x = Math.max(.0001, P.hp/PMAX);
   parBar.scale.x = Math.max(.0001, P.parCd > 0 ? 1 - P.parCd/.7 : 1);
