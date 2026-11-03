@@ -220,6 +220,10 @@ label.btn.file{cursor:pointer;display:inline-block}
           <label class="sel range">肩幅の補正<input type="range" id="shAdj" min="80" max="120" step="1" value="100"><span id="shAdjVal">100%</span></label>
         </div>
         <div class="row">
+          <label class="sel range">撮影をどこまで信じるか<input type="range" id="scanW" min="30" max="100" step="5" value="70"><span id="scanWVal">70%</span></label>
+          <label class="toggle"><input type="checkbox" id="keepPosture"> 頭の前後の位置も撮影から取る（猫背などの姿勢も再現）</label>
+        </div>
+        <div class="row">
           <label class="toggle"><input type="checkbox" id="normalView"> 面の向きを色で表示（形の確認用）</label>
           <label class="toggle"><input type="checkbox" id="clothThick" checked> 服の厚みを足す（②のとき）</label>
         </div>
@@ -258,7 +262,7 @@ label.btn.file{cursor:pointer;display:inline-block}
         <table id="bodyTable" hidden><thead><tr><th>部位</th><th style="text-align:right">幅</th><th style="text-align:right">厚み</th></tr></thead><tbody></tbody></table>
       </div>
       <div id="tab-diag" class="scroll" hidden>
-        <p class="placeholder" id="diagEmpty">VRoid素体を使って体型をつくると、素体をどれだけ伸ばしたか・どの値を使ったかがここに出ます。赤い数字は上限か下限に張り付いた値です。</p>
+        <p class="placeholder" id="diagEmpty">VRoid素体を使って体型をつくると、素体をどれだけ伸ばしたか・どの値を使ったかがここに出ます。赤い数字は、測定値が素体から大きく外れた所（撮影や切り抜きを疑う所）です。</p>
         <table id="diagTable" hidden><thead><tr><th>項目</th><th style="text-align:right">スキャン</th><th style="text-align:right">素体</th><th style="text-align:right">倍率</th></tr></thead><tbody></tbody></table>
         <div class="legend" aria-label="撮影画面の色分け">
           <span><i style="background:#43cdee"></i>胴</span><span><i style="background:#f5ad48"></i>頭</span>
@@ -411,10 +415,11 @@ function interpPts(pts, k) {
 function makeView(s, kind, C, loose) {
   const W = s.mw, H = s.mh, iw = s.img.width, ih = s.img.height, sx = iw / W, sy = ih / H, data = s.img.data, Y = C.Y;
   const P = i => new V2(s.lm[i].x * W, s.lm[i].y * H);
-  const v = { kind, s, W, H, P, lab: null, flt: 0 };
+  const v = { kind, s, W, H, P, lab: null, keep: null, flt: 0 };
   v.m = (x, y) => {
     const xi = Math.round(x), yi = Math.round(y); if (xi < 0 || yi < 0 || xi >= W || yi >= H) return 0;
     const i = yi * W + xi;
+    if (v.keep && !v.keep[i]) return 0;   // 体からはなれた背景の誤判定
     if (v.flt && v.lab && !(v.flt & (1 << v.lab[i]))) return 0;   // 測っている部位以外の画素は「人物でない」とみなす
     return s.mask[i];
   };
@@ -458,9 +463,17 @@ function makeView(s, kind, C, loose) {
   v.leg = { left: lLeft ? LA : LB, right: lLeft ? LB : LA };
   v.legAvg = { hip: mid(LA.hip, LB.hip), kn: mid(LA.kn, LB.kn), an: mid(LA.an, LB.an), toe: mid(LA.toe, LB.toe) };
   const fd = P(0).x - v.cols.ear; v.face = Math.abs(fd) < 1 ? 1 : Math.sign(fd);   // 横向き：顔が画像の右(+1)/左(-1)
-  if (kind !== 'side') {   // 横向きは腕と胴が重なるので部位分けしない
-    const key = `${loose ? 1 : 0}:${s.ver || 0}:${v.mpp.toFixed(6)}`;   // 切り抜きを直すまでは前の結果を使い回す
-    if (s._lab && s._lab.key === key) v.lab = s._lab.lab; else { v.lab = partLabels(v, loose); s._lab = { key, lab: v.lab }; }
+  {
+    const key = `${kind}:${loose ? 1 : 0}:${s.ver || 0}:${v.mpp.toFixed(6)}`;   // 切り抜きを直すまでは前の結果を使い回す
+    if (s._lab && s._lab.key === key) { v.keep = s._lab.keep; v.lab = s._lab.lab; }
+    else {
+      // 背景の誤判定を切り離す（横向きも含めて全部の向きで）
+      const sd = [mid(P(11), P(12)).lerp(mid(P(23), P(24)), .5), mid(P(7), P(8)), P(25), P(26), P(27), P(28)];
+      if (kind !== 'side') for (const sdA of ['left', 'right']) { const a = v.arm[sdA]; sd.push(mid(a[0], a[1]), mid(a[1], a[2])); }
+      v.keep = bodyComponent(v, sd);
+      v.lab = kind !== 'side' ? partLabels(v, loose) : null;   // 横向きは腕と胴が重なるので部位分けしない
+      s._lab = { key, keep: v.keep, lab: v.lab };
+    }
   }
   return v;
 }
@@ -488,7 +501,7 @@ function partLabels(v, loose) {
   add(sh, ear, PART_R.neck, PART.trunk);
   add(ear, ear.clone().add(ear.clone().sub(sh).multiplyScalar(.45)), PART_R.head, PART.head);
   const quad = [P(11), P(12), P(24), P(23)], hp = mid(P(23), P(24)), sp = hp.clone().sub(sh), sp2 = sp.lengthSq() || 1;
-  const keep = bodyComponent(v, [sh.clone().lerp(hp, .5), ear, ...segs.map(g => new V2((g[0] + g[2]) / 2, (g[1] + g[3]) / 2))]);
+  const keep = v.keep;
   // 胴は肩と股関節の4点で囲んだ四角形（内側は距離0）
   const qa = quad.map((a, i) => { const b = quad[(i + 1) % 4]; return [a.x, a.y, b.x, b.y]; });
   let sgn = 0; { const [a, b, c] = quad; sgn = Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) || 1; }
@@ -498,7 +511,7 @@ function partLabels(v, loose) {
     return Math.hypot(px - ax - dx * t, py - ay - dy * t);
   };
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const i = y * W + x; if (mask[i] < .5 || !keep[i]) continue;
+    const i = y * W + x; if (mask[i] < .5 || (keep && !keep[i])) continue;
     let inside = true, dq = Infinity;
     for (const [ax, ay, bx, by] of qa) {
       if (((bx - ax) * (y - ay) - (by - ay) * (x - ax)) * sgn < 0) inside = false;
@@ -1183,14 +1196,24 @@ const regionOf = h => /Arm$|Hand$/.test(h) ? (h.startsWith('left') ? 'leftArm' :
 /* 骨の位置だけを置き直す（素体の肩幅・股関節の幅に合わせる）。長さはスキャンのまま */
 /* 頭の高さを決める：首の長さは素体の比率（体の倍率で伸縮）を下限にする。
    カメラの骨格推定は首を短く見積もりがちで、そのままだと頭が肩に埋まるため */
-function placeHead(tpl, rig, hd) {
+function tplHeadZ(tpl) {   // 素体の頭の中心の前後位置（腰を0として）
+  if (Number.isFinite(tpl._headZ)) return tpl._headZ;
+  const eye = Number.isFinite(tpl.eyeY) ? tpl.eyeY : tpl.joints.head.y + .06, zs = [];
+  for (const pr of tpl.prims) if (!pr.hide && pr.kind === 'face') for (let i = 0; i < pr.pos.length; i += 3) if (Math.abs(pr.pos[i + 1] - eye) < .015) zs.push(pr.pos[i + 2]);
+  zs.sort((a, b) => a - b);
+  tpl._headZ = zs.length ? (zs[Math.floor(zs.length * .02)] + zs[Math.floor(zs.length * .98)]) / 2 - tpl.joints.hips.z : tpl.joints.head.z - tpl.joints.hips.z;
+  return tpl._headZ;
+}
+function placeHead(tpl, rig, hd, keepPosture) {
   const { Y } = rig.C, T = tpl.joints;
   const hipJ = (T.leftUpperLeg.y + T.rightUpperLeg.y) / 2, shJ = (T.leftUpperArm.y + T.rightUpperArm.y) / 2;
   const s = clamp((Y.sh - Y.hip) / (shJ - hipJ), .7, 1.4, 1);
   const chinT = Number.isFinite(tpl.chinY) ? tpl.chinY : T.neck.y + .04;
   const neckY = Y.sh + .02, chinTarget = neckY + (chinT - T.neck.y) * s;
   const dy = Math.max(0, chinTarget - hd.chinY);
-  return { headRx: hd.headRx, headRz: hd.headRz, headZc: hd.headZc, cheekW: hd.cheekW, eyeY: hd.eyeY + dy, chinY: hd.chinY + dy, topY: hd.topY + dy };
+  // 頭の前後位置は「姿勢」なので、ふつうは素体の位置を使う（猫背やあごを出した立ち方を形に残さない）
+  const headZc = keepPosture ? hd.headZc : tplHeadZ(tpl);
+  return { headRx: hd.headRx, headRz: hd.headRz, headZc, cheekW: hd.cheekW, eyeY: hd.eyeY + dy, chinY: hd.chinY + dy, topY: hd.topY + dy };
 }
 function setRigAnchors(rig, shX, hipX, headY, armZ = 0) {
   const { L, Y } = rig.C, P = rig.P;
@@ -1306,6 +1329,24 @@ function fitTemplate(tpl, rig, body, opts = {}) {
   diagRaw = { sm, raw: { chest: sm.chest / tm.chest, waist: sm.waist / tm.waist, hip: sm.hip / tm.hip, chestD: sm.chestD / tm.chestD, waistD: sm.waistD / tm.waistD,
     hipD: sm.hipD / tm.hipD, uArm: sm.uArm / tm.uArm, fArm: sm.fArm / tm.fArm, thigh: sm.thigh / tm.thigh, calf: sm.calf / tm.calf }, hasSide };
   S_.chestD = dR('chest', S_.chest); S_.waistD = dR('waist', S_.waist); S_.hipD = dR('hip', S_.hip);
+
+  /* ---- 素体と見比べた補正 ----
+     スキャンの倍率をそのまま使うと、切り抜きのノイズや撮影の誤差がそのまま形に出る。
+     素体（VRoid）の形を「正しい人の形の見本」として、次の順にそろえる */
+  const notes = [];
+  const set = (k, v, why) => { if (Math.abs(v - S_[k]) > .015) notes.push({ k, from: S_[k], to: v, why }); S_[k] = v; };
+  const gm = a => Math.exp(a.reduce((s, x) => s + Math.log(x), 0) / a.length);
+  // (1) 撮影をどこまで信じるか：倍率を「素体どおり（×1）」の方へ寄せる
+  const AL = opts.scanW ?? .7;
+  for (const k of Object.keys(S_)) S_[k] = Math.pow(S_[k], AL);
+  // (2) 胸・おなか・腰の幅は、平均から±15%まで（素体の上下の形を保つ）
+  const tw = gm([S_.chest, S_.waist, S_.hip]);
+  for (const k of ['chest', 'waist', 'hip']) set(k, clamp(S_[k], tw * .85, tw * 1.15, tw), '胴の上下のバランスを素体に寄せた');
+  // (3) 厚みは、その高さの幅の倍率の -15%〜+20% まで（横から見た形を素体に寄せる）
+  for (const k of ['chest', 'waist', 'hip']) set(k + 'D', clamp(S_[k + 'D'], S_[k] * .85, S_[k] * 1.2, S_[k]), '厚みと幅の比を素体に寄せた');
+  // (4) 腕・脚の太さは、胴の倍率の -15%〜+20% まで（胴だけ太って手足が細く見えるのを防ぐ）
+  for (const k of ['uArm', 'fArm', 'thigh', 'calf']) set(k, clamp(S_[k], tw * .85, tw * 1.2, tw), '胴とのバランスを素体に寄せた');
+  diagRaw.notes = notes; diagRaw.scanW = AL;
   }
 
   // 肩の関節の位置：以前は「素体の肩×胸の倍率」だったので、服の厚みで肩が外に出ていた。
@@ -1540,7 +1581,7 @@ const scans = { front: null, relax: null, side: null, back: null, face: null }; 
 let C = null, rig = null, avatar = null, bodyMesh = null, outlineMesh = null, helper = null, markers = null;
 let smoothRaw = null, bodyStats = null, revealStart = -1;
 const REVEAL_MS = matchMedia('(prefers-reduced-motion: reduce)').matches ? 300 : 1600;
-const CD = { front: 3000, relax: 3000, side: 5000, back: 5000, face: 2000 };
+const CD = { front: 5000, relax: 5000, side: 5000, back: 5000, face: 2000 };   // 体の撮影は、ポーズが検出できてから5秒数える
 
 /* ---------- UI ---------- */
 const STEP_LABEL = k => ({ camera: 'カメラ', front: mode === 'body' ? '正面・骨格' : '正面の服', relax: '腕下ろし', side: '横', back: '背中', face: '顔',
@@ -1647,20 +1688,21 @@ function startScan(v) {
     ensureFace().catch(e => { console.error(e); say('顔のAIを読み込めません', 'インターネット接続を確認してください。', true); });
   } else if (v === 'front') {
     say(mode === 'body' ? '正面スキャン（骨格）' : '正面スキャン（服）', mode === 'body'
-      ? 'カメラの方を向いて全身を映し、両腕を水平に広げたTポーズで止まってください。ポーズが揃うと3秒数えて自動で撮影します。'
-      : '普段の服で、体型のときと同じ場所に立ち、Tポーズで止まってください。体型は①のまま、服の色と厚みだけを取ります。');
-    buttons(['いますぐスキャン', () => { if (cur && fullBody(cur)) startCountdown(); else chip('全身が映っていません'); }], cancel);
+      ? 'カメラの方を向いて全身を映し、両腕を水平に広げたTポーズで止まってください。ポーズを検出すると5秒数えて自動で撮影します。'
+      : '普段の服で、体型のときと同じ場所に立ち、Tポーズで止まってください。ポーズを検出すると5秒数えて撮影します。体型は①のまま、服の色と厚みだけを取ります。');
+    buttons(['判定を待たずに撮影', () => startCountdown(true)], cancel);
   } else if (v === 'relax') {
-    say('腕を下ろした正面', '正面を向いたまま、両腕を体から少し離して下ろしてください（体と腕のあいだにすき間ができるくらい）。腕を上げると肩が持ち上がるので、肩幅はこの姿勢で測ります。');
-    buttons(['いますぐスキャン', () => { if (cur && fullBody(cur)) startCountdown(); else chip('全身が映っていません'); }], cancel || ['この撮影はスキップ', () => skipView('relax')]);
+    say('腕を下ろした正面', '正面を向いたまま、両腕を体から少し離して下ろしてください（体と腕のあいだにすき間ができるくらい）。腕を上げると肩が持ち上がるので、肩幅はこの姿勢で測ります。ポーズを検出すると5秒数えて撮影します。');
+    buttons(['判定を待たずに撮影', () => startCountdown(true)], cancel || ['この撮影はスキップ', () => skipView('relax')]);
   } else {
     say(v === 'side' ? '横向きスキャン' : '背中スキャン', v === 'side'
-      ? '体の横をカメラに向けて、Tポーズのまま立ってください。体の厚みと横顔・後ろ髪の形を取ります。ボタンを押してから5秒あるので、その間に向きを変えてください。'
-      : 'カメラに背中を向けて、Tポーズで立ってください。背中側の服と髪の色を取ります。ボタンを押してから5秒で撮影します。');
-    buttons([`5秒後に${NAMES[v]}を撮影`, startCountdown], cancel || [`${NAMES[v]}をスキップ`, () => skipView(v)]);
+      ? '体の横をカメラに向けて、Tポーズのまま立ってください。横向きを検出すると5秒数えて撮影します。体の厚みと横顔・後ろ髪の形を取ります。'
+      : 'カメラに背中を向けて、Tポーズで立ってください。背中を検出すると5秒数えて撮影します。背中側の形と色を取ります。');
+    buttons(['判定を待たずに撮影', () => startCountdown(true)], cancel || [`${NAMES[v]}をスキップ`, () => skipView(v)]);
   }
 }
-function startCountdown() { sub = 'countdown'; cdStart = performance.now(); buttons(null); }
+let forcedCD = false;   // 「いますぐスキャン」で始めたときは、ポーズの判定でカウントを止めない
+function startCountdown(forced) { sub = 'countdown'; cdStart = performance.now(); forcedCD = forced === true; }
 function resume() { hideEditor(); const nv = nextView(); nv ? startScan(nv) : goLive(); }
 function skipView(v) { scans[v] = 'skip'; if (v === 'relax' && C) delete C.L.shHalfRelax; rebuildAvatar(false); resume(); }
 function startOver() {
@@ -1744,6 +1786,34 @@ function armsDown(c) {
   const l = c.lm, shY = (l[11].y + l[12].y) / 2, hipY = (l[23].y + l[24].y) / 2, tor = hipY - shY;
   return l[15].y > shY + tor * .6 && l[16].y > shY + tor * .6 && l[13].y > shY + tor * .2 && l[14].y > shY + tor * .2;
 }
+// 向きの判定：肩幅（画面上）÷胴の長さ。正面・背中は大きく、横向きは小さい
+function facing(c) {
+  const W = src.width || 1, H = src.height || 1, l = c.lm;
+  const sw = Math.hypot((l[11].x - l[12].x) * W, (l[11].y - l[12].y) * H);
+  const th = Math.hypot(((l[11].x + l[12].x) - (l[23].x + l[24].x)) / 2 * W, ((l[11].y + l[12].y) - (l[23].y + l[24].y)) / 2 * H) || 1;
+  const r = sw / th;
+  if (r < .32) return 'side';
+  if (r > .45) return l[11].x > l[12].x ? 'front' : 'back';   // 本人の左肩が画面の右なら正面、左なら背中
+  return 'turning';
+}
+// 体（肩・腰・足首）が画面に入っているか。背中や横向きは顔の点が見えにくいので、顔は見ない
+function bodyIn(c) { return [11, 12, 23, 24, 27, 28].every(i => { const p = c.lm[i]; return p.v > .3 && p.x > .01 && p.x < .99 && p.y > .01 && p.y < .995; }); }
+// 撮影ごとの「ポーズがそろったか」。そろっていなければ理由を返す
+function poseIssue(v, c) {
+  if (!c) return '人が映っていません';
+  if (v === 'front' || v === 'relax') {
+    if (!fullBody(c)) return '頭からつま先まで映るように下がってください';
+    if (v === 'front' && !tPose(c)) return '両腕を肩の高さで水平に広げてください';
+    if (v === 'relax' && !armsDown(c)) return '両腕を体から少し離して下ろしてください';
+    return null;
+  }
+  if (!bodyIn(c)) return '頭からつま先まで映るように下がってください';
+  const f = facing(c);
+  if (v === 'side' && f !== 'side') return '体の横をカメラに向けてください';
+  if (v === 'back' && f === 'side') return 'もう少し回って、背中をカメラに向けてください';
+  if (v === 'back' && f === 'front') return '背中をカメラに向けてください';
+  return null;
+}
 function tPose(c) {
   const l = c.lm, shY = (l[11].y + l[12].y) / 2, shW = Math.abs(l[11].x - l[12].x);
   return Math.abs(l[15].y - shY) < .1 && Math.abs(l[16].y - shY) < .1 && Math.abs(l[13].y - shY) < .08 && Math.abs(l[14].y - shY) < .08
@@ -1774,17 +1844,15 @@ function updatePhase(now) {
   if (phase === 'scan' && view === 'face') return updateFace(now);
   if (phase === 'scan') {
     if (sub === 'ready') {
-      if (view !== 'front' && view !== 'relax') { chip(view === 'side' ? '横向き・Tポーズで準備してください' : '背中を向けて準備してください'); return; }
-      if (!cur) { chip('人が映っていません'); holdT = 0; return; }
-      if (!fullBody(cur)) { chip('頭からつま先まで映るように下がってください'); holdT = 0; return; }
-      if (view === 'front' && !tPose(cur)) { chip('両腕を肩の高さで水平に広げてください'); holdT = 0; return; }
-      if (view === 'relax' && !armsDown(cur)) { chip('両腕を体から少し離して下ろしてください'); holdT = 0; return; }
-      chip('そのまま止まってください', true);
+      // どの向きも同じ：ポーズがそろって0.9秒止まったら、5秒のカウントダウン
+      const why = poseIssue(view, cur);
+      if (why) { chip(why); holdT = 0; return; }
+      chip('検出しました。そのまま止まってください', true);
       if (!holdT) holdT = now; else if (now - holdT > 900) startCountdown();
     } else if (sub === 'countdown') {
-      const auto = view === 'front' || view === 'relax';
-      if (auto && (!cur || !fullBody(cur))) { startScan(view); return; }
-      chip(auto ? '動かないでください' : 'Tポーズで止まってください', true);
+      const why = poseIssue(view, cur);
+      if (why && !forcedCD) { sub = 'ready'; holdT = 0; chip(why); return; }   // くずれたら数え直し
+      chip('動かないでください', true);
       if (now - cdStart > CD[view]) { sub = 'capture'; frames = []; snaps = []; capStart = now; capCount = 0; }
     } else if (sub === 'capture') {
       const auto = view === 'front' || view === 'relax';
@@ -2231,7 +2299,7 @@ function rebuildTemplate(reveal, F, S, B) {
   if (mode === 'outfit' && calib && calib.prof && $('#clothThick').checked) { thick = makeThick(calib.prof, profOf(body.parts, !!S), C); lastThick = thick.stats(); }
   const hd0 = frozen ? frozen.hd : body.head, hk = headK(tplData, hd0);
   const kF = faceScale() * hk.k;
-  const hdUse = placeHead(tplData, rig, scaleHead(hd0, kF));   // 顔の大きさ補正 → 首の長さの補正
+  const hdUse = placeHead(tplData, rig, scaleHead(hd0, kF), $('#keepPosture').checked);   // 顔の大きさ補正 → 首の長さの補正
   // 頭の表面の点 → 写真上の頭の位置（大きさ補正や持ち上げを打ち消して、写真の正しい場所から色を取る）
   const bh = body.head;
   const headInv = p => new THREE.Vector3(p.x * bh.headRx / hdUse.headRx, bh.eyeY + (p.y - hdUse.eyeY) * bh.headRx / hdUse.headRx, bh.headZc + (p.z - hdUse.headZc) * bh.headRz / hdUse.headRz);
@@ -2265,7 +2333,7 @@ function rebuildTemplate(reveal, F, S, B) {
   }
   const noTex = mode === 'body';   // ①では色を付けず、形だけを見る
   const fit = fitTemplate(tplData, rig, body, { faceSample, skin, headInv, shape: frozen ? { ...frozen, hd: hdUse } : null, hd: hdUse, texSize: pr => pr.base || null,
-    shAdj: shAdj(), shMode: $('#shMode').value, noTex, thick });
+    shAdj: shAdj(), shMode: $('#shMode').value, scanW: +$('#scanW').value / 100, noTex, thick });
   fit.diag.head = { ...hk, kF };
   fillDiag(fit.diag);
   if (mode === 'body') {   // ①の結果を体型データとして記録（②で使う）
@@ -2371,6 +2439,9 @@ const shAdj = () => +$('#shAdj').value / 100;
 $('#shAdj').oninput = e => { $('#shAdjVal').textContent = e.target.value + '%'; };
 $('#shAdj').onchange = () => rebuildAvatar(false);
 $('#shMode').onchange = () => rebuildAvatar(false);
+$('#scanW').oninput = e => { $('#scanWVal').textContent = e.target.value + '%'; };
+$('#scanW').onchange = () => rebuildAvatar(false);
+$('#keepPosture').onchange = () => rebuildAvatar(false);
 $('#clothThick').onchange = () => { if (mode === 'outfit') rebuildAvatar(false); };
 const normalMat = new THREE.MeshNormalMaterial({ clippingPlanes: [clip] });
 function applyViewMode() {
@@ -2406,8 +2477,10 @@ function fillDiag(d) {
     const clamped = Number.isFinite(raw) && Math.abs(raw - used) > .005;
     const isD = k.endsWith('D'), half = isD || ['uArm', 'fArm', 'thigh', 'calf', 'chest', 'waist', 'hip'].includes(k);
     rows.push([NM[k] + (isD && d.raw && !d.hasSide ? '（横なし）' : ''), cm(sm * (half ? 2 : 1)), cm(tmv * (half ? 2 : 1)),
-      x(used) + (clamped ? `（測定 ${x(raw)}）` : ''), clamped || (lim[k] && (used <= lim[k][0] + .001 || used >= lim[k][1] - .001))]);
+      x(used) + (clamped ? `（測定 ${x(raw)}）` : ''), Number.isFinite(raw) && (raw < .75 || raw > 1.45)]);   // 赤＝測定値が素体から大きく外れた（撮影を疑う）
   }
+  if (Number.isFinite(d.scanW)) rows.push([`撮影を信じる割合 ${Math.round(d.scanW * 100)}%`, '', '', '', false, '100%でスキャンの倍率そのまま、低いほど素体の形に近づきます']);
+  for (const n of d.notes || []) rows.push([`補正：${NM[n.k] || n.k}`, '', '', `${x(n.from)} → ${x(n.to)}`, false, n.why]);
   tb.innerHTML = rows.map(([a, b, c, e, w, note]) => `<tr><td>${a}${note ? `<br><span class="hint" style="margin:0">${note}</span>` : ''}</td><td class="num">${b}</td><td class="num">${c}</td><td class="num${w ? ' warn' : ''}">${e}</td></tr>`).join('');
   $('#diagTable').hidden = false; $('#diagEmpty').hidden = true;
 }
