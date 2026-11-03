@@ -129,7 +129,7 @@
       <label>斬鉄剣: 揺れの強さ <b id="skZaV">1.3</b>g<input type="range" id="skZa" min="0.6" max="3" step="0.1" value="1.3"></label>
       <label>斬鉄剣: 上下の回数 <b id="skZnV">4</b><input type="range" id="skZn" min="2" max="8" step="1" value="4"><small>切っ先を下に向けて素早く上下（1往復=2回）。HP30%以下なら一撃必殺</small></label>
       <label><input type="checkbox" id="skLR"> 左右の判定を反転</label><small>ロータス(左→右)とストラッシュ(右→左)が逆に出る時。③/⑤の登録でも自動設定</small>
-      <label><input type="checkbox" id="skTip"> 切っ先の上下を反転</label><small>判定ログの「姿勢」が上下逆に出る時</small>
+      <label><input type="checkbox" id="skTip" checked> 切っ先の上下を反転</label><small>判定ログの「姿勢」が上下逆に出る時</small>
       <button id="skL5" style="width:100%;margin-top:4px">⑤ストラッシュ(右→左)を登録</button>
       <label><input type="checkbox" id="skDual" checked> 二刀流（ヌンチャクを振る=左の剣）</label>
       <label>ヌンチャク振り感度 <b id="skNtV">1.8</b>g<input type="range" id="skNt" min="1.2" max="3" step="0.1" value="1.8"></label>
@@ -1654,7 +1654,7 @@ function onWii(e){
 // 握りが回っても縦/横を判定できる（センサー軸 yaw/roll/pitch は縦横に一対一対応しないため）。
 const sk = { on:true, win:1.5, sqWin:1.1, rB:.18, rA:.30, minPk:600, mult:5, dbg:true, st:0, last:null, armedAt:0, lastHead:'',
              heavyV:650, heavyH:260, spin:360, thrustA:4.0, thrustRot:150, thrustPk:800, lastR:null,
-             hid:true, exHold:1.0, chMin:.8, preGap:.8, zanA:1.3, zanN:4, zanKill:.3, lrSign:-1, tipFlip:false, dual:true, pass:true, nunTh:1.8 };
+             hid:true, exHold:1.0, chMin:.8, preGap:.8, zanA:1.3, zanN:4, zanKill:.3, lrSign:-1, tipFlip:true, dual:true, pass:true, nunTh:1.8 };
 const GY = { SLOW:440/8192, FAST:2000/440, PRE:120, HOLD:150, MAXSW:1500, CAL_MS:1000, CAL_STD:80, UP_GAIN:.03, UP_TOL:.15 };
 // ==== MP-BEGIN ====
 function calStart(){
