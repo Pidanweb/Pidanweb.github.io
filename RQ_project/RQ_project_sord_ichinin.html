@@ -1200,11 +1200,11 @@ async function flipFaceCam(){   // フロント(顔)とバック(背景)のカ�
   listCams();
 }
 function faceMirror(){ const t = $('faceType').value; return t === 'auto' ? (face.src === vid ? camMirror : face.fm !== false) : t === 'front'; }
-const sPary = new Audio('sound/pary.mp3'); let vol = .8; sPary.preload = 'auto';
-const sAtk = new Audio('sound/atack.mp3'); sAtk.preload = 'auto';
+const sPary = new Audio('sounds/pary.mp3'); let vol = .8; sPary.preload = 'auto';
+const sAtk = new Audio('sounds/atack.mp3'); sAtk.preload = 'auto';
 function playAtk(){ try { const a = sAtk.cloneNode(); a.volume = vol; a.play().catch(() => {}); } catch (e){} }
 // 戦闘BGM（ループ）
-const bgm = new Audio('sound/battle.mp3'); bgm.loop = true; bgm.preload = 'auto'; bgm.volume = .5;
+const bgm = new Audio('sounds/battle.mp3'); bgm.loop = true; bgm.preload = 'auto'; bgm.volume = .5;
 function bgmPlay(restart){ try { if (restart) bgm.currentTime = 0; bgm.play().catch(() => {}); } catch (e){} }
 function bgmStop(){ try { bgm.pause(); } catch (e){} }
 // ガード音（素材なしのため簡易合成）
