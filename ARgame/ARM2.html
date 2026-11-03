@@ -88,9 +88,11 @@
       <hr style="border:0;border-top:1px dashed #7ae7ff44;margin:8px 0 4px">
       <b style="color:#7ae7ff">📍 ボスの配置</b>
       <div><button id="bcPickBtn">📍 ボスの位置をクリックで指定</button> <button id="bcPickClear">指定を消す</button></div>
+      <div style="margin-top:4px"><button id="bcPickOrigin">🧍 立ち位置をクリックで移動</button></div>
       <div id="bcBossStat" style="font-size:12px;color:#5fe07a">未指定（下の「ボスまでの距離」で配置）</div>
       <label>ボスの大きさ（高さ） <b id="bcBossHV">3.6</b> m<input type="range" id="bcBossH" min="0.6" max="3.6" step="0.1" value="3.6"><small>部屋が狭いときは小さくすると近くに置けます</small></label>
     </div>
+    <label><input type="checkbox" id="bcAvAR" checked> AR確認表示でもアバターを重ねる（実際の足の位置に合わせる）</label>
     <label><input type="checkbox" id="bcAR"> AR確認表示（カメラ映像にゲームの床とボスを重ねる）</label>
     <div id="bcStat" style="font-size:12px;color:#ffd35a">未設定</div>
     <small>足元まで全身が映るようにして「開始」→ 5秒のカウントダウン中にプレイする位置へ移動 → 3秒まっすぐ立つ（前かがみ・ひざ曲げは数えません）。左下のプレビューに床のマス目（1m間隔）が出るので、実際の床と合っているか確認してください。</small>
@@ -118,7 +120,7 @@
     <small style="display:block;margin-top:6px;color:#ffd35a">▼ 反応しない時: その動きを1回だけ行い、直後に押す（キー1〜4）。直近の斬りを基準にしきい値を自動設定</small>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px"><button id="skL1">①縦重撃を登録</button><button id="skL2">②突きを登録</button><button id="skL3">③横重撃を登録</button><button id="skL4">④一回転を登録</button></div>
     <label><input type="checkbox" id="skDbg" checked> 判定ログを表示</label>
-    <small style="display:block;margin-top:6px">バーチカル:縦→横 / ヴォーパル:突き / ソニックリープ:縦重 / ロータス:横重 / スクエア:縦横縦横 / メテオ:一回転 / スターバースト:被ダメ0で16ヒット→READY→振る</small>
+    <small style="display:block;margin-top:6px">バーチカル:縦→横 / ヴォーパル:突き / ソニックリープ:縦重 / ロータス:横重 / スクエア:縦横縦横 / メテオ:一回転 / スターバースト:被ダメ0で16ヒット→READY→振る / マザーズ・ロザリオ:ヴォーパルストライク11回成功→READY→突く</small>
     <button id="skCal" style="margin-top:6px;width:100%">ジャイロ再キャリブ（−ボタンでも可）</button>
   </details>
   <button id="mRestart">↻ リスタート</button><button id="mTitle">⌂ タイトルへ</button>
@@ -737,7 +739,7 @@ function bcSolve(obs, eye, hKnown, fovFree){
   }
   return { th:best.x[0], ph:best.x[1], h:hKnown || (fovFree ? 0 : best.x[2]), s:fovFree ? best.x[2] : 1, rms:Math.sqrt(best.f) };
 }
-const bc = { state:'off', height:1.70, camH:0, hfov:65, boss:8.5, ar:false, autoFov:true, cd:0, lastH:null,
+const bc = { avAR:true, state:'off', height:1.70, camH:0, hfov:65, boss:8.5, ar:false, autoFov:true, cd:0, lastH:null,
   obs:[], obsA:[], meanA:null, t0:0, still:0, lastF:null, msg:'', res:null,
   camF:new THREE.Matrix4(), FfromCam:new THREE.Matrix4(), FfromG:new THREE.Matrix4(), GfromF:new THREE.Matrix4(), GfromCam:new THREE.Matrix4(),
   origin:null, feetS:[], feetF:null, feetX:0, feetSeen:-1e9, live:null };
@@ -916,15 +918,16 @@ $('bcTuneReset').onclick = () => { bc.tune = { floor:0, th:0, ph:0 }; bcTuneUI()
 function bcBossUI(){
   const st = $('bcBossStat');
   if (!st) return;
-  if (bc.picking){ st.textContent = '👆 左下のプレビュー（またはAR確認表示の画面）で、ボスを置きたい床をクリック'; return; }
+  if (bc.picking){ st.textContent = `👆 プレビュー（またはAR確認表示の画面）で、${bc.picking === 'origin' ? '立ち位置にしたい' : 'ボスを置きたい'}床をクリック（Escでやめる）`; return; }
   if (bc.bossF){
     const near = bc.bossDist < bcMinDist();
     st.textContent = `ボス: 立ち位置から ${bc.bossDist.toFixed(1)}m 先` + (near ? `（近すぎるので ${bcMinDist().toFixed(1)}m 先に置きます。ボスを小さくすると近くに置けます）` : '');
   } else st.textContent = bc.bossUV ? 'ボスの位置が床の外です。指定し直してください' : '未指定（下の「ボスまでの距離」で配置）';
 }
-function bcPick(on){
-  bc.picking = on && bc.state === 'locked';
-  $('bcPickBtn').textContent = bc.picking ? '✖ 指定をやめる' : '📍 ボスの位置をクリックで指定';
+function bcPick(mode){   // mode: 'boss' | 'origin' | false
+  bc.picking = bc.state === 'locked' && mode ? mode : false;
+  $('bcPickBtn').textContent = bc.picking === 'boss' ? '✖ 指定をやめる' : '📍 ボスの位置をクリックで指定';
+  $('bcPickOrigin').textContent = bc.picking === 'origin' ? '✖ 指定をやめる' : '🧍 立ち位置をクリックで移動';
   // プレビューは普段クリックを素通りさせている（pointer-events:none）ので、指定中だけ受け付けて大きく表示する
   const st = prevC.style;
   if (bc.picking){
@@ -960,13 +963,15 @@ addEventListener('mousedown', e => {
   const uv = bcClientToUV(e); if (!uv) return;
   e.stopImmediatePropagation(); e.preventDefault();   // ゲームの「斬る」などに渡さない
   if (uv[0] < 0 || uv[0] > 1 || uv[1] < 0 || uv[1] > 1) return;
-  const old = bc.bossUV; bc.bossUV = uv;
-  if (!bcApply() || !bc.bossF){ bc.bossUV = old; bcApply(); bcSay('そこは床として計算できません。床の上をクリックしてください'); return; }
+  const key = bc.picking === 'origin' ? 'originUV' : 'bossUV', old = bc[key]; bc[key] = uv;
+  if (!bcApply() || (key === 'bossUV' && !bc.bossF)){ bc[key] = old; bcApply(); bcSay('そこは床として計算できません。床の上をクリックしてください'); return; }
   bcHover(); bcSave(); bcPick(false);
   B.z = HOVER; B.x = 0;
-  bcSay('ボスの位置を指定しました', 'ボスの位置を指定しました');
+  const t = key === 'originUV' ? '立ち位置を移動しました' : 'ボスの位置を指定しました';
+  bcSay(t, t);
 }, true);
-$('bcPickBtn').onclick = () => bcPick(!bc.picking);
+$('bcPickBtn').onclick = () => bcPick(bc.picking === 'boss' ? false : 'boss');
+$('bcPickOrigin').onclick = () => bcPick(bc.picking === 'origin' ? false : 'origin');
 $('bcPickClear').onclick = () => { bc.bossUV = null; bc.bossF = null; bcPick(false); if (bcApply()){ bcHover(); bcSave(); } bcBossUI(); };
 $('bcBossH').oninput = e => { R = +e.target.value/2; $('bcBossHV').textContent = (+e.target.value).toFixed(1); bcHover(); bcBossUI(); if (bc.state === 'locked') bcSave(); };
 
@@ -981,7 +986,7 @@ function bcRay(o){
 }
 function bcFeet(o){
   const p = bcRay(o); if (!p) return;
-  bc.feetF = p; bc.feetX = p.clone().applyMatrix4(bc.GfromF).x; bc.feetSeen = performance.now();
+  bc.feetF = p; const g = p.clone().applyMatrix4(bc.GfromF); bc.feetX = g.x; bc.feetZ = g.z; bc.feetSeen = performance.now();
 }
 const bcFeetOK = () => bc.state === 'locked' && performance.now() - bc.feetSeen < 500;
 const bcARActive = () => tp && bc.ar && bc.state === 'locked' && camTex && vid.videoWidth > 0;
@@ -1013,13 +1018,14 @@ function bcDrawPrev(X, Y){
     if (o && b){ pctx.strokeStyle = '#5fe07a'; pctx.setLineDash([3, 3]); pctx.beginPath(); pctx.moveTo(o[0], o[1]); pctx.lineTo(b[0], b[1]); pctx.stroke(); pctx.setLineDash([]); }
   }
   if (bcFeetOK() && bc.feetF){ const c = proj(bc.feetF); if (c){ pctx.fillStyle = '#ff4d5e'; pctx.beginPath(); pctx.arc(c[0], c[1], 4, 0, 7); pctx.fill(); } }
-  if (bc.picking){ pctx.fillStyle = '#ffd35a'; pctx.font = 'bold 13px sans-serif'; pctx.fillText('👆 ボスを置く床をクリック', 8, prevC.height - 10); }
+  if (bc.picking){ pctx.fillStyle = '#ffd35a'; pctx.font = 'bold 13px sans-serif'; pctx.fillText(bc.picking === 'origin' ? '👆 立ち位置にする床をクリック' : '👆 ボスを置く床をクリック', 8, prevC.height - 10); }
 }
 $('bcStart').onclick = bcStart;
 $('bcReset').onclick = bcReset;
 $('bcFovIn').oninput = e => { bc.hfov = +e.target.value; $('bcFovV').textContent = bc.hfov; if (bc.state === 'locked' && bcApply()){ bcHover(); bcSave(); } };
 $('bcBoss').oninput = e => { bc.boss = +e.target.value; $('bcBossV').textContent = bc.boss.toFixed(1); if (bc.state === 'locked'){ bcHover(); bcSave(); } };
 $('bcAR').onchange = e => { bc.ar = e.target.checked; applyBg(); };
+$('bcAvAR').onchange = e => { bc.avAR = e.target.checked; };
 
 // ----- VRM 読み込み（three-vrm は使わず GLTFLoader + VRMの骨情報だけ読む。VRM0.x / 1.0 両対応）-----
 let vrm = null;
@@ -1217,7 +1223,7 @@ let state = 'title', hitstop = 0, shake = 0, fovp = 0, flash = 0, vr = false, en
 function reset(){
   Object.assign(P, { armed:false, x:0, hp:PMAX, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, counter:0, guard:false });
   Object.assign(B, { x:0, z:-16, vz:0, s:'enter', t:1, hp:800, hit:false, weak:0, combo:0, stun:false, phase:1, unp:false });
-  bossG.visible = true; sb.n = 0; sb.ready = false; sb.active = false; anim = null; sk.st = 0; sbDraw();
+  bossG.visible = true; sb.n = 0; sb.ready = false; sb.active = false; anim = null; sk.st = 0; sbDraw(); mr.n = 0; mr.ready = false; mr.active = false; mrDraw();
 }
 function titleMsg(){
   setMsg([['GIANT SLIME RAID', '#ffd35a', 72], ['左クリック: 斬る / 長押し: ガード　右クリック: パリィ', '#fff', 30],
@@ -1231,7 +1237,7 @@ function titleMsg(){
 titleMsg();
 
 function hurtBoss(d, at, big){
-  if (!sb.active) sbHit();
+  if (!sb.active && !mr.active) sbHit();
   B.hp -= d; B.flash = .12; B.wob = .25;
   burst(at, big ? 0xffd35a : 0xffffff, big ? 40 : 22, 6);
   popup(String(Math.round(d)), big ? '#ffd35a' : '#ffffff', tmp.copy(at).add(new THREE.Vector3(0, .6, 0)).clone(), big ? 1.1 : .8);
@@ -1383,12 +1389,13 @@ function skPose(seg, k){
     case 'thrustOut': return { tx:.2, ty:-.7, tz:-.8 - 3.0*e, rx:-1.5, rz:0, ry:0 };                                  // 突き出す
     case 'thrustBack':return { tx:.2, ty:-.7, tz:-3.8 + 1.9*e, rx:-1.5 + .55*e, rz:0, ry:0 };                         // 戻す
     case 'spin':      return { tx:0, ty:-.9, tz:-1.6, rx:0, rz:1.57, ry:Math.PI*2*(seg.k0 + (seg.k1 - seg.k0)*k) };    // 一回転
+    case 'rosThrust': { const o = Math.sin(Math.PI*k); return { tx:.2 + seg.x*.35, ty:-.7 + seg.y*.3, tz:-.8 - 3.0*o, rx:-1.5, rz:0, ry:0 }; }   // 突いて戻す
     case 'flurry':    return { tx:seg.x0 + (seg.x1 - seg.x0)*e, ty:-1.0 + seg.dy, tz:-1.9, rx:-1.0 + seg.rv, rz:seg.a0 + (seg.a1 - seg.a0)*e, ry:0 };
   }
   return P0;
 }
 function updSword(dt){
-  steel.emissive.setHex(sb.ready ? 0xffd35a : P.counter > 0 ? 0xff9a20 : 0x2a6f88);
+  steel.emissive.setHex(sb.ready ? 0xffd35a : mr.ready ? 0xb890ff : P.counter > 0 ? 0xff9a20 : 0x2a6f88);
   let tx = .9 + mouse.nx*.3, ty = -1.1 + mouse.ny*.2, tz = -1.9, rx = -.95, rz = .3, ry = 0, rate = 14, sc = 1;
   const an = stepAnim(dt);
   if (an){
@@ -1434,8 +1441,11 @@ function update(dt){
   const sh = (Math.random()-.5)*shake;
   aim.position.set(P.x, EYE, 0); aim.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0);
   av.position.x = P.x; av.rotation.y = vrm ? 0 : -mouse.nx*.3; headM.rotation.y = -mouse.nx*.5;   // 顔の向きにアバターも向く
+  // AR確認表示では、実際の足の前後位置にもアバター（と剣）を合わせる
+  const arZ = bcARActive() && bcFeetOK() ? Math.max(-3, Math.min(3, bc.feetZ)) : 0;
+  av.position.z += (arZ - av.position.z)*Math.min(1, dt*8); aim.position.z = av.position.z;
   if (tp) poseApply(dt);   // VRMの骨を全身ポーズに合わせる
-  av.visible = tp && !bcARActive();   // AR確認表示では本物のプレイヤーが映るのでアバターを隠す
+  av.visible = tp && (!bcARActive() || bc.avAR);   // AR確認表示では「アバターを重ねる」がONの時だけ表示
   if (bcARActive()) bcCamApply();   // 実カメラと同じ位置・向きから描く
   else if (tp){ camera.rotation.set(mouse.ny*.12 - .22, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + 1.5 + sh*.6, 4.2); }
   else { camera.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + sh*.6, 0); }
@@ -1685,7 +1695,7 @@ function skHead(){
   let t = !wii.dev ? 'Wii未接続' : m.state === 'none' ? 'ジャイロ: なし（加速度のみ）' : m.state === 'cal' ? 'ジャイロ: 静止して調整中 ' + m.calPct + '%'
         : m.state === 'ready' ? 'ジャイロ: 有効' + (m.sw ? ' / 斬り中' : '') + (sk.st === 1 || sk.st === 3 ? ' / 縦OK→横を！' : sk.st === 2 ? ' / 続けて縦横でスクエア' : ' / 待機')
         : m.state === 'lost' ? 'ジャイロ: データ停止' : 'ジャイロ: 有効化中…';
-  return t + (sk.on ? '' : '（スキルOFF）') + (sb.ready ? ' / STARBURST READY' : sb.n ? ' / CHAIN ' + sb.n + '/16' : '');
+  return t + (sk.on ? '' : '（スキルOFF）') + (sb.ready ? ' / STARBURST READY' : sb.n ? ' / CHAIN ' + sb.n + '/16' : '') + (mr.ready ? ' / ROSARIO READY' : mr.n ? ' / ROSARIO ' + mr.n + '/11' : '');
 }
 function dbgDraw(){ const el = $('wiiDbg'); el.style.display = sk.dbg ? '' : 'none'; if (sk.dbg) el.textContent = (sk.lastHead = skHead()) + '\n' + dbgLines.join('\n'); }
 function skTick(){
@@ -1714,7 +1724,8 @@ const SKD = {
   vertical:{ en:'VERTICAL', jp:'バーチカル', c:'#7ae7ff' }, vorpal:{ en:'VORPAL STRIKE', jp:'ヴォーパルストライク', c:'#b8f0ff' },
   sonic:{ en:'SONIC LEAP', jp:'ソニックリープ', c:'#ffd35a' }, lotus:{ en:'LOTUS SLASH', jp:'ロータススラッシュ', c:'#ff9ae0' },
   square:{ en:'HORIZONTAL SQUARE', jp:'ホリゾンタルスクエア', c:'#7ae7ff' }, meteor:{ en:'METEOR BREAK', jp:'メテオブレイク', c:'#ff9a20' },
-  starburst:{ en:'STARBURST STREAM', jp:'スターバーストストライク', c:'#ffd35a' } };
+  starburst:{ en:'STARBURST STREAM', jp:'スターバーストストライク', c:'#ffd35a' },
+  rosario:{ en:"MOTHER'S ROSARIO", jp:'マザーズ・ロザリオ', c:'#d8b8ff' } };
 function skBanner(k){ const d = SKD[k]; popCam(d.en, d.c, 1.4, 1.5); popup(d.jp, '#ffffff', new THREE.Vector3(0, -.15, -3), .6, 1.5, camera); }
 // 倍率mのダメージ（通常攻撃6/弱点9 × m × 設定倍率/5）。照準に関わらずボスへ命中（オートロック）
 const skHit = (m, big = true) => { if (state !== 'play' || B.s === 'dead') return; hurtBoss((B.weak > 0 ? 9 : 6)*m*sk.mult/5, bossG.position.clone(), big); playAtk(); };
@@ -1722,7 +1733,8 @@ function skImpact(fl, sh, fov, col){ flash = Math.max(flash, fl); flashM.materia
 function cast(name, r){
   const d = SKD[name];
   if (!sk.on){ dbg('（スキルOFFのため ' + d.jp + ' は発動せず）'); return; }
-  if (state !== 'play' || B.s === 'dead' || sb.active) return;
+  if (state !== 'play' || B.s === 'dead' || sb.active || mr.active) return;
+  if (name === 'vorpal' && mr.ready){ startRosario(); return; }   // READY中の突き → マザーズ・ロザリオ
   if (sb.ready){ startStarburst(); return; }
   const at = () => bossG.position, ring2 = (rr, hex) => { ring(at(), rr, hex, .5); ring(at(), rr*.5, 0xffffff, .3); };
   dbg(`★ ${d.jp}（${d.en}）` + (name === 'vertical' || name === 'square' ? ` 間隔${sk.last ? ((r.t0 - sk.last.t1)/1000).toFixed(2) : '-'}s` : ''));
@@ -1738,7 +1750,7 @@ function cast(name, r){
     { type:'sweepL', d:.24, on:() => { skHit(3); fxLeft(0xffd35a); skImpact(.6, .6, 10); ring2(6, 0x7ae7ff); burst(at(), 0xffd35a, 90, 10); } } ];
   else if (name === 'vorpal') seq = [
     { type:'thrustWind', d:.14 }, { type:'thrustOut', d:.1 },
-    { type:'thrustBack', d:.3, on:() => { skHit(6); skImpact(.6, .5, 12); ring2(5, 0xb8f0ff); burst(at(), 0xb8f0ff, 80, 12); for (let i = 0; i < 3; i++){ const a = i*Math.PI/3 + .2; fxLine(a, -Math.cos(a)*2, -Math.sin(a)*2, 4, 0xb8f0ff, .3, .14); } } } ];
+    { type:'thrustBack', d:.3, on:() => { skHit(6); mrHit(); skImpact(.6, .5, 12); ring2(5, 0xb8f0ff); burst(at(), 0xb8f0ff, 80, 12); for (let i = 0; i < 3; i++){ const a = i*Math.PI/3 + .2; fxLine(a, -Math.cos(a)*2, -Math.sin(a)*2, 4, 0xb8f0ff, .3, .14); } } } ];
   else if (name === 'sonic') seq = [
     { type:'chopWind', d:.24 },
     { type:'chop', d:.22, on:() => { skHit(5); skImpact(.6, .7, 14, 0xfff2b0); fxDown(0xffd35a); fxLine(-Math.PI/2, -.5, 3.2, 6.4, 0xffffff, .3, .12); ring2(6, 0xffd35a); burst(at(), 0xffd35a, 90, 10); } } ];
@@ -1785,6 +1797,55 @@ function startStarburst(){
       } });
   }
   seq.push({ type:'idle', d:.25, on:() => { sb.active = false; } });
+  startAnim(seq);
+}
+
+// ---- マザーズ・ロザリオ: ヴォーパルストライクを11回成功 → READY → 次の突きで11連撃（十字に5+5、最後に中心へ1）----
+const mr = { n:0, ready:false, active:false };
+let mrS = null;
+function mrDraw(){
+  if (mrS){ hud.remove(mrS); mrS.material.map.dispose(); mrS.material.dispose(); mrS = null; }
+  if (mr.n <= 0 && !mr.ready) return;
+  mrS = mkSprite(mr.ready ? "MOTHER'S ROSARIO READY! 突いて発動" : 'VORPAL ' + mr.n + ' / 11', mr.ready ? '#d8b8ff' : '#b8f0ff', .28);
+  mrS.position.set(0, 1.08, -3); hud.add(mrS);
+}
+function mrHit(){
+  if (mr.ready || mr.active || state !== 'play' || B.s === 'dead') return;
+  mr.n++; mrDraw();
+  if (mr.n >= 11){ mr.ready = true; mrDraw(); popCam("MOTHER'S ROSARIO READY!", '#d8b8ff', 1.1, 1.6); dbg('★ ヴォーパルストライク11回成功 → マザーズ・ロザリオ READY（次の突きで発動）'); wiiRumble(250); }
+}
+// 斜めの線: sx=1 は左上→右下、sx=-1 は右上→左下（k倍に伸ばす）
+function mrDiag(sx, k, hex, dur, th){ const x0 = -1.1*sx*k, y0 = .9*k; fxLine(Math.atan2(-1.8*k, 2.2*sx*k), x0, y0, Math.hypot(2.2, 1.8)*k, hex, dur, th); }
+function startRosario(){
+  if (state !== 'play' || B.s === 'dead') return;
+  mr.ready = false; mr.active = true; mr.n = 0; mrDraw();
+  P.inv = Math.max(P.inv, 2.2); P.swingCd = 2; P.swing = 0;
+  dbg('★ マザーズ・ロザリオ 11連撃！'); skBanner('rosario');
+  skImpact(.5, .3, 8, 0xe8d8ff);
+  const at = () => bossG.position, col = [0xd8b8ff, 0xffffff];
+  // 十字の点（カメラ前の面: 左上→右下 を5点、右上→左下 を5点）
+  const pts = [];
+  for (let i = 0; i < 5; i++){ const t = -1 + i*.5; pts.push([t*1.1, -t*.9]); }
+  for (let i = 0; i < 5; i++){ const t = -1 + i*.5; pts.push([-t*1.1, -t*.9]); }
+  const seq = [];
+  pts.forEach(([x, y], i) => seq.push({ type:'rosThrust', d:.085, x, y, on:() => {
+    skHit(1.3, false); hitstop = 0;
+    // 突いた点に小さな十字の光
+    fxLine(Math.PI/4, x - .3, y - .3, .85, col[i % 2], .3, .1); fxLine(-Math.PI/4, x - .3, y + .3, .85, col[i % 2], .3, .1);
+    burst(at(), 0xd8b8ff, 10, 7); shake = Math.max(shake, .12);
+    if (i === 4) mrDiag(1, 1, 0xd8b8ff, .5, .16);   // 5撃ごとに斜めの軌跡
+    if (i === 9) mrDiag(-1, 1, 0xd8b8ff, .5, .16);
+    if (i % 3 === 0) wiiRumble(70);
+  } }));
+  // 11撃目: 十字の中心へ渾身の突き
+  seq.push({ type:'thrustWind', d:.16 });
+  seq.push({ type:'thrustOut', d:.1, on:() => {
+    skHit(8); skImpact(1, .9, 16, 0xf0e0ff);
+    mrDiag(1, 1.3, 0xffffff, .6, .2); mrDiag(-1, 1.3, 0xffffff, .6, .2);   // 大きな十字
+    ring(at(), 9, 0xd8b8ff, .7); ring(at(), 5, 0xffffff, .4); burst(at(), 0xd8b8ff, 180, 15); wiiRumble(400);
+  } });
+  seq.push({ type:'thrustBack', d:.3 });
+  seq.push({ type:'idle', d:.2, on:() => { mr.active = false; } });
   startAnim(seq);
 }
 // メニュー設定（sk[key] ⇔ スライダー ⇔ 表示ラベル）
