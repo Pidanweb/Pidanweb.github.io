@@ -1267,7 +1267,7 @@ function hurtBoss(d, at, big){
 const SW_T = .32;   // 斬りモーションの長さ（旧.22。長く・大きくして見やすく）
 function attack(){
   if (P.swingCd > 0 || P.par > 0 || P.armed || P.guard || sb.active) return;
-  if (sb.ready){ startStarburst(); return; }
+  if (sb.ready && sbOK()){ startStarburst(); return; }
   playAtk();
   P.swingCd = .4; P.swing = SW_T; P.dir *= -1;
   arc.position.x = mouse.nx*1.5; arc.position.y = mouse.ny*1.0;
@@ -1277,7 +1277,7 @@ function attack(){
 const PL = { swing:0, cd:0, dir:1 };
 function attackL(){
   if (PL.cd > 0 || P.par > 0 || P.armed || P.guard || sb.active || mr.active || anim) return;
-  if (sb.ready){ startStarburst(); return; }
+  if (sb.ready && sbOK()){ startStarburst(); return; }
   playAtk(); PL.cd = .3; PL.swing = SW_T; PL.dir *= -1;
   swingHit();
 }
@@ -1431,7 +1431,8 @@ function skPose(seg, k){
   return P0;
 }
 function updSword(dt){
-  if (sb.ready || mr.ready || P.counter > 0) steel.emissive.setHex(sb.ready ? 0xffd35a : mr.ready ? 0xb890ff : 0xff9a20); else steel.emissive.copy(hidGlow());
+  const sbR = sb.ready && sbOK();
+  if (sbR || mr.ready || P.counter > 0) steel.emissive.setHex(sbR ? 0xffd35a : mr.ready ? 0xb890ff : 0xff9a20); else steel.emissive.copy(hidGlow());
   let tx = .9 + mouse.nx*.3, ty = -1.1 + mouse.ny*.2, tz = -1.9, rx = -.95, rz = .3, ry = 0, rate = 14, sc = 1;
   const an = stepAnim(dt);
   if (an){
@@ -1859,10 +1860,11 @@ function skHead(){
   const s = wii.still, nn = wii.nun;
   const hid = wii.dev && sk.hid ? `\n隠し: 姿勢=${POSE_JP[wii.poseNow]}(${wii.tip.toFixed(1)})` + (s.on ? ` 静止${s.dur.toFixed(1)}s` + (s.pose === 'flat' && chLv(s.dur) ? ` 溜めLv${chLv(s.dur)}` : '') + (s.pose === 'up' && s.dur >= sk.exHold ? ' 聖剣READY' : '') : '')
     + ` / ヌンチャク:${nunOn() ? '二刀流' : wii.nun.ext ? '接続(併用モードOFF?)' : 'なし'}` : '';
-  return t + (sk.on ? '' : '（スキルOFF）') + hid + (sb.ready ? ' / STARBURST READY' : sb.n ? ' / CHAIN ' + sb.n + '/16' : '') + (mr.ready ? ' / ROSARIO READY' : mr.n ? ' / ROSARIO ' + mr.n + '/11' : '');
+  return t + (sk.on ? '' : '（スキルOFF）') + hid + (!sbOK() ? '' : sb.ready ? ' / STARBURST READY' : sb.n ? ' / CHAIN ' + sb.n + '/16' : '') + (mr.ready ? ' / ROSARIO READY' : mr.n ? ' / ROSARIO ' + mr.n + '/11' : '');
 }
 function dbgDraw(){ const el = $('wiiDbg'); el.style.display = sk.dbg ? '' : 'none'; if (sk.dbg) el.textContent = (sk.lastHead = skHead()) + '\n' + dbgLines.join('\n'); }
 function skTick(){
+  const so = sbOK(); if (so !== sk.sbShown){ sk.sbShown = so; sbDraw(); }
   if (sk.st && !wii.mp.sw && performance.now() - sk.armedAt > sk.win*1000 + 100) sk.st = 0;
   if (sk.dbg && skHead() !== sk.lastHead) dbgDraw();
 }
@@ -1918,7 +1920,7 @@ function cast(name, r){
   if (!sk.on){ dbg('（スキルOFFのため ' + d.jp + ' は発動せず）'); return; }
   if (state !== 'play' || B.s === 'dead' || sb.active || mr.active) return;
   if (name === 'vorpal' && mr.ready){ startRosario(); return; }   // READY中の突き → マザーズ・ロザリオ
-  if (sb.ready && !SK_DIRECT[name]){ startStarburst(); return; }
+  if (sb.ready && sbOK() && !SK_DIRECT[name]){ startStarburst(); return; }
   const at = () => bossG.position, ring2 = (rr, hex) => { ring(at(), rr, hex, .5); ring(at(), rr*.5, 0xffffff, .3); };
   dbg(`★ ${d.jp}（${d.en}）` + (name === 'vertical' || name === 'square' ? ` 間隔${sk.last ? ((r.t0 - sk.last.t1)/1000).toFixed(2) : '-'}s` : ''));
   skBanner(name); P.swing = 0; PL.swing = 0; P.swingCd = Math.max(P.swingCd, .5);
@@ -1987,12 +1989,14 @@ const sb = { n:0, ready:false, active:false };
 let chainS = null;
 function sbDraw(){
   if (chainS){ hud.remove(chainS); chainS.material.map.dispose(); chainS.material.dispose(); chainS = null; }
-  if (sb.n <= 0 && !sb.ready) return;
+  if (!sbOK() || (sb.n <= 0 && !sb.ready)) return;   // 二刀流でない時はゲージを出さない
   chainS = mkSprite(sb.ready ? 'STARBURST READY! 振って発動' : 'CHAIN ' + sb.n + ' / 16', sb.ready ? '#ffd35a' : '#7ae7ff', .32);
   chainS.position.set(0, 1.28, -3); hud.add(chainS);
 }
+// スターバーストストリームは二刀流（ヌンチャク接続中）のみ
+function sbOK(){ return nunOn() && ctl.mode === 'wii'; }
 function sbHit(){
-  if (sb.ready || sb.active || state !== 'play') return;
+  if (sb.ready || sb.active || state !== 'play' || !sbOK()) return;
   sb.n++; sbDraw();
   if (sb.n >= 16){ sb.ready = true; sbDraw(); popCam('STARBURST READY!', '#ffd35a', 1.2, 1.4); dbg('★ 16連撃達成 → STARBURST READY（次の斬りで発動）'); wiiRumble(200); }
 }
