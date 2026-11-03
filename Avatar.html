@@ -153,6 +153,10 @@ label.btn.file{cursor:pointer;display:inline-block}
         <button class="btn" data-retake="face">顔を撮り直す</button>
         <button class="btn" id="restartBtn">最初からやり直す</button>
       </div>
+      <div id="calibRow" class="row" hidden style="margin-top:10px">
+        <button class="btn primary" id="outfitBtn">服だけ撮り直す（体型はそのまま）</button>
+        <button class="btn" id="saveCalibBtn">体型データを保存</button>
+      </div>
       <div id="editTools" class="editor" hidden>
         <div class="seg" role="radiogroup" aria-label="切り抜きの道具">
           <label><input type="radio" name="tool" value="lasso" checked><span>囲んで追加</span></label>
@@ -190,6 +194,10 @@ label.btn.file{cursor:pointer;display:inline-block}
           <label class="btn file">VRoid素体を読み込む<input type="file" id="tplFile" accept=".vrm,.glb" hidden></label>
           <label class="toggle"><input type="checkbox" id="useTpl" disabled> 素体を使う</label>
           <span class="hint" id="tplStatus" style="margin:0">未読み込み（簡易モデルで作ります）</span>
+        </div>
+        <div class="row">
+          <label class="btn file">体型データを読み込む<input type="file" id="calibFile" accept=".json" hidden></label>
+          <span class="hint" id="calibStatus" style="margin:0">体型キャリブレーション：未実施</span>
         </div>
         <div class="row">
           <label class="toggle"><input type="checkbox" id="mirror" checked> 鏡のように動かす</label>
@@ -671,7 +679,7 @@ function buildBody(rig, F, S, B, opts = {}) {
     return pt.col();
   };
   const headOut = { headAt, eyeY, chinY, topY, cheekW, headRx, headRz, headZc };
-  if (opts.noMesh) return { stats, head: headOut, parts: PN, sample };
+  if (opts.noMesh) return { stats, head: headOut, parts: PN, sample, views: { F, S, B } };
 
   /* ---------- テクスチャの配置（棚詰め） ---------- */
   const PADX = 3, AW = 2048;
@@ -978,81 +986,152 @@ const regionOf = h => /Arm$|Hand$/.test(h) ? (h.startsWith('left') ? 'leftArm' :
   : /Foot$|Toes$/.test(h) ? (h.startsWith('left') ? 'leftFoot' : 'rightFoot')
   : h === 'head' ? 'head' : 'trunk';
 
+/* 骨の位置だけを置き直す（素体の肩幅・股関節の幅に合わせる）。長さはスキャンのまま */
+function setRigAnchors(rig, shX, hipX) {
+  const { L, Y } = rig.C, P = rig.P;
+  for (const [s, g] of [['left', 1], ['right', -1]]) {
+    P[s + 'UpperArm'].x = g * shX; P[s + 'LowerArm'].x = g * (shX + L.upper); P[s + 'Hand'].x = g * (shX + L.upper + L.fore);
+    for (const n of ['UpperLeg', 'LowerLeg', 'Foot', 'Toes']) P[s + n].x = g * hipX;
+  }
+  for (const n of HB) { const p = PARENT[n]; rig.restLocal[n] = p ? P[n].clone().sub(P[p]) : P[n].clone(); }
+  const saved = HB.map(n => rig.bones[n].quaternion.clone()), hp = rig.bones.hips.position.clone();
+  restPose(rig); rig.bones.hips.updateMatrixWorld(true); rig.skeleton.calculateInverses();
+  HB.forEach((n, i) => rig.bones[n].quaternion.copy(saved[i])); rig.bones.hips.position.copy(hp);
+}
+
+/* 素体の形は保ったまま、骨ごとの一次変換（長さ・太さの倍率）でスキャンの体型に寄せる。
+   隣り合う骨の変換は関節で一致するので、ウェイトで混ぜても表面が割れたりとがったりしない */
 function fitTemplate(tpl, rig, body, opts = {}) {
-  const { L, Y } = rig.C, P = rig.P, T = tpl.joints, PN = body.parts, hd = body.head;
+  const { L, Y } = rig.C, T = tpl.joints, PN = body.parts, hd = opts.shape ? opts.shape.hd : body.head;
   const ax = n => (Math.abs(T['left' + n].x) + Math.abs(T['right' + n].x)) / 2;
   const ay = n => (T['left' + n].y + T['right' + n].y) / 2;
-  const tot = L.shHalf + L.upper + L.fore + L.hand;
-  // 素体の手の長さ・つま先・頭の寸法
-  let handT = 0, toeZ = -1e9, eyeRx = 0, hz0 = 1e9, hz1 = -1e9, chinT = 1e9, topT = -1e9;
+  const pct = (a, q) => { if (!a.length) return NaN; const b = a.slice().sort((x, y) => x - y); return b[Math.min(b.length - 1, Math.floor(q * b.length))]; };
+  const r = (v, lo = .8, hi = 1.35) => clamp(v, lo, hi, 1);
   const eyeT = Number.isFinite(tpl.eyeY) ? tpl.eyeY : (T.head.y + .06);
+  const hipJ = ay('UpperLeg'), shJ = ay('UpperArm');
+  const tY = f => lerp(hipJ, shJ, f), sY = f => lerp(Y.hip, Y.sh, f);
+
+  // --- 素体の寸法を測る（外れ値に強いよう、上下5%を捨てた範囲で） ---
+  const band = { chest: [], chestZ: [], waist: [], waistZ: [], hip: [], hipZ: [], uArm: [], fArm: [], thigh: [], calf: [], hand: [], toe: [], headX: [], headZ: [], chin: [], top: [] };
+  const uMid = [ax('UpperArm'), ax('LowerArm')], fMid = [ax('LowerArm'), ax('Hand')], thMid = [ay('LowerLeg'), hipJ], caMid = [ay('Foot'), ay('LowerLeg')];
   for (const pr of tpl.prims) {
     if (pr.hide) continue;
     for (const k of new Set(pr.idx)) {
-      const x = pr.pos[k * 3], y = pr.pos[k * 3 + 1], z = pr.pos[k * 3 + 2], h = pr.bw[k][0][0];
-      if (h.endsWith('Hand')) handT = Math.max(handT, Math.abs(x) - ax('Hand'));
-      if (/Foot$|Toes$/.test(h)) toeZ = Math.max(toeZ, z);
+      const x = pr.pos[k * 3], y = pr.pos[k * 3 + 1], z = pr.pos[k * 3 + 2], h = pr.bw[k][0][0], arm = /Arm$|Hand$/.test(h);
       if (h === 'head') {
-        topT = Math.max(topT, y);
-        if (pr.kind === 'face' && /SKIN/i.test(pr.name)) chinT = Math.min(chinT, y);
-        if (Math.abs(y - eyeT) < .012) { eyeRx = Math.max(eyeRx, Math.abs(x)); hz0 = Math.min(hz0, z); hz1 = Math.max(hz1, z); }
+        band.top.push(y);
+        if (pr.kind === 'face' && /SKIN/i.test(pr.name)) band.chin.push(y);
+        if (Math.abs(y - eyeT) < .012) { band.headX.push(Math.abs(x)); band.headZ.push(z); }
+        continue;
       }
+      if (pr.kind !== 'body') continue;
+      if (h.endsWith('Hand')) band.hand.push(Math.abs(x) - ax('Hand'));
+      if (/Foot$|Toes$/.test(h)) band.toe.push(z);
+      if (!arm && Math.abs(y - tY(.75)) < .02) { band.chest.push(Math.abs(x)); band.chestZ.push(z); }
+      if (!arm && Math.abs(y - tY(.42)) < .02) { band.waist.push(Math.abs(x)); band.waistZ.push(z); }
+      if (Math.abs(y - hipJ) < .02) { band.hip.push(Math.abs(x)); band.hipZ.push(z); }
+      if (/UpperArm$/.test(h)) { const t = (Math.abs(x) - uMid[0]) / (uMid[1] - uMid[0]); if (t > .35 && t < .7) band.uArm.push(y); }
+      if (/LowerArm$/.test(h)) { const t = (Math.abs(x) - fMid[0]) / (fMid[1] - fMid[0]); if (t > .3 && t < .7) band.fArm.push(y); }
+      if (/UpperLeg$/.test(h) && x > 0) { const t = (y - thMid[0]) / (thMid[1] - thMid[0]); if (t > .35 && t < .65) band.thigh.push(x); }
+      if (/LowerLeg$/.test(h) && x > 0) { const t = (y - caMid[0]) / (caMid[1] - caMid[0]); if (t > .45 && t < .75) band.calf.push(x); }
     }
   }
-  if (!(handT > .05)) handT = .17; if (!(chinT < eyeT)) chinT = eyeT - .1; if (!(eyeRx > .03)) eyeRx = .09; if (!(hz1 > hz0)) { hz0 = -.09; hz1 = .1; }
+  const half = a => (pct(a, .97) - pct(a, .03)) / 2;
+  const tm = {
+    chest: pct(band.chest, .97), chestD: half(band.chestZ), waist: pct(band.waist, .97), waistD: half(band.waistZ),
+    hip: pct(band.hip, .97), hipD: half(band.hipZ), uArm: half(band.uArm), fArm: half(band.fArm), thigh: half(band.thigh), calf: half(band.calf),
+    hand: pct(band.hand, .99), toe: pct(band.toe, .99), headX: pct(band.headX, .98), headZ0: pct(band.headZ, .02), headZ1: pct(band.headZ, .98),
+    chin: pct(band.chin, .01), top: pct(band.top, .995),
+  };
+  if (!(tm.hand > .05)) tm.hand = .17; if (!(tm.chin < eyeT)) tm.chin = eyeT - .1; if (!(tm.headX > .03)) tm.headX = .09;
+  if (!(tm.headZ1 > tm.headZ0)) { tm.headZ0 = -.09; tm.headZ1 = .1; }
   const footTY = ay('Foot'), footTZ = (T.leftFoot.z + T.rightFoot.z) / 2;
-  if (!(toeZ > footTZ + .03)) toeZ = footTZ + .15;
-  const trunkY = pwMap([[ay('UpperLeg'), Y.hip], [ay('UpperArm'), Y.sh], [T.neck.y, P.neck.y], [T.head.y, P.head.y]]);
-  const armA = pwMap([[ax('UpperArm'), L.shHalf], [ax('LowerArm'), L.shHalf + L.upper], [ax('Hand'), L.shHalf + L.upper + L.fore], [ax('Hand') + handT, tot]]);
-  const legY = pwMap([[footTY, Y.an], [ay('LowerLeg'), Y.kn], [ay('UpperLeg'), Y.hip]]);
-  const armTY = ay('UpperArm');
-  // 1) 素体の輪切り外形をとる
-  const prof = { trunk: profile(), leftArm: profile(), rightArm: profile(), leftLeg: profile(), rightLeg: profile() };
-  for (const pr of tpl.prims) {
-    if (pr.hide || pr.kind !== 'body') continue;
-    for (const k of new Set(pr.idx)) {
-      const x = pr.pos[k * 3], y = pr.pos[k * 3 + 1], z = pr.pos[k * 3 + 2], r = regionOf(pr.bw[k][0][0]);
-      if (r === 'trunk') prof.trunk.add(trunkY(y), Math.abs(x), z);
-      else if (r.endsWith('Arm')) prof[r].add(armA(Math.abs(x)), y, z);
-      else if (r.endsWith('Leg')) prof[r].add(legY(y), x, z);
-    }
+  if (!(tm.toe > footTZ + .03)) tm.toe = footTZ + .15;
+
+  let S_;
+  if (opts.shape) S_ = opts.shape.S;   // 体型キャリブレーション済みなら、その倍率をそのまま使う
+  else {
+  // --- スキャンの寸法（同じ高さ・同じ区間の中央値） ---
+  const med = (list, key, lo, hi, f) => median(list.filter(R => R[key] >= Math.min(lo, hi) && R[key] <= Math.max(lo, hi)).map(f));
+  const TR = PN.trunk.R, band2 = (f, k) => med(TR, 'y', sY(f) - .025, sY(f) + .025, R => R[k]);
+  const sm = {
+    chest: band2(.75, 'rx'), chestD: band2(.75, 'rz'), waist: band2(.42, 'rx'), waistD: band2(.42, 'rz'), hip: band2(0, 'rx'), hipD: band2(0, 'rz'),
+    uArm: med(PN.leftArm.R, 'a', L.shHalf + L.upper * .35, L.shHalf + L.upper * .7, R => R.ry), fArm: med(PN.leftArm.R, 'a', L.shHalf + L.upper + L.fore * .3, L.shHalf + L.upper + L.fore * .7, R => R.ry),
+    thigh: med(PN.leftLeg.R, 'y', lerp(Y.kn, Y.hip, .35), lerp(Y.kn, Y.hip, .65), R => R.rx), calf: med(PN.leftLeg.R, 'y', lerp(Y.an, Y.kn, .45), lerp(Y.an, Y.kn, .75), R => R.rx),
+  };
+  const hasSide = !!(body.views && body.views.S);
+  const wR = k => r(sm[k] / tm[k]);
+  const dR = (k, wr) => hasSide ? clamp(sm[k + 'D'] / tm[k + 'D'], wr * .85, wr * 1.15, wr) : wr;
+  S_ = {
+    chest: wR('chest'), waist: wR('waist'), hip: wR('hip'),
+    uArm: r(sm.uArm / tm.uArm, .8, 1.45), fArm: r(sm.fArm / tm.fArm, .8, 1.45), thigh: r(sm.thigh / tm.thigh), calf: r(sm.calf / tm.calf),
+  };
+  S_.chestD = dR('chest', S_.chest); S_.waistD = dR('waist', S_.waist); S_.hipD = dR('hip', S_.hip);
   }
-  const pf = Object.fromEntries(Object.entries(prof).map(([k, v]) => [k, v.done()]));
-  const at = (list, key, v) => {
-    const n = list.length, asc = list[n - 1][key] > list[0][key];
-    if (asc ? v <= list[0][key] : v >= list[0][key]) return list[0];
-    if (asc ? v >= list[n - 1][key] : v <= list[n - 1][key]) return list[n - 1];
-    let lo = 0, hi = n - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if ((list[m][key] < v) === asc) lo = m; else hi = m; }
-    const a = list[lo], b = list[hi]; return lerpR(a, b, (v - a[key]) / (b[key] - a[key]));
+
+  // 肩と股関節の位置（素体の位置×胴の倍率）。骨格もここに合わせる
+  const shX = ax('UpperArm') * S_.chest, hipX = ax('UpperLeg') * S_.hip;
+  setRigAnchors(rig, shX, hipX);
+  const P = rig.P;
+
+  // --- 変換 ---
+  const trunkY = pwMap([[hipJ, Y.hip], [shJ, Y.sh], [T.neck.y, P.neck.y]]);
+  const trunkZ0 = T.hips.z;
+  const headMap = (x, y, z) => {
+    const sy = y >= eyeT ? (hd.topY - hd.eyeY) / (tm.top - eyeT) : (hd.eyeY - hd.chinY) / (eyeT - tm.chin);
+    return [x * hd.headRx / tm.headX, hd.eyeY + (y - eyeT) * sy, hd.headZc + (z - (tm.headZ0 + tm.headZ1) / 2) * hd.headRz / ((tm.headZ1 - tm.headZ0) / 2)];
   };
-  const rs = (s, t) => clamp(s / Math.max(t, 1e-3), .55, 1.9, 1);
-  // 2) 骨ごとの変形
-  const sideX = { left: 1, right: -1 };
-  const xf = (region, x, y, z) => {
-    if (region === 'trunk') {
-      const yy = trunkY(y), R = at(PN.trunk.R, 'y', Math.min(yy, PN.trunk.R[PN.trunk.R.length - 1].y)), q = pf.trunk(yy);
-      const zc = (q[2] + q[3]) / 2;
-      return [x * rs(R.rx, q[1]), yy, R.zc + (z - zc) * rs(R.rz, (q[3] - q[2]) / 2)];
-    }
-    if (region === 'head') {
-      const sy = y >= eyeT ? (hd.topY - hd.eyeY) / (topT - eyeT) : (hd.eyeY - hd.chinY) / (eyeT - chinT);
-      return [x * hd.headRx / eyeRx, hd.eyeY + (y - eyeT) * sy, hd.headZc + (z - (hz0 + hz1) / 2) * hd.headRz / ((hz1 - hz0) / 2)];
-    }
-    if (region.endsWith('Arm')) {
-      const g = sideX[region.slice(0, -3)], a = armA(Math.abs(x)), R = at(PN[region].R, 'a', a), q = pf[region](a);
-      const yc = (q[0] + q[1]) / 2, zc = (q[2] + q[3]) / 2;
-      return [g * a, Y.sh + R.yc + (y - yc) * rs(R.ry, (q[1] - q[0]) / 2), (z - zc) * rs(R.rz, (q[3] - q[2]) / 2)];
-    }
-    if (region.endsWith('Leg')) {
-      const g = sideX[region.slice(0, -3)], yy = legY(y), R = at(PN[region].R, 'y', yy), q = pf[region](yy);
-      const xc = (q[0] + q[1]) / 2, zc = (q[2] + q[3]) / 2;
-      return [g * L.hipHalf + R.xo + (x - xc) * rs(R.rx, (q[1] - q[0]) / 2), yy, R.zo + (z - zc) * rs(R.rz, (q[3] - q[2]) / 2)];
-    }
-    // 足
-    const g = sideX[region.slice(0, -4)], fx = g > 0 ? T.leftFoot.x : T.rightFoot.x;
-    return [g * L.hipHalf + (x - fx), y <= footTY ? y * Y.an / footTY : legY(y), (z - footTZ) * L.foot / (toeZ - footTZ)];
+  const headAtNeckY = headMap(0, T.head.y, 0)[1];
+  const trunkS = { hips: [S_.hip, S_.hipD], spine: [S_.waist, S_.waistD], chest: [S_.chest, S_.chestD], leftShoulder: [S_.chest, S_.chestD], rightShoulder: [S_.chest, S_.chestD] };
+  const lin = (aT, aO, s) => (x, y, z) => [aO.x + (x - aT.x) * s[0], aO.y + (y - aT.y) * s[1], aO.z + (z - aT.z) * s[2]];
+  const xfs = { head: headMap };
+  for (const n of Object.keys(trunkS)) { const [sx, sz] = trunkS[n]; xfs[n] = (x, y, z) => [x * sx, trunkY(y), (z - trunkZ0) * sz]; }
+  {
+    const sy = clamp((headAtNeckY - P.neck.y) / (T.head.y - T.neck.y), .5, 2, 1), sx = (S_.chest + hd.headRx / tm.headX) / 2;
+    xfs.neck = lin(T.neck, new V3(0, P.neck.y, (T.neck.z - trunkZ0) * S_.chestD), [sx, sy, sx]);
+  }
+  for (const [s, g] of [['left', 1], ['right', -1]]) {
+    const T0 = n => T[s + n], aT = T0('UpperArm'), eT = T0('LowerArm'), hT = T0('Hand');
+    const ua = Math.abs(eT.x - aT.x), fa = Math.abs(hT.x - eT.x);
+    xfs[s + 'UpperArm'] = lin(aT, new V3(g * shX, Y.sh, 0), [L.upper / ua, S_.uArm, S_.uArm]);
+    xfs[s + 'LowerArm'] = lin(eT, new V3(g * (shX + L.upper), Y.sh, 0), [L.fore / fa, S_.fArm, S_.fArm]);
+    xfs[s + 'Hand'] = lin(hT, new V3(g * (shX + L.upper + L.fore), Y.sh, 0), [L.hand / tm.hand, S_.fArm, S_.fArm]);
+    const uT = T0('UpperLeg'), kT = T0('LowerLeg'), fT = T0('Foot');
+    xfs[s + 'UpperLeg'] = lin(uT, new V3(g * hipX, Y.hip, (uT.z - trunkZ0) * S_.hipD), [S_.thigh, (Y.hip - Y.kn) / (uT.y - kT.y), S_.thigh]);
+    xfs[s + 'LowerLeg'] = lin(kT, new V3(g * hipX, Y.kn, (kT.z - trunkZ0) * S_.hipD), [S_.calf, (Y.kn - Y.an) / (kT.y - fT.y), S_.calf]);
+    const ff = lin(fT, new V3(g * hipX, Y.an, (fT.z - trunkZ0) * S_.hipD), [1, Y.an / footTY, L.foot / (tm.toe - footTZ)]);
+    xfs[s + 'Foot'] = xfs[s + 'Toes'] = ff;
+  }
+
+  // --- 写真から色を取る（体の向きに応じて正面・横・背中を混ぜ、そのまま投影する） ---
+  const { F, S, B } = body.views, segs = [L.upper, L.fore, L.hand];
+  const legCols = (v, side, row) => legCol(side ? v.leg[side] : v.legAvg, row);
+  const proj = (region, p, n) => {
+    const nz = n.z, nx = n.x, ny = n.y;
+    let cf = null, cb = null, cs = null, wf = Math.max(nz, 0) ** 2, wb = Math.max(-nz, 0) ** 2, ws = nx * nx;
+    if (region === 'trunk' || region === 'head') {
+      const fr = F.rowOf(p.y), fc = F.centerCol(fr);
+      cf = sampleToward(F, fc, fr, p.x / F.mpp, 0);
+      if (B) { const br = B.rowOf(p.y), bc = B.centerCol(br); cb = sampleToward(B, bc, br, -p.x / B.mpp, 0); }
+      if (S) { const sr = S.rowOf(p.y), sc = S.centerCol(sr); cs = sampleToward(S, sc, sr, S.cols.hip + S.face * p.z / S.mpp - sc, 0); }
+    } else if (region.endsWith('Arm')) {
+      const side = region.slice(0, -3), g = side === 'left' ? 1 : -1, ac = Math.max(0, g * p.x - shX), dy = p.y - Y.sh;
+      const fp = polyAt(F.arm[side], segs, ac);
+      cf = sampleToward(F, fp.P.x, fp.P.y, fp.n.x * dy / F.mpp, fp.n.y * dy / F.mpp);
+      if (B) { const bp = polyAt(B.arm[side], segs, ac); cb = sampleToward(B, bp.P.x, bp.P.y, bp.n.x * dy / B.mpp, bp.n.y * dy / B.mpp); }
+      wf += .4 * ny * ny; ws = 0;
+    } else if (region.endsWith('Leg')) {
+      const side = region.slice(0, -3), g = side === 'left' ? 1 : -1, dx = p.x - g * hipX;
+      const fr = F.rowOf(p.y); cf = sampleToward(F, legCols(F, side, fr), fr, dx / F.mpp, 0);
+      if (B) { const br = B.rowOf(p.y); cb = sampleToward(B, legCols(B, side, br), br, -dx / B.mpp, 0); }
+      if (S) { const sr = S.rowOf(p.y), gc = legCols(S, null, sr); cs = sampleToward(S, gc, sr, S.face * p.z / S.mpp, 0); }
+    } else return PN[region] ? PN[region].col() : null;
+    if (!cb) { cb = cs || cf; }
+    if (!cs) { cs = null; wf += ws / 2; wb += ws / 2; ws = 0; }
+    return mixC([[cf, wf], [cb, wb], [cs, ws]]) || cf || cb || cs;
   };
-  // 3) 頂点を動かし、テクスチャを焼き込む
+
+  // --- 頂点を動かし、テクスチャを焼き込む ---
   const out = [];
   for (const pr of tpl.prims) {
     if (pr.hide) continue;
@@ -1060,7 +1139,7 @@ function fitTemplate(tpl, rig, body, opts = {}) {
     for (let k = 0; k < nv; k++) {
       const x = pr.pos[k * 3], y = pr.pos[k * 3 + 1], z = pr.pos[k * 3 + 2];
       let sx = 0, sy = 0, sz = 0, sw = 0;
-      for (const [h, w] of pr.bw[k]) { const q = xf(regionOf(h), x, y, z); sx += q[0] * w; sy += q[1] * w; sz += q[2] * w; sw += w; }
+      for (const [h, w] of pr.bw[k]) { const q = (xfs[h] || xfs.hips)(x, y, z); sx += q[0] * w; sy += q[1] * w; sz += q[2] * w; sw += w; }
       F2[k * 3] = sx / sw; F2[k * 3 + 1] = sy / sw; F2[k * 3 + 2] = sz / sw;
       reg.push(regionOf(pr.bw[k][0][0]));
     }
@@ -1069,10 +1148,12 @@ function fitTemplate(tpl, rig, body, opts = {}) {
       const b = pr.bw[k], t = b.reduce((s, x) => s + x[1], 0) || 1;
       for (let c = 0; c < 4; c++) { sI[k * 4 + c] = b[c] ? HB.indexOf(b[c][0]) : 0; sW[k * 4 + c] = b[c] ? b[c][1] / t : (c === 0 && !b.length ? 1 : 0); }
     }
-    const tex = pr.uv ? bakePrim(pr, F2, reg, body.sample, opts.faceSample, opts.texSize ? opts.texSize(pr) : null) : null;
+    const tex = pr.uv ? bakePrim(pr, F2, reg, proj, opts.faceSample, opts.texSize ? opts.texSize(pr) : null) : null;
     out.push({ name: pr.name, kind: pr.kind, pos: F2, nrm: pr.nrm, uv: pr.uv, idx: pr.idx, sI, sW, tex,
       alphaMode: pr.alphaMode, alphaCutoff: pr.alphaCutoff, doubleSided: pr.doubleSided });
   }
+  out.ratios = S_;
+  out.shape = { S: { ...S_ }, hd: { headRx: hd.headRx, headRz: hd.headRz, headZc: hd.headZc, eyeY: hd.eyeY, chinY: hd.chinY, topY: hd.topY, cheekW: hd.cheekW } };
   return out;
 }
 
@@ -1098,9 +1179,10 @@ function bakePrim(pr, F2, reg, sample, faceSample, base) {
       const inside = w0 >= 0 && w1 >= 0 && w2 >= 0;
       if (done[o] === 1 && !inside) continue;
       p.set(F2[a * 3] * w0 + F2[b * 3] * w1 + F2[c * 3] * w2, F2[a * 3 + 1] * w0 + F2[b * 3 + 1] * w1 + F2[c * 3 + 1] * w2, F2[a * 3 + 2] * w0 + F2[b * 3 + 2] * w1 + F2[c * 3 + 2] * w2);
-      let col = sample(r, p);
+      n.set(N[a * 3] * w0 + N[b * 3] * w1 + N[c * 3] * w2, N[a * 3 + 1] * w0 + N[b * 3 + 1] * w1 + N[c * 3 + 1] * w2, N[a * 3 + 2] * w0 + N[b * 3 + 2] * w1 + N[c * 3 + 2] * w2);
+      if (n.lengthSq() > 1e-12) n.normalize(); else n.set(0, 0, 1);
+      let col = sample(r, p, n);
       if (isFace && faceSample) {
-        n.set(N[a * 3] * w0 + N[b * 3] * w1 + N[c * 3] * w2, N[a * 3 + 1] * w0 + N[b * 3 + 1] * w1 + N[c * 3 + 1] * w2, N[a * 3 + 2] * w0 + N[b * 3 + 2] * w1 + N[c * 3 + 2] * w2).normalize();
         const f = faceSample(p);
         if (f) { const k = f[3] / 255 * sstep(-.05, .35, n.z); col = col ? [0, 1, 2].map(q => col[q] + (f[q] - col[q]) * k) : f; }
       }
@@ -1211,7 +1293,7 @@ async function linkStart() {
     say('AIモデルを読み込めません', 'インターネット接続を確認してください。モデルは jsdelivr.net と storage.googleapis.com から読み込みます。', true);
     $('#primaryBtn').disabled = false; return;
   }
-  startScan('front');
+  if (calib) startOutfit(); else startScan('front');
 }
 async function loadModel(kind) {
   const vision = await import(MP_URL);
@@ -1254,7 +1336,7 @@ $('#camSelect').onchange = e => startCamera(e.target.value).catch(err => say('�
 /* ---------- 撮影の流れ ---------- */
 function nextView() { return ORDER.find(k => scans[k] === null); }
 function startScan(v) {
-  phase = 'scan'; view = v; sub = 'ready'; holdT = 0; setStep(v); hideEditor(); $('#liveRow').hidden = true;
+  phase = 'scan'; view = v; sub = 'ready'; holdT = 0; setStep(v); hideEditor(); $('#liveRow').hidden = true; $('#calibRow').hidden = true;
   const had = isObj(scans[v]);
   const cancel = had ? ['やめて前の撮影を使う', resume] : null;
   if (v === 'face') {
@@ -1275,10 +1357,42 @@ function startScan(v) {
 function startCountdown() { sub = 'countdown'; cdStart = performance.now(); buttons(null); }
 function resume() { hideEditor(); const nv = nextView(); nv ? startScan(nv) : goLive(); }
 function skipView(v) { scans[v] = 'skip'; rebuildAvatar(false); resume(); }
-function startOver() { ORDER.forEach(k => scans[k] = null); clearRig(); startScan('front'); }
+function startOver() { outfit = false; ORDER.forEach(k => scans[k] = null); clearRig(); startScan('front'); }
+function startOutfit() {
+  if (!calib) return;
+  if (!rig) initRig(calib.C);
+  outfit = true;
+  scans.front = scans.back = null; scans.side = 'skip'; scans.face = 'skip';
+  clearBody(); startScan('front');
+  say('着替えスキャン（正面）', '体型はキャリブレーション済みなので、ここでは服の見た目だけを撮ります。正面を向いてTポーズで止まると自動で撮影します。そのあと背中を撮れば完成です。');
+}
+$('#outfitBtn').onclick = startOutfit;
+$('#saveCalibBtn').onclick = () => {
+  if (!calib) return;
+  const data = { type: 'avatar-scan-calibration', version: 1, savedAt: new Date().toISOString(), C: calib.C, shape: calib.shape,
+    face: calib.face ? { fi: calib.face.fi, png: calib.face.canvas.toDataURL('image/png') } : null };
+  download(new Blob([JSON.stringify(data)], { type: 'application/json' }), 'avatar-body-calibration.json');
+};
+$('#calibFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    if (d.type !== 'avatar-scan-calibration') throw new Error('体型データのファイルではありません');
+    let face = null;
+    if (d.face) {
+      const img = new Image(); img.src = d.face.png; await img.decode();
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d').drawImage(img, 0, 0);
+      face = { fi: d.face.fi, canvas: c };
+    }
+    calib = { C: d.C, shape: d.shape, face };
+    $('#calibStatus').textContent = `体型キャリブレーション：読み込み済み（${(d.savedAt || '').slice(0, 10)}）`;
+    if (landmarker) startOutfit();
+    else say('体型データを読み込みました', '「Link Start」を押すと、服だけを撮る着替えスキャンから始まります。素体のVRMも読み込んでおいてください。');
+  } catch (err) { console.error(err); $('#calibStatus').textContent = '読み込めませんでした：' + err.message; }
+};
 function goLive() {
   phase = 'live'; view = null; sub = null; setStep('live'); hideEditor();
-  $('#liveRow').hidden = false; buttons(null);
+  $('#liveRow').hidden = false; $('#calibRow').hidden = !calib; buttons(null);
   const guessed = ORDER.filter(k => isObj(scans[k]) && scans[k].snap.maskSrc === 'guess' && !scans[k].snap.edited).map(k => NAMES[k]);
   say('リンク中', `カメラの前で動くとアバターも動きます（推定身長 約${Math.round(bodyStats.height * 100)}cm）。気になる向きがあれば、下のボタンでその向きだけ撮り直せます。` +
     (guessed.length ? ` ${guessed.join('・')} は自動の切り抜きに失敗したため、形が推定のままです。` : ''), guessed.length > 0);
@@ -1312,6 +1426,7 @@ function onResult(res) {
       snaps.push({ lm: cur.lm, cands, img: offCtx.getImageData(0, 0, off.width, off.height) });
     }
   }
+  if (rig && !smoothRaw) smoothRaw = cur.wl.map(p => new THREE.Vector3(p.x, p.y, p.z));
   if (smoothRaw) cur.wl.forEach((p, i) => smoothRaw[i].lerp(new THREE.Vector3(p.x, p.y, p.z), .5));
 }
 
@@ -1523,17 +1638,21 @@ function finishScan() {
   if (!snaps.length) return failScan();
   const s = snaps[snaps.length >> 1];
   resolveMask(s);
-  if (view === 'front') makeRig();
+  if (view === 'front' && !(outfit && calib && rig)) makeRig();
   scans[view] = { snap: s };
   enterReview();
 }
 
 /* ---------- 正面から骨格を作る ---------- */
 function makeRig() {
-  clearRig();
   const n = frames.length;
   const avg = Array.from({ length: 33 }, (_, i) => { const v = new THREE.Vector3(); frames.forEach(f => v.add(new THREE.Vector3(f.wl[i].x, -f.wl[i].y, -f.wl[i].z))); return v.divideScalar(n); });
-  C = canonFrom(jointsFrom(avg));
+  initRig(canonFrom(jointsFrom(avg)));
+  smoothRaw = frames[n - 1].wl.map(p => new THREE.Vector3(p.x, p.y, p.z));
+}
+function initRig(c) {
+  clearRig();
+  C = c;
   rig = buildRig(C);
   avatar = new THREE.Group(); avatar.add(rig.bones.hips); scene.add(avatar);
   helper = new THREE.SkeletonHelper(rig.bones.hips);
@@ -1541,9 +1660,9 @@ function makeRig() {
   markers = new THREE.Group(); scene.add(markers);
   const mg = new THREE.SphereGeometry(.018, 12, 8), mm = new THREE.MeshBasicMaterial({ color: 0xf5ad48, depthTest: false, transparent: true });
   HB.forEach(() => { const s = new THREE.Mesh(mg, mm); s.renderOrder = 11; markers.add(s); });
-  smoothRaw = frames[n - 1].wl.map(p => new THREE.Vector3(p.x, p.y, p.z));
-  fillBoneTable();
+  fillBoneTable(); frameCamera();
 }
+function frameCamera() { if (!C) return; const top = C.Y.ear + .15; controls.target.set(0, top * .52, 0); camera.position.set(top * .45, top * .62, top * 2.1); }
 
 /* ---------- 確認と切り抜き修正 ---------- */
 function enterReview() {
@@ -1668,6 +1787,7 @@ const grad = new THREE.DataTexture(new Uint8Array([140, 185, 225, 255]), 4, 1, T
 grad.minFilter = grad.magFilter = THREE.NearestFilter; grad.needsUpdate = true;
 const bodyMat = new THREE.MeshToonMaterial({ gradientMap: grad, clippingPlanes: [clip] });
 let atlasTex = null, tplData = null, tplMeshes = [];
+let calib = null, outfit = false;   // calib：体型キャリブレーションの結果 / outfit：服だけ撮る「着替え」モード
 const outlineMat = new THREE.MeshBasicMaterial({ color: 0x15161d, side: THREE.BackSide, clippingPlanes: [clip] });
 const ring = new THREE.Group();
 {
@@ -1723,10 +1843,24 @@ const useTpl = () => tplData && $('#useTpl').checked;
 function rebuildTemplate(reveal, F, S, B) {
   const body = buildBody(rig, F, S, B, { face: faceRatios(), noMesh: true });
   bodyStats = body.stats;
-  let faceSample = null;
+  const frozen = outfit && calib ? calib.shape : null;
+  let faceSample = null, faceRec = null;
+  const faceFrom = (fi, canvas) => {
+    const S2 = canvas.width, fd = canvas.getContext('2d').getImageData(0, 0, S2, S2).data;
+    return p => {
+      const px = fi.eye.x + p.x / fi.mpp, py = fi.eye.y - (p.y - fi.eyeY) / fi.mpp;
+      const u = Math.round((px - fi.crop.x) / fi.crop.w * S2), v = Math.round((py - fi.crop.y) / fi.crop.h * S2);
+      if (u < 0 || v < 0 || u >= S2 || v >= S2) return null;
+      const o = (v * S2 + u) * 4; return [fd[o], fd[o + 1], fd[o + 2], fd[o + 3]];
+    };
+  };
+  if (!isObj(scans.face) && calib && calib.face) faceSample = faceFrom(calib.face.fi, calib.face.canvas);
   if (isObj(scans.face)) {
     try {
-      const fi = makeFace(body.head), S2 = faceCanvas.width, fd = faceCanvas.getContext('2d').getImageData(0, 0, S2, S2).data;
+      const fi0 = makeFace(frozen ? frozen.hd : body.head);
+      const fi = { eye: { x: fi0.eye.x, y: fi0.eye.y }, eyeY: fi0.eyeY, mpp: fi0.mpp, crop: fi0.crop };
+      faceRec = { fi, canvas: faceCanvas };
+      const S2 = faceCanvas.width, fd = faceCanvas.getContext('2d').getImageData(0, 0, S2, S2).data;
       faceSample = p => {
         const px = fi.eye.x + p.x / fi.mpp, py = fi.eye.y - (p.y - fi.eyeY) / fi.mpp;
         const u = Math.round((px - fi.crop.x) / fi.crop.w * S2), v = Math.round((py - fi.crop.y) / fi.crop.h * S2);
@@ -1735,7 +1869,11 @@ function rebuildTemplate(reveal, F, S, B) {
       };
     } catch (e) { console.error('顔を焼き込めませんでした', e); }
   }
-  const fit = fitTemplate(tplData, rig, body, { faceSample, texSize: pr => pr.base || null });
+  const fit = fitTemplate(tplData, rig, body, { faceSample, shape: frozen, texSize: pr => pr.base || null });
+  if (!frozen) {   // 体型キャリブレーションとして記録（服だけ撮り直すときに使う）
+    calib = { C, shape: fit.shape, face: faceRec || (calib && calib.face) || null };
+    $('#calibStatus').textContent = '体型キャリブレーション：済み（このセッション）';
+  }
   const saved = HB.map(n => rig.bones[n].quaternion.clone()), hp = rig.bones.hips.position.clone();
   restPose(rig); avatar.updateMatrixWorld(true);
   let verts = 0, tris = 0;
@@ -1774,6 +1912,7 @@ function rebuildAvatar(reveal) {
   const B = isObj(scans.back) ? makeView(scans.back.snap, 'back', C) : null;
   clearBody();
   if (useTpl()) return rebuildTemplate(reveal, F, S, B);
+  setRigAnchors(rig, C.L.shHalf, C.L.hipHalf);
   const { geo, stats, head, tex } = buildBody(rig, F, S, B, { face: faceRatios() });
   { const tc = document.createElement('canvas'); tc.width = tex.width; tc.height = tex.height;
     tc.getContext('2d').putImageData(new ImageData(tex.data, tex.width, tex.height), 0, 0);
