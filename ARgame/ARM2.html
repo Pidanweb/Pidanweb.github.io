@@ -529,7 +529,7 @@ function faceUpdate(dt){
 const prevC = $('facePrev'), pctx = prevC.getContext('2d');
 let prevLast = 0;
 function faceDraw(){
-  const show = prevOn && (tp || face.on) && !vr && state !== undefined;
+  const show = (prevOn || (bc && bc.picking)) && (tp || face.on) && !vr && state !== undefined;   // ボス位置の指定中はプレビューを必ず出す
   prevC.style.display = show ? 'block' : 'none'; if (!show) return;
   const now = performance.now(); if (now - prevLast < Q.prevMs) return; prevLast = now;
   if (tp){ poseDraw(); return; }
@@ -925,8 +925,19 @@ function bcBossUI(){
 function bcPick(on){
   bc.picking = on && bc.state === 'locked';
   $('bcPickBtn').textContent = bc.picking ? '✖ 指定をやめる' : '📍 ボスの位置をクリックで指定';
+  // プレビューは普段クリックを素通りさせている（pointer-events:none）ので、指定中だけ受け付けて大きく表示する
+  const st = prevC.style;
+  if (bc.picking){
+    if (!bc.prevSave) bc.prevSave = { w:prevC.width, h:prevC.height };
+    prevC.width = 640; prevC.height = 480;
+    Object.assign(st, { pointerEvents:'auto', cursor:'crosshair', width:'min(640px, 70vw)', height:'auto', aspectRatio:'4 / 3', zIndex:'30', display:'block' });
+  } else {
+    if (bc.prevSave){ prevC.width = bc.prevSave.w; prevC.height = bc.prevSave.h; bc.prevSave = null; }
+    for (const k of ['pointerEvents', 'cursor', 'width', 'height', 'aspectRatio', 'zIndex']) st[k] = '';
+  }
   bcBossUI();
 }
+addEventListener('keydown', e => { if (e.key === 'Escape' && bc.picking) bcPick(false); });
 // 画面上の点 → 映像上の位置（0〜1）
 function bcClientToUV(e){
   const W_ = vid.videoWidth, H_ = vid.videoHeight; if (!W_) return null;
@@ -989,10 +1000,12 @@ function bcDrawPrev(X, Y){
   const line = (x0, z0, x1, z1) => { const n = 40; let prev = null;
     for (let i = 0; i <= n; i++){ const q = proj(new THREE.Vector3(x0 + (x1 - x0)*i/n, 0, z0 + (z1 - z0)*i/n));
       if (q && prev){ pctx.moveTo(prev[0], prev[1]); pctx.lineTo(q[0], q[1]); } prev = q; } };
+  pctx.save(); pctx.beginPath();   // 映像の範囲の外（上下の黒帯）にはマス目を描かない
+  pctx.rect(Math.min(X(0), X(1)), Y(0), Math.abs(X(1) - X(0)), Y(1) - Y(0)); pctx.clip();
   pctx.strokeStyle = 'rgba(122,231,255,.65)'; pctx.lineWidth = 1; pctx.beginPath();
   for (let x = -6; x <= 6; x++) line(x, 0, x, -10);
   for (let z = 0; z >= -10; z--) line(-6, z, 6, z);
-  pctx.stroke();
+  pctx.stroke(); pctx.restore();
   const dot = (q, col, label) => { const s = q && proj(q); if (!s) return null; pctx.fillStyle = col; pctx.beginPath(); pctx.arc(s[0], s[1], 5, 0, 7); pctx.fill(); pctx.font = 'bold 11px sans-serif'; pctx.fillText(label, s[0] + 6, s[1] - 4); return s; };
   const o = dot(bc.origin, '#ffd35a', '立ち位置');
   if (bc.bossF){
