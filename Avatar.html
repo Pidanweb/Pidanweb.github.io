@@ -200,6 +200,9 @@ label.btn.file{cursor:pointer;display:inline-block}
           <span class="hint" id="calibStatus" style="margin:0">体型キャリブレーション：未実施</span>
         </div>
         <div class="row">
+          <label class="sel range">顔の大きさ<input type="range" id="faceScale" min="80" max="130" step="1" value="100"><span id="faceScaleVal">100%</span></label>
+        </div>
+        <div class="row">
           <label class="toggle"><input type="checkbox" id="mirror" checked> 鏡のように動かす</label>
           <label class="toggle"><input type="checkbox" id="showBones"> ボーンを表示</label>
         </div>
@@ -487,19 +490,27 @@ function buildBody(rig, F, S, B, opts = {}) {
   const fo = opts.face || { chin: .85 };
   const eyeRowF = (F.P(2).y + F.P(5).y) / 2, eyeY = F.yOf(eyeRowF);
   const he = runAt(F, F.centerCol(eyeRowF), eyeRowF, 1, 0, .12 / F.mpp);
-  const headRx = clamp(he ? he.half * F.mpp : NaN, .062, .095, .078), headFc = he ? he.cx : F.centerCol(eyeRowF);
+  const kF = clamp(opts.faceScale, .7, 1.4, 1);   // 手動の「顔の大きさ」補正
+  let headRx = clamp(he ? he.half * F.mpp : NaN, .062, .095, .078);
+  // 顔写真から測った頭の幅（黒目の間隔を約63mmとして実寸に直したもの）があれば平均する
+  if (fo.headHalfM) headRx = (headRx + clamp(fo.headHalfM, .065, .1, headRx)) / 2;
+  headRx = clamp(headRx * kF, .055, .12, .078);
+  const headFc = he ? he.cx : F.centerCol(eyeRowF);
   let headRz = headRx * 1.18, headZc = .02, headSc = 0;
   if (S) {
     const r = S.rowOf(eyeY), g = S.centerCol(r), hs = runAt(S, g, r, 1, 0, .16 / S.mpp);
     headSc = hs ? hs.cx : g;
-    if (hs) { headRz = clamp(hs.half * S.mpp, headRx * 1.02, headRx * 1.4, headRz); headZc = clamp(S.face * (hs.cx - S.cols.hip) * S.mpp, -.06, .14, headZc); }
+    if (hs) { headRz = clamp(hs.half * S.mpp * kF, headRx * 1.02, headRx * 1.4, headRz); headZc = clamp(S.face * (hs.cx - S.cols.hip) * S.mpp, -.06, .14, headZc); }
   }
   let topY = eyeY + .11;
   { let r = Math.round(eyeRowF); const c = headFc;
     while (r > 1 && (F.m(c, r - 1) >= .5 || F.m(c - 3, r - 1) >= .5 || F.m(c + 3, r - 1) >= .5)) r--;
     topY = clamp(F.yOf(r), eyeY + .085, eyeY + .15, topY); }
-  if (fo.top) topY = clamp(Math.max(topY, eyeY + fo.top * headRx * 2 * .88), eyeY + .085, eyeY + .17, topY);
-  const cheekW = headRx * 2 * .88, chinY = eyeY - clamp(fo.chin, .6, 1.15, .85) * cheekW;
+  // 頬から頬までの幅：顔写真の実寸があればそれを使う（無ければ頭の幅の88%）
+  const cheekW = clamp(fo.cheekM ? fo.cheekM * kF : NaN, .1, .19, headRx * 2 * .88);
+  topY = eyeY + (topY - eyeY) * kF;
+  if (fo.top) topY = clamp(Math.max(topY, eyeY + fo.top * cheekW), eyeY + .085, eyeY + .19, topY);
+  const chinY = eyeY - clamp(fo.chin, .6, 1.15, .85) * cheekW;
   const neckR = clamp(headRx * .68, .042, .062, .052), neckZc = headZc - headRz * .3, neckTop = eyeY - .01;
   const hBot = chinY - .008, hcy = (topY + hBot) / 2, hry = (topY - hBot) / 2;
   const headAt = y => {
@@ -1125,6 +1136,12 @@ function fitTemplate(tpl, rig, body, opts = {}) {
   const proj = (region, p, n) => {
     const nz = n.z, nx = n.x, ny = n.y;
     let cf = null, cb = null, cs = null, wf = Math.max(nz, 0) ** 2, wb = Math.max(-nz, 0) ** 2, ws = nx * nx;
+    if (opts.skin && ((region === 'trunk' && p.y > Y.sh + .015) || (region === 'head' && p.y < hd.eyeY - .03 && nz > -.2))) {
+      // 首とあごの下は肌の色（写真の対応する位置は服やあごになりやすいため）
+      const back = region === 'trunk' ? Math.max(-nz, 0) : 0;
+      if (back < .3) return opts.skin;
+    }
+    if (region === 'head' && opts.headInv) p = opts.headInv(p);
     if (region === 'trunk' || region === 'head') {
       const fr = F.rowOf(p.y), fc = F.centerCol(fr);
       cf = sampleToward(F, fc, fr, p.x / F.mpp, 0);
@@ -1558,7 +1575,16 @@ function faceRatios() {
     while (r > 0 && on(cx, r - 1)) r--;
     top = (eye.y - r / sy) / cheek;
   }
-  return { chin: (P(152).y - eye.y) / cheek, top };
+  // 黒目の中心どうしの距離を約63mm（大人の平均）として、写真の画素を実寸に直す
+  const ipdPx = fs.lm.length >= 478 ? P(468).distanceTo(P(473)) : P(33).distanceTo(P(263)) * .68;
+  const mPerPx = .063 / Math.max(1, ipdPx);
+  let headHalfM = NaN;
+  if (fs.mask) {
+    const sx = fs.mw / W, sy = fs.mh / H, ry = Math.round(eye.y * sy), cx = Math.round(eye.x * sx);
+    let l = cx, r = cx; while (l > 0 && fs.mask[ry * fs.mw + l - 1] >= .5) l--; while (r < fs.mw - 1 && fs.mask[ry * fs.mw + r + 1] >= .5) r++;
+    headHalfM = (r - l) / sx / 2 * mPerPx;
+  }
+  return { chin: (P(152).y - eye.y) / cheek, top, cheekM: cheek * mPerPx, headHalfM };
 }
 function makeFace(head) {
   const fs = scans.face.snap, W = fs.img.width, H = fs.img.height, P = i => new THREE.Vector2(fs.lm[i].x * W, fs.lm[i].y * H);
@@ -1590,7 +1616,8 @@ function makeFace(head) {
   mx.drawImage(mc, crop.x / W * fs.mw, crop.y / H * fs.mh, crop.w / W * fs.mw, crop.h / H * fs.mh, 0, 0, S, S);
   mx.filter = 'none';
   x.globalCompositeOperation = 'destination-in'; x.drawImage(m, 0, 0); x.globalCompositeOperation = 'source-over';
-  return { eye, eyeY, mpp, crop, yBot: head.chinY - .012, yTop: head.topY, th: 1.55 };
+  const skin = [0, 1, 2].map(k => Math.min(255, faceC[k] * gain[k]));
+  return { eye, eyeY, mpp, crop, skin, yBot: head.chinY - .012, yTop: head.topY, th: 1.55 };
 }
 function failScan() {
   const v = view; startScan(v);
@@ -1828,6 +1855,14 @@ function clearRig() {
   avatar = rig = helper = markers = smoothRaw = C = null;
 }
 
+const faceScale = () => +$('#faceScale').value / 100;
+function scaleHead(hd, k) {
+  if (Math.abs(k - 1) < 1e-3) return hd;
+  return { ...hd, headRx: hd.headRx * k, headRz: hd.headRz * k, cheekW: hd.cheekW * k, chinY: hd.eyeY - (hd.eyeY - hd.chinY) * k, topY: hd.eyeY + (hd.topY - hd.eyeY) * k };
+}
+$('#faceScale').oninput = e => { $('#faceScaleVal').textContent = e.target.value + '%'; };
+$('#faceScale').onchange = () => rebuildAvatar(false);
+
 /* ---------- VRoid素体の読み込み ---------- */
 const capFor = pr => /Body_00|_SKIN/i.test(pr.name) ? 1024 : /Mouth|EyeWhite/i.test(pr.name) ? 256 : 512;
 async function prepareTplImages(t) {
@@ -1860,7 +1895,11 @@ function rebuildTemplate(reveal, F, S, B) {
   const body = buildBody(rig, F, S, B, { face: faceRatios(), noMesh: true });
   bodyStats = body.stats;
   const frozen = outfit && calib ? calib.shape : null;
-  const hdUse = placeHead(tplData, rig, frozen ? frozen.hd : body.head);   // 以前の体型データにも首の補正をかける
+  const kF = faceScale();
+  const hdUse = placeHead(tplData, rig, scaleHead(frozen ? frozen.hd : body.head, kF));   // 顔の大きさ補正 → 首の長さの補正
+  // 頭の表面の点 → 写真上の頭の位置（大きさ補正や持ち上げを打ち消して、写真の正しい場所から色を取る）
+  const bh = body.head;
+  const headInv = p => new THREE.Vector3(p.x * bh.headRx / hdUse.headRx, bh.eyeY + (p.y - hdUse.eyeY) * bh.headRx / hdUse.headRx, bh.headZc + (p.z - hdUse.headZc) * bh.headRz / hdUse.headRz);
   bodyStats.height = hdUse.topY;
   let faceSample = null, faceRec = null;
   const faceFrom = (fi, canvas) => {
@@ -1872,11 +1911,13 @@ function rebuildTemplate(reveal, F, S, B) {
       const o = (v * S2 + u) * 4; return [fd[o], fd[o + 1], fd[o + 2], fd[o + 3]];
     };
   };
-  if (!isObj(scans.face) && calib && calib.face) faceSample = faceFrom(calib.face.fi, calib.face.canvas);
+  let skin = null;
+  if (!isObj(scans.face) && calib && calib.face) { faceSample = faceFrom(calib.face.fi, calib.face.canvas); skin = calib.face.fi.skin || null; }
   if (isObj(scans.face)) {
     try {
       const fi0 = makeFace(hdUse);
-      const fi = { eye: { x: fi0.eye.x, y: fi0.eye.y }, eyeY: fi0.eyeY, mpp: fi0.mpp, crop: fi0.crop };
+      const fi = { eye: { x: fi0.eye.x, y: fi0.eye.y }, eyeY: fi0.eyeY, mpp: fi0.mpp, crop: fi0.crop, skin: fi0.skin };
+      skin = fi0.skin;
       faceRec = { fi, canvas: faceCanvas };
       const S2 = faceCanvas.width, fd = faceCanvas.getContext('2d').getImageData(0, 0, S2, S2).data;
       faceSample = p => {
@@ -1887,9 +1928,11 @@ function rebuildTemplate(reveal, F, S, B) {
       };
     } catch (e) { console.error('顔を焼き込めませんでした', e); }
   }
-  const fit = fitTemplate(tplData, rig, body, { faceSample, shape: frozen ? { ...frozen, hd: hdUse } : null, hd: hdUse, texSize: pr => pr.base || null });
+  const fit = fitTemplate(tplData, rig, body, { faceSample, skin, headInv, shape: frozen ? { ...frozen, hd: hdUse } : null, hd: hdUse, texSize: pr => pr.base || null });
   if (!frozen) {   // 体型キャリブレーションとして記録（服だけ撮り直すときに使う）
-    calib = { C, shape: fit.shape, face: faceRec || (calib && calib.face) || null };
+    const h = body.head;   // 体型データには大きさ補正前の頭の寸法を残す
+    calib = { C, shape: { S: fit.shape.S, hd: { headRx: h.headRx, headRz: h.headRz, headZc: h.headZc, eyeY: h.eyeY, chinY: h.chinY, topY: h.topY, cheekW: h.cheekW } },
+      face: faceRec || (calib && calib.face) || null };
     $('#calibStatus').textContent = '体型キャリブレーション：済み（このセッション）';
   }
   const saved = HB.map(n => rig.bones[n].quaternion.clone()), hp = rig.bones.hips.position.clone();
@@ -1931,7 +1974,7 @@ function rebuildAvatar(reveal) {
   clearBody();
   if (useTpl()) return rebuildTemplate(reveal, F, S, B);
   setRigAnchors(rig, C.L.shHalf, C.L.hipHalf);
-  const { geo, stats, head, tex } = buildBody(rig, F, S, B, { face: faceRatios() });
+  const { geo, stats, head, tex } = buildBody(rig, F, S, B, { face: faceRatios(), faceScale: faceScale() });
   { const tc = document.createElement('canvas'); tc.width = tex.width; tc.height = tex.height;
     tc.getContext('2d').putImageData(new ImageData(tex.data, tex.width, tex.height), 0, 0);
     if (atlasTex) atlasTex.dispose();
