@@ -134,7 +134,8 @@
       <label><input type="checkbox" id="skDual" checked> 二刀流（ヌンチャクを振る=左の剣）</label>
       <label>ヌンチャク振り感度 <b id="skNtV">1.8</b>g<input type="range" id="skNt" min="1.2" max="3" step="0.1" value="1.8"></label>
       <label><input type="checkbox" id="skPass" checked> ヌンチャク併用モード（MotionPlusパススルー）</label><small>ジャイロが不安定になる時はOFF（ヌンチャクは使えなくなる）</small>
-      <small style="color:#ffd35a">両手を同時に振る → ダブルサーキュラー / 二刀流中のスターバーストは両手で</small>
+      <label>ダブルサーキュラー判定 <b id="skDsV">0.65</b><input type="range" id="skDs" min="0.3" max="0.95" step="0.05" value="0.65"><small>両手の動きの似ている度合。大きいほど厳しい（ログの「相関」を参考に）</small></label>
+      <small style="color:#ffd35a">基本は片手ずつ / 両手で同じ動きを同時に → ダブルサーキュラー / 二刀流中のスターバーストは両手で</small>
     </details>
   </details>
   <button id="mRestart">↻ リスタート</button><button id="mTitle">⌂ タイトルへ</button>
@@ -1547,7 +1548,8 @@ const wii = { dev:null, leds:1, a:false, b:false, aT:0, pA:false, pPlus:false, p
               mode:0x35, modeT:0, pMinus:false, passOn:false, mpOnce:false, rSwT:-1e9, dualCd:0, tip:0, poseNow:'flat',
               still:{ on:false, t0:0, t1:0, dur:0, pose:'flat', px:0, py:0, pz:0, last:null, fired:false },   // 静止（溜め・聖剣チャージ）
               zan:{ sg:0, n:0, t0:0, last:0, cd:0 },                                                            // 斬鉄剣の上下揺れ
-              nun:{ seen:-1e9, ext:false, c:false, z:false, a:1, g1:51, prev:0, swT:-1e9 },                    // ヌンチャク
+              nun:{ seen:-1e9, ext:false, c:false, z:false, a:1, g1:51, prev:0, swT:-1e9, pend:0, gv:null },
+              hist:{ R:[], N:[] },                    // ヌンチャク
               mp:{ state:'off', ok:false, calibrated:false, zero:[8192, 8192, 8192], cal:null, calPct:0, up:null, upT:0, lastValid:0, sw:null, ring:[], to:0, wmag:0, wT:0 } };
 function wiiMsg(t){ $('wiiStat').textContent = t; }
 function setCtl(m){
@@ -1631,6 +1633,7 @@ function onWii(e){
   }
   if (id === 0x35 && d.byteLength >= 11) wiiGyro(d, x, y, z, m, ts, A || Bb);   // ジャイロ(縦横判定)。通常攻撃/パリィの加速度判定とは独立
   wiiPose(); stillUpd(x, y, z, m, ts);
+  { const gl0 = Math.hypot(wii.gx, wii.gy, wii.gz) || 1; histPush(wii.hist.R, { t:now, m, v:(x*wii.gx + y*wii.gy + z*wii.gz)/gl0 - gl0 }); }   // 両手の動き比較用
   if (ctl.mode !== 'wii' || state !== 'play' || menuOn) return;
   // 重力方向(=上)に沿った動的加速度。持ち方に依存せず「上向きに加速」を検出できる
   const gl = Math.hypot(wii.gx, wii.gy, wii.gz) || 1;
@@ -1644,8 +1647,9 @@ function onWii(e){
   } else if (!wii.a && m > wii.th){   // 振り → 通常攻撃
     wii.lastSw = now;
     const pc = !wii.mp.ok && hidOK() ? preCharge(ts) : null;   // ジャイロなしの時: 頭上静止→振りでエクスカリバー
-    if (pc && pc.pose === 'up' && pc.dur >= sk.exHold) cast('excalibur'); else attack();
-    wii.rSwT = now; dualCheck(now);
+    if (pc && pc.pose === 'up' && pc.dur >= sk.exHold) cast('excalibur');
+    else if (!dualPair('R', now)) attack();   // 直前に左手も振っていたら「同じ動きか」を判定（同じ=ダブルサーキュラー / 違う=つられ動きとして無視）
+    wii.rSwT = now;
   }
 }
 
@@ -1654,7 +1658,7 @@ function onWii(e){
 // 握りが回っても縦/横を判定できる（センサー軸 yaw/roll/pitch は縦横に一対一対応しないため）。
 const sk = { on:true, win:1.5, sqWin:1.1, rB:.18, rA:.30, minPk:600, mult:5, dbg:true, st:0, last:null, armedAt:0, lastHead:'',
              heavyV:650, heavyH:260, spin:360, thrustA:4.0, thrustRot:150, thrustPk:800, lastR:null,
-             hid:true, exHold:1.0, chMin:.8, preGap:.8, zanA:1.3, zanN:4, zanKill:.3, lrSign:-1, tipFlip:true, dual:true, pass:true, nunTh:1.8 };
+             hid:true, exHold:1.0, chMin:.8, preGap:.8, zanA:1.3, zanN:4, zanKill:.3, lrSign:-1, tipFlip:true, dual:true, pass:true, nunTh:1.8, dualSim:.65 };
 const GY = { SLOW:440/8192, FAST:2000/440, PRE:120, HOLD:150, MAXSW:1500, CAL_MS:1000, CAL_STD:80, UP_GAIN:.03, UP_TOL:.15 };
 // ==== MP-BEGIN ====
 function calStart(){
@@ -1830,13 +1834,56 @@ function nunFeed(e){
   const x = e[2] - 128, y = e[3] - 128, z = (e[4] & 0xfe) - 128, mag = Math.hypot(x, y, z);
   if (Math.abs(mag - n.prev) < 2 && mag > 35 && mag < 75) n.g1 += (mag - n.g1)*.02;   // 静止時の大きさ=1g を学習
   n.prev = mag; n.a = mag/n.g1;
+  // 重力方向（静止に近い時だけ更新）と、それに沿った動的加速度(上下成分)
+  if (Math.abs(n.a - 1) < .1){ const l = mag || 1; n.gv = n.gv ? n.gv.map((g, i) => g + ([x, y, z][i]/l - g)*.1) : [x/l, y/l, z/l]; }
+  const gv = n.gv || [0, 0, 1], gl = Math.hypot(gv[0], gv[1], gv[2]) || 1;
+  histPush(wii.hist.N, { t:now, m:n.a, v:(x*gv[0] + y*gv[1] + z*gv[2])/gl/n.g1 - 1 });
   if (!(sk.dual && ctl.mode === 'wii' && state === 'play' && !menuOn)) return;
-  if (n.a >= sk.nunTh && now - n.swT > 380){ n.swT = now; attackL(); dualCheck(now); }
+  // 左は120ms待ってから確定: その間に右も振られていれば「同じ動きか」を判定する
+  if (n.a >= sk.nunTh && now - n.swT > 380 && !n.pend){
+    n.swT = now;
+    n.pend = setTimeout(() => {
+      n.pend = 0;
+      if (!(sk.dual && ctl.mode === 'wii' && state === 'play' && !menuOn)) return;
+      if (!dualPair('L', performance.now())) attackL();
+    }, 120);
+  }
 }
-// 両手をほぼ同時(170ms以内)に振る → ダブルサーキュラー
-function dualCheck(now){
-  if (!nunOn() || !sk.on) return;
-  if (Math.abs(wii.rSwT - wii.nun.swT) < 170 && now > wii.dualCd){ wii.dualCd = now + 1200; cast('dcircular'); }
+function histPush(a, p){ a.push(p); while (a.length && p.t - a[0].t > 600) a.shift(); }
+// 直近350msの右(リモコン)と左(ヌンチャク)の動きを比べる: |a|の波形の相関・上下成分の相関・強さの比
+function dualSim(T){
+  const W = 350, BW = 20, nb = W/BW;
+  const bin = arr => {
+    const s = Array.from({ length:nb }, () => [0, 0, 0]);
+    for (const p of arr){ const i = Math.floor((p.t - (T - W))/BW); if (i >= 0 && i < nb){ s[i][0] += Math.min(3, p.m); s[i][1] += p.v; s[i][2]++; } }
+    let lm = 1, lv = 0; return s.map(b => { if (b[2]){ lm = b[0]/b[2]; lv = b[1]/b[2]; } return [lm, lv]; });
+  };
+  const corr = (a, b) => {
+    const n = a.length, ma = a.reduce((s, v) => s + v, 0)/n, mb = b.reduce((s, v) => s + v, 0)/n;
+    let sab = 0, saa = 0, sbb = 0; for (let i = 0; i < n; i++){ const da = a[i] - ma, db = b[i] - mb; sab += da*db; saa += da*da; sbb += db*db; }
+    return saa > 1e-6 && sbb > 1e-6 ? sab/Math.sqrt(saa*sbb) : 0;
+  };
+  const sd = a => { const n = a.length, mu = a.reduce((s, v) => s + v, 0)/n; return Math.sqrt(a.reduce((s, v) => s + (v - mu)**2, 0)/n); };
+  const R = bin(wii.hist.R), N = bin(wii.hist.N), Rm = R.map(p => p[0]), Nm = N.map(p => p[0]), Rv = R.map(p => p[1]), Nv = N.map(p => p[1]);
+  const cm = corr(Rm, Nm), cv = corr(Rv, Nv), pr = Math.max(...Rm), pn = Math.max(...Nm), ratio = Math.min(pr, pn)/Math.max(pr, pn, 1e-6);
+  const vert = sd(Rv) > .3 || sd(Nv) > .3;   // 横振りなど上下成分が小さい時は波形だけで判定
+  const score = vert ? (cm + cv)/2 : cm;
+  return { cm, cv, ratio, score, ok:score >= sk.dualSim && ratio >= .6 };
+}
+// 片方が振られた時、もう片方が250ms以内に振られていたら判定。true=処理済み（ダブルサーキュラー or つられ動きとして無視）
+function dualPair(side, now){
+  if (!nunOn() || !sk.on) return false;
+  const n = wii.nun;
+  if (side === 'R'){ if (n.pend || now - n.swT > 250) return false; }   // 左が判定待ちなら左側で判定する
+  else if (now - wii.rSwT > 370) return false;                         // 左の確定は120ms後なので、その分広め
+  const r = dualSim(now), f = v => v.toFixed(2);
+  const msg = `両手 相関${f(r.cm)}/上下${f(r.cv)} 強さ比${f(r.ratio)} → `;
+  if (r.ok){
+    if (now > wii.dualCd){ wii.dualCd = now + 1200; dbg(msg + '同じ動き'); cast('dcircular'); }
+    return true;
+  }
+  dbg(msg + `別の動き（${side === 'R' ? '右' : '左'}はつられ動きとして無視）`);
+  return true;
 }
 // 構え中の剣の光: 頭上静止=金（チャージ完了で明滅）/ 水平静止=溜めLvで白く / 下段=赤
 const HG = { base:new THREE.Color(0x2a6f88), ex:new THREE.Color(0xfff0b0), ch:new THREE.Color(0xbff8ff), zan:new THREE.Color(0xff4060), c:new THREE.Color() };
@@ -2075,7 +2122,7 @@ function startRosario(){
 const f2 = v => v.toFixed(2), f1 = v => v.toFixed(1);
 const SK_UI = { win:['skWin','skWinV'], rB:['skRB','skRBV',f2], rA:['skRA','skRAV',f2], minPk:['skPk','skPkV'], mult:['skMul','skMulV'], sqWin:['skSq','skSqV'],
   heavyV:['skHV','skHVV'], heavyH:['skHH','skHHV'], spin:['skSp','skSpV'], thrustA:['skTA','skTAV',f1], thrustRot:['skTR','skTRV'], thrustPk:['skTP','skTPV'],
-  exHold:['skEx','skExV',f1], chMin:['skCh','skChV',f1], zanA:['skZa','skZaV',f1], zanN:['skZn','skZnV'], nunTh:['skNt','skNtV',f1] };
+  exHold:['skEx','skExV',f1], chMin:['skCh','skChV',f1], zanA:['skZa','skZaV',f1], zanN:['skZn','skZnV'], nunTh:['skNt','skNtV',f1], dualSim:['skDs','skDsV',f2] };
 function skSet(key, v){ const [i, l, fm] = SK_UI[key], el = $(i); el.value = v; sk[key] = +el.value; $(l).textContent = fm ? fm(sk[key]) : sk[key]; }
 for (const key in SK_UI) $(SK_UI[key][0]).oninput = e => skSet(key, +e.target.value);
 // 直近の斬りを基準にしきい値を登録（実際の動きに合わせる）
