@@ -498,9 +498,12 @@ async function initMediaPipe() {
 /* ---------- 人物マスク / 背景プレート ---------- */
 let maskW = 0, maskH = 0;
 function clearMask() { if (maskW) { maskTex.image.data.fill(0); maskTex.needsUpdate = true; } }
+let maskN = 0;
 function grabMask() {
   const ms = poseRes?.segmentationMasks;
   if (!ms?.length) { if (!poseRes?.landmarks?.length) clearMask(); return false; }
+  // getAsFloat32Array() は GPU の処理完了を待つ同期読み出しで重い。2回に1回だけ読む(読まない回は閉じるだけ)
+  if (++maskN % 2) { for (const m of ms) try { m.close(); } catch {} return false; }
   let ok = false;
   try {
     const m = ms[0], f = m.getAsFloat32Array();
@@ -550,8 +553,10 @@ const learnQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), learnMat); learn
 let rtA = null, rtB = null;
 function clearRT(rt) { renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.setRenderTarget(null); renderer.setClearColor(0x000000, 1); }
 function resetLearn() { if (rtA) { clearRT(rtA); clearRT(rtB); } U.uHasLearn.value = 0; }
+let learnN = 0;
 function learnBg(empty) {
-  const vw = video.videoWidth, vh = video.videoHeight; if (!vw) return;
+  if (++learnN % 4 && U.uHasLearn.value) return;   // 背景はゆっくり覚えれば十分なので間引く
+  const vw = video.videoWidth >> 1, vh = video.videoHeight >> 1; if (!vw) return;
   if (!rtA || rtA.width !== vw || rtA.height !== vh) {
     rtA?.dispose(); rtB?.dispose();
     const o = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false };
@@ -871,7 +876,11 @@ const dirOf = (a, b) => V.set((lm(b).x - lm(a).x) * (mirror ? -1 : 1), -(lm(b).y
 // 「ワールド基準の回転」をボーンのローカル回転に直すとき、この分を補正しないと上下・前後が反転する。
 const restQ = () => vrm.scene.getWorldQuaternion(new THREE.Quaternion());
 // ワールド基準の回転 Qw(待機姿勢からの回転)をボーンに適用
+// 追従の強さ k は「60fpsで1フレームあたり」の値。fpsが落ちても時間あたりの追従速度が同じになるよう補正する
+let frameScale = 1;
+const kAdj = k => 1 - Math.pow(1 - k, frameScale);
 function setWorldRot(name, Qw, k = 0.5) {
+  k = kAdj(k);
   const n = vrm.humanoid.getNormalizedBoneNode(name); if (!n) return;
   const parentW = n.parent.getWorldQuaternion(new THREE.Quaternion());
   n.quaternion.slerp(parentW.invert().multiply(Qw).multiply(restQ()), k);
@@ -881,12 +890,14 @@ function setWorldRot(name, Qw, k = 0.5) {
 function setDir(name, rest, dir, k = 0.5) { setWorldRot(name, new THREE.Quaternion().setFromUnitVectors(rest, dir), k); }
 // ワールド基準の累積回転 q をローカルに直して適用(hips→spine のように親子で使っても整合する)
 function setRot(name, q, k = 0.5) {
+  k = kAdj(k);
   const n = vrm.humanoid.getNormalizedBoneNode(name); if (!n) return;
   const R0 = restQ();
   n.quaternion.slerp(R0.clone().invert().multiply(q).multiply(R0), k); n.updateMatrixWorld(true);
 }
 // ローカル回転をそのまま適用(指など)
 function setLocal(name, q, k = 0.5) {
+  k = kAdj(k);
   const n = vrm.humanoid.getNormalizedBoneNode(name); if (n) n.quaternion.slerp(q, k);
 }
 
@@ -1341,19 +1352,20 @@ function loop() {
   if (P.frameMs && now - lastRender < P.frameMs - 1.5) return;   // 軽量モード: 描画を約30fpsに制限
   lastRender = now;
   const dt = Math.min(clock.getDelta(), 0.1);
+  frameScale = Math.min(dt * 60, 4);
   updateView();
   if (tracking && video.readyState >= 2 && video.currentTime !== lastT) {
     lastT = video.currentTime;
     if (++detN % P.skip === 0) {
       const ts = performance.now(), turn = (detN / P.skip) | 0, useHand = hand && $('handTrack').checked;
       try {
-        faceRes = face.detectForVideo(video, ts);   // 表情・口パクは毎回
-        // 標準/軽量: ポーズと手を交互に検出して1フレームあたりの負荷を半分に
-        let poseRan = false;
-        if (!P.alt || !useHand || (turn & 1) === 0) { poseRes = pose.detectForVideo(video, ts); LM = poseRes.worldLandmarks?.[0] || null; poseRan = true; }
+        // 体の動きが一番目立つので、ポーズは毎回検出する
+        poseRes = pose.detectForVideo(video, ts); LM = poseRes.worldLandmarks?.[0] || null;
+        // 標準/軽量: 顔と手を交互に検出して1フレームあたりの負荷を抑える
+        if (!P.alt || !useHand || (turn & 1) === 0) faceRes = face.detectForVideo(video, ts);
         if (useHand) { if (!P.alt || (turn & 1) === 1) handRes = hand.detectForVideo(video, ts); } else handRes = null;
         drawOverlay();
-        if (poseRan) onDetect(now);
+        onDetect(now);
       } catch (e) { console.warn(e); }
     }
   }
