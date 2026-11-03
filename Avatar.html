@@ -97,6 +97,7 @@ label.range{flex-direction:row;align-items:center;gap:10px}
 label.range input{flex:1;max-width:260px;accent-color:var(--amber)}
 #liveRow{margin-top:10px}
 canvas.ov.editing{cursor:crosshair;touch-action:none}
+label.btn.file{cursor:pointer;display:inline-block}
 .placeholder{color:var(--ink-soft);font-size:13.5px;margin:0}
 </style>
 <script type="importmap">
@@ -184,6 +185,11 @@ canvas.ov.editing{cursor:crosshair;touch-action:none}
               <option value="lite">軽量（低スペック向け）</option>
             </select>
           </label>
+        </div>
+        <div class="row">
+          <label class="btn file">VRoid素体を読み込む<input type="file" id="tplFile" accept=".vrm,.glb" hidden></label>
+          <label class="toggle"><input type="checkbox" id="useTpl" disabled> 素体を使う</label>
+          <span class="hint" id="tplStatus" style="margin:0">未読み込み（簡易モデルで作ります）</span>
         </div>
         <div class="row">
           <label class="toggle"><input type="checkbox" id="mirror" checked> 鏡のように動かす</label>
@@ -619,7 +625,7 @@ function buildBody(rig, F, S, B, opts = {}) {
     });
     fillSmooth(LR, 'rz', .06, 3); fillSmooth(LR, 'zo', 0, 3);
     const ch = [[-Y.hip, sd + 'UpperLeg'], [-Y.kn, sd + 'LowerLeg'], [-Y.an, sd + 'Foot']];
-    parts.push({ name: sd + 'Leg', R: LR, M: 40, len: Y.hip + .03 - Y.an, cap: [false, true], wCap: [null, [[sd + 'Foot', 1]]],
+    parts.push({ name: sd + 'Leg', x0, R: LR, M: 40, len: Y.hip + .03 - Y.an, cap: [false, true], wCap: [null, [[sd + 'Foot', 1]]],
       pos: (R, th) => [x0 + R.xo + R.rx * Math.sin(th), R.y, R.zo + R.rz * Math.cos(th)],
       col: (R, th) => {
         const si = Math.sin(th), co = Math.cos(th);
@@ -645,6 +651,27 @@ function buildBody(rig, F, S, B, opts = {}) {
       w: R => R.z > L.foot * .65 ? [[sd + 'Foot', .5], [sd + 'Toes', .5]] : [[sd + 'Foot', 1]] });
     if (sd === 'left') stats.shoe = shoe;
   }
+
+  /* ---------- 任意の3D位置の色を写真から取る（素体の焼き込み用） ---------- */
+  const PN = Object.fromEntries(parts.map(p => [p.name, p]));
+  const atKey = (list, key, v) => {
+    const n = list.length, asc = list[n - 1][key] > list[0][key];
+    if (asc ? v <= list[0][key] : v >= list[0][key]) return list[0];
+    if (asc ? v >= list[n - 1][key] : v <= list[n - 1][key]) return list[n - 1];
+    let lo = 0, hi = n - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if ((list[m][key] < v) === asc) lo = m; else hi = m; }
+    const a = list[lo], b = list[hi]; return lerpR(a, b, (v - a[key]) / (b[key] - a[key]));
+  };
+  const rc = new Map();   // 2mm刻みでリングの補間結果をためて、何度も補間しない
+  const ringAt = (region, key, v) => { const id = region + (Math.round(v * 500)); let R = rc.get(id); if (!R) { R = atKey(PN[region].R, key, Math.round(v * 500) / 500); rc.set(id, R); } return R; };
+  const sample = (region, p) => {
+    const pt = PN[region]; if (!pt) return null;
+    if (region === 'trunk' || region === 'head') { const R = ringAt(region, 'y', p.y); return pt.col(R, Math.atan2(p.x / Math.max(R.rx, .005), (p.z - R.zc) / Math.max(R.rz, .005))); }
+    if (region.endsWith('Arm')) { const g = region === 'leftArm' ? 1 : -1, R = ringAt(region, 'a', p.x * g); return pt.col(R, Math.atan2((p.y - Y.sh - R.yc) / R.ry, p.z / R.rz)); }
+    if (region.endsWith('Leg')) { const R = ringAt(region, 'y', p.y); return pt.col(R, Math.atan2((p.x - pt.x0 - R.xo) / R.rx, (p.z - R.zo) / R.rz)); }
+    return pt.col();
+  };
+  const headOut = { headAt, eyeY, chinY, topY, cheekW, headRx, headRz, headZc };
+  if (opts.noMesh) return { stats, head: headOut, parts: PN, sample };
 
   /* ---------- テクスチャの配置（棚詰め） ---------- */
   const PADX = 3, AW = 2048;
@@ -731,7 +758,7 @@ function buildBody(rig, F, S, B, opts = {}) {
   const nr = geo.attributes.normal, nA = new V3(), nB = new V3();
   for (const [i, j] of seams) { nA.fromBufferAttribute(nr, i); nB.fromBufferAttribute(nr, j); nA.add(nB).normalize(); nr.setXYZ(i, nA.x, nA.y, nA.z); nr.setXYZ(j, nA.x, nA.y, nA.z); }
   stats.verts = pos.length / 3; stats.tris = idx.length / 3; stats.texSize = `${AW}×${AH}`;
-  return { geo, stats, tex, head: { headAt, eyeY, chinY, topY, cheekW } };
+  return { geo, stats, tex, head: headOut, parts: PN, sample };
 }
 
 /* 顔写真を頭の前面に貼るための曲面（頭の形に沿わせ、正面から投影したUVを付ける） */
@@ -835,6 +862,266 @@ function glbToVrm0(glb, name) {
         floatProperties: {}, vectorProperties: {}, textureProperties: {}, keywordMap: {}, tagMap: {} })),
     } });
   });
+}
+/* ===== VRoid素体（VRM）を読み込んで、スキャンに合わせて変形・色を焼き込む ===== */
+const HAND_RE = /^(left|right)(Thumb|Index|Middle|Ring|Little)/;
+function toHB(h) {
+  if (!h) return 'hips';
+  if (HB.includes(h)) return h;
+  if (h === 'upperChest') return 'chest';
+  const m = h.match(HAND_RE); if (m) return m[1] + 'Hand';
+  if (/Eye$|^jaw$/.test(h)) return 'head';
+  return 'hips';
+}
+function parseVRM(buf) {
+  const dv = new DataView(buf), jl = dv.getUint32(12, true);
+  const json = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 20, jl)));
+  const binOff = 20 + jl + 8;
+  const acc = i => {
+    const a = json.accessors[i], bv = json.bufferViews[a.bufferView];
+    const nc = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 }[a.type], ct = a.componentType;
+    const sz = { 5126: 4, 5125: 4, 5123: 2, 5122: 2, 5121: 1, 5120: 1 }[ct], stride = bv.byteStride || nc * sz;
+    const base = binOff + (bv.byteOffset || 0) + (a.byteOffset || 0), out = new Float32Array(a.count * nc);
+    for (let k = 0; k < a.count; k++) for (let c = 0; c < nc; c++) {
+      const o = base + k * stride + c * sz;
+      let v = ct === 5126 ? dv.getFloat32(o, true) : ct === 5125 ? dv.getUint32(o, true) : ct === 5123 ? dv.getUint16(o, true) : ct === 5122 ? dv.getInt16(o, true) : ct === 5121 ? dv.getUint8(o) : dv.getInt8(o);
+      if (a.normalized && ct === 5123) v /= 65535; else if (a.normalized && ct === 5121) v /= 255;
+      out[k * nc + c] = v;
+    }
+    return out;
+  };
+  const ext = json.extensions || {}, isV1 = !!ext.VRMC_vrm;
+  const hbList = isV1 ? Object.entries(ext.VRMC_vrm.humanoid.humanBones).map(([bone, v]) => ({ bone, node: v.node })) : (ext.VRM ? ext.VRM.humanoid.humanBones : []);
+  if (!hbList.length) throw new Error('VRMのボーン情報が見つかりません');
+  const human = {}; hbList.forEach(h => human[h.node] = h.bone);
+  const parent = {}; json.nodes.forEach((n, i) => (n.children || []).forEach(c => parent[c] = i));
+  const world = [];
+  const wm = i => {
+    if (world[i]) return world[i];
+    const n = json.nodes[i], m = new THREE.Matrix4();
+    if (n.matrix) m.fromArray(n.matrix);
+    else m.compose(new V3(...(n.translation || [0, 0, 0])), new THREE.Quaternion(...(n.rotation || [0, 0, 0, 1])), new V3(...(n.scale || [1, 1, 1])));
+    world[i] = parent[i] !== undefined ? wm(parent[i]).clone().multiply(m) : m;
+    return world[i];
+  };
+  const conv = isV1 ? (x, y, z) => [x, y, z] : (x, y, z) => [-x, y, -z];   // VRM0は-Z向きなので180°回す
+  const nodeHB = i => { let k = i; while (k !== undefined) { if (human[k] !== undefined) return toHB(human[k]); k = parent[k]; } return 'hips'; };
+  const joints = {};
+  for (const h of hbList) { const p = new V3().setFromMatrixPosition(wm(h.node)); const c = conv(p.x, p.y, p.z); joints[h.bone] = new V3(...c); }
+  const imgOf = mat => {
+    const t = mat && mat.pbrMetallicRoughness && mat.pbrMetallicRoughness.baseColorTexture;
+    if (!t) return null;
+    const im = json.images[json.textures[t.index].source], bv = json.bufferViews[im.bufferView];
+    return { bytes: new Uint8Array(buf, binOff + (bv.byteOffset || 0), bv.byteLength), mime: im.mimeType || 'image/png' };
+  };
+  const prims = [];
+  json.nodes.forEach((n, ni) => {
+    if (n.mesh === undefined) return;
+    const M = wm(ni), skin = n.skin !== undefined ? json.skins[n.skin] : null;
+    const jmap = skin ? skin.joints.map(nodeHB) : null;
+    json.meshes[n.mesh].primitives.forEach(p => {
+      const mat = json.materials[p.material] || {}, name = mat.name || 'mat';
+      const pos = acc(p.attributes.POSITION), nrm = p.attributes.NORMAL !== undefined ? acc(p.attributes.NORMAL) : null;
+      const uv = p.attributes.TEXCOORD_0 !== undefined ? acc(p.attributes.TEXCOORD_0) : null;
+      const idx = p.indices !== undefined ? acc(p.indices) : Float32Array.from({ length: pos.length / 3 }, (_, i) => i);
+      const J = p.attributes.JOINTS_0 !== undefined ? acc(p.attributes.JOINTS_0) : null, W = p.attributes.WEIGHTS_0 !== undefined ? acc(p.attributes.WEIGHTS_0) : null;
+      const nv = pos.length / 3, P2 = new Float32Array(nv * 3), N2 = new Float32Array(nv * 3), v = new V3(), nm = new THREE.Matrix3().getNormalMatrix(M);
+      for (let k = 0; k < nv; k++) {
+        v.set(pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2]).applyMatrix4(M); const c = conv(v.x, v.y, v.z); P2.set(c, k * 3);
+        if (nrm) { v.set(nrm[k * 3], nrm[k * 3 + 1], nrm[k * 3 + 2]).applyMatrix3(nm).normalize(); const d = conv(v.x, v.y, v.z); N2.set(d, k * 3); }
+      }
+      const bw = [];   // 頂点ごとの [[HB名, 重み],...]
+      for (let k = 0; k < nv; k++) {
+        const acc2 = {};
+        if (J && jmap) for (let c = 0; c < 4; c++) { const w = W[k * 4 + c]; if (w > 0) { const h = jmap[J[k * 4 + c]]; acc2[h] = (acc2[h] || 0) + w; } }
+        else acc2.hips = 1;
+        bw.push(Object.entries(acc2).sort((a, b) => b[1] - a[1]).slice(0, 4));
+      }
+      const hide = /EyeHighlight|Eyeline|FaceBrow|EyeIris|EyeExtra|Highlight/i.test(name);
+      const kind = /HAIR/i.test(name) ? 'hair' : (/FACE|EYE|Mouth|Face_/i.test(name) ? 'face' : 'body');
+      prims.push({ name, kind, hide, pos: P2, nrm: N2, uv, idx: Uint32Array.from(idx), bw, img: imgOf(mat),
+        alphaMode: mat.alphaMode || 'OPAQUE', alphaCutoff: mat.alphaCutoff ?? .5, doubleSided: !!mat.doubleSided });
+    });
+  });
+  // 顔の目の高さ（白目または虹彩の中心）
+  const eyeP = prims.find(p => /EyeWhite|EyeIris/i.test(p.name));
+  let eyeY = joints.leftEye ? joints.leftEye.y : NaN;
+  if (eyeP) { const used = new Set(eyeP.idx); let s = 0; used.forEach(k => s += eyeP.pos[k * 3 + 1]); eyeY = s / used.size; }
+  return { isV1, joints, prims, eyeY, version: isV1 ? '1.0' : '0.x' };
+}
+
+/* 区間ごとの一次補間（範囲外は端の傾きで延長） */
+function pwMap(pts) {
+  pts = pts.slice().sort((a, b) => a[0] - b[0]);
+  return x => {
+    let i = 0; while (i < pts.length - 2 && x > pts[i + 1][0]) i++;
+    const a = pts[i], b = pts[i + 1]; return a[1] + (b[1] - a[1]) * (x - a[0]) / ((b[0] - a[0]) || 1);
+  };
+}
+/* 輪切りの外形（最小・最大）を1cmごとにためて、なめらかにして引けるようにする */
+function profile(step = .01) {
+  const m = new Map();
+  return {
+    add(k, u, v) { const i = Math.round(k / step); let b = m.get(i); if (!b) m.set(i, b = [1e9, -1e9, 1e9, -1e9]); b[0] = Math.min(b[0], u); b[1] = Math.max(b[1], u); b[2] = Math.min(b[2], v); b[3] = Math.max(b[3], v); },
+    done() {
+      const keys = [...m.keys()].sort((a, b) => a - b); if (!keys.length) return () => null;
+      const lo = keys[0], hi = keys[keys.length - 1], n = hi - lo + 1, A = [];
+      for (let i = 0; i < n; i++) A.push(m.get(lo + i) || null);
+      for (let i = 0; i < n; i++) if (!A[i]) { let j = 1; while (!A[i - j] && !A[i + j] && j < n) j++; A[i] = (A[i - j] || A[i + j]).slice(); }
+      const S = A.map((_, i) => { const r = [0, 0, 0, 0]; let c = 0; for (let k = -2; k <= 2; k++) { const b = A[i + k]; if (b) { for (let q = 0; q < 4; q++) r[q] += b[q]; c++; } } return r.map(x => x / c); });
+      return k => { const f = clamp(k / step - lo, 0, n - 1, 0), i = Math.min(n - 2, Math.floor(f)), t = f - i; if (n === 1) return S[0]; return S[i].map((x, q) => x + (S[i + 1][q] - x) * t); };
+    },
+  };
+}
+const regionOf = h => /Arm$|Hand$/.test(h) ? (h.startsWith('left') ? 'leftArm' : 'rightArm')
+  : /UpperLeg$|LowerLeg$/.test(h) ? (h.startsWith('left') ? 'leftLeg' : 'rightLeg')
+  : /Foot$|Toes$/.test(h) ? (h.startsWith('left') ? 'leftFoot' : 'rightFoot')
+  : h === 'head' ? 'head' : 'trunk';
+
+function fitTemplate(tpl, rig, body, opts = {}) {
+  const { L, Y } = rig.C, P = rig.P, T = tpl.joints, PN = body.parts, hd = body.head;
+  const ax = n => (Math.abs(T['left' + n].x) + Math.abs(T['right' + n].x)) / 2;
+  const ay = n => (T['left' + n].y + T['right' + n].y) / 2;
+  const tot = L.shHalf + L.upper + L.fore + L.hand;
+  // 素体の手の長さ・つま先・頭の寸法
+  let handT = 0, toeZ = -1e9, eyeRx = 0, hz0 = 1e9, hz1 = -1e9, chinT = 1e9, topT = -1e9;
+  const eyeT = Number.isFinite(tpl.eyeY) ? tpl.eyeY : (T.head.y + .06);
+  for (const pr of tpl.prims) {
+    if (pr.hide) continue;
+    for (const k of new Set(pr.idx)) {
+      const x = pr.pos[k * 3], y = pr.pos[k * 3 + 1], z = pr.pos[k * 3 + 2], h = pr.bw[k][0][0];
+      if (h.endsWith('Hand')) handT = Math.max(handT, Math.abs(x) - ax('Hand'));
+      if (/Foot$|Toes$/.test(h)) toeZ = Math.max(toeZ, z);
+      if (h === 'head') {
+        topT = Math.max(topT, y);
+        if (pr.kind === 'face' && /SKIN/i.test(pr.name)) chinT = Math.min(chinT, y);
+        if (Math.abs(y - eyeT) < .012) { eyeRx = Math.max(eyeRx, Math.abs(x)); hz0 = Math.min(hz0, z); hz1 = Math.max(hz1, z); }
+      }
+    }
+  }
+  if (!(handT > .05)) handT = .17; if (!(chinT < eyeT)) chinT = eyeT - .1; if (!(eyeRx > .03)) eyeRx = .09; if (!(hz1 > hz0)) { hz0 = -.09; hz1 = .1; }
+  const footTY = ay('Foot'), footTZ = (T.leftFoot.z + T.rightFoot.z) / 2;
+  if (!(toeZ > footTZ + .03)) toeZ = footTZ + .15;
+  const trunkY = pwMap([[ay('UpperLeg'), Y.hip], [ay('UpperArm'), Y.sh], [T.neck.y, P.neck.y], [T.head.y, P.head.y]]);
+  const armA = pwMap([[ax('UpperArm'), L.shHalf], [ax('LowerArm'), L.shHalf + L.upper], [ax('Hand'), L.shHalf + L.upper + L.fore], [ax('Hand') + handT, tot]]);
+  const legY = pwMap([[footTY, Y.an], [ay('LowerLeg'), Y.kn], [ay('UpperLeg'), Y.hip]]);
+  const armTY = ay('UpperArm');
+  // 1) 素体の輪切り外形をとる
+  const prof = { trunk: profile(), leftArm: profile(), rightArm: profile(), leftLeg: profile(), rightLeg: profile() };
+  for (const pr of tpl.prims) {
+    if (pr.hide || pr.kind !== 'body') continue;
+    for (const k of new Set(pr.idx)) {
+      const x = pr.pos[k * 3], y = pr.pos[k * 3 + 1], z = pr.pos[k * 3 + 2], r = regionOf(pr.bw[k][0][0]);
+      if (r === 'trunk') prof.trunk.add(trunkY(y), Math.abs(x), z);
+      else if (r.endsWith('Arm')) prof[r].add(armA(Math.abs(x)), y, z);
+      else if (r.endsWith('Leg')) prof[r].add(legY(y), x, z);
+    }
+  }
+  const pf = Object.fromEntries(Object.entries(prof).map(([k, v]) => [k, v.done()]));
+  const at = (list, key, v) => {
+    const n = list.length, asc = list[n - 1][key] > list[0][key];
+    if (asc ? v <= list[0][key] : v >= list[0][key]) return list[0];
+    if (asc ? v >= list[n - 1][key] : v <= list[n - 1][key]) return list[n - 1];
+    let lo = 0, hi = n - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if ((list[m][key] < v) === asc) lo = m; else hi = m; }
+    const a = list[lo], b = list[hi]; return lerpR(a, b, (v - a[key]) / (b[key] - a[key]));
+  };
+  const rs = (s, t) => clamp(s / Math.max(t, 1e-3), .55, 1.9, 1);
+  // 2) 骨ごとの変形
+  const sideX = { left: 1, right: -1 };
+  const xf = (region, x, y, z) => {
+    if (region === 'trunk') {
+      const yy = trunkY(y), R = at(PN.trunk.R, 'y', Math.min(yy, PN.trunk.R[PN.trunk.R.length - 1].y)), q = pf.trunk(yy);
+      const zc = (q[2] + q[3]) / 2;
+      return [x * rs(R.rx, q[1]), yy, R.zc + (z - zc) * rs(R.rz, (q[3] - q[2]) / 2)];
+    }
+    if (region === 'head') {
+      const sy = y >= eyeT ? (hd.topY - hd.eyeY) / (topT - eyeT) : (hd.eyeY - hd.chinY) / (eyeT - chinT);
+      return [x * hd.headRx / eyeRx, hd.eyeY + (y - eyeT) * sy, hd.headZc + (z - (hz0 + hz1) / 2) * hd.headRz / ((hz1 - hz0) / 2)];
+    }
+    if (region.endsWith('Arm')) {
+      const g = sideX[region.slice(0, -3)], a = armA(Math.abs(x)), R = at(PN[region].R, 'a', a), q = pf[region](a);
+      const yc = (q[0] + q[1]) / 2, zc = (q[2] + q[3]) / 2;
+      return [g * a, Y.sh + R.yc + (y - yc) * rs(R.ry, (q[1] - q[0]) / 2), (z - zc) * rs(R.rz, (q[3] - q[2]) / 2)];
+    }
+    if (region.endsWith('Leg')) {
+      const g = sideX[region.slice(0, -3)], yy = legY(y), R = at(PN[region].R, 'y', yy), q = pf[region](yy);
+      const xc = (q[0] + q[1]) / 2, zc = (q[2] + q[3]) / 2;
+      return [g * L.hipHalf + R.xo + (x - xc) * rs(R.rx, (q[1] - q[0]) / 2), yy, R.zo + (z - zc) * rs(R.rz, (q[3] - q[2]) / 2)];
+    }
+    // 足
+    const g = sideX[region.slice(0, -4)], fx = g > 0 ? T.leftFoot.x : T.rightFoot.x;
+    return [g * L.hipHalf + (x - fx), y <= footTY ? y * Y.an / footTY : legY(y), (z - footTZ) * L.foot / (toeZ - footTZ)];
+  };
+  // 3) 頂点を動かし、テクスチャを焼き込む
+  const out = [];
+  for (const pr of tpl.prims) {
+    if (pr.hide) continue;
+    const nv = pr.pos.length / 3, F2 = new Float32Array(nv * 3), reg = [];
+    for (let k = 0; k < nv; k++) {
+      const x = pr.pos[k * 3], y = pr.pos[k * 3 + 1], z = pr.pos[k * 3 + 2];
+      let sx = 0, sy = 0, sz = 0, sw = 0;
+      for (const [h, w] of pr.bw[k]) { const q = xf(regionOf(h), x, y, z); sx += q[0] * w; sy += q[1] * w; sz += q[2] * w; sw += w; }
+      F2[k * 3] = sx / sw; F2[k * 3 + 1] = sy / sw; F2[k * 3 + 2] = sz / sw;
+      reg.push(regionOf(pr.bw[k][0][0]));
+    }
+    const sI = new Uint16Array(nv * 4), sW = new Float32Array(nv * 4);
+    for (let k = 0; k < nv; k++) {
+      const b = pr.bw[k], t = b.reduce((s, x) => s + x[1], 0) || 1;
+      for (let c = 0; c < 4; c++) { sI[k * 4 + c] = b[c] ? HB.indexOf(b[c][0]) : 0; sW[k * 4 + c] = b[c] ? b[c][1] / t : (c === 0 && !b.length ? 1 : 0); }
+    }
+    const tex = pr.uv ? bakePrim(pr, F2, reg, body.sample, opts.faceSample, opts.texSize ? opts.texSize(pr) : null) : null;
+    out.push({ name: pr.name, kind: pr.kind, pos: F2, nrm: pr.nrm, uv: pr.uv, idx: pr.idx, sI, sW, tex,
+      alphaMode: pr.alphaMode, alphaCutoff: pr.alphaCutoff, doubleSided: pr.doubleSided });
+  }
+  return out;
+}
+
+/* UV空間で三角形を塗りつぶし、各画素の3D位置を写真に投影して色を取る */
+function bakePrim(pr, F2, reg, sample, faceSample, base) {
+  const W = base ? base.width : 512, H = base ? base.height : 512;
+  const data = base ? new Uint8ClampedArray(base.data) : new Uint8ClampedArray(W * H * 4).fill(255);
+  const done = new Uint8Array(W * H), uv = pr.uv, idx = pr.idx, N = pr.nrm;
+  const isFace = pr.kind === 'face' || pr.kind === 'hair';
+  const p = new V3(), n = new V3();
+  for (let t = 0; t < idx.length; t += 3) {
+    const a = idx[t], b = idx[t + 1], c = idx[t + 2];
+    const ax = uv[a * 2] * W - .5, ay = uv[a * 2 + 1] * H - .5, bx = uv[b * 2] * W - .5, by = uv[b * 2 + 1] * H - .5, cx = uv[c * 2] * W - .5, cy = uv[c * 2 + 1] * H - .5;
+    const den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy); if (Math.abs(den) < 1e-9) continue;
+    const x0 = Math.max(0, Math.floor(Math.min(ax, bx, cx)) - 1), x1 = Math.min(W - 1, Math.ceil(Math.max(ax, bx, cx)) + 1);
+    const y0 = Math.max(0, Math.floor(Math.min(ay, by, cy)) - 1), y1 = Math.min(H - 1, Math.ceil(Math.max(ay, by, cy)) + 1);
+    const r = reg[a] === reg[b] || reg[a] === reg[c] ? reg[a] : reg[b];
+    const eps = -1.2 / Math.sqrt(Math.abs(den));
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const w0 = ((by - cy) * (x - cx) + (cx - bx) * (y - cy)) / den, w1 = ((cy - ay) * (x - cx) + (ax - cx) * (y - cy)) / den, w2 = 1 - w0 - w1;
+      if (w0 < eps || w1 < eps || w2 < eps) continue;
+      const o = y * W + x; if (done[o] === 2) continue;
+      const inside = w0 >= 0 && w1 >= 0 && w2 >= 0;
+      if (done[o] === 1 && !inside) continue;
+      p.set(F2[a * 3] * w0 + F2[b * 3] * w1 + F2[c * 3] * w2, F2[a * 3 + 1] * w0 + F2[b * 3 + 1] * w1 + F2[c * 3 + 1] * w2, F2[a * 3 + 2] * w0 + F2[b * 3 + 2] * w1 + F2[c * 3 + 2] * w2);
+      let col = sample(r, p);
+      if (isFace && faceSample) {
+        n.set(N[a * 3] * w0 + N[b * 3] * w1 + N[c * 3] * w2, N[a * 3 + 1] * w0 + N[b * 3 + 1] * w1 + N[c * 3 + 1] * w2, N[a * 3 + 2] * w0 + N[b * 3 + 2] * w1 + N[c * 3 + 2] * w2).normalize();
+        const f = faceSample(p);
+        if (f) { const k = f[3] / 255 * sstep(-.05, .35, n.z); col = col ? [0, 1, 2].map(q => col[q] + (f[q] - col[q]) * k) : f; }
+      }
+      if (!col) continue;
+      data[o * 4] = col[0]; data[o * 4 + 1] = col[1]; data[o * 4 + 2] = col[2];
+      done[o] = inside ? 2 : 1;
+    }
+  }
+  // すき間（UVの境目）を周りの色で埋める
+  for (let it = 0; it < 4; it++) {
+    const add = [];
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const o = y * W + x; if (done[o]) continue;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const X = x + dx, Yy = y + dy; if (X < 0 || Yy < 0 || X >= W || Yy >= H) continue;
+        const q = Yy * W + X; if (done[q]) { add.push([o, q]); break; }
+      }
+    }
+    for (const [o, q] of add) { data[o * 4] = data[q * 4]; data[o * 4 + 1] = data[q * 4 + 1]; data[o * 4 + 2] = data[q * 4 + 2]; done[o] = 1; }
+  }
+  return { width: W, height: H, data };
 }
 /*CORE-END*/
 /* ===================== ここから画面・カメラ・3D表示 ===================== */
@@ -1307,7 +1594,7 @@ function fillLasso() {
   for (let i = 0; i < s.mask.length; i++) if (a[i * 4 + 3] > 127) s.mask[i] = 1;
   editor.tint = maskCanvas(s);
 }
-function changed() { editor.s.edited = true; clearTimeout(editor.timer); editor.timer = setTimeout(() => rebuildAvatar(false), 250); }
+function changed() { editor.s.edited = true; clearTimeout(editor.timer); editor.timer = setTimeout(() => rebuildAvatar(false), useTpl() ? 700 : 250); }
 ov.addEventListener('pointerdown', e => {
   if (!editor.s) return;
   e.preventDefault(); ov.setPointerCapture(e.pointerId);
@@ -1380,7 +1667,7 @@ const clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), 100);
 const grad = new THREE.DataTexture(new Uint8Array([140, 185, 225, 255]), 4, 1, THREE.RedFormat);
 grad.minFilter = grad.magFilter = THREE.NearestFilter; grad.needsUpdate = true;
 const bodyMat = new THREE.MeshToonMaterial({ gradientMap: grad, clippingPlanes: [clip] });
-let atlasTex = null;
+let atlasTex = null, tplData = null, tplMeshes = [];
 const outlineMat = new THREE.MeshBasicMaterial({ color: 0x15161d, side: THREE.BackSide, clippingPlanes: [clip] });
 const ring = new THREE.Group();
 {
@@ -1393,6 +1680,8 @@ function clearBody() {
   for (const m of [bodyMesh, outlineMesh, faceMesh]) if (m) { m.parent && m.parent.remove(m); m.geometry.dispose(); }
   if (faceMesh) faceMesh.material.dispose(); if (faceTex) faceTex.dispose();
   bodyMesh = outlineMesh = faceMesh = faceTex = null;
+  for (const m of tplMeshes) { m.parent && m.parent.remove(m); m.geometry.dispose(); m.material.map && m.material.map.dispose(); m.material.dispose(); }
+  tplMeshes = [];
   $('#vrmBtn').disabled = $('#vrm1Btn').disabled = $('#glbBtn').disabled = $('#shotBtn').disabled = true;
 }
 function clearRig() {
@@ -1403,6 +1692,80 @@ function clearRig() {
   avatar = rig = helper = markers = smoothRaw = C = null;
 }
 
+/* ---------- VRoid素体の読み込み ---------- */
+const capFor = pr => /Body_00|_SKIN/i.test(pr.name) ? 1024 : /Mouth|EyeWhite/i.test(pr.name) ? 256 : 512;
+async function prepareTplImages(t) {
+  for (const pr of t.prims) {
+    if (pr.hide || !pr.img) continue;
+    const bmp = await createImageBitmap(new Blob([pr.img.bytes], { type: pr.img.mime }));
+    const sc = Math.min(1, capFor(pr) / Math.max(bmp.width, bmp.height));
+    const w = Math.max(8, Math.round(bmp.width * sc)), h = Math.max(8, Math.round(bmp.height * sc));
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(bmp, 0, 0, w, h);
+    pr.base = x.getImageData(0, 0, w, h); delete pr.img;
+  }
+}
+$('#tplFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  $('#tplStatus').textContent = '読み込み中…';
+  try {
+    const t = parseVRM(await f.arrayBuffer());
+    await prepareTplImages(t);
+    tplData = t; $('#useTpl').disabled = false; $('#useTpl').checked = true;
+    $('#tplStatus').textContent = `${f.name}（VRM ${t.version}・${t.prims.filter(p => !p.hide).length}パーツ）`;
+    rebuildAvatar(true);
+  } catch (err) { console.error(err); $('#tplStatus').textContent = '読み込めませんでした：' + err.message; }
+};
+$('#useTpl').onchange = () => rebuildAvatar(true);
+const useTpl = () => tplData && $('#useTpl').checked;
+
+/* 素体をスキャンに合わせて変形し、写真の色を焼き込んで表示する */
+function rebuildTemplate(reveal, F, S, B) {
+  const body = buildBody(rig, F, S, B, { face: faceRatios(), noMesh: true });
+  bodyStats = body.stats;
+  let faceSample = null;
+  if (isObj(scans.face)) {
+    try {
+      const fi = makeFace(body.head), S2 = faceCanvas.width, fd = faceCanvas.getContext('2d').getImageData(0, 0, S2, S2).data;
+      faceSample = p => {
+        const px = fi.eye.x + p.x / fi.mpp, py = fi.eye.y - (p.y - fi.eyeY) / fi.mpp;
+        const u = Math.round((px - fi.crop.x) / fi.crop.w * S2), v = Math.round((py - fi.crop.y) / fi.crop.h * S2);
+        if (u < 0 || v < 0 || u >= S2 || v >= S2) return null;
+        const o = (v * S2 + u) * 4; return [fd[o], fd[o + 1], fd[o + 2], fd[o + 3]];
+      };
+    } catch (e) { console.error('顔を焼き込めませんでした', e); }
+  }
+  const fit = fitTemplate(tplData, rig, body, { faceSample, texSize: pr => pr.base || null });
+  const saved = HB.map(n => rig.bones[n].quaternion.clone()), hp = rig.bones.hips.position.clone();
+  restPose(rig); avatar.updateMatrixWorld(true);
+  let verts = 0, tris = 0;
+  for (const f of fit) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(f.pos, 3));
+    if (f.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(f.uv, 2));
+    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(f.sI, 4));
+    g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(f.sW, 4));
+    g.setIndex(new THREE.BufferAttribute(f.idx, 1));
+    if (f.nrm && f.nrm.some(v => v !== 0)) g.setAttribute('normal', new THREE.Float32BufferAttribute(f.nrm, 3)); else g.computeVertexNormals();
+    let map = null;
+    if (f.tex) {
+      const c = document.createElement('canvas'); c.width = f.tex.width; c.height = f.tex.height;
+      c.getContext('2d').putImageData(new ImageData(f.tex.data, f.tex.width, f.tex.height), 0, 0);
+      map = new THREE.CanvasTexture(c); map.flipY = false; map.colorSpace = THREE.SRGBColorSpace; map.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    }
+    const mat = new THREE.MeshToonMaterial({ map, gradientMap: grad, clippingPlanes: [clip], side: f.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
+      alphaTest: f.alphaMode === 'MASK' ? f.alphaCutoff : 0, transparent: f.alphaMode === 'BLEND' });
+    const m = new THREE.SkinnedMesh(g, mat); m.name = f.name.replace(/\s*\(Instance\)/, ''); m.frustumCulled = false;
+    avatar.add(m); m.bind(rig.skeleton, new THREE.Matrix4()); tplMeshes.push(m);
+    verts += f.pos.length / 3; tris += f.idx.length / 3;
+  }
+  HB.forEach((n, i) => rig.bones[n].quaternion.copy(saved[i])); rig.bones.hips.position.copy(hp);
+  Object.assign(bodyStats, { verts, tris, texSize: '素体のUV' });
+  if (reveal) { revealStart = performance.now(); clip.constant = -.05; ring.visible = true; }
+  $('#vrmBtn').disabled = $('#vrm1Btn').disabled = $('#glbBtn').disabled = $('#shotBtn').disabled = false;
+  fillBodyTable(); drawThumbs();
+}
+
 /* ---------- その時点の撮影でアバターを組み立てる ---------- */
 function rebuildAvatar(reveal) {
   if (!rig || !isObj(scans.front)) return;
@@ -1410,6 +1773,7 @@ function rebuildAvatar(reveal) {
   const S = isObj(scans.side) ? makeView(scans.side.snap, 'side', C) : null;
   const B = isObj(scans.back) ? makeView(scans.back.snap, 'back', C) : null;
   clearBody();
+  if (useTpl()) return rebuildTemplate(reveal, F, S, B);
   const { geo, stats, head, tex } = buildBody(rig, F, S, B, { face: faceRatios() });
   { const tc = document.createElement('canvas'); tc.width = tex.width; tc.height = tex.height;
     tc.getContext('2d').putImageData(new ImageData(tex.data, tex.width, tex.height), 0, 0);
@@ -1471,7 +1835,7 @@ function update3D(now) {
     clip.constant = -.05 + e * (bodyStats.height + .05); ring.position.y = clip.constant; bonesOp = 1 - e * .85;
     if (t >= 1) { revealStart = -1; clip.constant = 100; ring.visible = false; }
   }
-  const show = !bodyMesh || revealStart >= 0 || $('#showBones').checked;
+  const show = !(bodyMesh || tplMeshes.length) || revealStart >= 0 || $('#showBones').checked;
   helper.visible = markers.visible = show;
   helper.material.opacity = markers.children[0].material.opacity = revealStart >= 0 ? bonesOp : 1;
 }
@@ -1479,8 +1843,17 @@ function update3D(now) {
 /* ---------- 保存 ---------- */
 function exportModel(kind) {   // kind: 'vrm0' / 'vrm1' / 'glb'
   const mats = [];
+  if (!bodyMesh && tplMeshes.length) {
+    const parts = tplMeshes.map(m => ({ geo: m.geometry, name: m.name, mat: new THREE.MeshStandardMaterial({ map: m.material.map, alphaTest: m.material.alphaTest,
+      transparent: m.material.transparent, side: m.material.side, roughness: .9, metalness: 0, name: m.name }) }));
+    return exportParts(kind, parts);
+  }
   const parts = [{ geo: bodyMesh.geometry, mat: new THREE.MeshStandardMaterial({ map: atlasTex, roughness: .9, metalness: 0, name: 'Body' }), name: 'Body' }];
   if (faceMesh) parts.push({ geo: faceMesh.geometry, mat: new THREE.MeshStandardMaterial({ map: faceTex, transparent: true, roughness: .9, metalness: 0, name: 'Face' }), name: 'Face' });
+  return exportParts(kind, parts);
+}
+function exportParts(kind, parts) {
+  const mats = [];
   parts.forEach(p => { p.mat.name = p.name; mats.push(p.mat); });
   const root = makeExportRoot(rig, parts, kind === 'vrm0');
   const done = () => { root.traverse(o => { if (o.isMesh) o.geometry.dispose(); }); mats.forEach(m => m.dispose()); };
