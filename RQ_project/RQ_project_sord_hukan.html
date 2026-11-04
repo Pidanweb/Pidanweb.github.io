@@ -13,8 +13,10 @@
   #camPanel select{width:100%;margin:4px 0 8px;padding:4px;font:inherit}
   #camPanel div{margin-top:6px}
   #camStat{font-size:12px;color:#ffd35a;word-break:break-all}
-  #v,#fv,#bgv{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
+  #v,#fv,#bgv,#sv{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
   #facePrev{position:fixed;left:10px;bottom:10px;z-index:5;width:240px;height:180px;border:2px solid #7ae7ff88;border-radius:8px;background:#000;pointer-events:none;display:none}
+  #d2Box label{display:block;margin-top:6px}
+  #sidePrev{position:fixed;left:260px;bottom:10px;z-index:5;width:240px;height:180px;border:2px solid #ffb35a88;border-radius:8px;background:#000;pointer-events:none;display:none}
   #faceBadge{margin-top:6px;font-size:12px;color:#7ae7ff;text-shadow:0 0 4px #000}
   #camPanel input[type=range]{width:100%}
   #camPanel input[type=file]{width:100%;margin:4px 0;color:#9fdcea;font-size:12px}
@@ -43,7 +45,7 @@
     <label>バック（背景の映像）<select id="camSel"></select></label>
     <div><button id="camApply">▶ この割り当てで開く</button> <button id="camRefresh">🔄 カメラを再検出</button> <button id="faceFlip">⇄ 入れ替え</button></div>
     <div id="camStat">「カメラを再検出」で一覧に名前が出ます</div>
-    <small>自動: 内蔵カメラ＝フロント、USBカメラ＝バック。違うときは手で選んでください。</small>
+    <small>自動: 内蔵カメラ＝フロント、USBカメラ（OLYMPUS / OM Webcam を含む）＝バック。違うときは手で選んでください（選んだカメラは次回も覚えています）。OLYMPUS は OBS を閉じてから使ってください。</small>
     <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
     <b style="color:#ffd35a">🖼 敵の背景</b>
     <label>背景の種類 <select id="bgMode"><option value="cam">📷 バックカメラの映像</option><option value="video">🎞 動画ファイル</option><option value="image">🖼 画像ファイル</option><option value="none">なし（単色）</option></select></label>
@@ -96,6 +98,18 @@
     <label><input type="checkbox" id="bcAR"> AR確認表示（カメラ映像にゲームの床とボスを重ねる）</label>
     <div id="bcStat" style="font-size:12px;color:#ffd35a">未設定</div>
     <small>足元まで全身が映るようにして「開始」→ 5秒のカウントダウン中にプレイする位置へ移動 → 3秒まっすぐ立つ（前かがみ・ひざ曲げは数えません）。左下のプレビューに床のマス目（1m間隔）が出るので、実際の床と合っているか確認してください。</small>
+    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <div id="d2Box">
+    <b style="color:#ffb35a">📷📷 2台モード（後ろ＋横のカメラで前後の位置を正確に）</b>
+    <label><input type="checkbox" id="d2On"> 2台モードを使う</label>
+    <label>横カメラ <select id="d2Sel"></select></label>
+    <label>横カメラの高さ（床からレンズ） <input type="number" id="d2CamH" value="0" min="0" max="300" style="width:70px"> cm<small>0 = わからない</small></label>
+    <label><input type="checkbox" id="d2AutoFov" checked> 横カメラの画角も自動で測る（高さを入れた時）</label>
+    <label>横カメラの画角 <b id="d2FovV">65</b>°<input type="range" id="d2Fov" min="35" max="110" step="1" value="65"></label>
+    <div><button id="d2Start">📐 横カメラの位置合わせ開始</button> <button id="d2Reset">リセット</button></div>
+    <div id="d2Stat" style="font-size:12px;color:#ffb35a">未設定</div>
+    <small>① メイン（上の「バック」）カメラをプレイヤーの後ろ、横カメラを左側に置く → ② 上の体キャリブレーションを先に完了 → ③「位置合わせ開始」→ 5か所（今の位置・前・後ろ・左・右）で1.5秒ずつまっすぐ立つ。2台とも足元まで映るようにしてください。左下の2枚目のプレビューが横カメラです。</small>
+    </div>
   </div>
   <div id="faceBadge"></div><div id="perfStat" style="margin-top:4px;font:12px monospace;color:#9fffb0;text-shadow:0 0 4px #000"></div><div id="wiiStat" style="margin-top:4px;font-size:12px;color:#ffd35a;text-shadow:0 0 4px #000"></div></div>
 <div id="menu"><h3 style="margin:0">MENU</h3>
@@ -131,6 +145,8 @@
 <video id="v" autoplay playsinline muted></video>
 <video id="fv" autoplay playsinline muted></video>
 <video id="bgv" playsinline muted loop></video>
+<video id="sv" autoplay playsinline muted></video>
+<canvas id="sidePrev" width="320" height="240"></canvas>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 // ===== GIANT SLIME RAID =====
@@ -344,7 +360,15 @@ const $ = id => document.getElementById(id), camSel = $('camSel'), camStat = $('
 // ===== カメラ一覧と自動割り当て（内蔵=フロント/顔、USB=バック/背景）=====
 let camList = [];
 const isBuiltin = l => /integrated|built-?in|内蔵|facetime|user[- ]?facing|front|フロント/i.test(l || '');
-const isExt = l => /usb|logi|c9\d\d|c270|brio|external|rear|back|environment|world[- ]?facing|バック/i.test(l || '');
+const isExt = l => /usb|logi|c9\d\d|c270|brio|external|rear|back|environment|world[- ]?facing|バック|om[- ]?(?:d[- ]?)?webcam|olympus|om system|obs virtual/i.test(l || '');
+// 使用中エラーを分かりやすく（OBS が掴んだままだと Chrome からは開けない）
+const camErrTxt = e => !e ? '不明なエラー' : e.name === 'NotReadableError' || e.name === 'TrackStartError' ? '他のアプリ（OBS など）が使用中です。OBS を閉じるか、そのカメラのソースを削除してください'
+  : e.name === 'NotAllowedError' ? 'カメラの許可がありません（アドレスバー左のアイコンから許可）'
+  : e.name === 'OverconstrainedError' ? 'このカメラが対応していない設定です' : e.name;
+// 手で選んだカメラを名前で覚える（次回も同じカメラを選ぶ）
+const camPrefKey = id => 'rqCamPref:' + id;
+function saveCamPref(sel){ try { const d = camList.find(d => d.deviceId === sel.value); if (d && d.label) localStorage.setItem(camPrefKey(sel.id), d.label); else localStorage.removeItem(camPrefKey(sel.id)); } catch (e){} }
+function loadCamPref(sel){ try { const l = localStorage.getItem(camPrefKey(sel.id)); const d = l && camList.find(d => d.label === l); return d ? d.deviceId : ''; } catch (e){ return ''; } }
 const camName = id => { const d = camList.find(d => d.deviceId === id); return d ? (d.label || 'カメラ') : '自動'; };
 function autoIds(){
   const L = camList.filter(d => d.deviceId); if (!L.length) return {};
@@ -366,9 +390,11 @@ async function listCams(){
       const o0 = document.createElement('option'); o0.value = ''; o0.textContent = autoTxt; sel.appendChild(o0);
       camList.forEach((d, i) => { if (!d.deviceId) return; const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || ('カメラ ' + (i+1)); sel.appendChild(o); });
       if (cur && camList.some(d => d.deviceId === cur)) sel.value = cur;
+      else if (!cur){ const p = loadCamPref(sel); if (p) sel.value = p; }
     };
     fill(faceSel, '自動: ' + (a.front ? camName(a.front) : '内蔵カメラ'));
     fill(camSel, '自動: ' + (a.back ? camName(a.back) : (camList.length < 2 ? '（1台のみ→フロントと共用）' : 'USBカメラ')));
+    { const s = autoSideId(); fill($('d2Sel'), '自動: ' + (s ? camName(s) : '（2台目が見つかりません）')); }
     const same = frontId() && frontId() === backId();
     camStat.textContent = !camList.length ? 'カメラが見つかりません'
       : `${camList.length}台検出 / フロント: ${camName(frontId())} / バック: ${camName(backId())}` + (same ? '　⚠ 同じカメラです' : '');
@@ -383,7 +409,7 @@ async function openCam(id){
   const tries = id ? [{ video:{ deviceId:{ exact:id }, ...sz }, audio:false }, { video:{ deviceId:{ exact:id } }, audio:false }] : [{ video:{ facingMode:'environment', ...sz }, audio:false }, { video:sz, audio:false }, { video:true, audio:false }];
   let err;
   for (const c of tries){ try { camStream = await navigator.mediaDevices.getUserMedia(c); break; } catch (e){ err = e; } }
-  if (!camStream){ camStat.textContent = '起動失敗: ' + (err && err.name) + '（他のアプリが使用中、または許可なし）'; popCam('カメラ起動失敗', '#ff4d5e', .6, 3); return false; }
+  if (!camStream){ camStat.textContent = '起動失敗: ' + camErrTxt(err); popCam('カメラ起動失敗', '#ff4d5e', .6, 3); return false; }
   const tr = camStream.getVideoTracks()[0], st = tr.getSettings();
   $('mir').checked = camMirror = st.facingMode !== 'environment';
   vid.srcObject = camStream;
@@ -396,7 +422,7 @@ async function openCam(id){
 }
 $('camBtn').onclick = () => { const p = $('camPanel'); p.hidden = !p.hidden; if (!p.hidden) listCams(); };
 $('camApply').onclick = async () => { if (bgMode === 'cam' || tp) await openCam(camSel.value || null); if (face.on && !tp) await startFace(); listCams(); };
-camSel.onchange = () => { listCams(); if (bgMode === 'cam' || tp) openCam(camSel.value || null); };
+camSel.onchange = () => { saveCamPref(camSel); listCams(); if (bgMode === 'cam' || tp) openCam(camSel.value || null); };
 $('camRefresh').onclick = async () => { camStat.textContent = '検出中…'; await ensureCamPerm(); await listCams(); };
 $('mir').onchange = e => camMirror = e.target.checked;
 for (const ev of ['mousedown', 'keydown', 'keyup']) for (const el of ['ui', 'menu']) $(el).addEventListener(ev, e => e.stopPropagation());
@@ -484,14 +510,16 @@ async function openFaceCam(){
   face.stream = null; face.src = null; faceRecenter();
   await ensureCamPerm(); await listCams();
   const id = frontId(), sz = { width:{ ideal:640 }, height:{ ideal:480 } };
-  const tries = id ? [{ video:{ deviceId:{ exact:id }, ...sz }, audio:false }, { video:{ facingMode:'user', ...sz }, audio:false }]
+  const tries = id ? [{ video:{ deviceId:{ exact:id }, ...sz }, audio:false }, { video:{ deviceId:{ exact:id } }, audio:false }, { video:{ facingMode:'user', ...sz }, audio:false }]
                    : [{ video:{ facingMode:'user', ...sz }, audio:false }, { video:true, audio:false }];
-  for (const c of tries){ try { face.stream = await navigator.mediaDevices.getUserMedia(c); break; } catch (e){} }
+  let ferr;
+  for (const c of tries){ try { face.stream = await navigator.mediaDevices.getUserMedia(c); break; } catch (e){ ferr = ferr || e; console.warn('[顔カメラ]', e); } }
+  if (face.stream && id && face.stream.getVideoTracks()[0].getSettings().deviceId !== id) setBadge('👤 選んだカメラを開けず別のカメラで代用中: ' + camErrTxt(ferr));
   if (face.stream){
     face.fm = (face.stream.getVideoTracks()[0].getSettings().facingMode || 'user') !== 'environment'; fv.srcObject = face.stream; try { await fv.play(); } catch (e){}
     face.src = fv;
   } else if (camStream){ face.src = vid; setBadge('👤 顔用カメラを開けず、背景カメラで認識します'); }
-  else setBadge('👤 顔認識用カメラを開けません');
+  else setBadge('👤 顔認識用カメラを開けません: ' + camErrTxt(ferr));
   listCams();
 }
 async function startFace(){
@@ -565,7 +593,7 @@ $('faceOn').onchange = e => {
   else { if (face.stream) face.stream.getTracks().forEach(t => t.stop()); face.stream = face.src = null; faceRecenter(); setBadge(''); }
 };
 $('faceGain').oninput = e => face.gain = +e.target.value;
-faceSel.onchange = () => { listCams(); if (face.on && !tp) openFaceCam(); };
+faceSel.onchange = () => { saveCamPref(faceSel); listCams(); if (face.on && !tp) openFaceCam(); };
 $('faceCal').onclick = () => { faceRecenter(); poseRecenter(); };
 $('faceStart').onclick = () => { if (!face.on){ $('faceOn').checked = face.on = true; } startFace(); };
 let prevOn = true; $('facePrevOn').onchange = e => prevOn = e.target.checked;
@@ -641,6 +669,7 @@ async function enterTP(){
   face.src = null; faceRecenter(); poseRecenter();
   loadPoseModel(); loadHandModel();
   if (!camStream) await openCam(camSel.value || null);
+  if (dual.on && !dual.stream) dualOpen();
   if (!vrm) restoreVRM();
 }
 function leaveTP(){ pose.seen = false; if (face.on && !face.stream) startFace(); }
@@ -748,11 +777,13 @@ const bcEye = () => bc.height*.93;   // 目・耳の高さ ≒ 身長×0.93
 const bcFocal = w => (w/2)/Math.tan(bc.hfov*Math.PI/360);
 function bcSay(t, popup, quiet){ if (bc.msg === t) return; bc.msg = t; $('bcStat').textContent = t; if (popup) popCam(popup, '#ffd35a', .6, 2.2); if (!quiet) console.log('[体キャリブ] ' + t); }
 // ランドマーク → 正規化画像座標の観測
-function bcObsFrom(n){
-  const W_ = vid.videoWidth, H_ = vid.videoHeight; if (!W_) return null;
+function bcObsFrom(n, el = vid, hf = bc.hfov, loose = false){   // loose: 片方のかかとだけ見えていればよい（横から撮ると奥の足が隠れるため）
+  const W_ = el.videoWidth, H_ = el.videoHeight; if (!W_) return null;
   const vis = i => n[i].visibility === undefined ? 1 : n[i].visibility;
-  if (Math.min(vis(29), vis(30)) < .5) return null;   // かかとが見えない
-  const f = bcFocal(W_), nx = x => (x*W_ - W_/2)/f, ny = y => (y*H_ - H_/2)/f;
+  const v29 = vis(29), v30 = vis(30);
+  if ((loose ? Math.max(v29, v30) : Math.min(v29, v30)) < .5) return null;   // かかとが見えない
+  const hi = loose && Math.min(v29, v30) < .5 ? [v29 >= v30 ? 29 : 30] : [29, 30];   // 使うかかと
+  const f = (W_/2)/Math.tan(hf*Math.PI/360), nx = x => (x*W_ - W_/2)/f, ny = y => (y*H_ - H_/2)/f;
   const hd = [2, 5, 7, 8];   // 目と耳（正面でも背後からでも頭の高さとして使える）
   const hx = hd.reduce((a, i) => a + n[i].x, 0)/4, hy = hd.reduce((a, i) => a + n[i].y, 0)/4;
   // 姿勢チェック（画面上の角度）: 体幹と脚が一直線・ひざが伸びている
@@ -761,13 +792,14 @@ function bcObsFrom(n){
   const sh = mid(P(11), P(12)), hp = mid(P(23), P(24)), hl = mid(P(29), P(30));
   const body = 180 - ang(sh, hp, hl), knee = Math.min(ang(P(23), P(25), P(27)), ang(P(24), P(26), P(28)));
   const upright = body < 15 && knee > 155 && hy*H_ < sh[1];
-  return { fx:nx((n[29].x + n[30].x)/2), fy:ny((n[29].y + n[30].y)/2), hx:nx(hx), hy:ny(hy), upright, body, knee };
+  const hm = k => hi.reduce((a, i) => a + n[i][k], 0)/hi.length;
+  return { fx:nx(hm('x')), fy:ny(hm('y')), hx:nx(hx), hy:ny(hy), upright, body, knee };
 }
 const bcMean = L => L.reduce((a, o) => ({ fx:a.fx + o.fx/L.length, fy:a.fy + o.fy/L.length, hx:a.hx + o.hx/L.length, hy:a.hy + o.hy/L.length }), { fx:0, fy:0, hx:0, hy:0 });
 
 // --- キャリブレーションの進行（poseStepから毎フレーム呼ばれる）---
 function bcPose(n){
-  const o = bcObsFrom(n); bc.live = o;
+  const o = bcObsFrom(n); bc.live = o; bc.liveT = performance.now();
   if (bc.state === 'locked'){ bcFeet(o); return; }
   if (!['count', 'stand1', 'move', 'stand2'].includes(bc.state)) return;
   const now = performance.now();
@@ -976,16 +1008,20 @@ $('bcPickClear').onclick = () => { bc.bossUV = null; bc.bossF = null; bcPick(fal
 $('bcBossH').oninput = e => { R = +e.target.value/2; $('bcBossHV').textContent = (+e.target.value).toFixed(1); bcHover(); bcBossUI(); if (bc.state === 'locked') bcSave(); };
 
 // 正規化画像座標のかかと → 床との交点（F座標）
-function bcRay(o){
+function bcRay(o){ return bcRayM(o, bc.FfromCam); }
+function bcRayM(o, FfromCam){   // FfromCam: カメラ座標 → そのカメラの床座標
   if (!o) return null;
-  const c = new THREE.Vector3().applyMatrix4(bc.FfromCam);
-  const d = new THREE.Vector3(o.fx, -o.fy, -1).transformDirection(bc.FfromCam);
+  const c = new THREE.Vector3().applyMatrix4(FfromCam);
+  const d = new THREE.Vector3(o.fx, -o.fy, -1).transformDirection(FfromCam);
   if (d.y > -1e-4) return null;
   const t = (BC_LIFT - c.y)/d.y; if (t <= 0 || t > 40) return null;
   const p = c.addScaledVector(d, t); p.y = 0; return p;
 }
 function bcFeet(o){
   const p = bcRay(o); if (!p) return;
+  dual.m = { p, t:performance.now() }; dualFuse();   // 横カメラがあれば2台で合成（なければ今まで通り1台）
+}
+function bcSetFeet(p){
   bc.feetF = p; const g = p.clone().applyMatrix4(bc.GfromF); bc.feetX = g.x; bc.feetZ = g.z; bc.feetSeen = performance.now();
 }
 const bcFeetOK = () => bc.state === 'locked' && performance.now() - bc.feetSeen < 500;
@@ -1026,6 +1062,264 @@ $('bcFovIn').oninput = e => { bc.hfov = +e.target.value; $('bcFovV').textContent
 $('bcBoss').oninput = e => { bc.boss = +e.target.value; $('bcBossV').textContent = bc.boss.toFixed(1); if (bc.state === 'locked'){ bcHover(); bcSave(); } };
 $('bcAR').onchange = e => { bc.ar = e.target.checked; applyBg(); };
 $('bcAvAR').onchange = e => { bc.avAR = e.target.checked; };
+
+// ===== 2台モード（メイン=後ろのカメラ + 横のカメラ）=====
+// 1台だと、足の前後位置は「かかとの画素を床に投げた点」なので、カメラから遠いほど奥行きの誤差が大きい。
+// 横に置いた2台目は、その前後の動きを「画面の左右の動き」として正確に見られる。
+// 各カメラの推定に「向きには強く・奥行きには弱い」誤差の楕円を付けて、重み付きで合成する（= 床の上での三角測量）。
+// 座標: F = メインカメラの床座標（体キャリブレーションと同じ）/ S = 横カメラの床座標（横カメラ真下が原点）
+// 位置合わせ: 横カメラ自身も体キャリブレーションと同じ方法で床を求め、5か所に立った足の位置から S→F（回転+平行移動）を解く。
+const sv = $('sv'), sPrev = $('sidePrev'), sctx = sPrev.getContext('2d');
+const DUAL_KEY = 'connectworld_dualcal_v1', DUAL_ON_KEY = 'connectworld_dual_on', DUAL_SPOTS = 5, DUAL_STILL_MS = 1500, DUAL_FRESH_MS = 200;
+const DUAL_GUIDE = ['いつもの立ち位置でまっすぐ立って、止まってください', '前（ボスの方）に1〜2歩進んで、止まってください',
+                    '後ろに2〜3歩下がって、止まってください', '左に1〜2歩動いて、止まってください', '右に2〜3歩動いて、止まってください'];
+const dual = { on:false, lm:null, loading:false, stream:null, seen:false, n:null, live:null, liveT:-1e9, last:-1, lastRun:0,
+  state:'off', hfov:65, camH:0, autoFov:true, res:null, al:null, t0:0, cd:0, spots:[], cM:[], cS:[], c0:0, lastM:null, lastS:null,
+  camF:new THREE.Matrix4(), FfromCam:new THREE.Matrix4(), FfromS:new THREE.Matrix4(), SfromF:new THREE.Matrix4(), CamFromF:new THREE.Matrix4(),
+  m:null, s:null, src:'', triedLoad:false, msg:'', prevLast:0 };
+function dualSay(t, popup){ if (dual.msg === t) return; dual.msg = t; $('d2Stat').textContent = t; if (popup) popCam(popup, '#ffb35a', .6, 2.2); }
+function autoSideId(){
+  const L = camList.filter(d => d.deviceId && d.deviceId !== backId()); if (!L.length) return null;
+  return (L.find(d => isExt(d.label)) || L.find(d => !isBuiltin(d.label)) || L[0]).deviceId;
+}
+const sideId = () => $('d2Sel').value || autoSideId();
+async function dualLoadModel(){
+  if (dual.lm || dual.loading) return; dual.loading = true; dualSay('横カメラ用の全身認識モデルを読み込み中…');
+  try {
+    const V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14', mp = await import(V + '/vision_bundle.mjs'), fs = await mp.FilesetResolver.forVisionTasks(V + '/wasm');
+    const o = d => ({ baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task', delegate:d }, runningMode:'VIDEO', numPoses:1 });
+    try { dual.lm = await mp.PoseLandmarker.createFromOptions(fs, o('GPU')); } catch (e){ dual.lm = await mp.PoseLandmarker.createFromOptions(fs, o('CPU')); }
+    if (dual.state === 'off') dualSay('横カメラの準備OK。体キャリブレーションの後に「位置合わせ開始」を押してください');
+  } catch (e){ console.error(e); dualSay('横カメラ用の全身認識を読み込めません: ' + (e && e.message || e)); }
+  dual.loading = false;
+}
+async function dualOpen(){
+  dualClose();
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ dualSay('HTTPS か localhost で開いてください'); return false; }
+  await ensureCamPerm(); await listCams();
+  const id = sideId();
+  if (!id){ dualSay('横カメラが見つかりません。2台目をつないで「🔄 カメラを再検出」→ 2台モードを入れ直してください'); return false; }
+  if (id === backId()){ dualSay('⚠ 横カメラがメイン（バック）と同じカメラです。別のカメラを選んでください'); return false; }
+  const sz = { width:{ ideal:Q.bgW }, height:{ ideal:Q.bgH } };
+  let derr;
+  for (const c of [{ video:{ deviceId:{ exact:id }, ...sz }, audio:false }, { video:{ deviceId:{ exact:id } }, audio:false }]){
+    try { dual.stream = await navigator.mediaDevices.getUserMedia(c); break; } catch (e){ derr = derr || e; console.warn('[2台モード]', e); }
+  }
+  if (!dual.stream && derr && (derr.name === 'NotReadableError' || derr.name === 'TrackStartError')){ dualSay('横カメラを開けません: ' + camErrTxt(derr)); return false; }
+  if (!dual.stream){ dualSay('横カメラを開けません（他のアプリが使用中 / USBの帯域不足なら別のポートに挿すか、負荷モードを「軽い」に）'); return false; }
+  sv.srcObject = dual.stream; try { await sv.play(); } catch (e){}
+  dualSay('横カメラ: ' + camName(id));
+  dualLoadModel();
+  return true;
+}
+function dualClose(){ if (dual.stream){ dual.stream.getTracks().forEach(t => t.stop()); dual.stream = null; } dual.seen = false; dual.n = null; dual.s = null; }
+
+// --- カメラの姿勢(下向き角θ・傾きφ・高さh) → 行列（bcApply と同じ作り方）---
+function dualCamMat(th, ph, h){
+  const Uc = bcUp(th, ph), U = new THREE.Vector3(Uc[0], -Uc[1], -Uc[2]).normalize();
+  const back = new THREE.Vector3(0, 0, 1); back.addScaledVector(U, -back.dot(U)).normalize();
+  const X = new THREE.Vector3().crossVectors(U, back), O = U.clone().multiplyScalar(-h);
+  return new THREE.Matrix4().makeBasis(X, U, back).setPosition(O);   // 床座標 → カメラ座標
+}
+function dualApply(){
+  if (!dual.res || !dual.al) return false;
+  dual.camF.copy(dualCamMat(dual.res.th, dual.res.ph, dual.res.h)); dual.FfromCam.copy(dual.camF).invert();
+  dual.FfromS.makeRotationY(dual.al.yaw).setPosition(dual.al.tx, 0, dual.al.tz); dual.SfromF.copy(dual.FfromS).invert();
+  dual.CamFromF.multiplyMatrices(dual.camF, dual.SfromF);
+  return true;
+}
+// S → F（makeRotationY と同じ回転）
+const dualT = (p, yaw, tx, tz) => { const c = Math.cos(yaw), s = Math.sin(yaw); return { x:c*p.x + s*p.z + tx, z:-s*p.x + c*p.z + tz }; };
+// 床の上の推定点 p（カメラ真下 c から見た位置）の誤差の楕円 [xx, xz, zz]
+// 向き（画面の左右）は正確、奥行き（画面の上下 → 床に投げた距離）は距離の2乗で悪くなる
+function dualCov(c, p, h){
+  const dx = p.x - c.x, dz = p.z - c.z, d = Math.max(.3, Math.hypot(dx, dz)), ux = dx/d, uz = dz/d;
+  const sb = .02 + .012*d, sr = .04 + .03*d*d/Math.max(.6, h || 1.5), r2 = sr*sr, b2 = sb*sb;
+  return [r2*ux*ux + b2*uz*uz, (r2 - b2)*ux*uz, r2*uz*uz + b2*ux*ux];
+}
+const dualInv = m => { const det = m[0]*m[2] - m[1]*m[1] || 1e-12; return [m[2]/det, -m[1]/det, m[0]/det]; };
+const dualMahal = (dx, dz, m) => { const i = dualInv(m); return dx*dx*i[0] + 2*dx*dz*i[1] + dz*dz*i[2]; };
+const dualMainH = () => bc.res ? Math.max(.2, bc.res.h - ((bc.tune && bc.tune.floor) || 0)) : 1.5;
+
+// --- 2台の足の位置を合成して、ゲームの足の位置にする ---
+function dualFuse(){
+  const now = performance.now();
+  const m = dual.m && now - dual.m.t < DUAL_FRESH_MS ? dual.m.p : null;
+  const s = dual.on && dual.state === 'locked' && dual.s && now - dual.s.t < DUAL_FRESH_MS ? dual.s.p : null;
+  if (!m && !s) return;
+  if (!s){ dual.src = 'main'; bcSetFeet(m); return; }
+  if (!m){ dual.src = 'side'; bcSetFeet(s); return; }
+  const Cm = dualCov({ x:0, z:0 }, m, dualMainH()), Cs = dualCov({ x:dual.al.tx, z:dual.al.tz }, s, dual.res.h);
+  if (dualMahal(m.x - s.x, m.z - s.z, [Cm[0] + Cs[0], Cm[1] + Cs[1], Cm[2] + Cs[2]]) > 50){ dual.src = 'main(不一致)'; bcSetFeet(m); return; }   // 大きく食い違う（別の人を認識した等）→ メインを信じる
+  const Im = dualInv(Cm), Is = dualInv(Cs), I = [Im[0] + Is[0], Im[1] + Is[1], Im[2] + Is[2]], C = dualInv(I);
+  const bx = Im[0]*m.x + Im[1]*m.z + Is[0]*s.x + Is[1]*s.z, bz = Im[1]*m.x + Im[2]*m.z + Is[1]*s.x + Is[2]*s.z;
+  dual.src = '2台合成'; bcSetFeet(new THREE.Vector3(C[0]*bx + C[1]*bz, 0, C[1]*bx + C[2]*bz));
+}
+
+// --- 横カメラの全身認識（毎フレーム）---
+function dualStep(now){
+  if (!tp || !dual.on) return;
+  if (dual.state === 'count'){
+    const left = Math.ceil((BC_COUNT_MS - (now - dual.t0))/1000);
+    if (left !== dual.cd && left > 0){ dual.cd = left; popCam(String(left), '#ffb35a', 1.2, .8); }
+    dualSay(`${left}秒後に位置合わせを始めます。いつもの立ち位置へ`);
+    if (now - dual.t0 >= BC_COUNT_MS){ dual.state = 'spots'; dualSpotReset(); popCam('1か所目: そのまま止まって', '#ffb35a', .6, 1.6); }
+  }
+  if (!dual.lm || !dual.stream) return;
+  const v = sv; if (v.readyState < 2 || !v.videoWidth || v.currentTime === dual.last || now - dual.lastRun < Q.poseMs) return;
+  dual.last = v.currentTime; dual.lastRun = now; mlFrame = true;
+  const _t = performance.now();
+  let r; try { r = dual.lm.detectForVideo(v, now); } catch (e){ console.error(e); return; } finally { perf.pose += performance.now() - _t; }
+  const n = r.landmarks && r.landmarks[0];
+  dual.seen = !!n; dual.n = n || null;
+  const o = n ? bcObsFrom(n, sv, dual.hfov, true) : null; dual.live = o; dual.liveT = performance.now();
+  dualLoadSaved();
+  if (dual.state === 'spots') dualSpotTick(o);
+  else if (dual.state === 'locked' && o){
+    const p = bcRayM(o, dual.FfromCam);
+    if (p){ dual.s = { p:p.applyMatrix4(dual.FfromS), t:performance.now() }; dualFuse(); }
+  }
+}
+
+// --- 位置合わせ：5か所で両方のカメラの観測を集める ---
+function dualSpotReset(){ dual.cM = []; dual.cS = []; dual.c0 = performance.now(); }
+function dualSpotTick(oS){
+  const k = dual.spots.length, head = `(${k + 1}/${DUAL_SPOTS}) `;
+  const oM = performance.now() - (bc.liveT || -1e9) < DUAL_FRESH_MS ? bc.live : null;
+  const fail = t => { dualSpotReset(); dualSay(head + t); };
+  if (!oM && !oS) return fail('どちらのカメラにも足元が映っていません');
+  if (!oM) return fail('後ろのカメラに足元まで映るようにしてください');
+  if (!oS) return fail('横のカメラに足元まで映るようにしてください');
+  if (!oM.upright || !oS.upright) return fail('ひざと背すじを伸ばして、まっすぐ立ってください');
+  const mv = (a, b) => b ? Math.max(Math.hypot(a.fx - b.fx, a.fy - b.fy), Math.hypot(a.hx - b.hx, a.hy - b.hy)) : 1;
+  const moved = Math.max(mv(oM, dual.lastM), mv(oS, dual.lastS)) > .015; dual.lastM = oM; dual.lastS = oS;
+  if (moved) return fail(DUAL_GUIDE[k]);
+  const pM = bcRay(oM);
+  if (!pM) return fail('後ろのカメラから見た足の位置を計算できません（床の外？）');
+  if (dual.spots.some(sp => Math.hypot(sp.pM.x - pM.x, sp.pM.z - pM.z) < .5)) return fail('前の場所から50cm以上離れてください。' + DUAL_GUIDE[k]);
+  dual.cM.push(oM); dual.cS.push(oS);
+  const left = DUAL_STILL_MS - (performance.now() - dual.c0);
+  dualSay(head + `そのまま止まって… ${Math.max(0, left/1000).toFixed(1)}秒`);
+  if (left > 0) return;
+  const m = bcMean(dual.cM);
+  dual.spots.push({ m, s:bcMean(dual.cS), pM:bcRay(m) || pM });
+  dualSpotReset(); dual.lastM = dual.lastS = null;
+  if (dual.spots.length >= DUAL_SPOTS){ dualFinish(); return; }
+  popCam(`OK！ 次: ${DUAL_GUIDE[dual.spots.length].replace('、止まってください', '')}`, '#ffb35a', .5, 2);
+}
+function dualFinish(redo){
+  const sp = dual.spots, fovFree = dual.camH > 0 && dual.autoFov && !redo, W_ = sv.videoWidth;
+  const sObs = sp.map(x => x.s);
+  let r = bcSolve(sObs, bcEye(), dual.camH || 0, fovFree), note = '';
+  if (fovFree){
+    const fov = 2*Math.atan(Math.tan(dual.hfov*Math.PI/360)*r.s)*180/Math.PI;
+    if (fov < 35 || fov > 110) return dualFinish(true);   // 画角が不自然 → 設定値で計算し直す
+    for (const o of sObs){ o.fx *= r.s; o.fy *= r.s; o.hx *= r.s; o.hy *= r.s; }
+    dual.hfov = Math.round(fov*10)/10; $('d2Fov').value = Math.round(dual.hfov); $('d2FovV').textContent = dual.hfov.toFixed(1); note = `・画角 ${dual.hfov}°`;
+  }
+  const px = r.rms*(W_/2)/Math.tan(dual.hfov*Math.PI/360);
+  console.log(`[2台モード] 横カメラ: 高さ ${r.h.toFixed(2)}m 下向き ${(r.th*180/Math.PI).toFixed(1)}° 傾き ${(r.ph*180/Math.PI).toFixed(1)}° 画角 ${dual.hfov}° 誤差 ${px.toFixed(1)}px`);
+  if (px > 25 || r.h < .2 || r.h > 3.4){ dual.state = 'off'; dualSay(`横カメラの床を測れませんでした（誤差 ${px.toFixed(0)}px）。横カメラの高さ・身長を確認して、もう一度`, '位置合わせ失敗'); return; }
+  const camF = dualCamMat(r.th, r.ph, r.h), FfromCam = camF.clone().invert();
+  const PS = sObs.map(o => bcRayM(o, FfromCam)), PM = sp.map(x => x.pM), hM = dualMainH();
+  if (PS.some(p => !p)){ dual.state = 'off'; dualSay('横カメラから見た足の位置を計算できない場所がありました。もう一度', '位置合わせ失敗'); return; }
+  // S→F の回転・平行移動を解く（各点の誤差の楕円で重み付け）
+  const cost = q => { let s = 0;
+    for (let i = 0; i < PM.length; i++){
+      const t = dualT(PS[i], q[0], q[1], q[2]), Cm = dualCov({ x:0, z:0 }, PM[i], hM), Cs = dualCov({ x:q[1], z:q[2] }, t, r.h);
+      s += dualMahal(PM[i].x - t.x, PM[i].z - t.z, [Cm[0] + Cs[0], Cm[1] + Cs[1], Cm[2] + Cs[2]]);
+    } return s/PM.length; };
+  const mean = L => ({ x:L.reduce((a, p) => a + p.x, 0)/L.length, z:L.reduce((a, p) => a + p.z, 0)/L.length }), mM = mean(PM), mS = mean(PS);
+  let best = null;
+  for (let i = 0; i < 8; i++){
+    const yaw = i*Math.PI/4, t0 = dualT(mS, yaw, 0, 0), x0 = [yaw, mM.x - t0.x, mM.z - t0.z];
+    const res = bcNM(cost, x0, [.3, .5, .5], 800); if (!best || res.f < best.f) best = res;
+  }
+  const [yaw, tx, tz] = best.x;
+  const err = Math.sqrt(PM.reduce((a, p, i) => { const t = dualT(PS[i], yaw, tx, tz); return a + (p.x - t.x)**2 + (p.z - t.z)**2; }, 0)/PM.length);
+  console.log(`[2台モード] 位置合わせ: 回転 ${(yaw*180/Math.PI).toFixed(0)}° 横カメラの位置 (${tx.toFixed(2)}, ${tz.toFixed(2)})m 2台のずれ ${err.toFixed(2)}m`);
+  if (err > .8){ dual.state = 'off'; dualSay(`2台の位置が合いませんでした（ずれ ${err.toFixed(2)}m）。どちらかのカメラの床がずれているかもしれません。体キャリブレーションからやり直してください`, '位置合わせ失敗'); return; }
+  dual.res = { th:r.th, ph:r.ph, h:r.h }; dual.al = { yaw:((yaw % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI), tx, tz };
+  dualApply(); dual.state = 'locked'; dualSave();
+  const dist = Math.hypot(tx, tz);
+  dualSay(`完了: 横カメラの高さ ${r.h.toFixed(2)}m・メインカメラから ${dist.toFixed(1)}m・2台のずれ ${(err*100).toFixed(0)}cm${note}`, '2台の位置合わせ完了');
+}
+function dualStart(){
+  if (!dual.on){ dualSay('先に「2台モードを使う」をONにしてください'); return; }
+  if (bc.state !== 'locked'){ dualSay('先に上の体キャリブレーション（後ろのカメラ）を完了してください'); return; }
+  if (!dual.stream){ dualSay('横カメラが開いていません'); dualOpen(); return; }
+  if (!dual.lm){ dualSay('横カメラ用の全身認識を読み込み中です。少ししてからもう一度押してください'); return; }
+  dual.camH = +$('d2CamH').value/100; dual.autoFov = $('d2AutoFov').checked; dual.hfov = +$('d2Fov').value;
+  dual.state = 'count'; dual.t0 = performance.now(); dual.cd = 0; dual.spots = []; dual.s = null; dualSpotReset();
+  dualSay('5秒後に位置合わせを始めます。いつもの立ち位置へ');
+}
+function dualReset(){ dual.state = 'off'; dual.res = dual.al = null; dual.s = null; dual.spots = []; try { localStorage.removeItem(DUAL_KEY); } catch (e){} dualSay('リセットしました（足の位置はメインカメラ1台で求めます）'); }
+function dualSave(){ try { localStorage.setItem(DUAL_KEY, JSON.stringify({ res:dual.res, al:dual.al, hfov:dual.hfov, camH:dual.camH, cam:camName(sideId()) })); } catch (e){} }
+function dualLoadSaved(){
+  if (dual.triedLoad || dual.state !== 'off' || bc.state !== 'locked' || !sv.videoWidth) return;
+  dual.triedLoad = true;
+  let d = null; try { d = JSON.parse(localStorage.getItem(DUAL_KEY) || 'null'); } catch (e){}
+  if (!d || !d.res || !d.al) return;
+  Object.assign(dual, { res:d.res, al:d.al, hfov:d.hfov || dual.hfov, camH:d.camH || 0 });
+  $('d2Fov').value = Math.round(dual.hfov); $('d2FovV').textContent = (+dual.hfov).toFixed(1);
+  if (d.camH) $('d2CamH').value = Math.round(d.camH*100);
+  if (dualApply()){ dual.state = 'locked'; dualSay('前回の2台の位置合わせを読み込みました（カメラを動かしたら測り直してください）'); }
+}
+
+// --- 横カメラのプレビュー（左下の2枚目）---
+function dualDraw(){
+  const show = prevOn && tp && dual.on && !vr;
+  sPrev.style.display = show ? 'block' : 'none'; if (!show) return;
+  const now = performance.now(); if (now - dual.prevLast < Q.prevMs) return; dual.prevLast = now;
+  const w = sPrev.width, h = sPrev.height, v = sv, c = sctx;
+  c.fillStyle = '#000'; c.fillRect(0, 0, w, h); c.textAlign = 'left';
+  if (!dual.stream || v.readyState < 2 || !v.videoWidth){ c.fillStyle = '#ffb35a'; c.font = 'bold 15px sans-serif'; c.textAlign = 'center'; c.fillText('横カメラ待機中…', w/2, h/2); return; }
+  const vw = v.videoWidth, vh = v.videoHeight, f = Math.min(w/vw, h/vh), dw = vw*f, dh = vh*f, ox = (w - dw)/2, oy = (h - dh)/2;
+  c.drawImage(v, ox, oy, dw, dh);
+  const X = x => ox + x*dw, Y = y => oy + y*dh, fp = (vw/2)/Math.tan(dual.hfov*Math.PI/360);
+  const N2C = o => [X(.5 + o[0]*fp/vw), Y(.5 + o[1]*fp/vh)];   // 正規化画像座標 → プレビュー
+  if (dual.state === 'locked'){
+    const proj = q => { const p = q.clone().applyMatrix4(dual.CamFromF); return p.z < -.1 ? [X(.5 + fp*p.x/-p.z/vw), Y(.5 - fp*p.y/-p.z/vh)] : null; };
+    const line = (x0, z0, x1, z1) => { let prev = null; for (let i = 0; i <= 40; i++){ const q = proj(new THREE.Vector3(x0 + (x1 - x0)*i/40, 0, z0 + (z1 - z0)*i/40)); if (q && prev){ c.moveTo(prev[0], prev[1]); c.lineTo(q[0], q[1]); } prev = q; } };
+    c.save(); c.beginPath(); c.rect(ox, oy, dw, dh); c.clip();
+    c.strokeStyle = 'rgba(255,179,90,.55)'; c.lineWidth = 1; c.beginPath();
+    for (let x = -6; x <= 6; x++) line(x, 2, x, -10);
+    for (let z = 2; z >= -10; z--) line(-6, z, 6, z);
+    c.stroke();
+    if (bc.origin){ const q = proj(bc.origin); if (q){ c.fillStyle = '#ffd35a'; c.beginPath(); c.arc(q[0], q[1], 5, 0, 7); c.fill(); } }
+    if (bcFeetOK() && bc.feetF){ const q = proj(bc.feetF); if (q){ c.fillStyle = '#ff4d5e'; c.beginPath(); c.arc(q[0], q[1], 5, 0, 7); c.fill(); } }
+    c.restore();
+  }
+  if (dual.seen && dual.n){
+    const n = dual.n; c.strokeStyle = '#5ee08a'; c.lineWidth = 3; c.beginPath();
+    for (const [a, b] of POSE_LINKS){ c.moveTo(X(n[a].x), Y(n[a].y)); c.lineTo(X(n[b].x), Y(n[b].y)); } c.stroke();
+  }
+  if (dual.live){ const q = N2C([dual.live.fx, dual.live.fy]); c.strokeStyle = '#7ae7ff'; c.lineWidth = 2; c.beginPath(); c.arc(q[0], q[1], 6, 0, 7); c.stroke(); }
+  if (dual.state === 'spots' || dual.state === 'count'){
+    c.font = 'bold 12px sans-serif';
+    dual.spots.forEach((sp, i) => { const q = N2C([sp.s.fx, sp.s.fy]); c.fillStyle = '#ffd35a'; c.beginPath(); c.arc(q[0], q[1], 5, 0, 7); c.fill(); c.fillText(String(i + 1), q[0] + 6, q[1] - 4); });
+  }
+  c.font = 'bold 14px sans-serif';
+  const st = !dual.lm ? ['モデル読み込み中…', '#ffd35a'] : dual.state === 'spots' ? [`位置合わせ中 ${dual.spots.length}/${DUAL_SPOTS}`, '#ffb35a'] : dual.state === 'count' ? ['まもなく位置合わせ', '#ffb35a']
+    : dual.state === 'locked' ? [`横カメラ ● 位置: ${dual.src || '-'}`, dual.src === '2台合成' ? '#5ee08a' : '#ffd35a'] : [dual.seen ? '横カメラ（未位置合わせ）' : '× 全身が見つかりません', dual.seen ? '#ffd35a' : '#ff4d5e'];
+  c.fillStyle = st[1]; c.fillText(st[0], 8, 20);
+}
+
+// --- UI ---
+$('d2On').onchange = async e => {
+  dual.on = e.target.checked; try { localStorage.setItem(DUAL_ON_KEY, dual.on ? '1' : '0'); } catch (err){}
+  if (!dual.on){ dualClose(); dualSay('OFF（足の位置はメインカメラ1台で求めます）'); return; }
+  if (pose.cam !== 'back'){   // メインは後ろから撮る前提
+    $('poseCam').value = 'back'; pose.cam = 'back'; poseRecenter();
+    if (bc.state === 'locked' && bc.poseCam === 'front') popCam('メインを「背後から撮る」にしました。体キャリブレーションをやり直してください', '#ffb35a', .5, 3);
+  }
+  if (tp) await dualOpen();
+};
+$('d2Sel').onchange = () => { saveCamPref($('d2Sel')); if (dual.on && tp) dualOpen(); };
+$('d2Fov').oninput = e => { dual.hfov = +e.target.value; $('d2FovV').textContent = dual.hfov; if (dual.state === 'locked') dualSay('画角を変えたので、位置合わせをやり直してください'); };
+$('d2Start').onclick = dualStart;
+$('d2Reset').onclick = dualReset;
+try { if (localStorage.getItem(DUAL_ON_KEY) === '1'){ dual.on = true; $('d2On').checked = true; } } catch (e){}
 
 // ----- VRM 読み込み（three-vrm は使わず GLTFLoader + VRMの骨情報だけ読む。VRM0.x / 1.0 両対応）-----
 let vrm = null;
@@ -1906,7 +2200,7 @@ const perf = { n:0, t0:performance.now(), face:0, hand:0, pose:0, rend:0 };
 function perfTick(now){
   perf.n++;
   if (now - perf.t0 < 1000) return;
-  const n = perf.n, fps = n*1000/(now - perf.t0), cams = (camStream ? 1 : 0) + (face.stream ? 1 : 0), f = v => (v/n).toFixed(1);
+  const n = perf.n, fps = n*1000/(now - perf.t0), cams = (camStream ? 1 : 0) + (face.stream ? 1 : 0) + (dual.stream ? 1 : 0), f = v => (v/n).toFixed(1);
   $('perfStat').textContent = `FPS ${fps.toFixed(0)} | 顔${f(perf.face)} 手${f(perf.hand)}` + (tp ? ` 全身${f(perf.pose)}` : '') + ` 描画${f(perf.rend)}ms/フレーム | カメラ${cams}台`
     + (bgMode === 'video' && bgVidTex ? '+背景動画' : bgMode === 'image' && bgImgTex ? '+背景画像' : '');
   $('perfStat').style.color = fps < 30 ? '#ff4d5e' : fps < 50 ? '#ffd35a' : '#9fffb0';
@@ -1922,7 +2216,7 @@ tp = true; av.visible = true; rig = aim; rig.add(sword, shield, gShield, arc); a
 let last = performance.now();
 function loop(now){
   const dt = Math.min(.033, (now - last)/1000); last = now;
-  mlFrame = false; faceStep(now); poseStep(now); handStep(now); perfTick(now); hcStep(now, dt); palmUI(now); faceDraw(); update(dt);
+  mlFrame = false; faceStep(now); poseStep(now); dualStep(now); handStep(now); perfTick(now); hcStep(now, dt); palmUI(now); faceDraw(); dualDraw(); update(dt);
   const _t = performance.now(); render(); perf.rend += performance.now() - _t; requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
