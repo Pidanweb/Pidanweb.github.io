@@ -55,8 +55,8 @@
     <label>横重撃 ∫横 <b id="skHHV">260</b>°<input type="range" id="skHH" min="100" max="500" step="10" value="260"></label>
     <small>十字で武器切替: ↑=ハンドガン(8発) / ←=P90(50発・押しっぱなしで連射) / →=スナイパー(1発ずつ) / ↓=ビームサーベル<br>
     スナイパー: 伸び縮みする円が金色の円に重なった瞬間に撃つと命中<br>
-    サーベル: 前に突く=突き / 縦・横に大きく振る=重撃（A=突き）。MotionPlus付きなら剣士版と同じジャイロ判定<br>
-    Wii: A=攻撃 / B=ガード / B+振り上げ=パリィ / 縦に立てる=リロード<br>
+    サーベル: 前に突く=突き / 縦・横に大きく振る=重撃（B=突き）。MotionPlus付きなら剣士版と同じジャイロ判定<br>
+    Wii: B=射撃・攻撃 / A長押し=ガード / 振り上げ=パリィ（ボタンは押しても押さなくてもOK）/ 縦に立てる=リロード（黄色の所でB）<br>
     1=グレネード / 2=時限地雷 / +=回り込み弾 / −=照準リセット / HOME=メニュー<br>
     マウス: ←↑→↓ か 1〜4=武器切替 / サーベルはクリック=突き・ドラッグ縦横=重撃（W/Sでも可）/ G=グレネード F=地雷 Q,E=回り込み<br>
     照準が四角に重なると赤くなり、その時だけ当たります<br>黄色い小さい四角=弱点（回避直後・スタン中だけ開く）</small>
@@ -69,7 +69,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 // ===== GIANT SLIME RAID : GUNNER =====
-// Wii: A=攻撃 / B長押し=ガード / B+振り上げ=パリィ / 十字=武器切替(↑ハンドガン ←P90 →スナイパー ↓ビームサーベル) / 1=グレネード 2=時限地雷 +=回り込み弾 / −=照準中心リセット
+// Wii: B=射撃・攻撃 / A長押し=ガード / 振り上げ=パリィ(ボタン不要) / 十字=武器切替(↑ハンドガン ←P90 →スナイパー ↓ビームサーベル) / 1=グレネード 2=時限地雷 +=回り込み弾 / −=照準中心リセット
 // マウス: 左=攻撃 / 右=パリィ / Space=ガード / 矢印・1〜4=武器切替 / G,F,Q,E=サブ武器 / A,D=回避 / V:VR / T:視点 / C:顔の中心リセット
 const FONT = '"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif';
 const vid = document.getElementById('v');
@@ -582,16 +582,16 @@ function reset(){
 }
 function titleMsg(){
   setMsg([['GIANT SLIME RAID : GUNNER', '#ffd35a', 64],
-          ['顔の動きで照準 → 四角に重なったら A で攻撃', '#fff', 28],
+          ['顔の動きで照準 → 四角に重なったら B で攻撃', '#fff', 28],
           ['十字で武器切替 ↑ハンドガン ←P90 →スナイパー ↓ビームサーベル', '#ffd35a', 24],
-          ['リモコンを縦に立ててリロード　黄色い所で A → 強化弾', '#9fe870', 24],
+          ['リモコンを縦に立ててリロード　黄色い所で B → 強化弾', '#9fe870', 24],
           ['回避直後・スタン中は黄色い弱点が開く → 3倍ダメージ', '#ffd35a', 24],
-          ['B 長押し: ガード　B + 振り上げ: パリィ（赤く光る間）', '#fff', 26],
+          ['A 長押し: ガード　振り上げ: パリィ（赤く光る間）', '#fff', 26],
           ['紫に光る攻撃はパリィ不可 → ガードで防ぐ', '#c06bff', 26],
           ['1 グレネード　2 時限地雷　+ 回り込み弾', '#9fe870', 24],
           ['マウス: 左=攻撃 R=リロード 右=パリィ Space=ガード 矢印=武器 A/D=回避', '#7ae7ff', 22],
           ['C / −: 照準の中心リセット　V:VR　T:視点　M:メニュー', '#7ae7ff', 22],
-          ['クリック / A でスタート（Webカメラを使います）', '#7ae7ff', 30]]);
+          ['クリック / A・B でスタート（Webカメラを使います）', '#7ae7ff', 30]]);
 }
 titleMsg();
 
@@ -709,7 +709,7 @@ function shoot(){
   if (!hit) return;
   dealHit(wd.dmg*(crit ? CRIT : 1)*(pw ? 2 : 1), to, crit, pw || sr, !sr);
 }
-// リロード：Wiiは縦に立てている間だけゲージが進む（マウスはRで自動進行）。黄色の範囲でA/クリック → 即完了＋強化弾(2倍)、外すとジャムで遅くなる
+// リロード：Wiiは縦に立てている間だけゲージが進む（マウスはRで自動進行）。黄色の範囲でB/クリック → 即完了＋強化弾(2倍)、外すとジャムで遅くなる
 function startReload(){
   if (!curW().mag || P.rl || P.ammo >= curW().mag || state !== 'play' || menuOn) return;
   P.rl = { t:0, jam:false }; mgStop(true); sndReload(P.wp); wiiPattern([30]);
@@ -853,7 +853,7 @@ function updProj(dt){
 }
 
 // ===== パリィ・ガード・被弾 =====
-// 赤く光っている間(予兆〜突進)に B+振り上げ すれば、突進が当たる瞬間までパリィが有効（armed）。ガード中(B押下)からでも出せる
+// 赤く光っている間(予兆〜突進)に 振り上げ れば、突進が当たる瞬間までパリィが有効（armed）。ガード中(A押下)からでも出せる
 function parry(){ if (state !== 'play' || P.parCd > 0 || P.par > 0 || P.armed) return; P.par = .3; P.parAge = 0; P.parCd = .7; P.armed = (B.s === 'wind' || B.s === 'charge') && !B.unp; }
 function parried(){
   playPary(); const perfect = P.parAge < .45, at = rig.localToWorld(new THREE.Vector3(0, 0, -2.4));
@@ -1043,7 +1043,7 @@ function hudAmmo(){
   const k = Math.min(1, P.rl.t/curW().rl), paused = ctl.mode === 'wii' && !wii.vert;
   rlFill.scale.x = Math.max(.001, k); rlMark.position.x = -rlW/2 + rlW*k;
   rlFill.material.color.setHex(P.rl.jam ? 0xff4d5e : paused ? 0x556070 : 0x7ae7ff); rlZone.material.opacity = P.rl.jam ? .2 : .8;
-  const hs = P.rl.jam ? 'ジャム… 待って' : paused ? '縦に立てて！' : ctl.mode === 'wii' ? '黄色の所で A' : '黄色の所でクリック';
+  const hs = P.rl.jam ? 'ジャム… 待って' : paused ? '縦に立てて！' : ctl.mode === 'wii' ? '黄色の所で B' : '黄色の所でクリック';
   if (hs !== rlHintStr){
     rlHintStr = hs; if (rlHint){ rlG.remove(rlHint); rlHint.material.map.dispose(); rlHint.material.dispose(); }
     rlHint = mkSprite(hs, '#ffd35a', .2); rlHint.position.y = -.22; rlG.add(rlHint);
@@ -1125,7 +1125,8 @@ function setMouse(e){
 addEventListener('mousemove', setMouse);
 // ===== 操作切替（マウス / Wiiリモコン）=====
 const ctl = { mode:'mouse' }, mdn = { on:false };
-const wii = { dev:null, leds:1, a:false, b:false, aBlock:false, pA:false, pPlus:false, pHome:false, pMinus:false, pPad:0,
+const wii = { dev:null, leds:1, a:false, b:false, aBlock:false, pA:false, pB:false,   // a=射撃ボタン(B)押下中 / b=ガードボタン(A)押下中
+              pPlus:false, pHome:false, pMinus:false, pPad:0,
               gx:0, gy:0, gz:1, gok:false, vert:false, lastSw:0, lastNeg:-1e9, th:2.2, rt:0, modeT:0,
               p1:false, p2:false, swTh:2.2, sw:{ on:false, t0:0, ax:0, ay:0, az:0, cool:0 },
               mode:0x35, mpOnce:false,
@@ -1150,7 +1151,7 @@ async function openWii(d){
   wii.gok = false;
   await wiiEnableMP();
   await wLed();
-  setCtl('wii'); wiiMsg('🎮 Wii: 接続中（A攻撃 / Bガード / 十字で武器切替）');
+  setCtl('wii'); wiiMsg('🎮 Wii: 接続中（B射撃 / Aガード / 振り上げパリィ / 十字で武器切替）');
 }
 // ===== MotionPlus（サーベルの 突き / 縦重撃 / 横重撃 を剣士版と同じジャイロ判定で行う）=====
 // 0xA600FE ← 0x04 で有効化 → レポート0x35。3秒データが来なければ 0x31(加速度のみ)に戻し、加速度で簡易判定する
@@ -1231,7 +1232,7 @@ function gySwing(s, held){
 }
 // 剣士版と同じ分類：回転が小さく加速度が大きい=突き / 横度が rB 以上で ∫横が大きい=横重撃 / それ以外で ∫縦が大きい=縦重撃（軽い振りは何もしない）
 function gyFinish(o){
-  if (o.held) return;   // A/B を押しながらの振り（パリィなど）は除外
+  if (o.held) return;   // A/B を押しながらの振り・パリィになった振りは除外
   const pk = Math.max(Math.abs(o.pv), o.ph), tot = Math.abs(o.iv) + o.ih, ratio = tot > 0 ? Math.abs(o.iv)/tot : 0, rot = o.ih + Math.abs(o.iv);
   if (o.pa >= SK.thrustA && pk < SK.thrustPk && rot < SK.thrustRot) swordAct('thrust');
   else if (pk < SK.minPk) return;
@@ -1267,16 +1268,16 @@ function onWii(e){
   const b0 = d.getUint8(0), b1 = d.getUint8(1);
   const A = !!(b1 & 0x08), Bb = !!(b1 & 0x04), plus = !!(b0 & 0x10), home = !!(b1 & 0x80), minus = !!(b1 & 0x10);
   const pad = b0 & 0x0f, padDown = pad & ~wii.pPad;   // 十字: 0x01=左 0x02=右 0x04=下 0x08=上
-  const firing = A && !wii.pA && !wii.aBlock && state === 'play' && !menuOn;   // Aを押した瞬間に1発
+  const firing = Bb && !wii.pB && !wii.aBlock && state === 'play' && !menuOn;   // B(トリガー)を押した瞬間に1発
   const one = !!(b1 & 0x02), two = !!(b1 & 0x01), press1 = one && !wii.p1, press2 = two && !wii.p2, pressPlus = plus && !wii.pPlus;
   wii.p1 = one; wii.p2 = two;
-  const pressStart = (A && !wii.pA) || (plus && !wii.pPlus), pressHome = home && !wii.pHome, pressMinus = minus && !wii.pMinus;
-  wii.pA = A; wii.pPlus = plus; wii.pHome = home; wii.pMinus = minus; wii.pPad = pad; wii.b = Bb;
-  if (!A) wii.aBlock = false;
+  const pressStart = (A && !wii.pA) || (Bb && !wii.pB) || (plus && !wii.pPlus), pressHome = home && !wii.pHome, pressMinus = minus && !wii.pMinus;
+  wii.pA = A; wii.pB = Bb; wii.pPlus = plus; wii.pHome = home; wii.pMinus = minus; wii.pPad = pad; wii.b = A;   // A長押し=ガード
+  if (!Bb) wii.aBlock = false;
   if (pressHome) toggleMenu();
   if (pressMinus){ faceRecenter(); if (wii.mp.ok) calStart(); }   // −: 照準の中心リセット＋ジャイロ再調整
-  if (pressStart && state !== 'play' && !menuOn && !(state !== 'title' && now - endAt < 600)){ startGame(); wii.aBlock = true; }   // スタートに使ったAは離すまで射撃しない
-  wii.a = A && !wii.aBlock;
+  if (pressStart && state !== 'play' && !menuOn && !(state !== 'title' && now - endAt < 600)){ startGame(); wii.aBlock = true; }   // スタートに使ったBは離すまで射撃しない
+  wii.a = Bb && !wii.aBlock;   // B押しっぱなし = P90の連射
   // 加速度（0g=128, 1g≒26）
   const x = (d.getUint8(2) - 128)/26, y = (d.getUint8(3) - 128)/26, z = (d.getUint8(4) - 128)/26, m = Math.hypot(x, y, z);
   if (Math.abs(m - 1) < .12){   // ほぼ静止している時だけ重力方向を更新
@@ -1300,9 +1301,9 @@ function onWii(e){
   const gl = Math.hypot(wii.gx, wii.gy, wii.gz) || 1;
   const up = ((x - wii.gx)*wii.gx + (y - wii.gy)*wii.gy + (z - wii.gz)*wii.gz)/gl, upTh = wii.th*.65;
   if (up < -upTh*.7) wii.lastNeg = now;   // 直前に下向きの勢い = 振り下ろしの減速なので除外
-  // サーベル：Bを押していない時の振りを判定。立ち上がりから約0.1秒の各軸のピークで分類
+  // サーベル：A/Bを押していない時の振りを判定。立ち上がりから約0.1秒の各軸のピークで分類
   //   Y(長手方向)が最大=突き / X(左右)=横の重撃 / Z(上下)=縦の重撃
-  if (P.wp === 'sword' && !wii.b && !wii.mp.ok){   // ジャイロが無い時だけ加速度で簡易判定
+  if (P.wp === 'sword' && !A && !Bb && !wii.mp.ok){   // ジャイロが無い時だけ加速度で簡易判定
     const S = wii.sw, ddx = x - wii.gx, ddy = y - wii.gy, ddz = z - wii.gz, dm = Math.hypot(ddx, ddy, ddz);
     if (!S.on && dm > wii.swTh && now > S.cool){ S.on = true; S.t0 = now; S.ax = S.ay = S.az = 0; }
     if (S.on){
@@ -1314,7 +1315,11 @@ function onWii(e){
     }
   }
   if (now - wii.lastSw < 450) return;
-  if (wii.b && up > upTh && now - wii.lastNeg > 220){ wii.lastSw = now + 200; parry(); }
+  // 振り上げ → パリィ（ボタンを押していてもいなくても出る）。同じ振りがサーベルの縦重撃にならないよう判定中の振りを取り消す
+  if (up > upTh && now - wii.lastNeg > 220){
+    wii.lastSw = now + 200; parry();
+    wii.sw.on = false; wii.sw.cool = now + 500; if (wii.mp.sw) wii.mp.sw.held = true;
+  }
 }
 
 function startBattle(){ reset(); state = 'play'; setMsg(null); bgmPlay(true); }
