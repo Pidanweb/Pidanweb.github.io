@@ -113,8 +113,8 @@
     <div id="bcTune" hidden style="margin:6px 0;padding:6px 8px;border:1px dashed #7ae7ff66;border-radius:6px">
       <b style="color:#7ae7ff">✏️ 微調整（プレビューのマス目を見ながら）</b>
       <label>床を上下 <b id="bcTFV">0</b> cm<input type="range" id="bcTF" min="-40" max="40" step="1" value="0"><small>＋でマス目が上がる / −で下がる</small></label>
-      <label>前後の傾き <b id="bcTTV">0.0</b>°<input type="range" id="bcTT" min="-12" max="12" step="0.2" value="0"></label>
-      <label>左右の傾き <b id="bcTPV">0.0</b>°<input type="range" id="bcTP" min="-12" max="12" step="0.2" value="0"></label>
+      <label>奥を上下 <b id="bcTTV">0.0</b>°<input type="range" id="bcTT" min="-12" max="12" step="0.2" value="0"><small>立ち位置を軸に傾ける。＋で奥のマス目が上がる（手前は下がる）</small></label>
+      <label>左右の傾き <b id="bcTPV">0.0</b>°<input type="range" id="bcTP" min="-12" max="12" step="0.2" value="0"><small>立ち位置を軸に傾ける。＋で画面の右側のマス目が上がる</small></label>
       <small>画角のスライダーも、ここでその場で反映されます。結果は自動で保存され、次回は読み込まれます。</small>
       <button id="bcTuneReset">微調整を0に戻す</button>
       <hr style="border:0;border-top:1px dashed #7ae7ff44;margin:8px 0 4px">
@@ -392,8 +392,8 @@ const camErrTxt = e => !e ? '不明なエラー' : e.name === 'NotReadableError'
   : e.name === 'OverconstrainedError' ? 'このカメラが対応していない設定です' : e.name;
 // 手で選んだカメラを名前で覚える（次回も同じカメラを選ぶ）
 const camPrefKey = id => 'rqCamPref:' + id;
-function saveCamPref(sel){ try { const d = camList.find(d => d.deviceId === sel.value); if (d && d.label) localStorage.setItem(camPrefKey(sel.id), d.label); else localStorage.removeItem(camPrefKey(sel.id)); } catch (e){} }
-function loadCamPref(sel){ try { const l = localStorage.getItem(camPrefKey(sel.id)); const d = l && camList.find(d => d.label === l); return d ? d.deviceId : ''; } catch (e){ return ''; } }
+function saveCamPref(sel){ try { if (sel.value === CAM_NONE){ localStorage.setItem(camPrefKey(sel.id), CAM_NONE); return; } const d = camList.find(d => d.deviceId === sel.value); if (d && d.label) localStorage.setItem(camPrefKey(sel.id), d.label); else localStorage.removeItem(camPrefKey(sel.id)); } catch (e){} }
+function loadCamPref(sel){ try { const l = localStorage.getItem(camPrefKey(sel.id)); if (l === CAM_NONE) return sel.id === 'd2Sel' ? '' : CAM_NONE; const d = l && camList.find(d => d.label === l); return d ? d.deviceId : ''; } catch (e){ return ''; } }
 const camName = id => { const d = camList.find(d => d.deviceId === id); return d ? (d.label || 'カメラ') : '自動'; };
 function autoIds(){
   const L = camList.filter(d => d.deviceId); if (!L.length) return {};
@@ -401,8 +401,10 @@ function autoIds(){
   const b = L.find(d => d !== f && isExt(d.label)) || L.find(d => d !== f) || null;
   return { front: f.deviceId, back: b ? b.deviceId : null };
 }
-const frontId = () => faceSel.value || autoIds().front || null;
-const backId = () => camSel.value || autoIds().back || null;
+const CAM_NONE = 'none';   // カメラの選択肢「使用しない」
+const useFront = () => faceSel.value !== CAM_NONE, useBack = () => camSel.value !== CAM_NONE;
+const frontId = () => !useFront() ? null : faceSel.value || autoIds().front || null;
+const backId = () => !useBack() ? null : camSel.value || autoIds().back || null;
 async function ensureCamPerm(){   // 一度許可を取らないとカメラ名・IDが取れない
   if (camList.some(d => d.label) || camStream || face.stream || !navigator.mediaDevices) return;
   try { const s = await navigator.mediaDevices.getUserMedia({ video:true, audio:false }); s.getTracks().forEach(t => t.stop()); } catch (e){}
@@ -413,20 +415,25 @@ async function listCams(){
     const a = autoIds(), fill = (sel, autoTxt) => {
       const cur = sel.value; sel.innerHTML = '';
       const o0 = document.createElement('option'); o0.value = ''; o0.textContent = autoTxt; sel.appendChild(o0);
+      if (sel !== $('d2Sel')){ const on = document.createElement('option'); on.value = CAM_NONE; on.textContent = '🚫 使用しない'; sel.appendChild(on); }
       camList.forEach((d, i) => { if (!d.deviceId) return; const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || ('カメラ ' + (i+1)); sel.appendChild(o); });
-      if (cur && camList.some(d => d.deviceId === cur)) sel.value = cur;
+      if (cur && (cur === CAM_NONE || camList.some(d => d.deviceId === cur))) sel.value = cur;
       else if (!cur){ const p = loadCamPref(sel); if (p) sel.value = p; }
     };
     fill(faceSel, '自動: ' + (a.front ? camName(a.front) : '内蔵カメラ'));
     fill(camSel, '自動: ' + (a.back ? camName(a.back) : (camList.length < 2 ? '（1台のみ→フロントと共用）' : 'USBカメラ')));
     { const s = autoSideId(); fill($('d2Sel'), '自動: ' + (s ? camName(s) : '（2台目が見つかりません）')); }
-    const same = frontId() && frontId() === backId();
+    const same = frontId() && frontId() === backId(), nm = (use, id) => use ? camName(id) : '使用しない';
     camStat.textContent = !camList.length ? 'カメラが見つかりません'
-      : `${camList.length}台検出 / フロント: ${camName(frontId())} / バック: ${camName(backId())}` + (same ? '　⚠ 同じカメラです' : '');
+      : `${camList.length}台検出 / フロント: ${nm(useFront(), frontId())} / バック: ${nm(useBack(), backId())}` + (same ? '　⚠ 同じカメラです' : '');
   } catch (e){ camStat.textContent = '一覧を取得できません'; }
 }
 async function openCam(id){
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ camStat.textContent = 'HTTPS か localhost で開いてください'; return false; }
+  if (!useBack() || id === CAM_NONE){   // バックカメラ「使用しない」
+    if (camStream) camStream.getTracks().forEach(t => t.stop()); camStream = null; vid.srcObject = null;
+    applyBg(); if (typeof bgStatus === 'function') bgStatus(); await listCams(); return false;
+  }
   if (!id){ await ensureCamPerm(); await listCams(); id = backId(); }
   if (camStream) camStream.getTracks().forEach(t => t.stop());
   camStream = null;
@@ -451,8 +458,8 @@ function menuScreen(cam){ $('mMain').hidden = cam; $('mCam').hidden = !cam; $('m
 function camTab(pre){ $('cpPlay').hidden = pre; $('cpPre').hidden = !pre; $('tabPlay').classList.toggle('on', !pre); $('tabPre').classList.toggle('on', pre); $('menu').scrollTop = 0; }
 $('mCamOpen').onclick = () => menuScreen(true); $('mCamBack').onclick = () => menuScreen(false);
 $('tabPlay').onclick = () => camTab(false); $('tabPre').onclick = () => { camTab(true); if (!pose.lm) enterTP(); };
-$('camApply').onclick = async () => { if (bgMode === 'cam' || tp) await openCam(camSel.value || null); if (face.on && !tp) await startFace(); listCams(); };
-camSel.onchange = () => { saveCamPref(camSel); listCams(); if (bgMode === 'cam' || tp) openCam(camSel.value || null); };
+$('camApply').onclick = async () => { if (bgMode === 'cam' || tp) await openCam(camSel.value || null); if (tp) await openHandCam(); else if (face.on) await startFace(); listCams(); };
+camSel.onchange = async () => { saveCamPref(camSel); listCams(); if (bgMode === 'cam' || tp) await openCam(camSel.value || null); if (tp) openHandCam(); };
 $('camRefresh').onclick = async () => { camStat.textContent = '検出中…'; await ensureCamPerm(); await listCams(); };
 $('mir').onchange = e => camMirror = e.target.checked;
 for (const ev of ['mousedown', 'keydown', 'keyup']) for (const el of ['ui', 'menu']) $(el).addEventListener(ev, e => e.stopPropagation());
@@ -470,7 +477,7 @@ function applyBg(){
   else if (!bgv.paused) bgv.pause();
 }
 function bgStatus(){
-  $('bgStat').textContent = bgMode === 'cam' ? (camStream ? 'カメラ映像を背景に表示中' : 'ゲーム開始時にバックカメラを開きます')
+  $('bgStat').textContent = bgMode === 'cam' ? (!useBack() ? 'バックカメラが「使用しない」なので背景は表示されません' : camStream ? 'カメラ映像を背景に表示中' : 'ゲーム開始時にバックカメラを開きます')
     : bgMode === 'none' ? '背景なし' : (bgTex() ? '背景に表示中' : (bgMode === 'video' ? '動画' : '画像') + 'ファイルを選んでください');
 }
 $('bgMode').onchange = e => {
@@ -538,6 +545,7 @@ async function loadFaceModel(){
 async function openFaceCam(){
   if (face.stream) face.stream.getTracks().forEach(t => t.stop());
   face.stream = null; face.src = null; faceRecenter();
+  if (!useFront()){ setBadge('👤 フロントカメラ: 使用しない（顔・手の認識は止めています）'); listCams(); return; }
   await ensureCamPerm(); await listCams();
   const id = frontId(), sz = { width:{ ideal:640 }, height:{ ideal:480 } };
   const tries = id ? [{ video:{ deviceId:{ exact:id }, ...sz }, audio:false }, { video:{ deviceId:{ exact:id } }, audio:false }, { video:{ facingMode:'user', ...sz }, audio:false }]
@@ -551,6 +559,30 @@ async function openFaceCam(){
   } else if (camStream){ face.src = vid; setBadge('👤 顔用カメラを開けず、背景カメラで認識します'); }
   else setBadge('👤 顔認識用カメラを開けません: ' + camErrTxt(ferr));
   listCams();
+}
+// 俯瞰中: 顔認識は使わないが、手の認識（ピース・指カーソル）用にフロントカメラだけ開く
+async function openHandCam(){
+  if (!navigator.mediaDevices) return;
+  if (!useFront()){ if (face.stream){ face.stream.getTracks().forEach(t => t.stop()); face.stream = null; } face.src = null; setBadge('✋ フロントカメラ: 使用しない（手の認識は止めています）'); return; }
+  loadHandModel(); await ensureCamPerm(); await listCams();
+  const id = frontId(); if (!id) return;
+  const cur = face.stream && face.stream.getVideoTracks()[0].getSettings().deviceId;
+  if (cur === id) return;   // すでに開いている
+  if (face.stream){ face.stream.getTracks().forEach(t => t.stop()); face.stream = null; }
+  face.src = null;
+  if (camStream && camStream.getVideoTracks()[0].getSettings().deviceId === id) return;   // バックと同じカメラ → その映像を使う（handSrc）
+  try { face.stream = await navigator.mediaDevices.getUserMedia({ video:{ deviceId:{ exact:id }, width:{ ideal:640 }, height:{ ideal:480 } }, audio:false }); }
+  catch (e){ setBadge('✋ 手の認識用のフロントカメラを開けません: ' + camErrTxt(e)); return; }
+  face.fm = (face.stream.getVideoTracks()[0].getSettings().facingMode || 'user') !== 'environment';
+  fv.srcObject = face.stream; try { await fv.play(); } catch (e){}
+}
+// 手の認識に使う映像: フロントカメラだけ（「使用しない」なら無し。バックと同じ1台を共有しているときだけその映像）
+function handSrc(){
+  if (!useFront()) return null;
+  if (face.stream) return fv;
+  const id = frontId();
+  if (id && camStream && camStream.getVideoTracks()[0].getSettings().deviceId === id) return vid;
+  return null;
 }
 async function startFace(){
   if (!face.on || !navigator.mediaDevices) return;
@@ -623,7 +655,7 @@ $('faceOn').onchange = e => {
   else { if (face.stream) face.stream.getTracks().forEach(t => t.stop()); face.stream = face.src = null; faceRecenter(); setBadge(''); }
 };
 $('faceGain').oninput = e => face.gain = +e.target.value;
-faceSel.onchange = () => { saveCamPref(faceSel); listCams(); if (face.on && !tp) openFaceCam(); };
+faceSel.onchange = () => { saveCamPref(faceSel); listCams(); if (tp) openHandCam(); else if (face.on) openFaceCam(); };
 $('faceCal').onclick = () => { faceRecenter(); poseRecenter(); };
 $('faceStart').onclick = () => { if (!face.on){ $('faceOn').checked = face.on = true; } startFace(); };
 let prevOn = true; $('facePrevOn').onchange = e => prevOn = e.target.checked;
@@ -643,14 +675,14 @@ async function loadHandModel(){
 }
 function handStep(now){
   const hms = menuOn ? Math.min(Q.handMs, 66) : Q.handMs;   // メニュー中は指カーソルなので速めに
-  const v = tp ? vid : face.src; if (!hand.lm || !v || v.readyState < 2 || !v.videoWidth || now - hand.last < hms) return;
+  const v = handSrc(); if (!hand.lm || !v || v.readyState < 2 || !v.videoWidth || now - hand.last < hms) return;
   if (mlFrame && !menuOn) return;   // 同じフレームで顔と手を両方走らせない（次のフレームに回す）
   hand.last = now; const _t = performance.now();
   let r; try { r = hand.lm.detectForVideo(v, now); } catch (e){ return; } finally { perf.hand += performance.now() - _t; }
   const p = r.landmarks && r.landmarks[0]; if (!p){ palmLost(now); return; }
   if (menuOn){   // メニュー中は人差し指の先(8)をカーソルに使う
     hand.needRelease = true; hand.pt0 = null; hand.prog = 0; hc.seen = now;
-    const cl = v => Math.max(0, Math.min(1, v)), x = (tp ? pose.cam === 'front' : faceMirror()) ? 1 - p[8].x : p[8].x;
+    const cl = v => Math.max(0, Math.min(1, v)), x = (v === fv ? face.fm !== false : camMirror) ? 1 - p[8].x : p[8].x;
     hc.tx = cl((x - HC.X0)/(1 - HC.X0*2)); hc.ty = cl((p[8].y - HC.Y0)/(1 - HC.Y0*2)); return;
   }
   const d = (a, b) => Math.hypot(p[a].x - p[b].x, p[a].y - p[b].y);
@@ -695,10 +727,11 @@ async function loadPoseModel(){
 }
 async function enterTP(){
   // 1台で済ませるため、顔用カメラは止める（スマホは前後カメラを同時に開けないことが多い）
-  if (face.stream){ face.stream.getTracks().forEach(t => t.stop()); face.stream = null; }
+  // 顔認識は使わない。フロントカメラは手の認識（ピース・指カーソル）だけに使う
   face.src = null; faceRecenter(); poseRecenter();
-  loadPoseModel(); loadHandModel();
+  loadPoseModel(); if (useFront()) loadHandModel();
   if (!camStream) await openCam(camSel.value || null);
+  await openHandCam();
   if (dual.on && !dual.stream) dualOpen();
   if (!vrm) restoreVRM();
 }
@@ -878,7 +911,7 @@ function bcStart(){
       }
       bc.waiting = false;
       if (!pose.lm){ bcSay('全身認識モデルを読み込めませんでした。ネット接続を確認して、もう一度押してください'); return; }
-      if (!camStream){ bcSay('カメラを開けませんでした。プレイ時設定の「カメラの選択」を確認してください'); return; }
+      if (!camStream){ bcSay(!useBack() ? 'バックカメラが「使用しない」です。全身認識にはバックカメラが必要です' : 'カメラを開けませんでした。プレイ時設定の「カメラの選択」を確認してください'); return; }
       bcStart();
     })();
     return;
@@ -927,7 +960,19 @@ function bcFinish(obs){
 function bcApply(){
   const r = bc.res, t = bc.tune, W_ = vid.videoWidth, H_ = vid.videoHeight;
   if (!r || !W_ || !bc.originUV) return false;
-  const th = r.th + t.th*Math.PI/180, ph = r.ph + t.ph*Math.PI/180, h = Math.max(.2, r.h - t.floor);
+  // 床を上下: カメラの高さを変える。傾き: 立ち位置の床の点を動かさずに床を傾ける（奥/手前、左右がシーソーのように動く）
+  const h0 = Math.max(.2, r.h - t.floor); let th = r.th, ph = r.ph, h = h0;
+  if (t.th || t.ph){
+    const U0 = bcUp(r.th, r.ph), f0 = bcFocal(W_), d = [(bc.originUV[0] - .5)*W_/f0, (bc.originUV[1] - .5)*H_/f0, 1];
+    const du = d[0]*U0[0] + d[1]*U0[1] + d[2]*U0[2];
+    if (du < -1e-4){
+      const k = -h0/du, P = d.map(v => v*k);   // 立ち位置の床の点（カメラ座標）
+      const mir = (bc.poseCam || pose.cam) === 'front' ? -1 : 1;   // プレビューが左右反転のときは画面の左右に合わせる
+      th = r.th + t.th*Math.PI/180; ph = r.ph - mir*t.ph*Math.PI/180;
+      const U1 = bcUp(th, ph); h = Math.max(.2, -(P[0]*U1[0] + P[1]*U1[1] + P[2]*U1[2]));
+    }
+  }
+  bc.effH = h;
   const Uc = bcUp(th, ph), U = new THREE.Vector3(Uc[0], -Uc[1], -Uc[2]).normalize();   // OpenCV → three.js
   const back = new THREE.Vector3(0, 0, 1); back.addScaledVector(U, -back.dot(U)).normalize();   // カメラの後ろ向きの水平成分
   const X = new THREE.Vector3().crossVectors(U, back), O = U.clone().multiplyScalar(-h);
@@ -967,14 +1012,14 @@ function bcTuneUI(){
   $('bcTune').hidden = bc.state !== 'locked' && !bc.res;
 }
 function bcSave(){
-  try { localStorage.setItem(BC_KEY, JSON.stringify({ res:bc.res, tune:bc.tune, hfov:bc.hfov, originUV:bc.originUV, poseCam:bc.poseCam, boss:bc.boss, height:bc.height, bossUV:bc.bossUV || null, bossH:R*2 })); } catch (e){}
+  try { localStorage.setItem(BC_KEY, JSON.stringify({ res:bc.res, tune:{ ...bc.tune, v:2 }, hfov:bc.hfov, originUV:bc.originUV, poseCam:bc.poseCam, boss:bc.boss, height:bc.height, bossUV:bc.bossUV || null, bossH:R*2 })); } catch (e){}
 }
 function bcLoadSaved(){   // 前回の結果を読み込む（カメラを動かしていなければそのまま使える）
   if (bc.state !== 'off' || !tp || !vid.videoWidth || bc.triedLoad) return;
   bc.triedLoad = true;
   let d = null; try { d = JSON.parse(localStorage.getItem(BC_KEY) || 'null'); } catch (e){}
   if (!d || !d.res || !d.originUV) return;
-  Object.assign(bc, { res:d.res, tune:d.tune || { floor:0, th:0, ph:0 }, hfov:d.hfov || bc.hfov, originUV:d.originUV, poseCam:d.poseCam, boss:d.boss || bc.boss, bossUV:d.bossUV || null });
+  Object.assign(bc, { res:d.res, tune:d.tune ? (d.tune.v === 2 ? d.tune : { floor:d.tune.floor || 0, th:0, ph:0 }) : { floor:0, th:0, ph:0 }, hfov:d.hfov || bc.hfov, originUV:d.originUV, poseCam:d.poseCam, boss:d.boss || bc.boss, bossUV:d.bossUV || null });
   if (d.bossH){ R = d.bossH/2; $('bcBossH').value = d.bossH; $('bcBossHV').textContent = d.bossH.toFixed(1); }
   $('bcFovIn').value = Math.round(bc.hfov); $('bcFovV').textContent = bc.hfov.toFixed(1);
   $('bcBoss').value = bc.boss; $('bcBossV').textContent = bc.boss.toFixed(1);
@@ -1184,7 +1229,7 @@ function dualCov(c, p, h){
 }
 const dualInv = m => { const det = m[0]*m[2] - m[1]*m[1] || 1e-12; return [m[2]/det, -m[1]/det, m[0]/det]; };
 const dualMahal = (dx, dz, m) => { const i = dualInv(m); return dx*dx*i[0] + 2*dx*dz*i[1] + dz*dz*i[2]; };
-const dualMainH = () => bc.res ? Math.max(.2, bc.res.h - ((bc.tune && bc.tune.floor) || 0)) : 1.5;
+const dualMainH = () => bc.res ? (bc.effH || Math.max(.2, bc.res.h - ((bc.tune && bc.tune.floor) || 0))) : 1.5;
 
 // --- 2台の足の位置を合成して、ゲームの足の位置にする ---
 function dualFuse(){
@@ -1520,7 +1565,7 @@ async function flipFaceCam(){   // フロント(顔)とバック(背景)のカ�
   if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
   faceSel.value = b; camSel.value = f;
   if (bgMode === 'cam' || tp) await openCam(f);
-  if (face.on && !tp) await openFaceCam();
+  if (tp) await openHandCam(); else if (face.on) await openFaceCam();
   listCams();
 }
 function faceMirror(){ const t = $('faceType').value; return t === 'auto' ? (face.src === vid ? camMirror : face.fm !== false) : t === 'front'; }
