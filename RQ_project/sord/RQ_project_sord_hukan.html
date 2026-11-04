@@ -133,12 +133,11 @@
     <b style="color:#ffb35a">📷📷 2台モード（後ろ＋横のカメラで前後の位置を正確に）</b>
     <label><input type="checkbox" id="d2On"> 2台モードを使う</label>
     <label>横カメラ <select id="d2Sel"></select></label>
-    <label>横カメラの高さ（床からレンズ） <input type="number" id="d2CamH" value="0" min="0" max="300" style="width:70px"> cm<small>0 = わからない</small></label>
-    <label><input type="checkbox" id="d2AutoFov" checked> 横カメラの画角も自動で測る（高さを入れた時）</label>
+    <label><input type="checkbox" id="d2AutoFov" checked> 横カメラの画角も自動で測る</label>
     <label>横カメラの画角 <b id="d2FovV">65</b>°<input type="range" id="d2Fov" min="35" max="110" step="1" value="65"></label>
     <div><button id="d2Start">📐 横カメラの位置合わせ開始</button> <button id="d2Reset">リセット</button></div>
     <div id="d2Stat" style="font-size:12px;color:#ffb35a">未設定</div>
-    <small>① メイン（上の「バック」）カメラをプレイヤーの後ろ、横カメラを左側に置く → ② 上の体キャリブレーションを先に完了 → ③「位置合わせ開始」→ 5か所（今の位置・前・後ろ・左・右）で1.5秒ずつまっすぐ立つ。2台とも足元まで映るようにしてください。左下の2枚目のプレビューが横カメラです。</small>
+    <small>① メイン（上の「バック」）カメラをプレイヤーの後ろ、横カメラを左側に置く → ② 上の体キャリブレーションを先に完了 → ③「位置合わせ開始」→ 5か所（今の位置・前・後ろ・左・右）で1秒ずつ止まる。<br>横カメラは<b>足元が映っていればOK</b>（姿勢は自由、頭が切れていても計算できます）。ただし人として見つけるには上半身もある程度映っている必要があります。後ろのカメラにも足元が映っている必要があります（同じ瞬間の足の位置を2台で見比べて、2台の位置関係を求めるため）。左下の2枚目のプレビューが横カメラです。</small>
     </div>
     </details>
     <details class="cpGrp"><summary>⚙ 細かい設定</summary>
@@ -836,6 +835,7 @@ const bc = { avAR:true, state:'off', height:1.70, camH:0, hfov:65, boss:8.5, ar:
   camF:new THREE.Matrix4(), FfromCam:new THREE.Matrix4(), FfromG:new THREE.Matrix4(), GfromF:new THREE.Matrix4(), GfromCam:new THREE.Matrix4(),
   origin:null, feetS:[], feetF:null, feetX:0, feetSeen:-1e9, live:null };
 const BC_STAND_MS = 3000, BC_COUNT_MS = 5000;
+const BC_BODY_MAX = 22, BC_KNEE_MIN = 148;   // まっすぐ立っている判定: 体の曲がり（肩-腰-かかと）がこの角度未満・ひざがこの角度より伸びている
 const bcEye = () => bc.height*.93;   // 目・耳の高さ ≒ 身長×0.93
 const bcFocal = w => (w/2)/Math.tan(bc.hfov*Math.PI/360);
 function bcSay(t, popup, quiet){ if (bc.msg === t) return; bc.msg = t; $('bcStat').textContent = t; if (popup) popCam(popup, '#ffd35a', .6, 2.2); if (!quiet) console.log('[体キャリブ] ' + t); }
@@ -854,7 +854,7 @@ function bcObsFrom(n, el = vid, hf = bc.hfov, loose = false){   // loose: 片方
   const ang = (a, b, c) => { const u = [a[0] - b[0], a[1] - b[1]], v = [c[0] - b[0], c[1] - b[1]]; return Math.acos(Math.max(-1, Math.min(1, (u[0]*v[0] + u[1]*v[1])/(Math.hypot(...u)*Math.hypot(...v) || 1))))*180/Math.PI; };
   const sh = mid(P(11), P(12)), hp = mid(P(23), P(24)), hl = mid(P(29), P(30));
   const body = 180 - ang(sh, hp, hl), knee = Math.min(ang(P(23), P(25), P(27)), ang(P(24), P(26), P(28)));
-  const upright = body < 15 && knee > 155 && hy*H_ < sh[1];
+  const upright = body < BC_BODY_MAX && knee > BC_KNEE_MIN && hy*H_ < sh[1];
   const hm = k => hi.reduce((a, i) => a + n[i][k], 0)/hi.length;
   return { fx:nx(hm('x')), fy:ny(hm('y')), hx:nx(hx), hy:ny(hy), upright, body, knee };
 }
@@ -880,7 +880,7 @@ function bcPose(n){
   const movedH = bc.lastH ? Math.hypot(o.hx - bc.lastH.hx, o.hy - bc.lastH.hy) : 1;
   bc.lastF = o; bc.lastH = o; const moved = Math.max(movedF, movedH);
   if (bc.state === 'stand1' || bc.state === 'stand2'){
-    if (!o.upright){ reset(o.knee <= 155 ? 'ひざを伸ばして、まっすぐ立ってください' : '前かがみになっています。背すじを伸ばして、まっすぐ立ってください'); return; }
+    if (!o.upright){ reset(o.knee <= BC_KNEE_MIN ? `ひざを伸ばして、まっすぐ立ってください（ひざ ${o.knee.toFixed(0)}° / ${BC_KNEE_MIN}°以上で OK）` : o.body >= BC_BODY_MAX ? `体が曲がっています。背すじを伸ばしてください（曲がり ${o.body.toFixed(0)}° / ${BC_BODY_MAX}°未満で OK）` : '頭が映っていないか、頭の位置を認識できません'); return; }
     if (moved > .012){ reset('動かないでください…'); return; }
     const L = bc.state === 'stand1' ? bc.obsA : bc.obs; L.push(o);
     const left = Math.max(0, BC_STAND_MS - (now - bc.t0));
@@ -1160,7 +1160,7 @@ $('bcAvAR').onchange = e => { bc.avAR = e.target.checked; };
 // 座標: F = メインカメラの床座標（体キャリブレーションと同じ）/ S = 横カメラの床座標（横カメラ真下が原点）
 // 位置合わせ: 横カメラ自身も体キャリブレーションと同じ方法で床を求め、5か所に立った足の位置から S→F（回転+平行移動）を解く。
 const sv = $('sv'), sPrev = $('sidePrev'), sctx = sPrev.getContext('2d');
-const DUAL_KEY = 'connectworld_dualcal_v1', DUAL_ON_KEY = 'connectworld_dual_on', DUAL_SPOTS = 5, DUAL_STILL_MS = 1500, DUAL_FRESH_MS = 200;
+const DUAL_KEY = 'connectworld_dualcal_v1', DUAL_ON_KEY = 'connectworld_dual_on', DUAL_SPOTS = 5, DUAL_STILL_MS = 1000, DUAL_FRESH_MS = 200;
 const DUAL_GUIDE = ['いつもの立ち位置でまっすぐ立って、止まってください', '前（ボスの方）に1〜2歩進んで、止まってください',
                     '後ろに2〜3歩下がって、止まってください', '左に1〜2歩動いて、止まってください', '右に2〜3歩動いて、止まってください'];
 const dual = { on:false, lm:null, loading:false, stream:null, seen:false, n:null, live:null, liveT:-1e9, last:-1, lastRun:0,
@@ -1280,8 +1280,8 @@ function dualSpotTick(oS){
   if (!oM && !oS) return fail('どちらのカメラにも足元が映っていません');
   if (!oM) return fail('後ろのカメラに足元まで映るようにしてください');
   if (!oS) return fail('横のカメラに足元まで映るようにしてください');
-  if (!oM.upright || !oS.upright) return fail('ひざと背すじを伸ばして、まっすぐ立ってください');
-  const mv = (a, b) => b ? Math.max(Math.hypot(a.fx - b.fx, a.fy - b.fy), Math.hypot(a.hx - b.hx, a.hy - b.hy)) : 1;
+  // 使うのは足元（かかと）だけ。姿勢は問わない
+  const mv = (a, b) => b ? Math.hypot(a.fx - b.fx, a.fy - b.fy) : 1;
   const moved = Math.max(mv(oM, dual.lastM), mv(oS, dual.lastS)) > .015; dual.lastM = oM; dual.lastS = oS;
   if (moved) return fail(DUAL_GUIDE[k]);
   const pM = bcRay(oM);
@@ -1297,54 +1297,102 @@ function dualSpotTick(oS){
   if (dual.spots.length >= DUAL_SPOTS){ dualFinish(); return; }
   popCam(`OK！ 次: ${DUAL_GUIDE[dual.spots.length].replace('、止まってください', '')}`, '#ffb35a', .5, 2);
 }
-function dualFinish(redo){
-  const sp = dual.spots, fovFree = dual.camH > 0 && dual.autoFov && !redo, W_ = sv.videoWidth;
-  const sObs = sp.map(x => x.s);
-  let r = bcSolve(sObs, bcEye(), dual.camH || 0, fovFree), note = '';
-  if (fovFree){
-    const fov = 2*Math.atan(Math.tan(dual.hfov*Math.PI/360)*r.s)*180/Math.PI;
-    if (fov < 35 || fov > 110) return dualFinish(true);   // 画角が不自然 → 設定値で計算し直す
-    for (const o of sObs){ o.fx *= r.s; o.fy *= r.s; o.hx *= r.s; o.hy *= r.s; }
+// 横カメラの位置合わせ（足元だけで解く）
+// 5か所の足の位置は、メインカメラ（体キャリブレーション済み）から床の上の座標 F として分かっている。
+// 同じ瞬間に横カメラの映像のどこに足が映っていたかが分かれば、「床の上の点 → 横カメラの映像」の対応が5組できる。
+// 床という平面から映像への対応は射影変換（ホモグラフィ）で表せるので、そこから横カメラの高さ・向き・位置を直接求める。
+// → 頭は不要、身長を「ものさし」に使わないので、まっすぐ立つ必要もない。
+function dualHomog(A, B){   // A[i]=[x,z] → B[i]=[u,v]（u = (h0x+h1z+h2)/(h6x+h7z+1) ...）最小二乗
+  const M = [], y = [];
+  for (let i = 0; i < A.length; i++){
+    const [x, z] = A[i], [u, v] = B[i];
+    M.push([x, z, 1, 0, 0, 0, -u*x, -u*z]); y.push(u);
+    M.push([0, 0, 0, x, z, 1, -v*x, -v*z]); y.push(v);
+  }
+  const N = Array.from({ length:8 }, () => new Array(9).fill(0));   // 正規方程式 [MᵀM | Mᵀy]
+  for (let r = 0; r < M.length; r++) for (let a = 0; a < 8; a++){ N[a][8] += M[r][a]*y[r]; for (let b = 0; b < 8; b++) N[a][b] += M[r][a]*M[r][b]; }
+  for (let c = 0; c < 8; c++){   // ガウスの消去法
+    let pv = c; for (let r = c + 1; r < 8; r++) if (Math.abs(N[r][c]) > Math.abs(N[pv][c])) pv = r;
+    if (Math.abs(N[pv][c]) < 1e-12) return null; [N[c], N[pv]] = [N[pv], N[c]];
+    for (let r = 0; r < 8; r++){ if (r === c) continue; const k = N[r][c]/N[c][c]; for (let q = c; q < 9; q++) N[r][q] -= k*N[c][q]; }
+  }
+  const h = N.map((row, i) => row[8]/row[i]);
+  return [[h[0], h[1], h[2]], [h[3], h[4], h[5]], [h[6], h[7], 1]];
+}
+// 横カメラの姿勢パラメータ q=[θ, φ, h, yaw, tx, tz] → F の点 P を写した正規化画像座標
+function dualProj(q, P){
+  const camF = dualCamMat(q[0], q[1], q[2]), FfromS = new THREE.Matrix4().makeRotationY(q[3]).setPosition(q[4], 0, q[5]);
+  const M = camF.multiply(FfromS.invert()), out = [];
+  for (const p of P){ const c = new THREE.Vector3(p.x, BC_LIFT, p.z).applyMatrix4(M); out.push(c.z < -.05 ? [c.x/-c.z, -c.y/-c.z] : null); }
+  return out;
+}
+// ホモグラフィ H と焦点距離の倍率 k（本当の焦点距離 / 設定の画角から出した焦点距離）から、横カメラの姿勢 q を求める
+function dualDecomp(H, k, A){
+  const Ht = [[H[0][0]/k, H[0][1]/k, H[0][2]/k], [H[1][0]/k, H[1][1]/k, H[1][2]/k], H[2]];
+  const col = j => [Ht[0][j], Ht[1][j], Ht[2][j]], nrm = v => Math.hypot(...v), dot3 = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+  const cross = (a, b) => [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]];
+  let lam = 2/(nrm(col(0)) + nrm(col(1)));
+  if (lam*(Ht[2][0]*A[0][0] + Ht[2][1]*A[0][1] + Ht[2][2]) < 0) lam = -lam;   // 足がカメラの前にあるように
+  let rx = col(0).map(v => v*lam), rz = col(1).map(v => v*lam); const t1 = col(2).map(v => v*lam);
+  rx = rx.map(v => v/nrm(rx)); const d = dot3(rz, rx); rz = rz.map((v, i) => v - d*rx[i]); rz = rz.map(v => v/nrm(rz));
+  const ry = cross(rz, rx), t = t1.map((v, i) => v - BC_LIFT*ry[i]);   // R の列 = 床の x, y(上), z 軸をカメラ(OpenCV)から見た向き
+  const C = [-dot3(rx, t), -dot3(ry, t), -dot3(rz, t)];   // 横カメラの位置（F座標）
+  const th = Math.atan2(-ry[2], -ry[1]), ph = Math.asin(Math.max(-1, Math.min(1, ry[0]))), h = C[1];
+  if (!(h > .2 && h < 3.4)) return null;
+  const camF = dualCamMat(th, ph, h), toF = p => {   // three.jsのカメラ座標 → F
+    const c = [p.x, -p.y, -p.z].map((v, i) => v - t[i]); return new THREE.Vector3(dot3(rx, c), dot3(ry, c), dot3(rz, c)); };
+  const o = toF(new THREE.Vector3(0, 0, 0).applyMatrix4(camF)), ax = toF(new THREE.Vector3(1, 0, 0).applyMatrix4(camF)).sub(o);
+  return [th, ph, h, Math.atan2(-ax.z, ax.x), o.x, o.z];
+}
+function dualFinish(){
+  const sp = dual.spots, W_ = sv.videoWidth, fail = t => { dual.state = 'off'; dualSay(t, '位置合わせ失敗'); };
+  const PM = sp.map(x => x.pM), A = PM.map(p => [p.x, p.z]), B0 = sp.map(x => [x.s.fx, x.s.fy]);
+  const H = dualHomog(A, B0); if (!H) return fail('足の位置が一直線に並んでいて計算できません。前後と左右の両方に動いてください');
+  // 映像上のずれ（p = [θ, φ, h, yaw, tx, tz, k]）
+  const cost = p => { const k = p[6]; if (p[2] < .2 || p[2] > 3.5 || !(k > .4 && k < 2.5)) return 1e9; const pr = dualProj(p, PM); let s = 0;
+    for (let i = 0; i < pr.length; i++){ if (!pr[i]) return 1e9; s += (pr[i][0]*k - B0[i][0])**2 + (pr[i][1]*k - B0[i][1])**2; } return s/pr.length; };
+  // 画角の候補: 設定値（k=1）と、床の2方向が直交・同じ長さという条件から出した値
+  const ks = [1];
+  if (dual.autoFov){
+    const c1 = [H[0][0], H[1][0], H[2][0]], c2 = [H[0][1], H[1][1], H[2][1]];
+    for (const v of [-(c1[0]*c2[0] + c1[1]*c2[1])/(c1[2]*c2[2]), (c1[0]**2 + c1[1]**2 - c2[0]**2 - c2[1]**2)/(c2[2]**2 - c1[2]**2)])
+      if (isFinite(v) && v > .16 && v < 6) ks.push(Math.sqrt(v));
+  }
+  let best = null;
+  for (const k0 of ks){
+    const q0 = dualDecomp(H, k0, A); if (!q0) continue;
+    const st = [.03, .03, .1, .05, .2, .2, dual.autoFov ? .05 : 0];
+    const r = dual.autoFov ? bcNM(cost, [...q0, k0], st, 2000) : (() => { const c = p => cost([...p, 1]); const r = bcNM(c, q0, st.slice(0, 6), 1500); return { x:[...r.x, 1], f:r.f }; })();
+    if (!best || r.f < best.f) best = r;
+  }
+  if (!best || best.f >= 1e9) return fail('横カメラの位置を計算できませんでした。2台とも足元がはっきり映る場所で、もう一度');
+  const q = best.x, k = q[6]; let note = '';
+  if (dual.autoFov){
+    const fov = 2*Math.atan(Math.tan(dual.hfov*Math.PI/360)/k)*180/Math.PI;
+    if (fov < 35 || fov > 110) return fail(`画角を推定できませんでした（${fov.toFixed(0)}°）。「画角も自動で測る」を外し、画角を手で合わせてもう一度`);
     dual.hfov = Math.round(fov*10)/10; $('d2Fov').value = Math.round(dual.hfov); $('d2FovV').textContent = dual.hfov.toFixed(1); note = `・画角 ${dual.hfov}°`;
   }
-  const px = r.rms*(W_/2)/Math.tan(dual.hfov*Math.PI/360);
-  console.log(`[2台モード] 横カメラ: 高さ ${r.h.toFixed(2)}m 下向き ${(r.th*180/Math.PI).toFixed(1)}° 傾き ${(r.ph*180/Math.PI).toFixed(1)}° 画角 ${dual.hfov}° 誤差 ${px.toFixed(1)}px`);
-  if (px > 25 || r.h < .2 || r.h > 3.4){ dual.state = 'off'; dualSay(`横カメラの床を測れませんでした（誤差 ${px.toFixed(0)}px）。横カメラの高さ・身長を確認して、もう一度`, '位置合わせ失敗'); return; }
-  const camF = dualCamMat(r.th, r.ph, r.h), FfromCam = camF.clone().invert();
-  const PS = sObs.map(o => bcRayM(o, FfromCam)), PM = sp.map(x => x.pM), hM = dualMainH();
-  if (PS.some(p => !p)){ dual.state = 'off'; dualSay('横カメラから見た足の位置を計算できない場所がありました。もう一度', '位置合わせ失敗'); return; }
-  // S→F の回転・平行移動を解く（各点の誤差の楕円で重み付け）
-  const cost = q => { let s = 0;
-    for (let i = 0; i < PM.length; i++){
-      const t = dualT(PS[i], q[0], q[1], q[2]), Cm = dualCov({ x:0, z:0 }, PM[i], hM), Cs = dualCov({ x:q[1], z:q[2] }, t, r.h);
-      s += dualMahal(PM[i].x - t.x, PM[i].z - t.z, [Cm[0] + Cs[0], Cm[1] + Cs[1], Cm[2] + Cs[2]]);
-    } return s/PM.length; };
-  const mean = L => ({ x:L.reduce((a, p) => a + p.x, 0)/L.length, z:L.reduce((a, p) => a + p.z, 0)/L.length }), mM = mean(PM), mS = mean(PS);
-  let best = null;
-  for (let i = 0; i < 8; i++){
-    const yaw = i*Math.PI/4, t0 = dualT(mS, yaw, 0, 0), x0 = [yaw, mM.x - t0.x, mM.z - t0.z];
-    const res = bcNM(cost, x0, [.3, .5, .5], 800); if (!best || res.f < best.f) best = res;
-  }
-  const [yaw, tx, tz] = best.x;
-  const err = Math.sqrt(PM.reduce((a, p, i) => { const t = dualT(PS[i], yaw, tx, tz); return a + (p.x - t.x)**2 + (p.z - t.z)**2; }, 0)/PM.length);
-  console.log(`[2台モード] 位置合わせ: 回転 ${(yaw*180/Math.PI).toFixed(0)}° 横カメラの位置 (${tx.toFixed(2)}, ${tz.toFixed(2)})m 2台のずれ ${err.toFixed(2)}m`);
-  if (err > .8){ dual.state = 'off'; dualSay(`2台の位置が合いませんでした（ずれ ${err.toFixed(2)}m）。どちらかのカメラの床がずれているかもしれません。体キャリブレーションからやり直してください`, '位置合わせ失敗'); return; }
-  dual.res = { th:r.th, ph:r.ph, h:r.h }; dual.al = { yaw:((yaw % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI), tx, tz };
+  const f = (W_/2)/Math.tan(dual.hfov*Math.PI/360), px = Math.sqrt(best.f)*f/k;
+  // 横カメラだけで求めた足の位置と、メインカメラの足の位置のずれ
+  const FfromCam = dualCamMat(q[0], q[1], q[2]).invert();
+  const err = Math.sqrt(sp.reduce((a, x, i) => { const p = bcRayM({ fx:B0[i][0]/k, fy:B0[i][1]/k }, FfromCam); if (!p) return a + 9; const g = dualT(p, q[3], q[4], q[5]); return a + (PM[i].x - g.x)**2 + (PM[i].z - g.z)**2; }, 0)/sp.length);
+  console.log(`[2台モード] 横カメラ: 高さ ${q[2].toFixed(2)}m 下向き ${(q[0]*180/Math.PI).toFixed(1)}° 傾き ${(q[1]*180/Math.PI).toFixed(1)}° 画角 ${dual.hfov}° 位置 (${q[4].toFixed(2)}, ${q[5].toFixed(2)})m 映像のずれ ${px.toFixed(1)}px 足のずれ ${err.toFixed(2)}m`);
+  if (px > 30 || err > .5) return fail(`2台の位置が合いませんでした（映像のずれ ${px.toFixed(0)}px・足のずれ ${(err*100).toFixed(0)}cm）。体キャリブレーションの床がずれているかもしれません。微調整を確認してから、もう一度`);
+  dual.res = { th:q[0], ph:q[1], h:q[2] }; dual.al = { yaw:((q[3] % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI), tx:q[4], tz:q[5] };
   dualApply(); dual.state = 'locked'; dualSave();
-  const dist = Math.hypot(tx, tz);
-  dualSay(`完了: 横カメラの高さ ${r.h.toFixed(2)}m・メインカメラから ${dist.toFixed(1)}m・2台のずれ ${(err*100).toFixed(0)}cm${note}`, '2台の位置合わせ完了');
+  dualSay(`完了: 横カメラの高さ ${q[2].toFixed(2)}m・メインカメラから ${Math.hypot(q[4], q[5]).toFixed(1)}m・2台のずれ ${(err*100).toFixed(0)}cm${note}`, '2台の位置合わせ完了');
 }
 function dualStart(){
   if (!dual.on){ dualSay('先に「2台モードを使う」をONにしてください'); return; }
   if (bc.state !== 'locked'){ dualSay('先に上の体キャリブレーション（後ろのカメラ）を完了してください'); return; }
   if (!dual.stream){ dualSay('横カメラが開いていません'); dualOpen(); return; }
   if (!dual.lm){ dualSay('横カメラ用の全身認識を読み込み中です。少ししてからもう一度押してください'); return; }
-  dual.camH = +$('d2CamH').value/100; dual.autoFov = $('d2AutoFov').checked; dual.hfov = +$('d2Fov').value;
+  dual.autoFov = $('d2AutoFov').checked; dual.hfov = +$('d2Fov').value;
   dual.state = 'count'; dual.t0 = performance.now(); dual.cd = 0; dual.spots = []; dual.s = null; dualSpotReset();
   dualSay('5秒後に位置合わせを始めます。いつもの立ち位置へ');
 }
 function dualReset(){ dual.state = 'off'; dual.res = dual.al = null; dual.s = null; dual.spots = []; try { localStorage.removeItem(DUAL_KEY); } catch (e){} dualSay('リセットしました（足の位置はメインカメラ1台で求めます）'); }
-function dualSave(){ try { localStorage.setItem(DUAL_KEY, JSON.stringify({ res:dual.res, al:dual.al, hfov:dual.hfov, camH:dual.camH, cam:camName(sideId()) })); } catch (e){} }
+function dualSave(){ try { localStorage.setItem(DUAL_KEY, JSON.stringify({ res:dual.res, al:dual.al, hfov:dual.hfov, cam:camName(sideId()) })); } catch (e){} }
 function dualLoadSaved(){
   if (dual.triedLoad || dual.state !== 'off' || bc.state !== 'locked' || !sv.videoWidth) return;
   dual.triedLoad = true;
@@ -1352,7 +1400,6 @@ function dualLoadSaved(){
   if (!d || !d.res || !d.al) return;
   Object.assign(dual, { res:d.res, al:d.al, hfov:d.hfov || dual.hfov, camH:d.camH || 0 });
   $('d2Fov').value = Math.round(dual.hfov); $('d2FovV').textContent = (+dual.hfov).toFixed(1);
-  if (d.camH) $('d2CamH').value = Math.round(d.camH*100);
   if (dualApply()){ dual.state = 'locked'; dualSay('前回の2台の位置合わせを読み込みました（カメラを動かしたら測り直してください）'); }
 }
 
