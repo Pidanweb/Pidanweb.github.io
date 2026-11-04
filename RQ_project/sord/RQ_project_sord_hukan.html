@@ -447,9 +447,10 @@ async function openCam(id){
 }
 // メニュー内のカメラ設定画面（プレイ時設定 / 事前設定）
 function menuScreen(cam){ $('mMain').hidden = cam; $('mCam').hidden = !cam; $('menu').classList.toggle('cam', cam); $('menu').scrollTop = 0; if (cam) listCams(); }
+// 事前設定を開いたら、カメラと全身認識モデルを先に準備しておく（キャリブレーションをゲーム開始前でもできるように）
 function camTab(pre){ $('cpPlay').hidden = pre; $('cpPre').hidden = !pre; $('tabPlay').classList.toggle('on', !pre); $('tabPre').classList.toggle('on', pre); $('menu').scrollTop = 0; }
 $('mCamOpen').onclick = () => menuScreen(true); $('mCamBack').onclick = () => menuScreen(false);
-$('tabPlay').onclick = () => camTab(false); $('tabPre').onclick = () => camTab(true);
+$('tabPlay').onclick = () => camTab(false); $('tabPre').onclick = () => { camTab(true); if (!pose.lm) enterTP(); };
 $('camApply').onclick = async () => { if (bgMode === 'cam' || tp) await openCam(camSel.value || null); if (face.on && !tp) await startFace(); listCams(); };
 camSel.onchange = () => { saveCamPref(camSel); listCams(); if (bgMode === 'cam' || tp) openCam(camSel.value || null); };
 $('camRefresh').onclick = async () => { camStat.textContent = '検出中…'; await ensureCamPerm(); await listCams(); };
@@ -866,7 +867,22 @@ function bcPose(n){
 }
 function bcStart(){
   if (!tp){ bcSay('先に俯瞰モード（👁 ボタン）にしてください'); return; }
-  if (!pose.lm){ bcSay('全身認識の読み込みを待っています。少ししてからもう一度押してください'); return; }
+  if (!pose.lm){   // まだモデルが無い（ゲーム開始前にメニューから押した時など）→ ここで読み込み、終わったら自動で開始する
+    if (bc.waiting) return; bc.waiting = true;
+    bcSay('全身認識モデルを読み込み中です。読み込めたら自動で開始します…');
+    enterTP();   // カメラを開いて全身認識モデルを読み込む（ゲーム開始時と同じ準備）
+    (async () => {
+      for (let i = 0; i < 3 && !pose.lm; i++){   // 失敗したら最大3回まで読み込み直す
+        while (pose.loading) await new Promise(r => setTimeout(r, 200));
+        if (!pose.lm) await loadPoseModel();
+      }
+      bc.waiting = false;
+      if (!pose.lm){ bcSay('全身認識モデルを読み込めませんでした。ネット接続を確認して、もう一度押してください'); return; }
+      if (!camStream){ bcSay('カメラを開けませんでした。プレイ時設定の「カメラの選択」を確認してください'); return; }
+      bcStart();
+    })();
+    return;
+  }
   bc.height = +$('bcH').value/100; bc.camH = +$('bcCamH').value/100; bc.autoFov = $('bcAutoFov').checked;
   if (!(bc.height > 1 && bc.height < 2.3)){ bcSay('身長を正しく入れてください'); return; }
   bc.state = 'count'; bc.res = null; bcTuneUI(); bc.cd = 0; bc.t0 = performance.now(); bc.obsA = []; bc.obs = []; bc.lastF = bc.lastH = null;
