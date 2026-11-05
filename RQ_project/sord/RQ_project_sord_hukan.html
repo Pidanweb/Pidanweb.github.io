@@ -2512,12 +2512,99 @@ if (/[?&]start=1/.test(location.search)) setTimeout(() => dispatchEvent(new Mous
   function hide(){ navi.classList.remove('on'); }
   window.RQ = { say, hide, mode };
 
+  // ===== システム効果音 =====
+  // 基本は WebAudio で合成。sound/se_名前.mp3 を置くと、そのファイルが優先されます
+  // 名前: cursor decide open close panel start count clear complete skill hurt victory gameover navi link
+  const SE_NAMES = ['cursor','decide','open','close','panel','start','count','clear','complete','skill','hurt','victory','gameover','navi','link'];
+  const seFile = {};
+  for (const n of SE_NAMES){ const a = new Audio('sound/se_' + n + '.mp3'); a.preload = 'auto'; a.addEventListener('canplaythrough', () => seFile[n] = a, { once:true }); a.onerror = () => {}; }
+  let AC = null, out = null;
+  function ac(){
+    if (!AC){ try { AC = new (window.AudioContext || window.webkitAudioContext)(); out = AC.createGain(); out.connect(AC.destination); } catch (e){ return null; } }
+    if (AC.state === 'suspended') AC.resume().catch(() => {});
+    return AC;
+  }
+  ['pointerdown', 'keydown'].forEach(ev => addEventListener(ev, ac, { capture:true }));   // 最初の操作で音を有効化
+  const V = () => (typeof vol !== 'undefined' ? vol : .8);
+  function tone(f, d = .2, type = 'sine', v = .15, at = 0, f2 = 0){
+    const t = AC.currentTime + at, o = AC.createOscillator(), g = AC.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .008); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+    o.connect(g); g.connect(out); o.start(t); o.stop(t + d + .05);
+  }
+  function hiss(d, f0, f1, v = .2, at = 0){
+    const t = AC.currentTime + at, n = Math.floor(AC.sampleRate*d), b = AC.createBuffer(1, n, AC.sampleRate), c = b.getChannelData(0);
+    for (let i = 0; i < n; i++) c[i] = Math.random()*2 - 1;
+    const s = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+    s.buffer = b; f.type = 'bandpass'; f.Q.value = 1.5; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + d);
+    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+    s.connect(f); f.connect(g); g.connect(out); s.start(t);
+  }
+  const SYN = {
+    cursor(){ tone(1800, .05, 'sine', .06); },
+    decide(){ tone(880, .09, 'sine', .12); tone(1320, .16, 'sine', .1, .05); },
+    open(){ tone(600, .12, 'triangle', .08, 0, 1200); tone(1500, .2, 'sine', .06, .08); hiss(.18, 2000, 6000, .05); },
+    close(){ tone(1100, .14, 'triangle', .07, 0, 500); },
+    panel(){ tone(1046, .12, 'sine', .08); tone(1568, .25, 'sine', .07, .07); hiss(.25, 6000, 2500, .04); },
+    start(){ [523, 784, 1046].forEach((f, i) => tone(f, .18, 'triangle', .1, i*.05)); hiss(.35, 800, 5000, .08); },
+    count(){ tone(1318, .08, 'square', .05); tone(1975, .16, 'sine', .08, .04); },
+    clear(){ [659, 784, 988, 1318].forEach((f, i) => tone(f, .5, 'triangle', .1, i*.08)); tone(2637, .6, 'sine', .04, .32); },
+    complete(){ [523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, .9, 'triangle', .09, i*.1)); [262, 392].forEach(f => tone(f, 1.6, 'sine', .08, .5)); },
+    skill(){ hiss(.4, 1500, 9000, .12); tone(1760, .35, 'sine', .08, .05); tone(2637, .45, 'sine', .05, .1); tone(220, .3, 'sawtooth', .05, 0, 880); },
+    hurt(){ tone(180, .25, 'sawtooth', .12, 0, 70); hiss(.2, 1200, 300, .15); },
+    victory(){ [392, 523, 659, 784].forEach((f, i) => tone(f, .35, 'triangle', .1, i*.12)); [523, 659, 784, 1046].forEach(f => tone(f, 1.8, 'triangle', .07, .55)); },
+    gameover(){ [440, 415, 392, 330].forEach((f, i) => tone(f, .6, 'triangle', .09, i*.28)); tone(110, 2, 'sine', .1, .3); },
+    navi(){ tone(1568, .06, 'sine', .06); tone(2093, .1, 'sine', .05, .06); },
+    link(){ [784, 1046, 1318, 1568].forEach((f, i) => tone(f, .7, 'sine', .07, i*.09)); hiss(1.2, 8000, 1500, .06); },
+  };
+  let lastSe = {};
+  function se(n){
+    const now = performance.now(); if (now - (lastSe[n] || 0) < 40) return; lastSe[n] = now;   // 同じ音の連打を間引く
+    if (seFile[n]){ try { const a = seFile[n].cloneNode(); a.volume = Math.min(1, V()); a.play().catch(() => {}); } catch (e){} return; }
+    if (!ac() || AC.state !== 'running') return;
+    out.gain.value = V()*.9; try { SYN[n] && SYN[n](); } catch (e){}
+  }
+  RQ.se = se;
+
+  // ---- ゲーム側の関数に音を差し込む（元の処理はそのまま呼ぶ）----
+  function hook(name, fn){
+    const orig = window[name]; if (typeof orig !== 'function') return;
+    window[name] = function(){ try { fn.apply(this, arguments); } catch (e){} return orig.apply(this, arguments); };
+  }
+  function after(name, fn){
+    const orig = window[name]; if (typeof orig !== 'function') return;
+    window[name] = function(){ const r = orig.apply(this, arguments); try { fn.apply(this, arguments); } catch (e){} return r; };
+  }
+  hook('toggleMenu', f => { const on = !document.getElementById('menu').classList.contains('on'); se((f === undefined ? on : f) ? 'open' : 'close'); });
+  hook('hcClick', () => se('decide'));
+  hook('setMsg', L => {
+    if (!L) return; const t = String(L[0] && L[0][0] || '');
+    se(/VICTORY/.test(t) ? 'victory' : /GAME OVER/.test(t) ? 'gameover' : /CLEAR/.test(t) ? 'clear' : 'panel');
+  });
+  hook('prGo', () => se('panel'));
+  hook('prStart', () => se('start'));
+  after('prDone', () => se('complete'));
+  if (typeof window.prCount === 'function'){   // 成功数が増えた時だけ鳴らす
+    const orig = window.prCount;
+    window.prCount = function(){ const n0 = (typeof PR !== 'undefined') ? PR.n : 0; const r = orig.apply(this, arguments); try { if (typeof PR !== 'undefined' && PR.n > n0) se('count'); } catch (e){} return r; };
+  }
+  hook('skBanner', () => se('skill'));
+  hook('startBattle', () => se('start'));
+  if (mode !== 'TUTORIAL') hook('hurtPlayer', () => se('hurt'));
+  // HTMLのボタン：カーソルが乗った音・押した音
+  document.addEventListener('pointerover', e => { const b = e.target.closest && e.target.closest('button,summary'); if (b && !b.contains(e.relatedTarget)) se('cursor'); });
+  document.addEventListener('click', e => { if (e.target.closest && e.target.closest('#menu button,#ui button,summary')) se('decide'); });
+  // 指先カーソルで項目に乗った時も鳴らす
+  new MutationObserver(ms => { for (const m of ms) if (m.target.classList && m.target.classList.contains('hHover') && !(m.oldValue || '').includes('hHover')) { se('cursor'); break; } })
+    .observe(document.getElementById('menu') || document.body, { subtree:true, attributes:true, attributeFilter:['class'], attributeOldValue:true });
+  const _say = say; RQ.say = (t, ms) => { se('navi'); return _say(t, ms); };
+
   // ---- タイトルからリンクして来た時の到着演出 ----
   const fromLink = /[?&]link=1/.test(location.search);
   if (!fromLink) return;
   const ov = el('div', { id:'rqLink' }, '<div class="box"><div class="l1">LINK ESTABLISHED</div><div class="l2">TUTORIAL FIELD</div><div class="bar"><i></i></div></div>');
   document.body.appendChild(ov);
-  requestAnimationFrame(() => ov.classList.add('go'));
+  requestAnimationFrame(() => ov.classList.add('go')); se('link');
   setTimeout(() => ov.classList.add('fade'), 1500);
   setTimeout(() => ov.classList.add('out'), 2600);
   setTimeout(() => ov.remove(), 3600);
@@ -2526,9 +2613,9 @@ if (/[?&]start=1/.test(location.search)) setTimeout(() => dispatchEvent(new Mous
   if (mode === 'TUTORIAL'){
     (async () => {
       await new Promise(r => setTimeout(r, 3000));
-      await say('ようこそ、RADIQLEへ。リンクは正常に確立されました。', 1400);
-      await say('ここはチュートリアルフィールド。まずは剣の基本操作を覚えましょう。', 1600);
-      await say('説明パネルを読んだら Ⓐボタン でスタート。＋ボタンでスキップできます。', 2600);
+      await RQ.say('ようこそ、RADIQLEへ。リンクは正常に確立されました。', 1400);
+      await RQ.say('ここはチュートリアルフィールド。まずは剣の基本操作を覚えましょう。', 1600);
+      await RQ.say('説明パネルを読んだら Ⓐボタン でスタート。＋ボタンでスキップできます。', 2600);
       hide();
     })();
   }
