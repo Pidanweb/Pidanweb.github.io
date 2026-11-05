@@ -74,6 +74,9 @@
     <label><input type="checkbox" id="poseMove" checked> 体の左右移動で回避</label>
     <small>俯瞰モードでは「バック」のカメラ1台（既定はバックカメラ）だけで全身を認識します。顔用カメラは止めます。全身が映る位置に置いてください。</small>
     <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <div><button id="calPage" onclick="location.href='calibrate_2cam.html'">📐 キャリブレーション専用ページを開く（2台）</button></div>
+    <small>同じフォルダの calibrate_2cam.html。大きな映像・上から見た図・音声案内で測って保存すると、ここで自動で読み込まれます</small>
+    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
     <b style="color:#ffd35a">🧍 体キャリブレーション（俯瞰モード・床の位置合わせ）</b>
     <label>身長 <input type="number" id="bcH" value="170" min="100" max="230" style="width:70px"> cm</label>
     <label>カメラの高さ（床からレンズ） <input type="number" id="bcCamH" value="0" min="0" max="300" style="width:70px"> cm<small>0 = わからない（途中で横に1歩 動いてもらいます）</small></label>
@@ -400,10 +403,21 @@ async function listCams(){
     fill(faceSel, '自動: ' + (a.front ? camName(a.front) : '内蔵カメラ'));
     fill(camSel, '自動: ' + (a.back ? camName(a.back) : (camList.length < 2 ? '（1台のみ→フロントと共用）' : 'USBカメラ')));
     { const s = autoSideId(); fill($('d2Sel'), '自動: ' + (s ? camName(s) : '（2台目が見つかりません）')); }
+    applySavedCams();   // キャリブレーション専用ページで選んだカメラを使う
     const same = frontId() && frontId() === backId();
     camStat.textContent = !camList.length ? 'カメラが見つかりません'
       : `${camList.length}台検出 / フロント: ${camName(frontId())} / バック: ${camName(backId())}` + (same ? '　⚠ 同じカメラです' : '');
   } catch (e){ camStat.textContent = '一覧を取得できません'; }
+}
+function applySavedCams(){
+  let d = null; try { d = JSON.parse(localStorage.getItem('connectworld_cams_v1') || 'null'); } catch (e){}
+  if (!d) return;
+  const find = c => c && (camList.find(x => x.deviceId === c.id) || camList.find(x => c.label && x.label === c.label));
+  const m = find(d.main), s2 = find(d.side);
+  if (m && !camSel.value) camSel.value = m.deviceId;
+  if (s2 && !$('d2Sel').value) $('d2Sel').value = s2.deviceId;
+  const q = { '640x360':'light', '960x540':'std', '1280x720':'high' }[d.res];
+  if (q && !applySavedCams.q){ applySavedCams.q = true; $('qMode').value = q; setQuality(q); }   // 取り込みサイズもそろえる
 }
 async function openCam(id){
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ camStat.textContent = 'HTTPS か localhost で開いてください'; return false; }
@@ -940,6 +954,7 @@ function bcLoadSaved(){   // 前回の結果を読み込む（カメラを動か
   $('bcFovIn').value = Math.round(bc.hfov); $('bcFovV').textContent = bc.hfov.toFixed(1);
   $('bcBoss').value = bc.boss; $('bcBossV').textContent = bc.boss.toFixed(1);
   if (d.height) $('bcH').value = Math.round(d.height*100);
+  if (d.poseCam === 'front' || d.poseCam === 'back'){ if (!pose.camAuto) setPoseCam(d.poseCam); }   // 測ったときのカメラの向き（前/後ろ）に合わせる
   if (!bcApply()) return;
   bc.state = 'locked'; bcHover(); applyBg(); bcTuneUI(); bcBossUI();
   bcSay('前回のキャリブレーションを読み込みました（カメラを動かしたら測り直してください）');
