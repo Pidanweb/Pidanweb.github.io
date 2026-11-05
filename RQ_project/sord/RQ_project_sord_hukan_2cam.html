@@ -957,7 +957,7 @@ function bcLoadSaved(){   // 前回の結果を読み込む（カメラを動か
   if (d.poseCam === 'front' || d.poseCam === 'back'){ if (!pose.camAuto) setPoseCam(d.poseCam); }   // 測ったときのカメラの向き（前/後ろ）に合わせる
   if (!bcApply()) return;
   bc.state = 'locked'; bcHover(); applyBg(); bcTuneUI(); bcBossUI();
-  bcSay('前回のキャリブレーションを読み込みました（カメラを動かしたら測り直してください）');
+  bcSay(`保存したキャリブレーションを読み込みました: カメラの高さ ${d.res.h.toFixed(2)}m・画角 ${(+bc.hfov).toFixed(1)}°${savedAt(d)}（カメラを動かしたら測り直してください）`, 'キャリブレーション読み込み完了');
 }
 function bcTuneInput(){
   if (!bc.res) return;
@@ -1281,7 +1281,7 @@ function dualLoadSaved(){
   Object.assign(dual, { res:d.res, al:d.al, hfov:d.hfov || dual.hfov, camH:d.camH || 0 });
   $('d2Fov').value = Math.round(dual.hfov); $('d2FovV').textContent = (+dual.hfov).toFixed(1);
   if (d.camH) $('d2CamH').value = Math.round(d.camH*100);
-  if (dualApply()){ dual.state = 'locked'; dualSay('前回の2台の位置合わせを読み込みました（カメラを動かしたら測り直してください）'); }
+  if (dualApply()){ dual.state = 'locked'; dualSay(`保存した2台の位置合わせを読み込みました: 2台目はメインの${d.al.tx > 0 ? '右' : '左'} ${Math.hypot(d.al.tx, d.al.tz).toFixed(2)}m・高さ ${d.res.h.toFixed(2)}m${savedAt(d)}`, '2台の位置合わせ読み込み完了'); }
 }
 
 // --- 2台目のカメラのプレビュー（左下の2枚目）---
@@ -1753,6 +1753,15 @@ function reset(){
   Object.assign(B, { x:0, z:-16, vz:0, s:'enter', t:1, hp:800, hit:false, weak:0, combo:0, stun:false, phase:1, unp:false });
   bossG.visible = true; sb.n = 0; sb.ready = false; sb.active = false; anim = null; sk.st = 0; sbDraw(); mr.n = 0; mr.ready = false; mr.active = false; mrDraw();
 }
+// 保存した結果の有無（起動時に表示。読み込み自体はカメラが開いた時点で行う）
+const savedAt = d => d && d.at ? `（${new Date(d.at).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })} に測定）` : '';
+function savedCal(){
+  let b = null, d2 = null; try { b = JSON.parse(localStorage.getItem('connectworld_bodycal_v1') || 'null'); d2 = JSON.parse(localStorage.getItem('connectworld_dualcal_v1') || 'null'); } catch (e){}
+  return { b:b && b.res && b.originUV ? b : null, d:d2 && d2.res && d2.al ? d2 : null };
+}
+{ const sc = savedCal();
+  if (sc.b) $('bcStat').textContent = '保存した結果があります' + savedAt(sc.b) + '。ゲームを始める（画面クリック）とカメラが開いて読み込まれます';
+  if (sc.d) $('d2Stat').textContent = '保存した2台の位置合わせがあります' + savedAt(sc.d) + '。メインの読み込みの後に読み込まれます'; }
 function titleMsg(){
   setMsg([['GIANT SLIME RAID', '#ffd35a', 72], ['左クリック: 斬る / 長押し: ガード　右クリック: パリィ', '#fff', 30],
           ['紫に光る攻撃はパリィ不可 → ガードで防ぐ　A / D: 回避', '#c06bff', 28],
@@ -1760,6 +1769,7 @@ function titleMsg(){
           ['Wii: 振る=斬る / B+振り上げ=パリィ / A長押し=ガード', '#ffd35a', 26],
           ['Wii: 縦→横=バーチカル / 突き / 縦横縦横 / 一回転 など（−:ジャイロ再調整）', '#ffd35a', 22],
           ['顔を動かして狙う　C:中心リセット　V:VR　F:視点操作ON/OFF　M:メニュー', '#7ae7ff', 24],
+          ...(() => { const sc = savedCal(); return sc.b ? [[`📐 保存したキャリブレーションを使います（${sc.d ? '2台' : '1台'}）${savedAt(sc.b)}`, '#5fe07a', 24]] : []; })(),
           ['クリックでスタート（Webカメラを使います）', '#7ae7ff', 34]]);
 }
 titleMsg();
@@ -2454,7 +2464,7 @@ tp = true; av.visible = true; rig = aim; rig.add(sword, shield, gShield, arc); a
 let last = performance.now();
 function loop(now){
   const dt = Math.min(.033, (now - last)/1000); last = now;
-  mlFrame = false; faceStep(now); poseStep(now); dualStep(now); prTick(now); handStep(now); perfTick(now); hcStep(now, dt); palmUI(now); faceDraw(); dualDraw(); update(dt);
+  mlFrame = false; faceStep(now); poseStep(now); dualStep(now); prTick(now); bcLoadSaved(); dualLoadSaved(); handStep(now); perfTick(now); hcStep(now, dt); palmUI(now); faceDraw(); dualDraw(); update(dt);
   const _t = performance.now(); render(); perf.rend += performance.now() - _t; requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);

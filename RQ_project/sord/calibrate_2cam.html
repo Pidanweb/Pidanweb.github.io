@@ -35,6 +35,9 @@
   button{font:inherit;cursor:pointer;border-radius:8px;padding:9px 14px;border:1px solid var(--line);background:#22333f;color:var(--text)}
   button:hover{background:#2a3f4e} button:focus-visible{outline:2px solid var(--tape);outline-offset:2px}
   button:disabled{opacity:.4;cursor:not-allowed}
+  input[type=text]{width:100%;padding:6px 8px;background:#0f1820;color:var(--text);border:1px solid var(--line);border-radius:6px;font:inherit;font-size:13px}
+  a.btnlink{flex:1;display:block;text-align:center;text-decoration:none;border-radius:8px;padding:9px 14px;border:1px solid var(--line);background:#22333f;color:var(--text)}
+  a.btnlink:hover{background:#2a3f4e} a.btnlink:focus-visible{outline:2px solid var(--tape);outline-offset:2px}
   button.go{background:var(--tape);color:#1a1405;border-color:var(--tape);font-weight:800;width:100%;padding:12px;font-size:17px;margin-top:6px}
   button.go:hover{background:#ffd44a}
   .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px} .btns button{flex:1}
@@ -88,7 +91,9 @@
   <div class="note">「距離チェック」で2か所に立つと、その間の距離が出ます。メジャーで測った値と比べてください。</div>
   <div class="btns"><button id="check" disabled>距離チェック</button><button id="save" disabled>保存する</button></div>
   <div class="note" id="saveNote">保存すると、同じフォルダのゲームを開いたときに自動で読み込まれます。</div>
-  <div class="btns"><button id="toGame">ゲームを開く</button></div>
+  <label>ゲームのファイル名<small>このページと同じ場所からの相対パス。GitHub Pages は大文字・小文字も区別します</small><input type="text" id="gameUrl" value="RQ_project_sord_hukan_2cam.html" spellcheck="false"></label>
+  <div class="btns"><a id="toGame" class="btnlink" href="RQ_project_sord_hukan_2cam.html">ゲームを開く</a></div>
+  <div class="note" id="gameNote"></div>
 </aside>
 <main>
   <figure class="main"><canvas id="cvM"></canvas><figcaption>メイン</figcaption></figure>
@@ -211,7 +216,9 @@ function bcRayM(o, FfromCam){   // FfromCam: カメラ座標 → そのカメラ
 // ===== ここからキャリブレーション専用ページ =====
 const $ = id => document.getElementById(id);
 const KEY = { bc:'connectworld_bodycal_v1', dual:'connectworld_dualcal_v1', dualOn:'connectworld_dual_on', lay:'connectworld_dual_layout', cams:'connectworld_cams_v1', ui:'connectworld_calib_ui' };
-const GAME_URL = 'RQ_project_sord_hukan_2cam.html';
+// エラーが出たら画面に出す（「押しても反応がない」をなくす）
+addEventListener('error', e => { try { guide('エラーが出ました', String(e.message || e.error), 'bad'); } catch (_){} });
+addEventListener('unhandledrejection', e => { try { guide('エラーが出ました', String(e.reason && e.reason.message || e.reason), 'bad'); } catch (_){} });
 const POSE_LINKS = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
 const FRESH_MS = 250, STILL = .012, FAR = .09, COUNT_MS = 5000, STAND1_MS = 3000, STAND_MS = 2000, SPOTS = 4;
 const cams = {
@@ -244,7 +251,7 @@ function beep(f = 880, ms = 120){
 }
 
 // --- 設定の保存（このページの入力欄） ---
-const UI_IDS = ['res', 'base', 'hgt', 'camHM', 'camHS', 'fov0'];
+const UI_IDS = ['res', 'base', 'hgt', 'camHM', 'camHS', 'fov0', 'gameUrl'];
 function uiSave(){ try { const d = { lay:lay() }; for (const id of UI_IDS) d[id] = $(id).value; localStorage.setItem(KEY.ui, JSON.stringify(d)); } catch (e){} }
 function uiLoad(){
   let d = null; try { d = JSON.parse(localStorage.getItem(KEY.ui) || 'null'); } catch (e){}
@@ -492,17 +499,34 @@ $('save').onclick = () => {
   const label = c => { const d = camList.find(x => x.deviceId === c.sel.value); return { id:c.sel.value, label:d ? d.label : '' }; };
   try {
     localStorage.setItem(KEY.bc, JSON.stringify({ res:{ th:cal.m.th, ph:cal.m.ph, h:cal.m.h }, tune:{ floor:0, th:0, ph:0 }, hfov:cams.M.hfov, originUV:cal.originUV,
-      poseCam:lay(), boss:(old && old.boss) || 8.5, height:num('hgt', 170)/100, bossUV:null, bossH:(old && old.bossH) || 3.6 }));
-    localStorage.setItem(KEY.dual, JSON.stringify({ res:{ th:cal.s.th, ph:cal.s.ph, h:cal.s.h }, al:{ yaw:cal.s.yaw, tx:cal.s.tx, tz:cal.s.tz }, hfov:cams.S.hfov, camH:num('camHS', 0)/100, cam:label(cams.S).label }));
+      poseCam:lay(), boss:(old && old.boss) || 8.5, height:num('hgt', 170)/100, bossUV:null, bossH:(old && old.bossH) || 3.6, at:Date.now() }));
+    localStorage.setItem(KEY.dual, JSON.stringify({ res:{ th:cal.s.th, ph:cal.s.ph, h:cal.s.h }, al:{ yaw:cal.s.yaw, tx:cal.s.tx, tz:cal.s.tz }, hfov:cams.S.hfov, camH:num('camHS', 0)/100, cam:label(cams.S).label, at:Date.now() }));
     localStorage.setItem(KEY.dualOn, '1'); localStorage.setItem(KEY.lay, lay());
     localStorage.setItem(KEY.cams, JSON.stringify({ main:label(cams.M), side:label(cams.S), res:$('res').value }));
     $('saveNote').textContent = '保存しました。ゲームを開くと、このカメラの割り当てと位置合わせが使われます（カメラを動かしたら測り直し）';
     guide('保存しました', '「ゲームを開く」でゲームへ。カメラは閉じてから開きます', 'ok', '✓', 1); say('保存しました');
   } catch (e){ $('saveNote').textContent = '保存できませんでした: ' + e.message; }
 };
-$('toGame').onclick = () => {
+// ゲームへ: まずファイルがあるか確かめてから移動（無ければ、どのURLを探したかを表示）
+const gameUrl = () => ($('gameUrl').value || '').trim() || 'RQ_project_sord_hukan_2cam.html';
+function syncGameLink(){ $('toGame').href = gameUrl(); }
+$('gameUrl').addEventListener('input', () => { syncGameLink(); uiSave(); });
+$('toGame').onclick = async e => {
+  e.preventDefault();
+  const url = new URL(gameUrl(), location.href).href;
+  $('gameNote').textContent = '開いています: ' + url;
+  if (location.protocol.startsWith('http')){
+    try {
+      const r = await fetch(url, { method:'HEAD', cache:'no-store' });
+      if (!r.ok){
+        const msg = `ゲームのファイルが見つかりません（${r.status}）`;
+        $('gameNote').textContent = msg + ': ' + url + '　→ ファイル名・フォルダを確認して、上の欄を直してください';
+        guide(msg, url, 'bad'); return;
+      }
+    } catch (err){ /* 確認できなくても移動は試す */ }
+  }
   for (const c of Object.values(cams)) if (c.stream){ c.stream.getTracks().forEach(t => t.stop()); c.stream = null; }   // ゲームがカメラを開けるように先に閉じる
-  location.href = GAME_URL;
+  location.href = url;
 };
 
 // --- 描画: カメラ映像（骨格・足・床のマス目） ---
@@ -587,7 +611,7 @@ function loop(now){
   drawCam(cams.M); drawCam(cams.S); drawMap();
   requestAnimationFrame(loop);
 }
-uiLoad(); listCams(); requestAnimationFrame(loop);
+uiLoad(); syncGameLink(); listCams(); requestAnimationFrame(loop);
 </script>
 </body>
 </html>
