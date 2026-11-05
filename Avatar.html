@@ -225,8 +225,12 @@ label.btn.file{cursor:pointer;display:inline-block}
           <label class="toggle"><input type="checkbox" id="keepPosture"> 頭の前後の位置も撮影から取る（猫背などの姿勢も再現）</label>
         </div>
         <div class="row">
+          <label class="sel">形のなめらか補正（関節の段差・陰のカクカクを減らす）
+            <select id="smoothLv"><option value="0">なし（素体を伸ばしたまま）</option><option value="1">弱</option><option value="2" selected>中</option><option value="3">強</option></select>
+          </label>
           <label class="toggle"><input type="checkbox" id="normalView"> 面の向きを色で表示（形の確認用）</label>
           <label class="toggle"><input type="checkbox" id="clothThick" checked> 服の厚みを足す（②のとき）</label>
+          <label class="toggle"><input type="checkbox" id="texSharp" checked> 写真をくっきり補正（ぶれの少ない1枚を選び、引き伸ばしのぼけを戻す）</label>
         </div>
         <div class="row">
           <label class="toggle"><input type="checkbox" id="mirror" checked> 鏡のように動かす</label>
@@ -263,6 +267,11 @@ label.btn.file{cursor:pointer;display:inline-block}
         <table id="bodyTable" hidden><thead><tr><th>部位</th><th style="text-align:right">幅</th><th style="text-align:right">厚み</th></tr></thead><tbody></tbody></table>
       </div>
       <div id="tab-diag" class="scroll" hidden>
+        <h3 style="margin:0 0 4px;font-size:15px">形のチェック</h3>
+        <p class="hint" style="margin:0 0 8px">素体と比べて、面の裏返り・急な折れ・極端な伸び縮みを数えます。計算はすべてこのブラウザの中で行い、写真や形はどこにも送りません。</p>
+        <p class="placeholder" id="checkEmpty">VRoid素体で体型をつくると、ここに結果が出ます。</p>
+        <table id="checkTable" hidden><thead><tr><th>部位</th><th style="text-align:right">補正前</th><th style="text-align:right">補正後</th><th>判定</th></tr></thead><tbody></tbody></table>
+        <label class="toggle" style="margin:8px 0 14px"><input type="checkbox" id="showIssues"> 気になる所をモデル上で赤く表示</label>
         <p class="placeholder" id="diagEmpty">VRoid素体を使って体型をつくると、素体をどれだけ伸ばしたか・どの値を使ったかがここに出ます。赤い数字は、測定値が素体から大きく外れた所（撮影や切り抜きを疑う所）です。</p>
         <table id="diagTable" hidden><thead><tr><th>項目</th><th style="text-align:right">スキャン</th><th style="text-align:right">素体</th><th style="text-align:right">倍率</th></tr></thead><tbody></tbody></table>
         <div class="legend" aria-label="撮影画面の色分け">
@@ -282,6 +291,44 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 /*CORE-START*/
+/* ---- 写真をくっきり貼るための小道具 ---- */
+function bilerpRGB(d, w, h, fx, fy) {
+  fx = Math.min(w - 1, Math.max(0, fx)); fy = Math.min(h - 1, Math.max(0, fy));
+  const x0 = Math.floor(fx), y0 = Math.floor(fy), x1 = Math.min(w - 1, x0 + 1), y1 = Math.min(h - 1, y0 + 1), tx = fx - x0, ty = fy - y0;
+  const i00 = (y0 * w + x0) * 4, i10 = (y0 * w + x1) * 4, i01 = (y1 * w + x0) * 4, i11 = (y1 * w + x1) * 4, out = [0, 0, 0];
+  for (let k = 0; k < 3; k++) { const a = d[i00 + k] + (d[i10 + k] - d[i00 + k]) * tx, b = d[i01 + k] + (d[i11 + k] - d[i01 + k]) * tx; out[k] = a + (b - a) * ty; }
+  return out;
+}
+/* 画像のくっきり度（ラプラシアンの分散）。手ぶれ・被写体ぶれのある写真ほど小さくなる */
+function sharpnessOf(img) {
+  const { width: w, height: h, data: d } = img, st = Math.max(1, Math.round(Math.min(w, h) / 360));
+  const g = (x, y) => { const i = (y * w + x) * 4; return d[i] * .299 + d[i + 1] * .587 + d[i + 2] * .114; };
+  let s = 0, s2 = 0, n = 0;
+  for (let y = st; y < h - st; y += st) for (let x = st; x < w - st; x += st) {
+    const l = 4 * g(x, y) - g(x - st, y) - g(x + st, y) - g(x, y - st) - g(x, y + st); s += l; s2 += l * l; n++;
+  }
+  return n ? s2 / n - (s / n) ** 2 : 0;
+}
+/* アンシャープマスク（ぼかした画像との差を足してふちを立てる）。only を渡すとその画素だけ処理する */
+function unsharp(data, W, H, amount, radius, only) {
+  if (!(amount > 0)) return;
+  const r = Math.max(1, Math.round(radius)), n = W * H;
+  if (only) { let any = false; for (let i = 0; i < n; i++) if (only[i]) { any = true; break; } if (!any) return; }
+  const p = new Float32Array(n), t = new Float32Array(n), acc = new Float64Array(Math.max(W, H) + 1);
+  const pass = (from, to, horiz) => {   // 1方向の箱ぼかし（累積和）
+    const len = horiz ? W : H, lines = horiz ? H : W, step = horiz ? 1 : W;
+    for (let L = 0; L < lines; L++) {
+      const base = horiz ? L * W : L;
+      for (let q = 0; q < len; q++) acc[q + 1] = acc[q] + from[base + q * step];
+      for (let q = 0; q < len; q++) { const lo = q - r < 0 ? 0 : q - r, hi = q + r >= len ? len - 1 : q + r; to[base + q * step] = (acc[hi + 1] - acc[lo]) / (hi - lo + 1); }
+    }
+  };
+  for (let k = 0; k < 3; k++) {
+    for (let i = 0; i < n; i++) p[i] = data[i * 4 + k];
+    pass(p, t, true); pass(t, p, false); pass(p, t, true); pass(t, p, false);   // 2回かけてガウスに近づける
+    for (let i = 0; i < n; i++) { if (only && !only[i]) continue; const o = data[i * 4 + k]; data[i * 4 + k] = o + (o - p[i]) * amount; }
+  }
+}
 const V3 = THREE.Vector3, V2 = THREE.Vector2;
 const mid = (a, b) => a.clone().add(b).multiplyScalar(.5);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -424,23 +471,9 @@ function makeView(s, kind, C, loose) {
     if (v.flt && v.lab && !(v.flt & (1 << v.lab[i]))) return 0;   // 測っている部位以外の画素は「人物でない」とみなす
     return s.mask[i];
   };
-  v.colorRaw = (x, y) => {
-    let r = 0, g = 0, b = 0;
-    for (const [ox, oy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
-      const xi = Math.min(iw - 1, Math.max(0, Math.round(x * sx) + ox)), yi = Math.min(ih - 1, Math.max(0, Math.round(y * sy) + oy)), i = (yi * iw + xi) * 4;
-      r += data[i]; g += data[i + 1]; b += data[i + 2];
-    }
-    return [r / 4, g / 4, b / 4];
-  };
-  v.color = (x, y) => {
-    if (v.m(x, y) < .5) return null;
-    let r = 0, g = 0, b = 0;
-    for (const [ox, oy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
-      const xi = Math.min(iw - 1, Math.max(0, Math.round(x * sx) + ox)), yi = Math.min(ih - 1, Math.max(0, Math.round(y * sy) + oy)), i = (yi * iw + xi) * 4;
-      r += data[i]; g += data[i + 1]; b += data[i + 2];
-    }
-    return [r / 4, g / 4, b / 4];
-  };
+  // 写真の色はバイリニア補間で取る（以前の2x2平均は半画素ずれて、ぼけの原因になっていた）
+  v.colorRaw = (x, y) => bilerpRGB(data, iw, ih, (x + .5) * sx - .5, (y + .5) * sy - .5);
+  v.color = (x, y) => v.m(x, y) < .5 ? null : v.colorRaw(x, y);
   const rA = (a, b) => (P(a).y + P(b).y) / 2, cA = (a, b) => (P(a).x + P(b).x) / 2;
   v.rows = { an: rA(27, 28), kn: rA(25, 26), hip: rA(23, 24), sh: rA(11, 12), ear: rA(7, 8) };
   v.cols = { hip: cA(23, 24), sh: cA(11, 12), ear: cA(7, 8) };
@@ -1016,7 +1049,7 @@ function makeExportRoot(rig, parts, flip) {
   const root = new THREE.Group(); root.name = 'ScannedAvatar'; root.add(nb.hips); root.updateMatrixWorld(true);
   const sk = new THREE.Skeleton(HB.map(n => nb[n]));
   for (const { geo, mat, name } of parts) {
-    const g = geo.clone(); g.applyMatrix4(rot);
+    const g = geo.clone(); g.applyMatrix4(rot); if (geo.userData.issueColor) g.deleteAttribute('color');   // チェック用の赤い印は書き出さない
     const m = new THREE.SkinnedMesh(g, mat); m.name = name; root.add(m); m.bind(sk, new THREE.Matrix4());
   }
   root.updateMatrixWorld(true);
@@ -1428,7 +1461,8 @@ function fitTemplate(tpl, rig, body, opts = {}) {
     } else return PN[region] ? PN[region].col() : null;
     if (!cb) { cb = cs || cf; }
     if (!cs) { cs = null; wf += ws / 2; wb += ws / 2; ws = 0; }
-    return mixC([[cf, wf], [cb, wb], [cs, ws]]) || cf || cb || cs;
+    // 重みを2乗して、一番正対している写真を優先する（ずれた写真同士の平均は二重写り＝ぼけの原因）
+    return mixC([[cf, wf * wf], [cb, wb * wb], [cs, ws * ws]]) || cf || cb || cs;
   };
 
   // --- 頂点を動かし、法線も同じ変形で直し、（②では）服の厚みぶん外へ押し出す ---
@@ -1473,7 +1507,7 @@ function fitTemplate(tpl, rig, body, opts = {}) {
       const b = pr.bw[k], t = b.reduce((s, x) => s + x[1], 0) || 1;
       for (let c = 0; c < 4; c++) { sI[k * 4 + c] = b[c] ? HB.indexOf(b[c][0]) : 0; sW[k * 4 + c] = b[c] ? b[c][1] / t : (c === 0 && !b.length ? 1 : 0); }
     }
-    const tex = pr.uv && !opts.noTex ? bakePrim(pr, F2, reg, proj, opts.faceSample, opts.texSize ? opts.texSize(pr) : null) : null;
+    const tex = pr.uv && !opts.noTex ? bakePrim(pr, F2, reg, proj, opts.faceSample, opts.texSize ? opts.texSize(pr) : null, opts.sharpen || 0) : null;
     out.push({ name: pr.name, kind: pr.kind, pos: F2, nrm: hasN ? N2 : null, uv: pr.uv, idx: pr.idx, sI, sW, tex,
       alphaMode: pr.alphaMode, alphaCutoff: pr.alphaCutoff, doubleSided: pr.doubleSided });
   }
@@ -1484,7 +1518,7 @@ function fitTemplate(tpl, rig, body, opts = {}) {
 }
 
 /* UV空間で三角形を塗りつぶし、各画素の3D位置を写真に投影して色を取る */
-function bakePrim(pr, F2, reg, sample, faceSample, base) {
+function bakePrim(pr, F2, reg, sample, faceSample, base, sharpen = 0) {
   const W = base ? base.width : 512, H = base ? base.height : 512;
   const data = base ? new Uint8ClampedArray(base.data) : new Uint8ClampedArray(W * H * 4).fill(255);
   const done = new Uint8Array(W * H), uv = pr.uv, idx = pr.idx, N = pr.nrm;
@@ -1517,6 +1551,7 @@ function bakePrim(pr, F2, reg, sample, faceSample, base) {
       done[o] = inside ? 2 : 1;
     }
   }
+  const painted = done.slice();   // 写真から塗った画素（素体の元の模様は補正しない）
   // すき間（UVの境目）を周りの色で埋める
   for (let it = 0; it < 4; it++) {
     const add = [];
@@ -1529,7 +1564,164 @@ function bakePrim(pr, F2, reg, sample, faceSample, base) {
     }
     for (const [o, q] of add) { data[o * 4] = data[q * 4]; data[o * 4 + 1] = data[q * 4 + 1]; data[o * 4 + 2] = data[q * 4 + 2]; done[o] = 1; }
   }
+  // 写真は素体のテクスチャより粗いので、引き伸ばした分のぼけをアンシャープマスクで戻す
+  if (sharpen > 0) unsharp(data, W, H, sharpen, Math.max(1.5, W / 1024 * 2), painted);
   return { width: W, height: H, data };
+}
+/* ===== 形のなめらか補正とチェック（すべてブラウザ内で計算。外部には送らない） ===== */
+/* 同じ位置の頂点（UVの切れ目で分かれた頂点やパーツ同士の境目）を1つにまとめる */
+function weldFit(fit) {
+  const map = new Map(), gid = [], first = [];
+  for (let f = 0; f < fit.length; f++) {
+    // 素体のパーツは頂点の配列を共有していることがあるので、そのパーツの三角形が使う頂点だけを数える
+    const P = fit[f].pos, n = P.length / 3, g = new Int32Array(n).fill(-1), used = new Uint8Array(n);
+    for (const v of fit[f].idx) used[v] = 1;
+    for (let k = 0; k < n; k++) {
+      if (!used[k]) continue;
+      const key = Math.round(P[k * 3] * 2e4) + ',' + Math.round(P[k * 3 + 1] * 2e4) + ',' + Math.round(P[k * 3 + 2] * 2e4);
+      let id = map.get(key); if (id === undefined) { id = first.length; map.set(key, id); first.push([f, k]); }
+      g[k] = id;
+    }
+    gid.push(g);
+  }
+  return { gid, G: first.length, first };
+}
+const triN = (P, a, b, c) => {
+  const ux = P[b * 3] - P[a * 3], uy = P[b * 3 + 1] - P[a * 3 + 1], uz = P[b * 3 + 2] - P[a * 3 + 2];
+  const vx = P[c * 3] - P[a * 3], vy = P[c * 3 + 1] - P[a * 3 + 1], vz = P[c * 3 + 2] - P[a * 3 + 2];
+  return [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];   // 長さ＝面積×2
+};
+const boneOfV = (f, k) => { let b = 0, w = -1; for (let c = 0; c < 4; c++) if (f.sW[k * 4 + c] > w) { w = f.sW[k * 4 + c]; b = f.sI[k * 4 + c]; } return HB[b] || 'hips'; };
+
+/* 体のパーツをなめらかにする（Taubin法：ならしても痩せにくい）。関節まわり（ボーンの重みが混ざる所）ほど強くかける。
+   体以外のパーツ（顔など）とつながる頂点は動かさないので、すき間はできない */
+function smoothFit(fit, level, tpl) {
+  const iters = [0, 3, 6, 12][level] || 0; if (!iters) return;
+  const W = weldFit(fit), { gid, G } = W;
+  const isBody = f => f.kind === 'body' && f.nrm;
+  const pin = new Uint8Array(G), str = new Float32Array(G), cnt = new Uint8Array(G), P = new Float64Array(G * 3), Nv = new Float64Array(G * 3);
+  fit.forEach((f, fi) => {
+    const n = f.pos.length / 3, g = gid[fi];
+    for (let k = 0; k < n; k++) {
+      const i = g[k]; if (i < 0) continue;
+      if (!isBody(f)) { pin[i] = 1; continue; }
+      if (/Foot$|Toes$/.test(boneOfV(f, k))) { pin[i] = 1; continue; }   // 靴・つま先は角がデザインなので触らない
+      let mw = 0; for (let c = 0; c < 4; c++) mw = Math.max(mw, f.sW[k * 4 + c]);
+      str[i] = Math.max(str[i], .25 + .75 * Math.min(1, (1 - mw) * 3));   // 重みが混ざるほど強く
+      if (!cnt[i]) { P[i * 3] = f.pos[k * 3]; P[i * 3 + 1] = f.pos[k * 3 + 1]; P[i * 3 + 2] = f.pos[k * 3 + 2]; cnt[i] = 1; }
+      for (let c = 0; c < 3; c++) Nv[i * 3 + c] += f.nrm[k * 3 + c];
+    }
+  });
+  // 素体の時点で角になっている所（えり・すそ・靴底など）や、法線が分かれている所はデザインなので動かさない
+  const N0 = new Float64Array(G * 3), seenN = new Uint8Array(G);
+  fit.forEach((f, fi) => {
+    if (!isBody(f)) return; const g = gid[fi];
+    for (let k = 0; k < f.pos.length / 3; k++) { const i = g[k]; if (i < 0) continue;
+      if (!seenN[i]) { seenN[i] = 1; N0[i * 3] = f.nrm[k * 3]; N0[i * 3 + 1] = f.nrm[k * 3 + 1]; N0[i * 3 + 2] = f.nrm[k * 3 + 2]; }
+      else if (N0[i * 3] * f.nrm[k * 3] + N0[i * 3 + 1] * f.nrm[k * 3 + 1] + N0[i * 3 + 2] * f.nrm[k * 3 + 2] < .95) pin[i] = 1; }
+  });
+  if (tpl) {
+    const eT = new Map();
+    fit.forEach((f, fi) => {
+      if (!isBody(f)) return; const tp = tpl.prims.find(q => q.name === f.name); if (!tp || tp.pos.length !== f.pos.length) return;
+      const g = gid[fi], I = f.idx;
+      for (let t = 0; t < I.length; t += 3) {
+        const n = triN(tp.pos, I[t], I[t + 1], I[t + 2]), l = Math.hypot(...n); if (!(l > 0)) continue;
+        for (const [u, v] of [[I[t], I[t + 1]], [I[t + 1], I[t + 2]], [I[t + 2], I[t]]]) {
+          let a = g[u], b = g[v]; if (a > b) [a, b] = [b, a]; const key = a * G + b, o = eT.get(key);
+          if (!o) eT.set(key, n.map(x => x / l));
+          else if (o[0] * n[0] / l + o[1] * n[1] / l + o[2] * n[2] / l < .8) pin[a] = pin[b] = 1;
+        }
+      }
+    });
+  }
+  // 辺の一覧（重複なし）
+  const seen = new Map(), E = [];
+  fit.forEach((f, fi) => {
+    if (!isBody(f)) return; const g = gid[fi], I = f.idx;
+    for (let t = 0; t < I.length; t += 3) for (const [u, v] of [[I[t], I[t + 1]], [I[t + 1], I[t + 2]], [I[t + 2], I[t]]]) {
+      let a = g[u], b = g[v]; if (a === b) continue; if (a > b) [a, b] = [b, a];
+      const key = a * G + b, c = seen.get(key); if (c === undefined) { seen.set(key, 1); E.push(a, b); } else seen.set(key, c + 1);
+    }
+  });
+  // 穴のふち（三角形が片側にしかない辺）は動かさない。ならすと内側へ縮んで折れ目になる
+  for (const [key, c] of seen) if (c === 1) { pin[Math.floor(key / G)] = 1; pin[key % G] = 1; }
+  for (let i = 0; i < G; i++) { const l = Math.hypot(Nv[i * 3], Nv[i * 3 + 1], Nv[i * 3 + 2]); if (l > 0) for (let c = 0; c < 3; c++) Nv[i * 3 + c] /= l; else pin[i] = 1; }
+  const S = new Float64Array(G * 3), D = new Uint16Array(G);
+  for (let e = 0; e < E.length; e += 2) { D[E[e]]++; D[E[e + 1]]++; }
+  const step = lam => {
+    S.fill(0);
+    for (let e = 0; e < E.length; e += 2) { const a = E[e], b = E[e + 1]; for (let c = 0; c < 3; c++) { S[a * 3 + c] += P[b * 3 + c]; S[b * 3 + c] += P[a * 3 + c]; } }
+    for (let i = 0; i < G; i++) {
+      if (pin[i] || !D[i] || !cnt[i]) continue;
+      let d = 0; for (let c = 0; c < 3; c++) d += (S[i * 3 + c] / D[i] - P[i * 3 + c]) * Nv[i * 3 + c];   // 法線方向の成分だけ
+      const k = lam * str[i] * d; for (let c = 0; c < 3; c++) P[i * 3 + c] += k * Nv[i * 3 + c];
+    }
+  };
+  const P0 = Float64Array.from(P), AL = new Float64Array(G);
+  for (let e = 0; e < E.length; e += 2) { const a = E[e], b = E[e + 1], l = Math.hypot(P[a * 3] - P[b * 3], P[a * 3 + 1] - P[b * 3 + 1], P[a * 3 + 2] - P[b * 3 + 2]); AL[a] += l; AL[b] += l; }
+  for (let it = 0; it < iters; it++) { step(.5); step(-.53); }
+  // 動かしすぎ防止：段差をならすだけなので、周りの辺の長さの2割・最大6mmまで
+  for (let i = 0; i < G; i++) {
+    if (!D[i]) continue; const lim = Math.min(.006, .2 * AL[i] / D[i]);
+    const dx = P[i * 3] - P0[i * 3], dy = P[i * 3 + 1] - P0[i * 3 + 1], dz = P[i * 3 + 2] - P0[i * 3 + 2], d = Math.hypot(dx, dy, dz);
+    if (d > lim) { const k = lim / d; P[i * 3] = P0[i * 3] + dx * k; P[i * 3 + 1] = P0[i * 3 + 1] + dy * k; P[i * 3 + 2] = P0[i * 3 + 2] + dz * k; }
+  }
+  fit.forEach((f, fi) => { if (!isBody(f)) return; const g = gid[fi]; for (let k = 0; k < f.pos.length / 3; k++) { const i = g[k]; if (i < 0 || pin[i]) continue; f.pos[k * 3] = P[i * 3]; f.pos[k * 3 + 1] = P[i * 3 + 1]; f.pos[k * 3 + 2] = P[i * 3 + 2]; } });
+  // 法線を形から計算し直し（切れ目でもそろう）、さらに軽くならす。トゥーンの陰の段々を減らすため
+  const N = new Float64Array(G * 3);
+  fit.forEach((f, fi) => {
+    if (!isBody(f)) return; const g = gid[fi], I = f.idx;
+    for (let t = 0; t < I.length; t += 3) { const n = triN(f.pos, I[t], I[t + 1], I[t + 2]); for (const v of [I[t], I[t + 1], I[t + 2]]) for (let c = 0; c < 3; c++) N[g[v] * 3 + c] += n[c]; }
+  });
+  for (let r = 0; r < Math.min(3, level); r++) {
+    const T = new Float64Array(N);
+    for (let e = 0; e < E.length; e += 2) { const a = E[e], b = E[e + 1], la = Math.hypot(N[a * 3], N[a * 3 + 1], N[a * 3 + 2]) || 1, lb = Math.hypot(N[b * 3], N[b * 3 + 1], N[b * 3 + 2]) || 1;
+      for (let c = 0; c < 3; c++) { T[a * 3 + c] += N[b * 3 + c] / lb * la * .5 * str[a]; T[b * 3 + c] += N[a * 3 + c] / la * lb * .5 * str[b]; } }
+    N.set(T);
+  }
+  fit.forEach((f, fi) => {
+    if (!isBody(f)) return; const g = gid[fi];
+    for (let k = 0; k < f.pos.length / 3; k++) {
+      const i = g[k]; if (i < 0 || pin[i]) continue;   // 顔などとの境目は元の法線のまま（陰の継ぎ目を出さない）
+      const l = Math.hypot(N[i * 3], N[i * 3 + 1], N[i * 3 + 2]); if (!(l > 0)) continue;
+      f.nrm[k * 3] = N[i * 3] / l; f.nrm[k * 3 + 1] = N[i * 3 + 1] / l; f.nrm[k * 3 + 2] = N[i * 3 + 2] / l;
+    }
+  });
+}
+
+/* 形のチェック：素体と比べて ①面が裏返った ②急に折れ曲がった ③極端に伸び縮みした 所を数える。
+   各パーツに f.bad（頂点ごとの印）を付け、部位ごとの件数を返す */
+function checkFit(fit, tpl) {
+  const W = weldFit(fit), { gid } = W, res = {}, add = (rg, key) => { (res[rg] ||= { tris: 0, flip: 0, crease: 0, stretch: 0 })[key]++; };
+  const edges = new Map(), ratios = {};
+  const tris = [];
+  fit.forEach((f, fi) => {
+    f.bad = new Uint8Array(f.pos.length / 3);
+    if (f.kind !== 'body') return;
+    const tp = tpl.prims.find(p => p.name === f.name); if (!tp || tp.pos.length !== f.pos.length) return;
+    const I = f.idx, g = gid[fi];
+    for (let t = 0; t < I.length; t += 3) {
+      const a = I[t], b = I[t + 1], c = I[t + 2], nd = triN(f.pos, a, b, c), nt = triN(tp.pos, a, b, c);
+      const ad = Math.hypot(...nd), at = Math.hypot(...nt); if (at < 1e-12) continue;
+      const rg = regionOf(boneOfV(f, a)), T = { fi, a, b, c, rg, nd: ad > 0 ? nd.map(v => v / ad) : [0, 0, 0], nt: nt.map(v => v / at), r: ad / at };
+      tris.push(T); (ratios[rg] ||= []).push(T.r); add(rg, 'tris');
+      for (const [u, v] of [[a, b], [b, c], [c, a]]) { let x = g[u], y = g[v]; if (x > y) [x, y] = [y, x]; const k = x + ',' + y, L = edges.get(k); if (L) L.push(T); else edges.set(k, [T]); }
+    }
+  });
+  const med = {}; for (const rg in ratios) med[rg] = median(ratios[rg]);
+  const mark = T => { const b = fit[T.fi].bad; b[T.a] = b[T.b] = b[T.c] = 1; };
+  for (const T of tris) {
+    const dot = T.nd[0] * T.nt[0] + T.nd[1] * T.nt[1] + T.nd[2] * T.nt[2];
+    if (dot < 0) { add(T.rg, 'flip'); mark(T); }
+    else if (T.r > med[T.rg] * 4 || T.r < med[T.rg] / 4) { add(T.rg, 'stretch'); mark(T); }
+  }
+  for (const L of edges.values()) {
+    if (L.length !== 2) continue; const [A, B] = L;
+    const cd = A.nd[0] * B.nd[0] + A.nd[1] * B.nd[1] + A.nd[2] * B.nd[2], ct = A.nt[0] * B.nt[0] + A.nt[1] * B.nt[1] + A.nt[2] * B.nt[2];
+    if (cd < .5 && ct > .85) { add(A.rg, 'crease'); mark(A); mark(B); }   // 素体では平らなのに60°以上折れた
+  }
+  return res;
 }
 /*CORE-END*/
 /* ===================== ここから画面・カメラ・3D表示 ===================== */
@@ -1664,7 +1856,7 @@ async function ensureFace() {
 $('#modelSelect').onchange = async e => { if (landmarker) { try { await loadModel(e.target.value); } catch (err) { console.error(err); } } };
 async function startCamera(deviceId) {
   if (stream) stream.getTracks().forEach(t => t.stop());
-  const size = { width: { ideal: 1280 }, height: { ideal: 720 } };
+  const size = { width: { ideal: 1920 }, height: { ideal: 1080 } };   // 解像度が高いほど貼る写真がくっきりする（対応していないカメラは自動で下がる）
   stream = await navigator.mediaDevices.getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId }, ...size } : size, audio: false });
   video.srcObject = stream; await video.play();
   applyRotation();
@@ -1980,9 +2172,12 @@ function makeFace(head) {
   const gain = bodyPts.length ? [0, 1, 2].map(k => clamp(lerp(1, bodyPts.reduce((s, c) => s + c[k], 0) / bodyPts.length / Math.max(1, faceC[k]), .5), .6, 1.6, 1)) : [1, 1, 1];
   const S = 1024; faceCanvas = document.createElement('canvas'); faceCanvas.width = faceCanvas.height = S;
   const x = faceCanvas.getContext('2d');
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
   x.drawImage(src, crop.x, crop.y, crop.w, crop.h, 0, 0, S, S);
   const id = x.getImageData(0, 0, S, S);
   for (let i = 0; i < id.data.length; i += 4) for (let k = 0; k < 3; k++) id.data[i + k] = Math.min(255, id.data[i + k] * gain[k]);
+  // 元の写真（数百px）を1024pxへ引き伸ばしたぼけを戻す。半径は拡大率に合わせる
+  if (texSharp()) unsharp(id.data, S, S, .8, Math.max(1.5, S / crop.w * 1.2));
   x.putImageData(id, 0, 0);
   // 範囲マスクを少し内側に縮めてぼかし、ふちを肌や髪になじませる
   const mc = document.createElement('canvas'); mc.width = fs.mw; mc.height = fs.mh;
@@ -2058,7 +2253,9 @@ function resolveMask(s) {
 }
 function finishScan() {
   if (!snaps.length) return failScan();
-  const s = snaps[snaps.length >> 1];
+  // ぶれの少ない1枚を選ぶ（以前は真ん中の1枚を固定で使っていた）
+  let s = snaps[snaps.length >> 1], bestQ = -1;
+  if (texSharp()) for (const c of snaps) { const q = sharpnessOf(c.img); if (q > bestQ) { bestQ = q; s = c; } }
   resolveMask(s);
   if (view === 'front' && mode === 'body') makeRig();
   if (view === 'relax' && C) {
@@ -2328,11 +2525,13 @@ function rebuildTemplate(reveal, F, S, B) {
   let faceSample = null, faceRec = null;
   const faceFrom = (fi, canvas) => {
     const S2 = canvas.width, fd = canvas.getContext('2d').getImageData(0, 0, S2, S2).data;
-    return p => {
+    return p => {   // 最近傍ではなくバイリニアで取る（ギザギザ・ぼけを減らす）
       const px = fi.eye.x + p.x / fi.mpp, py = fi.eye.y - (p.y - fi.eyeY) / fi.mpp;
-      const u = Math.round((px - fi.crop.x) / fi.crop.w * S2), v = Math.round((py - fi.crop.y) / fi.crop.h * S2);
-      if (u < 0 || v < 0 || u >= S2 || v >= S2) return null;
-      const o = (v * S2 + u) * 4; return [fd[o], fd[o + 1], fd[o + 2], fd[o + 3]];
+      const u = (px - fi.crop.x) / fi.crop.w * S2 - .5, v = (py - fi.crop.y) / fi.crop.h * S2 - .5;
+      if (u < -.5 || v < -.5 || u > S2 - .5 || v > S2 - .5) return null;
+      const c = bilerpRGB(fd, S2, S2, u, v);
+      const ui = Math.min(S2 - 1, Math.max(0, Math.round(u))), vi = Math.min(S2 - 1, Math.max(0, Math.round(v)));
+      c.push(fd[(vi * S2 + ui) * 4 + 3]); return c;
     };
   };
   let skin = null;
@@ -2343,20 +2542,19 @@ function rebuildTemplate(reveal, F, S, B) {
       const fi = { eye: { x: fi0.eye.x, y: fi0.eye.y }, eyeY: fi0.eyeY, mpp: fi0.mpp, crop: fi0.crop, skin: fi0.skin };
       skin = fi0.skin;
       faceRec = { fi, canvas: faceCanvas };
-      const S2 = faceCanvas.width, fd = faceCanvas.getContext('2d').getImageData(0, 0, S2, S2).data;
-      faceSample = p => {
-        const px = fi.eye.x + p.x / fi.mpp, py = fi.eye.y - (p.y - fi.eyeY) / fi.mpp;
-        const u = Math.round((px - fi.crop.x) / fi.crop.w * S2), v = Math.round((py - fi.crop.y) / fi.crop.h * S2);
-        if (u < 0 || v < 0 || u >= S2 || v >= S2) return null;
-        const o = (v * S2 + u) * 4; return [fd[o], fd[o + 1], fd[o + 2], fd[o + 3]];
-      };
+      faceSample = faceFrom(fi, faceCanvas);
     } catch (e) { console.error('顔を焼き込めませんでした', e); }
   }
   const noTex = mode === 'body';   // ①では色を付けず、形だけを見る
   const fit = fitTemplate(tplData, rig, body, { faceSample, skin, headInv, shape: frozen ? { ...frozen, hd: hdUse } : null, hd: hdUse, texSize: pr => pr.base || null,
-    shAdj: shAdj(), shMode: $('#shMode').value, scanW: +$('#scanW').value / 100, noTex, thick });
+    shAdj: shAdj(), shMode: $('#shMode').value, scanW: +$('#scanW').value / 100, noTex, thick, sharpen: texSharp() ? .7 : 0 });
   fit.diag.head = { ...hk, kF };
   fillDiag(fit.diag);
+  try {   // 形のチェックとなめらか補正（ブラウザ内だけで計算）
+    const before = checkFit(fit, tplData), lv = +$('#smoothLv').value;
+    if (lv) smoothFit(fit, lv, tplData);
+    fillCheck(before, lv ? checkFit(fit, tplData) : null, lv);
+  } catch (e) { console.error('形のチェックに失敗しました', e); }
   if (mode === 'body') {   // ①の結果を体型データとして記録（②で使う）
     const h = body.head;   // 体型データには大きさ補正前の頭の寸法を残す
     calib = { C, shape: { S: fit.shape.S, shX: fit.shape.shX, hd: { headRx: h.headRx, headRz: h.headRz, headZc: h.headZc, eyeY: h.eyeY, chinY: h.chinY, topY: h.topY, cheekW: h.cheekW } },
@@ -2374,6 +2572,8 @@ function rebuildTemplate(reveal, F, S, B) {
     g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(f.sW, 4));
     g.setIndex(new THREE.BufferAttribute(f.idx, 1));
     if (f.nrm && f.nrm.some(v => v !== 0)) g.setAttribute('normal', new THREE.Float32BufferAttribute(f.nrm, 3)); else g.computeVertexNormals();
+    if (f.bad) { const col = new Float32Array(f.bad.length * 3).fill(1); for (let i = 0; i < f.bad.length; i++) if (f.bad[i]) { col[i * 3 + 1] = .2; col[i * 3 + 2] = .2; }
+      g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.userData.issueColor = true; }
     let map = null;
     if (f.tex) {
       const c = document.createElement('canvas'); c.width = f.tex.width; c.height = f.tex.height;
@@ -2386,6 +2586,7 @@ function rebuildTemplate(reveal, F, S, B) {
         alphaTest: map ? (f.alphaCutoff || .5) : 0 })
       : new THREE.MeshToonMaterial({ map, gradientMap: grad, clippingPlanes: [clip], side: f.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
         alphaTest: f.alphaMode === 'MASK' ? f.alphaCutoff : 0, transparent: f.alphaMode === 'BLEND' });
+    mat.vertexColors = !!f.bad && $('#showIssues').checked;
     const m = new THREE.SkinnedMesh(g, mat); m.name = f.name.replace(/\s*\(Instance\)/, ''); m.frustumCulled = false;
     avatar.add(m); m.bind(rig.skeleton, new THREE.Matrix4()); tplMeshes.push(m);
     verts += f.pos.length / 3; tris += f.idx.length / 3;
@@ -2457,6 +2658,7 @@ function grayAlpha(pr) {
 
 /* ---------- 形の確認用の表示 ---------- */
 const shAdj = () => +$('#shAdj').value / 100;
+function texSharp() { const e = document.getElementById('texSharp'); return !e || e.checked; }
 $('#shAdj').oninput = e => { $('#shAdjVal').textContent = e.target.value + '%'; };
 $('#shAdj').onchange = () => rebuildAvatar(false);
 $('#shMode').onchange = () => rebuildAvatar(false);
@@ -2464,6 +2666,7 @@ $('#scanW').oninput = e => { $('#scanWVal').textContent = e.target.value + '%'; 
 $('#scanW').onchange = () => rebuildAvatar(false);
 $('#keepPosture').onchange = () => rebuildAvatar(false);
 $('#clothThick').onchange = () => { if (mode === 'outfit') rebuildAvatar(false); };
+$('#texSharp').onchange = () => { if (mode === 'outfit') rebuildAvatar(false); };
 const normalMat = new THREE.MeshNormalMaterial({ clippingPlanes: [clip] });
 function applyViewMode() {
   const on = $('#normalView').checked;
@@ -2476,6 +2679,26 @@ function applyViewMode() {
   if (faceMesh) faceMesh.visible = !on;
 }
 $('#normalView').onchange = applyViewMode;
+const RG_JP = { trunk: '胴・首', head: '頭', leftArm: '左腕・手', rightArm: '右腕・手', leftLeg: '左脚', rightLeg: '右脚', leftFoot: '左足', rightFoot: '右足' };
+function fillCheck(before, after, lv) {
+  const tb = $('#checkTable tbody'), rows = [];
+  const n = r => r ? r.flip + r.crease + r.stretch : 0;
+  for (const rg of Object.keys(RG_JP)) {
+    const b = before[rg]; if (!b) continue;
+    const a = after ? after[rg] : b, na = n(a), pct = na / Math.max(1, a.tris) * 100;
+    const verdict = na === 0 ? '問題なし' : pct < .3 ? '小さな乱れ' : '要確認';
+    const why = a && na ? [a.flip && `裏返り${a.flip}`, a.crease && `折れ${a.crease}`, a.stretch && `伸び縮み${a.stretch}`].filter(Boolean).join('・') : '';
+    rows.push(`<tr><td>${RG_JP[rg]}</td><td class="num">${n(b)}</td><td class="num">${after ? na : '—'}</td><td class="${verdict === '要確認' ? 'warn' : ''}">${verdict}${why ? `<br><span class="hint" style="margin:0">${why}</span>` : ''}</td></tr>`);
+  }
+  tb.innerHTML = rows.join('') + (lv ? '' : '<tr><td colspan="4" class="hint">なめらか補正が「なし」なので、補正後の欄は空です</td></tr>');
+  $('#checkTable').hidden = false; $('#checkEmpty').hidden = true;
+}
+$('#smoothLv').onchange = () => rebuildAvatar(false);
+$('#showIssues').onchange = () => {
+  const on = $('#showIssues').checked;
+  for (const m of tplMeshes) { const mt = m.userData.mat || m.material; if (!m.geometry.userData.issueColor) continue; mt.vertexColors = on; mt.needsUpdate = true; }
+  if (on) $('#normalView').checked = false, applyViewMode();
+};
 function fillDiag(d) {
   const tb = $('#diagTable tbody');
   if (!d) { $('#diagTable').hidden = true; $('#diagEmpty').hidden = false; return; }
