@@ -3,56 +3,155 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GIANT SLIME RAID（俯瞰）</title>
+<title>Radiqle_Project ─ GIANT SLIME RAID</title>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#0a1110}
   canvas{display:block;cursor:crosshair;touch-action:none}
   #ui{position:fixed;top:10px;right:10px;z-index:5;font:14px sans-serif;color:#fff;text-align:right}
-  #ui button{background:#0d2a30cc;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer}
+  #ui button{background:#0d2a30cc;color:#bfe6ff;border:1px solid #bfe6ff88;border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer}
   #camPanel select{width:100%;margin:4px 0 8px;padding:4px;font:inherit}
   #camPanel div{margin-top:6px}
-  #camStat{font-size:12px;color:#ffd35a;word-break:break-all}
+  #camStat{font-size:12px;color:#ff9a3c;word-break:break-all}
   #v,#fv,#bgv,#sv{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
-  #facePrev{position:fixed;left:10px;bottom:10px;z-index:5;width:240px;height:180px;border:2px solid #7ae7ff88;border-radius:8px;background:#000;pointer-events:none;display:none}
+  #facePrev{position:fixed;left:10px;bottom:10px;z-index:5;width:240px;height:180px;border:2px solid #bfe6ff88;border-radius:8px;background:#000;pointer-events:none;display:none}
   #d2Box label{display:block;margin-top:6px}
   #sidePrev{position:fixed;left:260px;bottom:10px;z-index:5;width:240px;height:180px;border:2px solid #ffb35a88;border-radius:8px;background:#000;pointer-events:none;display:none}
-  #faceBadge{margin-top:6px;font-size:12px;color:#7ae7ff;text-shadow:0 0 4px #000}
+  #faceBadge{margin-top:6px;font-size:12px;color:#bfe6ff;text-shadow:0 0 4px #000}
   #camPanel input[type=range]{width:100%}
-  #camPanel input[type=file]{width:100%;margin:4px 0;color:#9fdcea;font-size:12px}
-  #camPanel small{display:block;color:#9fdcea;font-size:11px;margin-top:4px}
+  #camPanel input[type=file]{width:100%;margin:4px 0;color:#a9bdd1;font-size:12px}
+  #camPanel small{display:block;color:#a9bdd1;font-size:11px;margin-top:4px}
   #aimBtn.off,#mAim.off{color:#ff9aa5;border-color:#ff9aa588}
-  #menu{position:fixed;top:0;bottom:0;left:50%;transform:translateX(-50%);width:min(260px,44vw);z-index:9;background:#061418cc;border:1px solid #7ae7ff88;border-radius:12px;padding:16px;display:none;flex-direction:column;gap:12px;justify-content:center;font:15px sans-serif;color:#fff;text-align:center;box-sizing:border-box}
-  #menu.on{display:flex} #menu{overflow-y:auto;gap:8px} #menu>:first-child{margin-top:auto} #menu>:last-child{margin-bottom:auto} #jobs{display:none;flex-direction:column;gap:6px} #jobs.on{display:flex} #menu button:disabled{opacity:.45;cursor:not-allowed} #menu button{background:#0d2a30;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:8px;padding:10px;font:inherit;cursor:pointer}
-  #wiiDbg{position:fixed;left:10px;top:10px;z-index:6;margin:0;padding:6px 8px;max-width:46vw;font:11px/1.35 monospace;color:#9fffb0;background:#000a;border:1px solid #7ae7ff44;border-radius:6px;pointer-events:none;white-space:pre-wrap}
-  #skMenu{border:1px solid #7ae7ff44;border-radius:8px;padding:6px 8px;font-size:13px;text-align:left} #skMenu summary{cursor:pointer;color:#ffd35a;font-weight:bold} #skMenu label{display:block;margin-top:6px} #skMenu input[type=range]{width:100%} #skMenu small{color:#9fdcea}
-  #hCur{position:fixed;left:0;top:0;z-index:20;width:22px;height:22px;margin:-11px 0 0 -11px;border:3px solid #ffd35a;border-radius:50%;background:#ffd35a33;box-shadow:0 0 10px #ffd35a;pointer-events:none;display:none}
+  #menu{position:fixed;top:0;bottom:0;left:50%;transform:translateX(-50%);width:min(260px,44vw);z-index:9;background:#061418cc;border:1px solid #bfe6ff88;border-radius:12px;padding:16px;display:none;flex-direction:column;gap:12px;justify-content:center;font:15px sans-serif;color:#fff;text-align:center;box-sizing:border-box}
+  #menu.on{display:flex} #menu{overflow-y:auto;gap:8px} #menu>:first-child{margin-top:auto} #menu>:last-child{margin-bottom:auto} #jobs{display:none;flex-direction:column;gap:6px} #jobs.on{display:flex} #menu button:disabled{opacity:.45;cursor:not-allowed} #menu button{background:#0d2a30;color:#bfe6ff;border:1px solid #bfe6ff88;border-radius:8px;padding:10px;font:inherit;cursor:pointer}
+  #wiiDbg{position:fixed;left:10px;top:10px;z-index:6;margin:0;padding:6px 8px;max-width:46vw;font:11px/1.35 monospace;color:#9fffb0;background:#000a;border:1px solid #bfe6ff44;border-radius:6px;pointer-events:none;white-space:pre-wrap}
+  #skMenu{border:1px solid #bfe6ff44;border-radius:8px;padding:6px 8px;font-size:13px;text-align:left} #skMenu summary{cursor:pointer;color:#ff9a3c;font-weight:bold} #skMenu label{display:block;margin-top:6px} #skMenu input[type=range]{width:100%} #skMenu small{color:#a9bdd1}
+  #hCur{position:fixed;left:0;top:0;z-index:20;width:22px;height:22px;margin:-11px 0 0 -11px;border:3px solid #ff9a3c;border-radius:50%;background:#ff9a3c33;box-shadow:0 0 10px #ff9a3c;pointer-events:none;display:none}
   #palmRing{position:fixed;left:50%;top:50%;z-index:19;width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:50%;display:none;place-items:center;font-size:40px;pointer-events:none;
-    background:radial-gradient(#061418dd 58%,transparent 60%),conic-gradient(#ffd35a var(--p,0deg),#7ae7ff33 0);box-shadow:0 0 16px #ffd35a66}
+    background:radial-gradient(#061418dd 58%,transparent 60%),conic-gradient(#ff9a3c var(--p,0deg),#bfe6ff33 0);box-shadow:0 0 16px #ff9a3c66}
   #palmRing.on{display:grid}
-  #hCur.on{display:block} #hCur.down{background:#ffd35acc;border-color:#fff}
+  #hCur.on{display:block} #hCur.down{background:#ff9a3ccc;border-color:#fff}
   #menu .mScr{display:flex;flex-direction:column;gap:8px;margin:auto 0} #menu .mScr[hidden]{display:none}
   #menu{justify-content:flex-start} #menu.cam{width:min(400px,94vw)}
   #camTabs{display:grid;grid-template-columns:1fr 1fr;gap:6px}
   #menu #camTabs button{padding:12px 6px;font-weight:bold}
-  #menu #camTabs button.on{background:#7ae7ff;color:#061418;border-color:#7ae7ff}
+  #menu #camTabs button.on{background:#bfe6ff;color:#061418;border-color:#bfe6ff}
   #camPanel{text-align:left;font-size:13px}
   #menu #camPanel button{padding:6px 8px;font-size:13px;margin-top:4px}
-  #camPanel .cpH{color:#ffd35a;font-size:14px}
+  #camPanel .cpH{color:#ff9a3c;font-size:14px}
   #camPanel label{display:block;margin-top:6px}
   #camPanel input[type=number]{font:inherit;padding:2px 4px}
-  .cpGrp{border:1px solid #7ae7ff44;border-radius:8px;padding:6px 10px;margin-top:8px}
-  .cpGrp summary{cursor:pointer;color:#ffd35a;font-weight:bold;font-size:14px;padding:4px 0}
-  #menu .hHover{outline:2px solid #ffd35a;outline-offset:2px;box-shadow:0 0 12px #ffd35a88}
+  .cpGrp{border:1px solid #bfe6ff44;border-radius:8px;padding:6px 10px;margin-top:8px}
+  .cpGrp summary{cursor:pointer;color:#ff9a3c;font-weight:bold;font-size:14px;padding:4px 0}
+  #menu .hHover{outline:2px solid #ff9a3c;outline-offset:2px;box-shadow:0 0 12px #ff9a3c88}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style id="rq-theme">
+/* ===== Radiqle_Project 共通テーマ（AR端末風：白×オレンジ）=====
+   ゲーム側 <style> の後に読み込むので、同じセレクタはこちらが優先されます */
+:root{
+  --rq-ink:#f4f8ff; --rq-sub:#a9bdd1; --rq-dim:#5d7186;
+  --rq-acc:#ff9a3c; --rq-acc2:#ffc078; --rq-ice:#bfe6ff; --rq-ok:#6dffb0; --rq-ng:#ff6b7a;
+  --rq-line:rgba(220,236,255,.30); --rq-glass:rgba(8,16,30,.72);
+  --rq-en:"Rajdhani","Noto Sans JP",sans-serif; --rq-jp:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
+  --rq-cut:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+}
+html,body{background:#050912}
+
+/* ---- 右上ボタン ---- */
+#ui{font:500 13px var(--rq-jp);top:16px;right:16px}
+#ui button,#ui > button{background:var(--rq-glass);color:var(--rq-ink);border:1px solid var(--rq-line);border-radius:0;padding:7px 12px;
+  font:500 13px var(--rq-jp);letter-spacing:.04em;clip-path:var(--rq-cut);backdrop-filter:blur(4px);transition:background .15s,color .15s,border-color .15s}
+#ui button:hover{background:rgba(255,154,60,.14);color:var(--rq-acc2);border-color:var(--rq-acc)}
+#menuBtn{min-width:40px;font-weight:700 !important}
+#aimBtn.off,#mAim.off{color:var(--rq-ng) !important;border-color:rgba(255,107,122,.6) !important}
+#faceBadge{color:var(--rq-ice);font:500 12px var(--rq-jp)}
+#wiiStat{color:var(--rq-acc2) !important;font:500 12px var(--rq-jp) !important}
+
+/* ---- メニュー（中央の縦パネル）---- */
+#menu{justify-content:flex-start;justify-content:safe center;background:linear-gradient(180deg,rgba(10,20,36,.88),rgba(5,10,20,.92));border:0;border-left:1px solid var(--rq-line);border-right:1px solid var(--rq-line);
+  border-radius:0;font:500 14px var(--rq-jp);color:var(--rq-ink);backdrop-filter:blur(8px);padding:18px 16px;
+  box-shadow:0 0 0 1px rgba(0,0,0,.4),0 0 60px rgba(0,0,0,.6)}
+#menu::before,#menu::after{content:"";position:absolute;display:block;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--rq-acc),transparent)}
+#menu::before{top:0}#menu::after{bottom:0}
+#menu h3{font:300 26px var(--rq-en) !important;letter-spacing:.5em;margin-right:-.5em !important;color:var(--rq-ink)}
+#menu h3::after{content:"RADIQLE SYSTEM";display:block;font:700 10px var(--rq-en);letter-spacing:.5em;color:var(--rq-acc);margin-top:4px}
+#menu button{background:rgba(255,255,255,.04);color:var(--rq-ink);border:1px solid var(--rq-line);border-radius:0;padding:8px 12px;
+  font:500 14px var(--rq-jp);text-align:left;clip-path:var(--rq-cut);position:relative;transition:background .15s,border-color .15s,color .15s,padding .15s}
+#menu button::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:transparent;transition:background .15s}
+#menu button:hover,#menu .hHover{background:rgba(255,154,60,.14) !important;border-color:var(--rq-acc) !important;color:var(--rq-acc2) !important;outline:0 !important;box-shadow:none !important;padding-left:18px}
+#menu button:hover::before,#menu .hHover::before{background:var(--rq-acc)}
+#menu label{font-size:13px;color:var(--rq-sub);text-align:left}
+#menu small{color:var(--rq-dim) !important;font-size:11px}
+#menu #camTabs button.on{background:var(--rq-acc);color:#1a0d00;border-color:var(--rq-acc)}
+#jobs button{padding-left:22px !important}
+
+/* ---- 詳細設定・カメラパネル ---- */
+#camPanel{background:var(--rq-glass);border:1px solid var(--rq-line);border-radius:0;font:400 13px var(--rq-jp);color:var(--rq-ink)}
+#camPanel b,#camPanel .cpH{color:var(--rq-acc2) !important;font-weight:700;letter-spacing:.05em}
+#camPanel small{color:var(--rq-dim)}
+#camPanel hr{border-top-color:var(--rq-line) !important}
+#camStat,#bgStat,#faceStat,#vrmStat{color:var(--rq-acc2) !important}
+#skMenu,.cpGrp{border:1px solid var(--rq-line);border-radius:0;background:rgba(255,255,255,.03)}
+#skMenu summary,.cpGrp summary{color:var(--rq-acc2);letter-spacing:.04em}
+#skMenu b{color:var(--rq-ink)}
+#menu select,#camPanel select,#menu input[type=number]{background:#0b1626;color:var(--rq-ink);border:1px solid var(--rq-line);border-radius:0;padding:5px}
+input[type=range]{accent-color:var(--rq-acc)}
+input[type=checkbox]{accent-color:var(--rq-acc)}
+
+/* ---- デバッグ・カーソル ---- */
+#wiiDbg{background:rgba(5,10,20,.72);border:1px solid var(--rq-line);border-left:3px solid var(--rq-acc);border-radius:0;color:var(--rq-ice);font:11px/1.4 ui-monospace,Consolas,monospace}
+#facePrev,#sidePrev{border:1px solid var(--rq-line) !important;border-radius:0 !important;box-shadow:0 0 0 3px rgba(5,10,20,.6)}
+#hCur{border:2px solid var(--rq-ink);background:rgba(255,154,60,.25);box-shadow:0 0 12px var(--rq-acc)}
+#hCur.down{background:var(--rq-acc);border-color:#fff}
+#palmRing{background:radial-gradient(rgba(5,10,20,.88) 58%,transparent 60%),conic-gradient(var(--rq-acc) var(--p,0deg),rgba(220,236,255,.18) 0);box-shadow:0 0 18px rgba(255,154,60,.45)}
+
+/* ===== rq_theme.js が出すAR HUDフレーム ===== */
+#rqFrame{position:fixed;inset:0;z-index:4;pointer-events:none}
+#rqFrame .c{position:absolute;width:34px;height:34px;border:2px solid var(--rq-ink);opacity:.55}
+#rqFrame .tl{left:12px;top:12px;border-right:0;border-bottom:0}
+#rqFrame .tr{right:12px;top:12px;border-left:0;border-bottom:0}
+#rqFrame .bl{left:12px;bottom:12px;border-right:0;border-top:0}
+#rqFrame .br{right:12px;bottom:12px;border-left:0;border-top:0}
+#rqFrame .c::after{content:"";position:absolute;width:6px;height:6px;background:var(--rq-acc)}
+#rqFrame .tl::after{left:-4px;top:-4px}#rqFrame .tr::after{right:-4px;top:-4px}#rqFrame .bl::after{left:-4px;bottom:-4px}#rqFrame .br::after{right:-4px;bottom:-4px}
+#rqTop{position:absolute;left:50%;top:14px;transform:translateX(-50%);display:flex;gap:14px;align-items:center;
+  font:500 12px var(--rq-en);letter-spacing:.3em;color:var(--rq-sub);text-shadow:0 0 6px #000;white-space:nowrap}
+#rqTop b{color:var(--rq-ink);font-weight:700}
+#rqTop .m{color:var(--rq-acc)}
+#rqClock{font:500 15px var(--rq-en);color:var(--rq-ink);letter-spacing:.15em}
+
+/* ===== リンク到着演出（?link=1）===== */
+#rqLink{position:fixed;inset:0;z-index:200;pointer-events:none;background:#fff;display:grid;place-items:center;transition:background 1.2s ease}
+#rqLink.fade{background:rgba(255,255,255,0)}
+#rqLink .box{text-align:center;transition:opacity .8s,transform .8s}
+#rqLink .l1{font:700 13px var(--rq-en);letter-spacing:.6em;color:var(--rq-acc)}
+#rqLink .l2{font:300 clamp(30px,5vw,58px) var(--rq-en);letter-spacing:.25em;color:#24313f;margin-top:6px;transition:color 1s}
+#rqLink.fade .l2{color:#fff;text-shadow:0 0 18px rgba(120,180,255,.8)}
+#rqLink .bar{width:min(420px,70vw);height:2px;margin:14px auto 0;background:rgba(36,49,63,.15);overflow:hidden}
+#rqLink .bar i{display:block;height:100%;width:0;background:var(--rq-acc);transition:width 1.4s ease}
+#rqLink.go .bar i{width:100%}
+#rqLink.out .box{opacity:0;transform:translateY(-12px)}
+/* ナビゲーター（チュートリアル案内）*/
+#rqNavi{position:fixed;left:50%;top:58px;transform:translateX(-50%) translateY(-16px);z-index:8;pointer-events:none;opacity:0;transition:opacity .5s,transform .5s;
+  width:min(640px,60vw);padding:10px 18px 10px 80px;background:var(--rq-glass);border:1px solid var(--rq-line);clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);backdrop-filter:blur(6px)}
+#rqNavi.on{opacity:1;transform:translateX(-50%) translateY(0)}
+#rqNavi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--rq-acc)}
+#rqNavi .ico{position:absolute;left:18px;top:50%;transform:translateY(-50%);width:50px;height:50px;border-radius:50%;border:2px solid var(--rq-ink);display:grid;place-items:center;
+  font:700 14px var(--rq-en);letter-spacing:.1em;color:var(--rq-acc);box-shadow:0 0 14px rgba(255,154,60,.4),inset 0 0 10px rgba(255,154,60,.3)}
+#rqNavi .who{font:700 11px var(--rq-en);letter-spacing:.4em;color:var(--rq-acc)}
+#rqNavi .say{margin-top:4px;font:500 16px/1.6 var(--rq-jp);color:var(--rq-ink);min-height:1.6em}
+
 </style>
 </head>
-<body>
+<body data-rq-mode="RAID QUEST">
 <div id="ui"><button id="viewBtn" style="display:none">👁 一人称</button> <button id="aimBtn">🎯 視点操作 ON</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰</button>
-  <div id="faceBadge"></div><div id="perfStat" style="margin-top:4px;font:12px monospace;color:#9fffb0;text-shadow:0 0 4px #000"></div><div id="wiiStat" style="margin-top:4px;font-size:12px;color:#ffd35a;text-shadow:0 0 4px #000"></div></div>
+  <div id="faceBadge"></div><div id="perfStat" style="margin-top:4px;font:12px monospace;color:#9fffb0;text-shadow:0 0 4px #000"></div><div id="wiiStat" style="margin-top:4px;font-size:12px;color:#ff9a3c;text-shadow:0 0 4px #000"></div></div>
 <div id="menu"><div id="mMain" class="mScr"><h3 style="margin:0">MENU</h3>
   <button id="mClose">▶ 再開</button><button id="mCamOpen">📷 カメラ設定</button><button id="mView" style="display:none">👁 視点: 一人称</button><button id="mAim">🎯 視点操作: ON</button><button id="mCtrl">🖱 操作: マウス</button>
   <button id="jobBtn">🔁 ジョブチェンジ</button>
   <div id="jobs"><button id="jSword">⚔ 剣士</button><button id="jWiz">🪄 魔法使い</button><button id="jGun" disabled>🔫 ガンナー（準備中）</button></div>
-  <label>効果音 <input type="range" id="mVol" min="0" max="1" step=".1" value=".8"></label><label>BGM <input type="range" id="mBgm" min="0" max="1" step=".05" value=".5"></label><label>Wii振り感度 <input type="range" id="mWiiTh" min="1.2" max="4" step=".1" value="2.2"><br><small style="color:#9fdcea">左ほど敏感</small></label>
+  <label>効果音 <input type="range" id="mVol" min="0" max="1" step=".1" value=".8"></label><label>BGM <input type="range" id="mBgm" min="0" max="1" step=".05" value=".5"></label><label>Wii振り感度 <input type="range" id="mWiiTh" min="1.2" max="4" step=".1" value="2.2"><br><small style="color:#a9bdd1">左ほど敏感</small></label>
   <details id="skMenu"><summary>⚔ ソードスキル（縦→横）</summary>
     <label><input type="checkbox" id="skOn" checked> 有効</label>
     <label>受付時間 <b id="skWinV">1.5</b>秒<input type="range" id="skWin" min="0.5" max="3" step="0.1" value="1.5"><small>縦を斬り終えてから横を振り始めるまで</small></label>
@@ -67,14 +166,14 @@
     <label>突き(ヴォーパル) 加速度 <b id="skTAV">4.0</b>g<input type="range" id="skTA" min="2.5" max="8" step="0.1" value="4.0"><small>回転が小さく加速度が大きい動き</small></label>
     <label>突きの回転上限 <b id="skTRV">150</b>°<input type="range" id="skTR" min="30" max="400" step="10" value="150"></label>
     <label>突きの最大速度 <b id="skTPV">800</b>°/s<input type="range" id="skTP" min="300" max="1500" step="50" value="800"></label>
-    <small style="display:block;margin-top:6px;color:#ffd35a">▼ 反応しない時: その動きを1回だけ行い、直後に押す（キー1〜4）。直近の斬りを基準にしきい値を自動設定</small>
+    <small style="display:block;margin-top:6px;color:#ff9a3c">▼ 反応しない時: その動きを1回だけ行い、直後に押す（キー1〜4）。直近の斬りを基準にしきい値を自動設定</small>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px"><button id="skL1">①縦重撃を登録</button><button id="skL2">②突きを登録</button><button id="skL3">③横重撃を登録</button><button id="skL4">④一回転を登録</button></div>
     <label><input type="checkbox" id="skDbg" checked> 判定ログを表示</label>
     <small style="display:block;margin-top:6px">バーチカル:縦→横 / ヴォーパル:突き / ソニックリープ:縦重 / ロータス:横重 / スクエア:縦横縦横 / メテオ:一回転 / スターバースト:被ダメ0で16ヒット→READY→振る / マザーズ・ロザリオ:ヴォーパルストライク11回成功→READY→突く</small>
     <button id="skCal" style="margin-top:6px;width:100%">ジャイロ再キャリブ（−ボタンでも可）</button>
   </details>
   <button id="mRestart">↻ リスタート</button><button id="mTitle">⌂ タイトルへ</button>
-  <small style="color:#9fdcea">✌ ピースを約1秒キープで開く / 指先でカーソル → Aで決定（スライダーはAを押したまま左右）/ M キーで開閉</small></div>
+  <small style="color:#a9bdd1">✌ ピースを約1秒キープで開く / 指先でカーソル → Aで決定（スライダーはAを押したまま左右）/ M キーで開閉</small></div>
   <div id="mCam" class="mScr" hidden>
   <h3 style="margin:0">📷 カメラ設定</h3>
   <button id="mCamBack">← メニューに戻る</button>
@@ -89,8 +188,8 @@
       <label><input type="checkbox" id="bgFlip"> 左右反転</label>
     </div>
     <label><input type="checkbox" id="bgTP"> 俯瞰モードでも背景に表示</label>
-    <div id="bgStat" style="font-size:12px;color:#ffd35a"></div>
-    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <div id="bgStat" style="font-size:12px;color:#ff9a3c"></div>
+    <hr style="border:0;border-top:1px solid #bfe6ff44;margin:10px 0 4px">
     <b class="cpH">📷 カメラの選択</b>
     <label>フロント（顔・手の認識）<select id="faceSel"></select></label>
     <label>バック（背景の映像）<select id="camSel"></select></label>
@@ -102,23 +201,23 @@
     <small style="margin:0 0 6px">ゲームを始める前に一度だけ決めておく項目です。結果は保存され、次回も使われます。</small>
     <details class="cpGrp" open><summary>📐 空間キャリブレーション</summary>
     <label>カメラの置き方 <select id="poseCam"><option value="front">プレイヤーを正面から撮る（推奨）</option><option value="back">プレイヤーを背後から撮る</option></select></label>
-    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
-    <b style="color:#ffd35a">🧍 体キャリブレーション（俯瞰モード・床の位置合わせ）</b>
+    <hr style="border:0;border-top:1px solid #bfe6ff44;margin:10px 0 4px">
+    <b style="color:#ff9a3c">🧍 体キャリブレーション（俯瞰モード・床の位置合わせ）</b>
     <label>身長 <input type="number" id="bcH" value="170" min="100" max="230" style="width:70px"> cm</label>
     <label>カメラの高さ（床からレンズ） <input type="number" id="bcCamH" value="0" min="0" max="300" style="width:70px"> cm<small>0 = わからない（途中で横に1歩 動いてもらいます）</small></label>
     <label><input type="checkbox" id="bcAutoFov" checked> 画角も自動で測る（カメラの高さを入れた時。途中で横に1歩 動いてもらいます）</label>
     <label>カメラの画角 <b id="bcFovV">65</b>°<input type="range" id="bcFovIn" min="35" max="110" step="1" value="65"><small>カメラの仕様（対角でなく水平の画角）が分かれば合わせる</small></label>
     <label>ボスまでの距離（位置を指定しない時） <b id="bcBossV">8.5</b> m<input type="range" id="bcBoss" min="3" max="12" step="0.5" value="8.5"></label>
     <div><button id="bcStart">🧍 キャリブレーション開始</button> <button id="bcReset">リセット</button></div>
-    <div id="bcTune" hidden style="margin:6px 0;padding:6px 8px;border:1px dashed #7ae7ff66;border-radius:6px">
-      <b style="color:#7ae7ff">✏️ 微調整（プレビューのマス目を見ながら）</b>
+    <div id="bcTune" hidden style="margin:6px 0;padding:6px 8px;border:1px dashed #bfe6ff66;border-radius:6px">
+      <b style="color:#bfe6ff">✏️ 微調整（プレビューのマス目を見ながら）</b>
       <label>床を上下 <b id="bcTFV">0</b> cm<input type="range" id="bcTF" min="-40" max="40" step="1" value="0"><small>＋でマス目が上がる / −で下がる</small></label>
       <label>奥を上下 <b id="bcTTV">0.0</b>°<input type="range" id="bcTT" min="-12" max="12" step="0.2" value="0"><small>立ち位置を軸に傾ける。＋で奥のマス目が上がる（手前は下がる）</small></label>
       <label>左右の傾き <b id="bcTPV">0.0</b>°<input type="range" id="bcTP" min="-12" max="12" step="0.2" value="0"><small>立ち位置を軸に傾ける。＋で画面の右側のマス目が上がる</small></label>
       <small>画角のスライダーも、ここでその場で反映されます。結果は自動で保存され、次回は読み込まれます。</small>
       <button id="bcTuneReset">微調整を0に戻す</button>
-      <hr style="border:0;border-top:1px dashed #7ae7ff44;margin:8px 0 4px">
-      <b style="color:#7ae7ff">📍 ボスの配置</b>
+      <hr style="border:0;border-top:1px dashed #bfe6ff44;margin:8px 0 4px">
+      <b style="color:#bfe6ff">📍 ボスの配置</b>
       <div><button id="bcPickBtn">📍 ボスの位置をクリックで指定</button> <button id="bcPickClear">指定を消す</button></div>
       <div style="margin-top:4px"><button id="bcPickOrigin">🧍 立ち位置をクリックで移動</button></div>
       <div id="bcBossStat" style="font-size:12px;color:#5fe07a">未指定（下の「ボスまでの距離」で配置）</div>
@@ -126,9 +225,9 @@
     </div>
     <label><input type="checkbox" id="bcAvAR" checked> AR確認表示でもアバターを重ねる（実際の足の位置に合わせる）</label>
     <label><input type="checkbox" id="bcAR"> AR確認表示（カメラ映像にゲームの床とボスを重ねる）</label>
-    <div id="bcStat" style="font-size:12px;color:#ffd35a">未設定</div>
+    <div id="bcStat" style="font-size:12px;color:#ff9a3c">未設定</div>
     <small>足元まで全身が映るようにして「開始」→ 5秒のカウントダウン中にプレイする位置へ移動 → 3秒まっすぐ立つ（前かがみ・ひざ曲げは数えません）。左下のプレビューに床のマス目（1m間隔）が出るので、実際の床と合っているか確認してください。</small>
-    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <hr style="border:0;border-top:1px solid #bfe6ff44;margin:10px 0 4px">
     <div id="d2Box">
     <b style="color:#ffb35a">📷📷 2台モード（後ろ＋横のカメラで前後の位置を正確に）</b>
     <label><input type="checkbox" id="d2On"> 2台モードを使う</label>
@@ -143,18 +242,18 @@
     <details class="cpGrp"><summary>⚙ 細かい設定</summary>
     <label>⚙ 負荷モード <select id="qMode"><option value="high">高画質（重い）</option><option value="std">標準</option><option value="light" selected>軽量（ノートPC推奨）</option></select></label>
     <small>軽量: 描画解像度を下げ、顔認識20回/秒・手認識5回/秒に間引き、背景カメラを640×360で取得</small>
-    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
-    <b style="color:#ffd35a">👤 顔認識</b>
+    <hr style="border:0;border-top:1px solid #bfe6ff44;margin:10px 0 4px">
+    <b style="color:#ff9a3c">👤 顔認識</b>
     <label><input type="checkbox" id="faceOn" checked> 顔の動きで視点・照準を操作</label>
     <label>カメラの種類 <select id="faceType"><option value="auto">自動判定</option><option value="front">フロント（鏡像）</option><option value="back">バック（非鏡像）</option></select></label>
     <label>感度 <input type="range" id="faceGain" min="0.5" max="3" step="0.1" value="1.5"></label>
     <label><input type="checkbox" id="facePrevOn" checked> 認識プレビューを表示</label>
     <div><button id="faceStart">顔認識を開始/再起動</button> <button id="faceCal">中心リセット (C)</button></div>
-    <div id="faceStat" style="font-size:12px;color:#ffd35a"></div>
-    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
-    <b style="color:#ffd35a">🧍 俯瞰モード（VRMアバター）</b>
+    <div id="faceStat" style="font-size:12px;color:#ff9a3c"></div>
+    <hr style="border:0;border-top:1px solid #bfe6ff44;margin:10px 0 4px">
+    <b style="color:#ff9a3c">🧍 俯瞰モード（VRMアバター）</b>
     <label>VRMファイル<input type="file" id="vrmFile" accept=".vrm,.glb"></label>
-    <div id="vrmStat" style="font-size:12px;color:#ffd35a">未読み込み（読み込むまでは簡易アバター）</div>
+    <div id="vrmStat" style="font-size:12px;color:#ff9a3c">未読み込み（読み込むまでは簡易アバター）</div>
     <label><input type="checkbox" id="poseOn" checked> 映像の動きをアバターに反映</label>
     <label><input type="checkbox" id="poseMove" checked> 体の左右移動で回避</label>
     <small>俯瞰モードでは「バック」のカメラ1台（既定はバックカメラ）だけで全身を認識します。顔用カメラは止めます。全身が映る位置に置いてください。</small>
@@ -175,7 +274,7 @@
 <script>
 // ===== GIANT SLIME RAID =====
 // 左クリック: 斬る(長押しでガード) / 右クリック: パリィ / 紫の攻撃はパリィ不可→ガード / Wii: 振る=斬る, B+振り上げ=パリィ, A長押し=ガード / A,D: 左右に回避 / V: VR(左右分割)モード切替 / 視点・照準: 顔の動き(マウスでも可) / C: 顔の中心リセット
-const FONT = '"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif';
+const FONT = '"Rajdhani","Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif';
 const vid = document.getElementById('v');
 const renderer = new THREE.WebGLRenderer({ antialias:true });
 // ===== 負荷モード =====
@@ -345,13 +444,28 @@ function setViewCtl(v){
 // ===== HUD（3Dで描くのでVRモードでも見える）=====
 const hud = new THREE.Group(); camera.add(hud);
 function bar(w, y, hex){
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(w + .06, .2), new THREE.MeshBasicMaterial({ color:0, transparent:true, opacity:.6, depthTest:false }));
-  back.position.set(0, y, -3); back.renderOrder = 10;
-  const g = new THREE.PlaneGeometry(w, .14); g.translate(w/2, 0, 0);
-  const fill = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color:hex, depthTest:false })); fill.position.set(-w/2, y, -3); fill.renderOrder = 11;
-  hud.add(back, fill); return fill;
+  const FH = .15, SK = .07, PW = w + .16, PH = .32;   // 中身の高さ / 斜めの量 / 枠の大きさ
+  const frame = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), new THREE.MeshBasicMaterial({ transparent:true, depthTest:false,
+    map:canvasTex(1024, 96, (x, cw, ch) => {
+      const u = cw/PW, v = ch/PH, l = (PW - w)/2*u, r = l + w*u, t = (PH - FH)/2*v, b = t + FH*v, s = SK*u;
+      const para = (o) => { x.beginPath(); x.moveTo(l - o, b + o); x.lineTo(r - s + o*.4, b + o); x.lineTo(r + o, t - o); x.lineTo(l + s - o*.4, t - o); x.closePath(); };
+      para(6); x.fillStyle = 'rgba(6,12,24,.62)'; x.fill();
+      x.lineWidth = 2; x.strokeStyle = 'rgba(230,242,255,.75)'; x.stroke();
+      x.strokeStyle = 'rgba(230,242,255,.22)'; x.lineWidth = 2;   // 10%ごとの目盛り
+      for (let i = 1; i < 10; i++){ const px = l + (r - l)*i/10; x.beginPath(); x.moveTo(px + s*.15, b + 6); x.lineTo(px + s*.15, b + 14); x.stroke(); }
+      x.fillStyle = '#ff9a3c'; x.fillRect(l - 14, t - 6, 5, b - t + 12);   // 左端のオレンジ
+      x.fillRect(r - 40, b + 10, 40, 3);
+    }) }));
+  frame.position.set(0, y, -3); frame.renderOrder = 10;
+  const sh = new THREE.Shape(); sh.moveTo(0, -FH/2); sh.lineTo(w - SK, -FH/2); sh.lineTo(w, FH/2); sh.lineTo(SK, FH/2); sh.closePath();
+  const fill = new THREE.Mesh(new THREE.ShapeGeometry(sh), new THREE.MeshBasicMaterial({ color:hex, depthTest:false, transparent:true, opacity:.95 }));
+  fill.position.set(-w/2, y, -3); fill.renderOrder = 11;
+  const gl = new THREE.Shape(); gl.moveTo(SK*.5, FH*.05); gl.lineTo(w - SK*.5, FH*.05); gl.lineTo(w - SK*.3, FH*.42); gl.lineTo(SK*.8, FH*.42); gl.closePath();
+  const gloss = new THREE.Mesh(new THREE.ShapeGeometry(gl), new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:.28, depthTest:false }));
+  gloss.renderOrder = 12; fill.add(gloss);
+  hud.add(frame, fill); return fill;
 }
-const bossBar = bar(3.4, 1.55, 0xff4d5e), pBar = bar(2.4, -1.55, 0x5ee08a), parBar = bar(1.0, -1.78, 0xffd35a);
+const bossBar = bar(3.4, 1.55, 0xff4d5e), pBar = bar(2.4, -1.55, 0x6dffb0), parBar = bar(1.0, -1.78, 0xbfe6ff);
 const nameS = mkSprite('GIANT SLIME', '#ffffff', .4); nameS.position.set(0, 1.85, -3); hud.add(nameS);
 hud.visible = false;
 const msg = new THREE.Sprite(new THREE.SpriteMaterial({ transparent:true, depthTest:false }));
@@ -359,17 +473,26 @@ msg.position.z = -4; msg.renderOrder = 30; camera.add(msg);
 // ===== 照準（顔操作時に表示。ray.setFromCamera と同じNDC位置に置く）=====
 const reticle = new THREE.Sprite(new THREE.SpriteMaterial({ transparent:true, depthTest:false, map:canvasTex(128, 128, (x, w, h) => {
   const segs = [[64,14,64,34],[64,94,64,114],[14,64,34,64],[94,64,114,64]];
-  for (const [col, lw] of [['#000a', 10], ['#7ae7ff', 5]]){
+  for (const [col, lw] of [['#000a', 10], ['#bfe6ff', 5]]){
     x.strokeStyle = col; x.lineWidth = lw; x.beginPath(); x.arc(64, 64, 30, 0, 7); x.stroke();
     x.beginPath(); for (const [a, b, c, d] of segs){ x.moveTo(a, b); x.lineTo(c, d); } x.stroke();
   }
-  x.fillStyle = '#7ae7ff'; x.beginPath(); x.arc(64, 64, 4, 0, 7); x.fill();
+  x.fillStyle = '#bfe6ff'; x.beginPath(); x.arc(64, 64, 4, 0, 7); x.fill();
 }) }));
 reticle.renderOrder = 35; reticle.visible = false; camera.add(reticle);
+function rqPanel(x, w, h){
+  const c = 38, m = 8;
+  x.beginPath(); x.moveTo(m + c, m); x.lineTo(w - m, m); x.lineTo(w - m, h - m - c); x.lineTo(w - m - c, h - m); x.lineTo(m, h - m); x.lineTo(m, m + c); x.closePath();
+  const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(12,24,42,.9)'); g.addColorStop(1, 'rgba(5,10,20,.92)');
+  x.fillStyle = g; x.fill(); x.lineWidth = 2.5; x.strokeStyle = 'rgba(230,242,255,.55)'; x.stroke();
+  x.fillStyle = '#ff9a3c'; x.fillRect(m, m + c + 6, 7, h*.32);                    // 左のアクセント
+  x.fillRect(m + c + 10, m - 1, 160, 4); x.fillRect(w - m - 200, h - m - 3, 150, 4);  // 上下のライン
+  x.fillStyle = 'rgba(230,242,255,.07)'; for (let yy = m + 4; yy < h - m; yy += 4) x.fillRect(m + 2, yy, w - 2*m - 4, 1);   // うっすら走査線
+}
 function setMsg(L){
   if (!L){ msg.visible = false; return; }
   const t = canvasTex(1024, 512, (x, w, h) => {
-    x.fillStyle = 'rgba(0,0,0,.62)'; x.fillRect(0, 0, w, h); x.strokeStyle = '#ffd35a'; x.lineWidth = 4; x.strokeRect(8, 8, w-16, h-16);
+    rqPanel(x, w, h);
     x.textAlign = 'center'; x.textBaseline = 'middle';
     let y = h/2 - L.reduce((a, l) => a + l[2]*1.5, 0)/2;
     for (const [s, c, z] of L){ y += z*.75; x.font = `bold ${z}px ${FONT}`; x.fillStyle = c; x.fillText(s, w/2, y); y += z*.75; }
@@ -627,7 +750,7 @@ function faceDraw(){
   const w = prevC.width, h = prevC.height, v = face.src;
   pctx.fillStyle = '#000'; pctx.fillRect(0, 0, w, h);
   if (!v || v.readyState < 2 || !v.videoWidth){
-    pctx.fillStyle = '#ffd35a'; pctx.font = 'bold 18px sans-serif'; pctx.textAlign = 'center';
+    pctx.fillStyle = '#ff9a3c'; pctx.font = 'bold 18px sans-serif'; pctx.textAlign = 'center';
     pctx.fillText(face.lm || face.loading ? 'カメラ待機中…' : '「顔認識を開始」を押すか、ゲームを開始', w/2, h/2); return;
   }
   pctx.save(); if (faceMirror()){ pctx.translate(w, 0); pctx.scale(-1, 1); }
@@ -635,17 +758,17 @@ function faceDraw(){
   pctx.drawImage(v, (w - dw)/2, (h - dh)/2, dw, dh); pctx.restore();
   const X = x => (faceMirror() ? 1 - x : x)*w, Y = y => y*h;
   if (face.seen && face.pts){
-    pctx.fillStyle = '#5ee08a'; for (const q of face.pts) pctx.fillRect(X(q.x) - 1, Y(q.y) - 1, 2, 2);
+    pctx.fillStyle = '#6dffb0'; for (const q of face.pts) pctx.fillRect(X(q.x) - 1, Y(q.y) - 1, 2, 2);
     pctx.fillStyle = '#ff4d5e'; pctx.beginPath(); pctx.arc(X(face.x), Y(face.y), 5, 0, 7); pctx.fill();   // 鼻先
   }
   if (face.cx !== null){   // 構えた中心
-    pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 1.5; const cx = X(face.cx), cy = Y(face.cy);
+    pctx.strokeStyle = '#ff9a3c'; pctx.lineWidth = 1.5; const cx = X(face.cx), cy = Y(face.cy);
     pctx.beginPath(); pctx.moveTo(cx - 12, cy); pctx.lineTo(cx + 12, cy); pctx.moveTo(cx, cy - 12); pctx.lineTo(cx, cy + 12); pctx.stroke();
     if (face.seen){ pctx.strokeStyle = '#ff4d5e'; pctx.beginPath(); pctx.moveTo(cx, cy); pctx.lineTo(X(face.x), Y(face.y)); pctx.stroke(); }
   }
-  if (hand.palm && hand.prog > 0){ pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 4; pctx.beginPath(); pctx.arc(X(hand.palm.x), Y(hand.palm.y), 22, -Math.PI/2, -Math.PI/2 + hand.prog*Math.PI*2); pctx.stroke(); }
+  if (hand.palm && hand.prog > 0){ pctx.strokeStyle = '#ff9a3c'; pctx.lineWidth = 4; pctx.beginPath(); pctx.arc(X(hand.palm.x), Y(hand.palm.y), 22, -Math.PI/2, -Math.PI/2 + hand.prog*Math.PI*2); pctx.stroke(); }
   pctx.font = 'bold 16px sans-serif'; pctx.textAlign = 'left';
-  pctx.fillStyle = !face.lm ? '#ffd35a' : face.seen ? '#5ee08a' : '#ff4d5e';
+  pctx.fillStyle = !face.lm ? '#ff9a3c' : face.seen ? '#6dffb0' : '#ff4d5e';
   pctx.fillText(!face.lm ? 'モデル読み込み中…' : face.seen ? (face.cx === null ? '顔を中心に構えて…' : '● 追跡中') : '× 顔が見つかりません', 8, 22);
 }
 $('faceOn').onchange = e => {
@@ -766,19 +889,19 @@ function poseDraw(){
   const w = prevC.width, h = prevC.height, v = vid;
   pctx.fillStyle = '#000'; pctx.fillRect(0, 0, w, h);
   if (!camStream || v.readyState < 2 || !v.videoWidth){
-    pctx.fillStyle = '#ffd35a'; pctx.font = 'bold 16px sans-serif'; pctx.textAlign = 'center'; pctx.fillText('カメラ待機中…', w/2, h/2); return;
+    pctx.fillStyle = '#ff9a3c'; pctx.font = 'bold 16px sans-serif'; pctx.textAlign = 'center'; pctx.fillText('カメラ待機中…', w/2, h/2); return;
   }
   const mir = pose.cam === 'front', f = Math.min(w/v.videoWidth, h/v.videoHeight), dw = v.videoWidth*f, dh = v.videoHeight*f, ox = (w - dw)/2, oy = (h - dh)/2;
   pctx.save(); if (mir){ pctx.translate(w, 0); pctx.scale(-1, 1); } pctx.drawImage(v, ox, oy, dw, dh); pctx.restore();
   const X = x => { const p = ox + x*dw; return mir ? w - p : p; }, Y = y => oy + y*dh;
   if (pose.seen && pose.n){
-    const n = pose.n; pctx.strokeStyle = '#5ee08a'; pctx.lineWidth = 3; pctx.beginPath();
+    const n = pose.n; pctx.strokeStyle = '#6dffb0'; pctx.lineWidth = 3; pctx.beginPath();
     for (const [a, b] of POSE_LINKS){ pctx.moveTo(X(n[a].x), Y(n[a].y)); pctx.lineTo(X(n[b].x), Y(n[b].y)); } pctx.stroke();
     pctx.fillStyle = '#ff4d5e'; pctx.beginPath(); pctx.arc(X(n[0].x), Y(n[0].y), 4, 0, 7); pctx.fill();
   }
-  if (pose.cx !== null){ pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 1.5; pctx.setLineDash([4, 4]); pctx.beginPath(); pctx.moveTo(X(pose.cx), oy); pctx.lineTo(X(pose.cx), oy + dh); pctx.stroke(); pctx.setLineDash([]); }
+  if (pose.cx !== null){ pctx.strokeStyle = '#ff9a3c'; pctx.lineWidth = 1.5; pctx.setLineDash([4, 4]); pctx.beginPath(); pctx.moveTo(X(pose.cx), oy); pctx.lineTo(X(pose.cx), oy + dh); pctx.stroke(); pctx.setLineDash([]); }
   pctx.font = 'bold 15px sans-serif'; pctx.textAlign = 'left';
-  pctx.fillStyle = !pose.lm ? '#ffd35a' : pose.seen ? '#5ee08a' : '#ff4d5e';
+  pctx.fillStyle = !pose.lm ? '#ff9a3c' : pose.seen ? '#6dffb0' : '#ff4d5e';
   pctx.fillText(!pose.lm ? 'モデル読み込み中…' : pose.seen ? (pose.cx === null ? 'まっすぐ立って…' : '● 全身追跡中') : '× 全身が見つかりません', 8, 20);
   bcDrawPrev(X, Y);
 }
@@ -838,7 +961,7 @@ const BC_STAND_MS = 3000, BC_COUNT_MS = 5000;
 const BC_BODY_MAX = 22, BC_KNEE_MIN = 148;   // まっすぐ立っている判定: 体の曲がり（肩-腰-かかと）がこの角度未満・ひざがこの角度より伸びている
 const bcEye = () => bc.height*.93;   // 目・耳の高さ ≒ 身長×0.93
 const bcFocal = w => (w/2)/Math.tan(bc.hfov*Math.PI/360);
-function bcSay(t, popup, quiet){ if (bc.msg === t) return; bc.msg = t; $('bcStat').textContent = t; if (popup) popCam(popup, '#ffd35a', .6, 2.2); if (!quiet) console.log('[体キャリブ] ' + t); }
+function bcSay(t, popup, quiet){ if (bc.msg === t) return; bc.msg = t; $('bcStat').textContent = t; if (popup) popCam(popup, '#ff9a3c', .6, 2.2); if (!quiet) console.log('[体キャリブ] ' + t); }
 // ランドマーク → 正規化画像座標の観測
 function bcObsFrom(n, el = vid, hf = bc.hfov, loose = false){   // loose: 片方のかかとだけ見えていればよい（横から撮ると奥の足が隠れるため）
   const W_ = el.videoWidth, H_ = el.videoHeight; if (!W_) return null;
@@ -868,9 +991,9 @@ function bcPose(n){
   const now = performance.now();
   if (bc.state === 'count'){
     const left = Math.ceil((BC_COUNT_MS - (now - bc.t0))/1000);
-    if (left !== bc.cd && left > 0){ bc.cd = left; popCam(String(left), '#ffd35a', 1.2, .8); }
+    if (left !== bc.cd && left > 0){ bc.cd = left; popCam(String(left), '#ff9a3c', 1.2, .8); }
     bcSay(`${left}秒後に測定を始めます。プレイする位置に移動して、まっすぐ立ってください`, null, true);
-    if (now - bc.t0 >= BC_COUNT_MS){ bc.state = 'stand1'; bc.t0 = now; bc.obsA = []; bc.lastF = bc.lastH = null; popCam('そのまま動かないで', '#7ae7ff', .7, 1.5); }
+    if (now - bc.t0 >= BC_COUNT_MS){ bc.state = 'stand1'; bc.t0 = now; bc.obsA = []; bc.lastF = bc.lastH = null; popCam('そのまま動かないで', '#bfe6ff', .7, 1.5); }
     return;
   }
   const reset = msg => { bc.t0 = now; (bc.state === 'stand1' ? bc.obsA : bc.obs).length = 0; bcSay(msg, null, true); };
@@ -1138,13 +1261,13 @@ function bcDrawPrev(X, Y){
   for (let z = 0; z >= -10; z--) line(-6, z, 6, z);
   pctx.stroke(); pctx.restore();
   const dot = (q, col, label) => { const s = q && proj(q); if (!s) return null; pctx.fillStyle = col; pctx.beginPath(); pctx.arc(s[0], s[1], 5, 0, 7); pctx.fill(); pctx.font = 'bold 11px sans-serif'; pctx.fillText(label, s[0] + 6, s[1] - 4); return s; };
-  const o = dot(bc.origin, '#ffd35a', '立ち位置');
+  const o = dot(bc.origin, '#ff9a3c', '立ち位置');
   if (bc.bossF){
     const b = dot(bc.bossF, '#5fe07a', 'ボス');
     if (o && b){ pctx.strokeStyle = '#5fe07a'; pctx.setLineDash([3, 3]); pctx.beginPath(); pctx.moveTo(o[0], o[1]); pctx.lineTo(b[0], b[1]); pctx.stroke(); pctx.setLineDash([]); }
   }
   if (bcFeetOK() && bc.feetF){ const c = proj(bc.feetF); if (c){ pctx.fillStyle = '#ff4d5e'; pctx.beginPath(); pctx.arc(c[0], c[1], 4, 0, 7); pctx.fill(); } }
-  if (bc.picking){ pctx.fillStyle = '#ffd35a'; pctx.font = 'bold 13px sans-serif'; pctx.fillText(bc.picking === 'origin' ? '👆 立ち位置にする床をクリック' : '👆 ボスを置く床をクリック', 8, prevC.height - 10); }
+  if (bc.picking){ pctx.fillStyle = '#ff9a3c'; pctx.font = 'bold 13px sans-serif'; pctx.fillText(bc.picking === 'origin' ? '👆 立ち位置にする床をクリック' : '👆 ボスを置く床をクリック', 8, prevC.height - 10); }
 }
 $('bcStart').onclick = bcStart;
 $('bcReset').onclick = bcReset;
@@ -1423,22 +1546,22 @@ function dualDraw(){
     for (let x = -6; x <= 6; x++) line(x, 2, x, -10);
     for (let z = 2; z >= -10; z--) line(-6, z, 6, z);
     c.stroke();
-    if (bc.origin){ const q = proj(bc.origin); if (q){ c.fillStyle = '#ffd35a'; c.beginPath(); c.arc(q[0], q[1], 5, 0, 7); c.fill(); } }
+    if (bc.origin){ const q = proj(bc.origin); if (q){ c.fillStyle = '#ff9a3c'; c.beginPath(); c.arc(q[0], q[1], 5, 0, 7); c.fill(); } }
     if (bcFeetOK() && bc.feetF){ const q = proj(bc.feetF); if (q){ c.fillStyle = '#ff4d5e'; c.beginPath(); c.arc(q[0], q[1], 5, 0, 7); c.fill(); } }
     c.restore();
   }
   if (dual.seen && dual.n){
-    const n = dual.n; c.strokeStyle = '#5ee08a'; c.lineWidth = 3; c.beginPath();
+    const n = dual.n; c.strokeStyle = '#6dffb0'; c.lineWidth = 3; c.beginPath();
     for (const [a, b] of POSE_LINKS){ c.moveTo(X(n[a].x), Y(n[a].y)); c.lineTo(X(n[b].x), Y(n[b].y)); } c.stroke();
   }
-  if (dual.live){ const q = N2C([dual.live.fx, dual.live.fy]); c.strokeStyle = '#7ae7ff'; c.lineWidth = 2; c.beginPath(); c.arc(q[0], q[1], 6, 0, 7); c.stroke(); }
+  if (dual.live){ const q = N2C([dual.live.fx, dual.live.fy]); c.strokeStyle = '#bfe6ff'; c.lineWidth = 2; c.beginPath(); c.arc(q[0], q[1], 6, 0, 7); c.stroke(); }
   if (dual.state === 'spots' || dual.state === 'count'){
     c.font = 'bold 12px sans-serif';
-    dual.spots.forEach((sp, i) => { const q = N2C([sp.s.fx, sp.s.fy]); c.fillStyle = '#ffd35a'; c.beginPath(); c.arc(q[0], q[1], 5, 0, 7); c.fill(); c.fillText(String(i + 1), q[0] + 6, q[1] - 4); });
+    dual.spots.forEach((sp, i) => { const q = N2C([sp.s.fx, sp.s.fy]); c.fillStyle = '#ff9a3c'; c.beginPath(); c.arc(q[0], q[1], 5, 0, 7); c.fill(); c.fillText(String(i + 1), q[0] + 6, q[1] - 4); });
   }
   c.font = 'bold 14px sans-serif';
-  const st = !dual.lm ? ['モデル読み込み中…', '#ffd35a'] : dual.state === 'spots' ? [`位置合わせ中 ${dual.spots.length}/${DUAL_SPOTS}`, '#ffb35a'] : dual.state === 'count' ? ['まもなく位置合わせ', '#ffb35a']
-    : dual.state === 'locked' ? [`横カメラ ● 位置: ${dual.src || '-'}`, dual.src === '2台合成' ? '#5ee08a' : '#ffd35a'] : [dual.seen ? '横カメラ（未位置合わせ）' : '× 全身が見つかりません', dual.seen ? '#ffd35a' : '#ff4d5e'];
+  const st = !dual.lm ? ['モデル読み込み中…', '#ff9a3c'] : dual.state === 'spots' ? [`位置合わせ中 ${dual.spots.length}/${DUAL_SPOTS}`, '#ffb35a'] : dual.state === 'count' ? ['まもなく位置合わせ', '#ffb35a']
+    : dual.state === 'locked' ? [`横カメラ ● 位置: ${dual.src || '-'}`, dual.src === '2台合成' ? '#6dffb0' : '#ff9a3c'] : [dual.seen ? '横カメラ（未位置合わせ）' : '× 全身が見つかりません', dual.seen ? '#ff9a3c' : '#ff4d5e'];
   c.fillStyle = st[1]; c.fillText(st[0], 8, 20);
 }
 
@@ -1637,10 +1760,10 @@ $('aimBtn').onclick = $('mAim').onclick = () => setViewCtl(!viewCtl); $('menuBtn
 $('mClose').onclick = () => toggleMenu(false); $('faceFlip').onclick = flipFaceCam;
 $('mVol').oninput = e => vol = +e.target.value; $('mBgm').oninput = e => bgm.volume = +e.target.value;
 $('mRestart').onclick = () => { toggleMenu(false); startBattle(); };
-$('mTitle').onclick = () => location.href = 'parytitle.html';
+$('mTitle').onclick = () => location.href = 'index.html';   // Radiqle タイトル
 const JOB = 'sword';   // このHTMLの職業
 for (const [k, id, url] of [['sword', 'jSword', 'pary_game.html'], ['wiz', 'jWiz', 'Connectworld_Wizard.html']]){
-  const b = $(id); if (k === JOB){ b.textContent = '✔ ' + b.textContent; b.style.borderColor = '#ffd35a'; b.onclick = () => toggleMenu(false); }
+  const b = $(id); if (k === JOB){ b.textContent = '✔ ' + b.textContent; b.style.borderColor = '#ff9a3c'; b.onclick = () => toggleMenu(false); }
   else b.onclick = () => location.href = url + '?start=1';   // 別HTMLへ移動して自動スタート
 }
 $('jobBtn').onclick = () => $('jobs').classList.toggle('on');
@@ -1657,13 +1780,13 @@ function reset(){
   bossG.visible = true; sb.n = 0; sb.ready = false; sb.active = false; anim = null; sk.st = 0; sbDraw(); mr.n = 0; mr.ready = false; mr.active = false; mrDraw();
 }
 function titleMsg(){
-  setMsg([['GIANT SLIME RAID', '#ffd35a', 72], ['左クリック: 斬る / 長押し: ガード　右クリック: パリィ', '#fff', 30],
+  setMsg([['RADIQLE  //  RAID QUEST', '#bfe6ff', 22], ['GIANT SLIME RAID', '#ff9a3c', 64], ['左クリック: 斬る / 長押し: ガード　右クリック: パリィ', '#fff', 30],
           ['紫に光る攻撃はパリィ不可 → ガードで防ぐ　A / D: 回避', '#c06bff', 28],
           ['赤く光っている間に右クリック → 弾き返してスタン → 大ダメージ', '#fff', 28],
-          ['Wii: 振る=斬る / B+振り上げ=パリィ / A長押し=ガード', '#ffd35a', 26],
-          ['Wii: 縦→横=バーチカル / 突き / 縦横縦横 / 一回転 など（−:ジャイロ再調整）', '#ffd35a', 22],
-          ['顔を動かして狙う　C:中心リセット　V:VR　F:視点操作ON/OFF　M:メニュー', '#7ae7ff', 24],
-          ['クリックでスタート（Webカメラを使います）', '#7ae7ff', 34]]);
+          ['Wii: 振る=斬る / B+振り上げ=パリィ / A長押し=ガード', '#ff9a3c', 26],
+          ['Wii: 縦→横=バーチカル / 突き / 縦横縦横 / 一回転 など（−:ジャイロ再調整）', '#ff9a3c', 22],
+          ['顔を動かして狙う　C:中心リセット　V:VR　F:視点操作ON/OFF　M:メニュー', '#bfe6ff', 24],
+          ['クリックでスタート（Webカメラを使います）', '#bfe6ff', 34]]);
 }
 titleMsg();
 
@@ -1671,12 +1794,12 @@ function hurtBoss(d, at, big){
   if (!sb.active && !mr.active) sbHit();
   B.hp -= d; B.flash = .12; B.wob = .25;
   burst(at, big ? 0xffd35a : 0xffffff, big ? 40 : 22, 6);
-  popup(String(Math.round(d)), big ? '#ffd35a' : '#ffffff', tmp.copy(at).add(new THREE.Vector3(0, .6, 0)).clone(), big ? 1.1 : .8);
+  popup(String(Math.round(d)), big ? '#ff9a3c' : '#ffffff', tmp.copy(at).add(new THREE.Vector3(0, .6, 0)).clone(), big ? 1.1 : .8);
   shake = Math.max(shake, .12); hitstop = Math.max(hitstop, .05);
   if (B.hp <= 0){
     B.hp = 0; B.s = 'dead'; state = 'win'; bgmStop(); endAt = performance.now(); bossG.visible = false; lane.visible = false;
     burst(bossG.position, 0x5fe07a, 200, 12); ring(bossG.position, 8, 0x5fe07a, .8); shake = .6;
-    setMsg([['VICTORY!', '#ffd35a', 80], ['ジャイアントスライムを倒した', '#fff', 34], ['クリックでもう一度', '#7ae7ff', 32]]);
+    setMsg([['VICTORY!', '#ff9a3c', 80], ['ジャイアントスライムを倒した', '#fff', 34], ['クリックでもう一度', '#bfe6ff', 32]]);
   }
 }
 const SW_T = .32;   // 斬りモーションの長さ（旧.22。長く・大きくして見やすく）
@@ -1692,7 +1815,7 @@ function attack(){
   if (!hit && cnt && B.s !== 'dead') hit = bossG.position.clone();   // カウンター中は目線が外れていても振れば命中（パリィ成功で視線が外れるため）
   if (hit && B.s !== 'dead' && ray.ray.origin.distanceTo(hit) < 25){
     hurtBoss(cnt ? P.cBig : B.weak > 0 ? 9 : 6, hit, cnt);
-    if (cnt){ P.counter = 0; shake = .5; hitstop = .15; popCam('COUNTER!!', '#ffd35a', 1.2, 1); }
+    if (cnt){ P.counter = 0; shake = .5; hitstop = .15; popCam('COUNTER!!', '#ff9a3c', 1.2, 1); }
   }
 }
 // 赤く光っている間(予兆〜突進)に押せば、突進が当たる瞬間までパリィが有効（armed）
@@ -1701,11 +1824,11 @@ function parried(){
   playPary(); const perfect = P.parAge < .45, at = rig.localToWorld(new THREE.Vector3(0, 0, -2.4));
   hitstop = perfect ? .22 : .14; shake = perfect ? .5 : .3; fovp = perfect ? 14 : 8; flash = perfect ? .8 : .4; flashM.material.color.set(0xfff2b0);
   ring(at, perfect ? 6 : 4, 0xffd35a, .5); ring(at, 2.5, 0xffffff, .3); burst(at, 0xffd35a, perfect ? 90 : 55, 9);
-  popCam(perfect ? 'PERFECT!' : 'PARRY!', '#ffd35a', perfect ? 1.3 : 1, 1);
+  popCam(perfect ? 'PERFECT!' : 'PARRY!', '#ff9a3c', perfect ? 1.3 : 1, 1);
   P.inv = .5; P.par = 0; P.armed = false; P.parCd = .15; wiiRumble(perfect ? 300 : 200);
   B.s = 'knock'; B.stun = true; B.t = perfect ? 3 : 2.2; B.vz = perfect ? -24 : -17;
   P.counter = B.t; P.cBig = perfect ? 140 : 90;
-  popup('反撃チャンス!', '#7ae7ff', new THREE.Vector3(0, -.6, -3), .7, 1.2, camera);
+  popup('反撃チャンス!', '#bfe6ff', new THREE.Vector3(0, -.6, -3), .7, 1.2, camera);
 }
 // ガード成功：ダメージ無効。突進を受け止めてボスを押し返す
 function guarded(){
@@ -1713,7 +1836,7 @@ function guarded(){
   const at = rig.localToWorld(new THREE.Vector3(0, 0, -2.2));
   ring(at, 4, 0x7ae7ff, .45); ring(at, 2.2, 0xffffff, .25); burst(at, 0x7ae7ff, 45, 7);
   hitstop = .08; shake = .3; fovp = 5; flash = .35; flashM.material.color.set(0x9fe8ff);
-  popCam('GUARD!', '#7ae7ff', 1, .9);
+  popCam('GUARD!', '#bfe6ff', 1, .9);
   P.inv = .5; P.counter = 0;
   B.s = 'knock'; B.stun = false; B.t = 1.0; B.vz = -12;
 }
@@ -1724,7 +1847,7 @@ function hurtPlayer(mult = 1){
   B.s = 'knock'; B.stun = false; B.t = 1.2; B.vz = -10;
   if (P.hp <= 0){
     P.hp = 0; state = 'over'; bgmStop(); endAt = performance.now();
-    setMsg([['GAME OVER', '#ff4d5e', 80], [`スライムの残りHP ${Math.ceil(B.hp)}`, '#fff', 34], ['クリックでリトライ', '#7ae7ff', 32]]);
+    setMsg([['GAME OVER', '#ff4d5e', 80], [`スライムの残りHP ${Math.ceil(B.hp)}`, '#fff', 34], ['クリックでリトライ', '#bfe6ff', 32]]);
   }
 }
 
@@ -1759,7 +1882,7 @@ function bossAI(dt){
         else hurtPlayer();
         B.combo++;
       }
-      else if (P.inv <= 0) popCam('回避!', '#7ae7ff', .9, .8);
+      else if (P.inv <= 0) popCam('回避!', '#bfe6ff', .9, .8);
     }
     if (B.s === 'charge' && B.z > P.z + 3){ B.combo++; B.s = 'enter'; B.z = HOVER - 7.5*(R/1.8); B.x = (Math.random()-.5)*5*(R/1.8); B.weak = 2.5; P.armed = false; }
   } else if (B.s === 'knock'){
@@ -1885,7 +2008,7 @@ function update(dt){
   else if (tp){ camera.rotation.set(mouse.ny*.12 - .22, -mouse.nx*.2, 0); const fix = bc.state === 'locked';   // 体キャリブレーション済み: カメラは床に固定（現実の部屋と同じく、動くのは自分だけ）
     camera.position.set((fix ? 0 : P.x) + sh, EYE + 1.5 + sh*.6, (fix ? 0 : P.z) + 4.2); }
   else { camera.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + sh*.6, P.z); }
-  bossBar.scale.x = Math.max(.0001, B.hp/B.max); pBar.scale.x = Math.max(.0001, P.hp/PMAX);
+  bossBar.scale.x = Math.max(.0001, B.hp/B.max); pBar.scale.x = Math.max(.0001, P.hp/PMAX); pBar.material.color.setHex(P.hp/PMAX > .5 ? 0x6dffb0 : P.hp/PMAX > .25 ? 0xffd35a : 0xff4d5e);   // HPで緑→黄→赤
   parBar.scale.x = Math.max(.0001, P.parCd > 0 ? 1 - P.parCd/.7 : 1);
   hud.visible = state === 'play'; $('ui').style.display = vr ? 'none' : '';
   const asp = vr ? W/2/H : W/H, mw = Math.min(7, 5.3*asp);
@@ -2157,10 +2280,10 @@ function updSkillFx(dt){
 const fxDown = hex => fxLine(-Math.PI/2, 0, 3.2, 6.4, hex), fxRight = hex => fxLine(0, -3.2, 0, 6.4, hex), fxLeft = hex => fxLine(Math.PI, 3.2, 0, 6.4, hex);
 // ---- スキル定義 ----
 const SKD = {
-  vertical:{ en:'VERTICAL', jp:'バーチカル', c:'#7ae7ff' }, vorpal:{ en:'VORPAL STRIKE', jp:'ヴォーパルストライク', c:'#b8f0ff' },
-  sonic:{ en:'SONIC LEAP', jp:'ソニックリープ', c:'#ffd35a' }, lotus:{ en:'LOTUS SLASH', jp:'ロータススラッシュ', c:'#ff9ae0' },
-  square:{ en:'HORIZONTAL SQUARE', jp:'ホリゾンタルスクエア', c:'#7ae7ff' }, meteor:{ en:'METEOR BREAK', jp:'メテオブレイク', c:'#ff9a20' },
-  starburst:{ en:'STARBURST STREAM', jp:'スターバーストストライク', c:'#ffd35a' },
+  vertical:{ en:'VERTICAL', jp:'バーチカル', c:'#bfe6ff' }, vorpal:{ en:'VORPAL STRIKE', jp:'ヴォーパルストライク', c:'#b8f0ff' },
+  sonic:{ en:'SONIC LEAP', jp:'ソニックリープ', c:'#ff9a3c' }, lotus:{ en:'LOTUS SLASH', jp:'ロータススラッシュ', c:'#ff9ae0' },
+  square:{ en:'HORIZONTAL SQUARE', jp:'ホリゾンタルスクエア', c:'#bfe6ff' }, meteor:{ en:'METEOR BREAK', jp:'メテオブレイク', c:'#ff9a20' },
+  starburst:{ en:'STARBURST STREAM', jp:'スターバーストストライク', c:'#ff9a3c' },
   rosario:{ en:"MOTHER'S ROSARIO", jp:'マザーズ・ロザリオ', c:'#d8b8ff' } };
 function skBanner(k){ const d = SKD[k]; popCam(d.en, d.c, 1.4, 1.5); popup(d.jp, '#ffffff', new THREE.Vector3(0, -.15, -3), .6, 1.5, camera); }
 // 倍率mのダメージ（通常攻撃6/弱点9 × m × 設定倍率/5）。照準に関わらずボスへ命中（オートロック）
@@ -2205,13 +2328,13 @@ let chainS = null;
 function sbDraw(){
   if (chainS){ hud.remove(chainS); chainS.material.map.dispose(); chainS.material.dispose(); chainS = null; }
   if (sb.n <= 0 && !sb.ready) return;
-  chainS = mkSprite(sb.ready ? 'STARBURST READY! 振って発動' : 'CHAIN ' + sb.n + ' / 16', sb.ready ? '#ffd35a' : '#7ae7ff', .32);
+  chainS = mkSprite(sb.ready ? 'STARBURST READY! 振って発動' : 'CHAIN ' + sb.n + ' / 16', sb.ready ? '#ff9a3c' : '#bfe6ff', .32);
   chainS.position.set(0, 1.28, -3); hud.add(chainS);
 }
 function sbHit(){
   if (sb.ready || sb.active || state !== 'play') return;
   sb.n++; sbDraw();
-  if (sb.n >= 16){ sb.ready = true; sbDraw(); popCam('STARBURST READY!', '#ffd35a', 1.2, 1.4); dbg('★ 16連撃達成 → STARBURST READY（次の斬りで発動）'); wiiRumble(200); }
+  if (sb.n >= 16){ sb.ready = true; sbDraw(); popCam('STARBURST READY!', '#ff9a3c', 1.2, 1.4); dbg('★ 16連撃達成 → STARBURST READY（次の斬りで発動）'); wiiRumble(200); }
 }
 function startStarburst(){
   if (state !== 'play' || B.s === 'dead') return;
@@ -2340,7 +2463,7 @@ function perfTick(now){
   const n = perf.n, fps = n*1000/(now - perf.t0), cams = (camStream ? 1 : 0) + (face.stream ? 1 : 0) + (dual.stream ? 1 : 0), f = v => (v/n).toFixed(1);
   $('perfStat').textContent = `FPS ${fps.toFixed(0)} | 顔${f(perf.face)} 手${f(perf.hand)}` + (tp ? ` 全身${f(perf.pose)}` : '') + ` 描画${f(perf.rend)}ms/フレーム | カメラ${cams}台`
     + (bgMode === 'video' && bgVidTex ? '+背景動画' : bgMode === 'image' && bgImgTex ? '+背景画像' : '');
-  $('perfStat').style.color = fps < 30 ? '#ff4d5e' : fps < 50 ? '#ffd35a' : '#9fffb0';
+  $('perfStat').style.color = fps < 30 ? '#ff4d5e' : fps < 50 ? '#ff9a3c' : '#9fffb0';
   perf.n = perf.face = perf.hand = perf.pose = perf.rend = 0; perf.t0 = now;
 }
 function setQuality(k){
@@ -2359,6 +2482,58 @@ function loop(now){
 requestAnimationFrame(loop);
 // タイトル画面(parytitle.html)から ?start=1 で来たら自動スタート
 if (/[?&]start=1/.test(location.search)) setTimeout(() => dispatchEvent(new MouseEvent('mousedown', { button:0, clientX:innerWidth/2, clientY:innerHeight/2 })), 500);
+</script>
+<script id="rq-theme-js">
+// ===== Radiqle_Project 共通UI（AR HUDフレーム・リンク到着演出・ナビゲーター）=====
+// 使い方: <body data-rq-mode="TUTORIAL"> のように画面名を付け、</body> の直前で読み込む
+(function(){
+  const mode = document.body.dataset.rqMode || 'FIELD';
+  const el = (tag, attrs, html) => { const e = document.createElement(tag); Object.assign(e, attrs || {}); if (html) e.innerHTML = html; return e; };
+
+  // ---- AR HUDフレーム（四隅＋上部の帯）----
+  const frame = el('div', { id:'rqFrame' },
+    '<div class="c tl"></div><div class="c tr"></div><div class="c bl"></div><div class="c br"></div>' +
+    `<div id="rqTop"><b>RADIQLE</b><span>//</span><span class="m">${mode}</span><span>//</span><span id="rqClock">--:--</span></div>`);
+  document.body.appendChild(frame);
+  const clk = () => { const d = new Date(); document.getElementById('rqClock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  clk(); setInterval(clk, 10000);
+
+  // ---- ナビゲーター（画面下の案内）----
+  const navi = el('div', { id:'rqNavi' }, '<div class="ico">NAV</div><div class="who">SYSTEM NAVIGATOR</div><div class="say"></div>');
+  document.body.appendChild(navi);
+  let naviTimer = 0, typeTimer = 0;
+  function say(text, ms = 4000){
+    clearTimeout(naviTimer); clearInterval(typeTimer);
+    const s = navi.querySelector('.say'); s.textContent = ''; navi.classList.add('on');
+    let i = 0; const chars = [...text];
+    typeTimer = setInterval(() => { s.textContent += chars[i++] || ''; if (i >= chars.length) clearInterval(typeTimer); }, 38);
+    return new Promise(res => { naviTimer = setTimeout(() => { res(); }, chars.length*38 + ms); });
+  }
+  function hide(){ navi.classList.remove('on'); }
+  window.RQ = { say, hide, mode };
+
+  // ---- タイトルからリンクして来た時の到着演出 ----
+  const fromLink = /[?&]link=1/.test(location.search);
+  if (!fromLink) return;
+  const ov = el('div', { id:'rqLink' }, '<div class="box"><div class="l1">LINK ESTABLISHED</div><div class="l2">TUTORIAL FIELD</div><div class="bar"><i></i></div></div>');
+  document.body.appendChild(ov);
+  requestAnimationFrame(() => ov.classList.add('go'));
+  setTimeout(() => ov.classList.add('fade'), 1500);
+  setTimeout(() => ov.classList.add('out'), 2600);
+  setTimeout(() => ov.remove(), 3600);
+  // URLから link=1 を外しておく（リロードで演出が繰り返されないように）
+  try { history.replaceState(null, '', location.pathname + location.search.replace(/([?&])link=1&?/, '$1').replace(/[?&]$/, '') + location.hash); } catch (e){}
+  if (mode === 'TUTORIAL'){
+    (async () => {
+      await new Promise(r => setTimeout(r, 3000));
+      await say('ようこそ、RADIQLEへ。リンクは正常に確立されました。', 1400);
+      await say('ここはチュートリアルフィールド。まずは剣の基本操作を覚えましょう。', 1600);
+      await say('説明パネルを読んだら Ⓐボタン でスタート。＋ボタンでスキップできます。', 2600);
+      hide();
+    })();
+  }
+})();
+
 </script>
 </body>
 </html>
