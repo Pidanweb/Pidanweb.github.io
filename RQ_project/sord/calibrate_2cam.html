@@ -38,6 +38,8 @@
   input[type=text]{width:100%;padding:6px 8px;background:#0f1820;color:var(--text);border:1px solid var(--line);border-radius:6px;font:inherit;font-size:13px}
   a.btnlink{flex:1;display:block;text-align:center;text-decoration:none;border-radius:8px;padding:9px 14px;border:1px solid var(--line);background:#22333f;color:var(--text)}
   a.btnlink:hover{background:#2a3f4e} a.btnlink:focus-visible{outline:2px solid var(--tape);outline-offset:2px}
+  fieldset{border:0;margin:0;padding:0;min-width:0} fieldset:disabled{opacity:.45}
+  input[type=range]{width:100%;accent-color:var(--tape)}
   button.go{background:var(--tape);color:#1a1405;border-color:var(--tape);font-weight:800;width:100%;padding:12px;font-size:17px;margin-top:6px}
   button.go:hover{background:#ffd44a}
   .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px} .btns button{flex:1}
@@ -68,8 +70,8 @@
   <h2>1. カメラ</h2>
   <label>メイン（アバターの動きもこちらで取ります）<select id="selM"></select></label>
   <label>2台目<select id="selS"></select></label>
-  <label>取り込みサイズ<select id="res"><option value="640x360">640×360（ゲームの負荷モード「軽量」）</option><option value="960x540">960×540（「標準」）</option><option value="1280x720">1280×720（「高画質」）</option></select>
-    <small>ゲームの負荷モードと同じにしてください（違うと画角がずれることがあります）</small></label>
+  <label>取り込みサイズ<select id="res"><option value="640x360">640×360（ゲームの負荷「軽量」）</option><option value="960x540">960×540（「標準」）</option><option value="1280x720">1280×720（「高画質」）</option></select>
+    <small>保存すると、ゲームの負荷モードもこれに合わせます</small></label>
   <div class="btns"><button id="open">カメラを開く</button><button id="swap">メインと2台目を入れ替え</button></div>
   <div class="note" id="camNote"></div>
 
@@ -77,21 +79,36 @@
   <div class="seg"><input type="radio" name="lay" id="layF" value="front" checked><label for="layF">体の前に左右2台</label><input type="radio" name="lay" id="layB" value="back"><label for="layB">体の後ろに左右2台</label></div>
   <div class="row" style="margin-top:8px"><label>2台の間隔（レンズとレンズ）</label><input type="number" id="base" value="200" min="30" max="500"> cm</div>
   <div class="row"><label>身長</label><input type="number" id="hgt" value="170" min="100" max="230"> cm</div>
-  <div class="row"><label>メインの高さ<small>床からレンズ。0 = わからない</small></label><input type="number" id="camHM" value="0" min="0" max="300"> cm</div>
-  <div class="row"><label>2台目の高さ<small>両方分かれば画角も測れて正確</small></label><input type="number" id="camHS" value="0" min="0" max="300"> cm</div>
-  <div class="row"><label>画角（高さ不明の時に使う）<small>カメラ仕様の水平画角</small></label><input type="number" id="fov0" value="65" min="35" max="110"> °</div>
+  <div class="row"><label>メインの高さ<small>床からレンズの中心。0 = わからない</small></label><input type="number" id="camHM" value="0" min="0" max="300"> cm</div>
+  <div class="row"><label>2台目の高さ<small>両方入れると画角も測れて正確</small></label><input type="number" id="camHS" value="0" min="0" max="300"> cm</div>
+  <div class="row"><label>画角（測れない時に使う）<small>カメラ仕様の水平画角</small></label><input type="number" id="fov0" value="65" min="35" max="110"> °</div>
 
   <h2>3. 測定</h2>
-  <div class="note">2台とも足元まで全身が映る位置に立ちます。4か所（真ん中 → 左 → 右 → 前後）で2〜3秒ずつ、まっすぐ立って止まります。</div>
+  <div class="note">2台とも足元まで全身が映る位置で、4か所（真ん中 → 左 → 右 → 前後）に2〜3秒ずつ、まっすぐ立って止まります。1か所ごとに1m近く大きく動くほど正確です。</div>
   <button class="go" id="start" disabled>測定を始める</button>
   <div class="btns"><button id="stop" disabled>中止</button><label style="margin:0;align-self:center;flex:1"><input type="checkbox" id="voice" checked> 音声で案内</label></div>
   <div id="result">まだ測定していません</div>
 
-  <h2>4. 確かめる・保存</h2>
+  <fieldset id="after" disabled>
+  <h2>4. 床の微調整</h2>
+  <div class="note">映像の黄色いマス目（1m）が実際の床に乗るように合わせます。2台の位置関係も自動で計算し直します。</div>
+  <div class="seg"><input type="radio" name="tcam" id="tcM" value="M" checked><label for="tcM">メイン</label><input type="radio" name="tcam" id="tcS" value="S"><label for="tcS">2台目</label></div>
+  <label>床を上下 <b id="tfV">0</b> cm<input type="range" id="tf" min="-40" max="40" step="1" value="0"><small>＋でマス目が上がる / −で下がる</small></label>
+  <label>前後の傾き <b id="ttV">0.0</b>°<input type="range" id="tt" min="-12" max="12" step="0.2" value="0"></label>
+  <label>左右の傾き <b id="tpV">0.0</b>°<input type="range" id="tp" min="-12" max="12" step="0.2" value="0"></label>
+  <div class="btns"><button id="tReset">このカメラの微調整を0に戻す</button></div>
+
+  <h2>5. 立ち位置とボス</h2>
+  <div class="btns"><button id="pickO">立ち位置を図でクリックして動かす</button></div>
+  <label>ボスまでの距離 <b id="bdV">8.5</b> m<input type="range" id="bd" min="2" max="12" step="0.5" value="8.5"><small>図の赤い丸がボス。近すぎる時は「大きさ＋1.5m」まで離します</small></label>
+  <label>ボスの大きさ（高さ） <b id="bhV">3.6</b> m<input type="range" id="bh" min="0.6" max="3.6" step="0.1" value="3.6"><small>部屋が狭いときは小さくすると近くに置けます</small></label>
+
+  <h2>6. 確かめる・保存</h2>
   <div class="note">「距離チェック」で2か所に立つと、その間の距離が出ます。メジャーで測った値と比べてください。</div>
-  <div class="btns"><button id="check" disabled>距離チェック</button><button id="save" disabled>保存する</button></div>
-  <div class="note" id="saveNote">保存すると、同じフォルダのゲームを開いたときに自動で読み込まれます。</div>
-  <label>ゲームのファイル名<small>このページと同じ場所からの相対パス。GitHub Pages は大文字・小文字も区別します</small><input type="text" id="gameUrl" value="RQ_project_sord_hukan_2cam.html" spellcheck="false"></label>
+  <div class="btns"><button id="check">距離チェック</button><button id="save">保存する</button></div>
+  </fieldset>
+  <div class="note" id="saveNote">保存すると、同じ場所に置いたゲームを開いたときに自動で読み込まれます。</div>
+  <label>ゲームのファイル名<small>このページからの相対パス（大文字・小文字も区別）</small><input type="text" id="gameUrl" value="RQ_project_sord_hukan_2cam.html" spellcheck="false"></label>
   <div class="btns"><a id="toGame" class="btnlink" href="RQ_project_sord_hukan_2cam.html">ゲームを開く</a></div>
   <div class="note" id="gameNote"></div>
 </aside>
@@ -215,22 +232,26 @@ function bcRayM(o, FfromCam){   // FfromCam: カメラ座標 → そのカメラ
 
 // ===== ここからキャリブレーション専用ページ =====
 const $ = id => document.getElementById(id);
-const KEY = { bc:'connectworld_bodycal_v1', dual:'connectworld_dualcal_v1', dualOn:'connectworld_dual_on', lay:'connectworld_dual_layout', cams:'connectworld_cams_v1', ui:'connectworld_calib_ui' };
-// エラーが出たら画面に出す（「押しても反応がない」をなくす）
-addEventListener('error', e => { try { guide('エラーが出ました', String(e.message || e.error), 'bad'); } catch (_){} });
-addEventListener('unhandledrejection', e => { try { guide('エラーが出ました', String(e.reason && e.reason.message || e.reason), 'bad'); } catch (_){} });
+const KEY = { bc:'connectworld_bodycal_v1', dual:'connectworld_dualcal_v1', dualOn:'connectworld_dual_on', lay:'connectworld_dual_layout',
+  cams:'connectworld_cams_v1', ui:'connectworld_calib_ui', sess:'connectworld_calib_session' };
 const POSE_LINKS = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
 const FRESH_MS = 250, STILL = .012, FAR = .09, COUNT_MS = 5000, STAND1_MS = 3000, STAND_MS = 2000, SPOTS = 4;
 const cams = {
   M:{ key:'M', name:'メイン', v:$('vM'), cv:$('cvM'), sel:$('selM'), col:'#59c9e8', stream:null, lm:null, n:null, o:null, oT:-1e9, last:-1, hfov:65 },
   S:{ key:'S', name:'2台目', v:$('vS'), cv:$('cvS'), sel:$('selS'), col:'#f08c3a', stream:null, lm:null, n:null, o:null, oT:-1e9, last:-1, hfov:65 },
 };
-let camList = [], cal = null;   // cal: 計算結果
-const st = { mode:'idle', t0:0, cd:0, k:0, all:[], cur:{ M:[], S:[] }, means:[], c0:0, lastM:null, lastS:null, tM:-1, tS:-1, chk:null, trail:[] };
+let camList = [];
+// sess = 測定結果のもと（保存して、ページを開き直しても微調整・保存できる）/ cal = sess から計算した行列など
+let sess = null, cal = null;
+const st = { mode:'idle', t0:0, cd:0, k:0, all:[], cur:{ M:[], S:[] }, means:[], c0:0, lastM:null, lastS:null, tM:-1, tS:-1, chk:null, chkLine:null, trail:[], pick:false };
 const lay = () => document.querySelector('input[name=lay]:checked').value;
 const num = (id, d) => { const v = +$(id).value; return isFinite(v) ? v : d; };
 const eye = () => num('hgt', 170)/100*.93;
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+const minDist = () => num('bh', 3.6)/2 + 1.5;   // ゲームと同じ: ボスの半径 + 1.5m より近くには置かない
+
+// エラーは画面に出す（「押しても反応がない」をなくす）
+addEventListener('error', e => { try { guide('エラーが出ました', String(e.message || e.error), 'bad'); } catch (_){} });
+addEventListener('unhandledrejection', e => { try { guide('エラーが出ました', String(e.reason && e.reason.message || e.reason), 'bad'); } catch (_){} });
 
 // --- 案内（大きい文字＋音声） ---
 let lastSpoken = '';
@@ -249,18 +270,20 @@ function beep(f = 880, ms = 120){
   try { actx = actx || new AudioContext(); const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = f; g.gain.value = .12;
     o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime + ms/1000); } catch (e){}
 }
+function setResult(t, cls = ''){ $('result').textContent = t; $('result').className = cls; }
 
-// --- 設定の保存（このページの入力欄） ---
+// --- 入力欄の保存 ---
 const UI_IDS = ['res', 'base', 'hgt', 'camHM', 'camHS', 'fov0', 'gameUrl'];
 function uiSave(){ try { const d = { lay:lay() }; for (const id of UI_IDS) d[id] = $(id).value; localStorage.setItem(KEY.ui, JSON.stringify(d)); } catch (e){} }
 function uiLoad(){
   let d = null; try { d = JSON.parse(localStorage.getItem(KEY.ui) || 'null'); } catch (e){}
-  if (!d){ try { const l = localStorage.getItem(KEY.lay); if (l === 'back') $('layB').checked = true; } catch (e){} return; }
+  if (!d){ try { if (localStorage.getItem(KEY.lay) === 'back') $('layB').checked = true; } catch (e){} return; }
   for (const id of UI_IDS) if (d[id] !== undefined) $(id).value = d[id];
   if (d.lay === 'back') $('layB').checked = true;
 }
 for (const id of UI_IDS) $(id).addEventListener('change', uiSave);
 for (const r of document.querySelectorAll('input[name=lay]')) r.addEventListener('change', () => { uiSave(); if (cal) invalidate('置き方を変えたので、測り直してください'); });
+for (const id of ['base', 'hgt', 'camHM', 'camHS', 'fov0']) $(id).addEventListener('change', () => { if (cal) invalidate('入力を変えたので、測り直してください'); });
 
 // --- カメラ ---
 async function listCams(){
@@ -276,10 +299,11 @@ async function listCams(){
     const pref = cur || (find(saved && saved[k === 'M' ? 'main' : 'side']) || {}).deviceId || (camList[k === 'M' ? 0 : 1] || {}).deviceId;
     if (pref) c.sel.value = pref;
   }
+  if (saved && saved.res && !localStorage.getItem(KEY.ui)) $('res').value = saved.res;
   $('camNote').textContent = camList.length < 2 ? `カメラが ${camList.length} 台しか見つかりません。2台つないでからページを再読み込みしてください` : `${camList.length} 台見つかりました`;
 }
 async function openOne(c){
-  if (c.stream){ c.stream.getTracks().forEach(t => t.stop()); c.stream = null; }
+  closeOne(c);
   const [w, h] = $('res').value.split('x').map(Number), id = c.sel.value;
   for (const v of [{ deviceId:{ exact:id }, width:{ ideal:w }, height:{ ideal:h } }, { deviceId:{ exact:id } }]){
     try { c.stream = await navigator.mediaDevices.getUserMedia({ video:v, audio:false }); break; } catch (e){ c.err = e.name; }
@@ -288,20 +312,35 @@ async function openOne(c){
   c.v.srcObject = c.stream; try { await c.v.play(); } catch (e){}
   return true;
 }
+function closeOne(c){ if (c.stream){ c.stream.getTracks().forEach(t => t.stop()); c.stream = null; } c.n = c.o = null; }
 async function openCams(){
-  if (!navigator.mediaDevices){ guide('https:// か localhost で開いてください', 'file:// で開いてカメラが使えない場合は、ローカルサーバーで開きます', 'bad'); return; }
-  if (cams.M.sel.value && cams.M.sel.value === cams.S.sel.value){ guide('メインと2台目が同じカメラです', '別々のカメラを選んでください', 'bad'); return; }
+  if (!navigator.mediaDevices){ guide('https:// か localhost で開いてください', '', 'bad'); return false; }
+  if (cams.M.sel.value && cams.M.sel.value === cams.S.sel.value){ guide('メインと2台目が同じカメラです', '別々のカメラを選んでください', 'bad'); return false; }
   $('open').disabled = true; guide('カメラを開いています…');
   const okM = await openOne(cams.M), okS = await openOne(cams.S);
   $('open').disabled = false;
-  if (!okM || !okS){ guide(`${!okM ? 'メイン' : '2台目'}のカメラを開けません`, '他のアプリが使っているか、USBの帯域不足です（別のUSBポートに挿す・取り込みサイズを下げる）', 'bad'); return; }
-  invalidate();
+  if (!okM || !okS){
+    const c = !okM ? cams.M : cams.S, busy = /NotReadable|Abort|TrackStart/.test(c.err || '');
+    guide(`${c.name}のカメラを開けません（${c.err}）`, busy ? 'ゲームなど別のタブ・アプリがカメラを使っています。そちらを閉じてから「カメラを開く」' : 'カメラの選択と、ブラウザのカメラ許可を確認してください', 'bad');
+    return false;
+  }
   loadModels();
+  return true;
 }
 $('open').onclick = openCams;
-$('swap').onclick = () => { const a = cams.M.sel.value; cams.M.sel.value = cams.S.sel.value; cams.S.sel.value = a; if (cams.M.stream) openCams(); };
-for (const c of Object.values(cams)) c.sel.onchange = () => { if (c.stream) openCams(); };
-$('res').addEventListener('change', () => { if (cams.M.stream) openCams(); });
+const camChanged = () => { if (cal) invalidate('カメラを変えたので、測り直してください'); if (cams.M.stream) openCams(); };
+$('swap').onclick = () => { const a = cams.M.sel.value; cams.M.sel.value = cams.S.sel.value; cams.S.sel.value = a; camChanged(); };
+for (const c of Object.values(cams)) c.sel.onchange = camChanged;
+$('res').addEventListener('change', camChanged);
+// 別のタブ（ゲームなど）に移ったらカメラを手放す。戻ったら開き直す（USBカメラは同時に1つのページしか使えないことが多い）
+let reopen = false;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden){
+    if (!cams.M.stream && !cams.S.stream) return;
+    if (st.mode !== 'idle') stopCal('別のタブに移ったので測定を中止しました');
+    reopen = true; for (const c of Object.values(cams)) closeOne(c);
+  } else if (reopen){ reopen = false; openCams(); }
+});
 
 // --- 全身認識（MediaPipe Pose、カメラごとに1つ） ---
 let mpLoading = false;
@@ -322,7 +361,8 @@ async function loadModels(){
 function readyCheck(){
   const ok = cams.M.lm && cams.S.lm && cams.M.stream && cams.S.stream;
   $('start').disabled = !ok || st.mode !== 'idle';
-  if (ok && st.mode === 'idle' && !cal) guide('準備OK。「測定を始める」を押してください', '2台とも足元まで全身が映っているか、下の映像で確かめます', 'ok');
+  if (ok && st.mode === 'idle') guide(cal ? '準備OK。微調整・保存、または測り直しができます' : '準備OK。「測定を始める」を押してください',
+    '2台とも足元まで全身が映っているか、下の映像で確かめます', 'ok');
 }
 function detect(c, now){
   const v = c.v; if (!c.lm || !c.stream || v.readyState < 2 || !v.videoWidth || v.currentTime === c.last) return;
@@ -333,13 +373,13 @@ function detect(c, now){
 }
 
 // --- 測定（4か所） ---
-const spotGuide = () => ['真ん中に立って、止まってください', '左に1〜2歩動いて、止まってください', '最初の位置より右に1〜2歩の所で、止まってください',
-  lay() === 'front' ? '真ん中に戻って、カメラの方へ1〜2歩近づいて止まってください' : '真ん中に戻って、カメラから1〜2歩離れて止まってください'];
+const spotGuide = () => ['真ん中に立って、止まってください', '左に1歩大きく動いて、止まってください', '最初の位置より右に1歩大きく動いて、止まってください',
+  lay() === 'front' ? '真ん中に戻って、カメラの方へ1歩大きく近づいて止まってください' : '真ん中に戻って、カメラから1歩大きく離れて止まってください'];
 function startCal(){
   const h = num('hgt', 170)/100; if (!(h > 1 && h < 2.3)){ guide('身長を正しく入れてください', '', 'bad'); return; }
-  cal = null; cams.M.hfov = cams.S.hfov = num('fov0', 65);
-  Object.assign(st, { mode:'count', t0:performance.now(), cd:0, k:0, all:[], means:[], cur:{ M:[], S:[] }, lastM:null, lastS:null, chk:null, trail:[] });
-  $('start').disabled = true; $('stop').disabled = false; $('check').disabled = $('save').disabled = true;
+  cams.M.hfov = cams.S.hfov = num('fov0', 65);
+  Object.assign(st, { mode:'count', t0:performance.now(), cd:0, k:0, all:[], means:[], cur:{ M:[], S:[] }, lastM:null, lastS:null, chk:null, chkLine:null, trail:[], pick:false });
+  $('start').disabled = true; $('stop').disabled = false;
   setResult('測定中…'); say('5秒後に測定を始めます。2台の真ん中の、プレイする位置に立ってください');
 }
 function stopCal(msg){ st.mode = 'idle'; $('stop').disabled = true; readyCheck(); if (msg) guide(msg, '', 'bad'); }
@@ -379,68 +419,121 @@ function calTick(now){
   say('OK。次は、' + G[st.k]);
 }
 
-// --- 計算（ゲーム本体の「2台まとめてキャリブレーション」と同じ方法） ---
+// --- 計算 ① それぞれのカメラの床（体を「ものさし」にする） ---
 function solveCam(c, obsAll, camH){
   const W_ = c.v.videoWidth, f0 = num('fov0', 65), fovFree = camH > 0;
-  c.hfov = f0;
-  let r = bcSolve(obsAll, eye(), camH, fovFree), note = '';
+  let hfov = f0, r = bcSolve(obsAll, eye(), camH, fovFree), note = '';
   if (fovFree){
     const fov = 2*Math.atan(Math.tan(f0*Math.PI/360)*r.s)*180/Math.PI;
-    if (fov < 35 || fov > 110){ r = bcSolve(obsAll, eye(), camH, false); note = `画角は推定できず ${f0}° を使用`; }
-    else { for (const o of obsAll){ o.fx *= r.s; o.fy *= r.s; o.hx *= r.s; o.hy *= r.s; } c.hfov = Math.round(fov*10)/10; note = `画角 ${c.hfov}° を推定`; }
-  }
-  const px = r.rms*(W_/2)/Math.tan(c.hfov*Math.PI/360);
-  const camF = dualCamMat(r.th, r.ph, r.h);
-  return { th:r.th, ph:r.ph, h:r.h, px, note, camF, FfromCam:camF.clone().invert() };
+    if (fov < 35 || fov > 110){ r = bcSolve(obsAll, eye(), camH, false); note = `画角は測れず ${f0}° を使用`; }
+    else { for (const o of obsAll){ o.fx *= r.s; o.fy *= r.s; o.hx *= r.s; o.hy *= r.s; } hfov = Math.round(fov*10)/10; note = `画角 ${hfov}° を推定`; }
+  } else note = `画角 ${f0}°（入力値）`;
+  const px = r.rms*(W_/2)/Math.tan(hfov*Math.PI/360);
+  return { th:r.th, ph:r.ph, h:r.h, hfov, px, note };
 }
 function solve(){
-  const A = st.all, base = Math.max(.3, num('base', 200)/100);
-  // 観測は計算中に画角に合わせて書き換えるので、コピーを使う
-  const cp = L => L.map(o => ({ ...o }));
-  const spots = A.map(s => ({ M:cp(s.M), S:cp(s.S) }));
+  const cp = L => L.map(o => ({ ...o }));   // 画角に合わせて書き換えるのでコピー
+  const spots = st.all.map(s => ({ M:cp(s.M), S:cp(s.S) }));
   const m = solveCam(cams.M, spots.flatMap(s => s.M), num('camHM', 0)/100);
   const s = solveCam(cams.S, spots.flatMap(s => s.S), num('camHS', 0)/100);
-  const badCam = (r, nm) => (r.px > 25 || r.h < .2 || r.h > 3.4) ? `${nm}の床を測れませんでした（誤差 ${r.px.toFixed(0)}px・高さ ${r.h.toFixed(2)}m）。身長・カメラの高さの入力を確認して、測り直してください` : '';
-  const e1 = badCam(m, 'メイン') || badCam(s, '2台目');
-  if (e1){ fail(e1); return; }
-  const PM = spots.map(x => bcRayM(bcMean(x.M), m.FfromCam)), PS = spots.map(x => bcRayM(bcMean(x.S), s.FfromCam));
-  if (PM.some(p => !p) || PS.some(p => !p)){ fail('足の位置を計算できない場所がありました。測り直してください'); return; }
+  const bad = (r, nm) => (r.px > 25 || r.h < .2 || r.h > 3.4) ? `${nm}の床を測れませんでした（誤差 ${r.px.toFixed(0)}px・高さ ${r.h.toFixed(2)}m）。身長・カメラの高さの入力を確認して、測り直してください` : '';
+  const e1 = bad(m, 'メイン') || bad(s, '2台目'); if (e1) return fail(e1);
+  const old = sess || {};
+  const ns = { lay:lay(), base:Math.max(.3, num('base', 200)/100), height:num('hgt', 170)/100, camH:{ M:num('camHM', 0)/100, S:num('camHS', 0)/100 },
+    vw:cams.M.v.videoWidth, vh:cams.M.v.videoHeight, M:m, S:s, spots:spots.map(x => ({ M:bcMean(x.M), S:bcMean(x.S) })),
+    tune:{ M:{ f:0, t:0, p:0 }, S:{ f:0, t:0, p:0 } }, al:null, originF:null, boss:old.boss || 8.5, bossH:old.bossH || 3.6, at:Date.now() };
+  if (!calBuild(ns, true)) return fail(cal && cal.why || '足の位置を計算できない場所がありました。測り直してください');
+  if (cal.err > .5){ const t = `2台の足の位置が合いませんでした（ずれ ${(cal.err*100).toFixed(0)}cm）。身長・カメラの高さ・間隔の入力を確認して、測り直してください`; cal = null; sess = null; return fail(t); }
+  say('測定完了です。歩いて、図の白い点が自分の動きと合うか確かめてください');
+  readyCheck(); guide('測定完了。歩いて確かめてください', '白い点が自分の動きと合うか → 必要なら「床の微調整」→「保存する」', 'ok', '✓', 1);
+  function fail(t){ readyCheck(); setResult(t, 'bad'); guide('測定できませんでした', t, 'bad'); say('測定できませんでした'); }
+}
+// --- 計算 ② sess（測定結果＋微調整）から、床・2台の位置関係を作る。微調整のたびに呼ぶ ---
+function camMats(b, tn){
+  const th = b.th + tn.t*Math.PI/180, ph = b.ph + tn.p*Math.PI/180, h = Math.max(.2, b.h - tn.f/100), camF = dualCamMat(th, ph, h);
+  return { th, ph, h, camF, FfromCam:camF.clone().invert() };
+}
+function calBuild(S_, full){
+  const m = camMats(S_.M, S_.tune.M), s = camMats(S_.S, S_.tune.S);
+  const PM = S_.spots.map(x => bcRayM(x.M, m.FfromCam)), PS = S_.spots.map(x => bcRayM(x.S, s.FfromCam));
+  if (PM.some(p => !p) || PS.some(p => !p)){ cal = { why:'足の位置を計算できない場所がありました（床の微調整を戻すか、測り直してください）' }; return false; }
+  const B = S_.base;
   const cost = q => { let sum = 0;
     for (let i = 0; i < PM.length; i++){
       const t = dualT(PS[i], q[0], q[1], q[2]), Cm = dualCov({ x:0, z:0 }, PM[i], m.h), Cs = dualCov({ x:q[1], z:q[2] }, t, s.h);
       sum += dualMahal(PM[i].x - t.x, PM[i].z - t.z, [Cm[0] + Cs[0], Cm[1] + Cs[1], Cm[2] + Cs[2]]);
     }
-    const db = (Math.hypot(q[1], q[2]) - base)/.15; return sum/PM.length + db*db; };
-  const mean = L => ({ x:L.reduce((a, p) => a + p.x, 0)/L.length, z:L.reduce((a, p) => a + p.z, 0)/L.length }), mM = mean(PM), mS = mean(PS);
+    const db = (Math.hypot(q[1], q[2]) - B)/.15;   // 2台の間隔は入力値 ±15cm くらい、という条件
+    return sum/PM.length + db*db; };
   let best = null;
-  for (let i = -4; i <= 4; i++){ const yaw = i*Math.PI/12, t0 = dualT(mS, yaw, 0, 0), r = bcNM(cost, [yaw, mM.x - t0.x, mM.z - t0.z], [.2, .4, .4], 900); if (!best || r.f < best.f) best = r; }
-  const [yaw, tx, tz] = best.x;
+  if (full || !S_.al){
+    const mean = L => ({ x:L.reduce((a, p) => a + p.x, 0)/L.length, z:L.reduce((a, p) => a + p.z, 0)/L.length }), mM = mean(PM), mS = mean(PS);
+    for (let i = -4; i <= 4; i++){ const yaw = i*Math.PI/12, t0 = dualT(mS, yaw, 0, 0), r = bcNM(cost, [yaw, mM.x - t0.x, mM.z - t0.z], [.2, .4, .4], 900); if (!best || r.f < best.f) best = r; }
+  } else best = bcNM(cost, S_.al.slice(), [.03, .05, .05], 500);
+  const [yaw, tx, tz] = best.x; S_.al = [yaw, tx, tz];
   const err = Math.sqrt(PM.reduce((a, p, i) => { const t = dualT(PS[i], yaw, tx, tz); return a + (p.x - t.x)**2 + (p.z - t.z)**2; }, 0)/PM.length);
-  const gap = Math.hypot(tx, tz);
-  if (err > .5){ fail(`2台の足の位置が合いませんでした（ずれ ${(err*100).toFixed(0)}cm）。身長・カメラの高さ・間隔の入力を確認して、測り直してください`); return; }
-  const FfromS = new THREE.Matrix4().makeRotationY(yaw).setPosition(tx, 0, tz);
-  const mainF = { ...m }, sideF = { ...s, yaw:((yaw % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI), tx, tz, FfromS, CamFromF:s.camF.clone().multiply(FfromS.clone().invert()) };
-  // 立ち位置 = 1か所目のかかと（メインの映像上の位置で保存。ゲームと同じ形式）
-  const W_ = cams.M.v.videoWidth, H_ = cams.M.v.videoHeight, f = (W_/2)/Math.tan(cams.M.hfov*Math.PI/360), o0 = bcMean(spots[0].M);
-  // 2台の並び（間隔の線）を左右、カメラが向いている方を奥として、図と表示の向きをそろえる
-  const ux = tx/gap, uz = tz/gap; let fx = -uz, fz = ux; if (fz > 0){ fx = -fx; fz = -fz; }   // f: カメラが向く方（メインの前 = -Z 側）
-  const rig = { f:{ x:fx, z:fz }, r:{ x:-fz, z:fx } };
-  cal = { rig, m:mainF, s:sideF, err, gap, base, originUV:[o0.fx*f/W_ + .5, o0.fy*f/H_ + .5], origin:PM[0], spotsF:PM.map((p, i) => ({ m:p, s:dualT(PS[i], yaw, tx, tz) })) };
-  const warn = Math.abs(gap - base) > .25 ? `\n⚠ 間隔が入力値と ${(Math.abs(gap - base)*100).toFixed(0)}cm 違います。間隔の数字か、カメラの高さを確認してください` : '';
-  setResult(`メイン: 高さ ${m.h.toFixed(2)}m・下向き ${(m.th*180/Math.PI).toFixed(0)}°・${m.note || `画角 ${cams.M.hfov}°（入力値）`}
-2台目: 高さ ${s.h.toFixed(2)}m・下向き ${(s.th*180/Math.PI).toFixed(0)}°・${s.note || `画角 ${cams.S.hfov}°（入力値）`}
-2台目はメインの${tx > 0 ? '右' : '左'} ${gap.toFixed(2)}m（入力 ${base.toFixed(2)}m）
-4か所の足の位置のずれ: 平均 ${(err*100).toFixed(0)}cm` + warn, warn ? '' : 'ok');
-  guide('測定完了。歩いて確かめてください', '下の図の白い点が自分の位置。「距離チェック」で精度を確認 → 「保存する」', 'ok', '✓', 1);
-  say('測定完了です。歩いて、図の白い点が自分の動きと合うか確かめてください');
-  $('check').disabled = $('save').disabled = false; readyCheck();
-  function fail(t){ cal = null; setResult(t, 'bad'); guide('測定できませんでした', t, 'bad'); say('測定できませんでした'); readyCheck(); }
+  const gap = Math.hypot(tx, tz), FfromS = new THREE.Matrix4().makeRotationY(yaw).setPosition(tx, 0, tz);
+  // 2台の並びを左右、カメラが向く方を奥として、図と表示の向きをそろえる
+  const ux = tx/gap, uz = tz/gap; let fx = -uz, fz = ux; if (fz > 0){ fx = -fx; fz = -fz; }
+  sess = S_; cams.M.hfov = S_.M.hfov; cams.S.hfov = S_.S.hfov;
+  cal = { rig:{ f:{ x:fx, z:fz }, r:{ x:-fz, z:fx } }, m:{ ...m, hfov:S_.M.hfov },
+    s:{ ...s, hfov:S_.S.hfov, yaw:((yaw % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI), tx, tz, FfromS, CamFromF:s.camF.clone().multiply(FfromS.clone().invert()) },
+    err, gap, origin:S_.originF ? new THREE.Vector3(S_.originF.x, 0, S_.originF.z) : PM[0], spotsF:PM.map((p, i) => ({ m:p, s:dualT(PS[i], yaw, tx, tz) })) };
+  try { localStorage.setItem(KEY.sess, JSON.stringify(S_)); } catch (e){}
+  showResult(); afterUI();
+  return true;
 }
-function setResult(t, cls = ''){ $('result').textContent = t; $('result').className = cls; }
+function showResult(){
+  const S_ = sess, warn = Math.abs(cal.gap - S_.base) > .25 ? `\n⚠ 間隔が入力値と ${(Math.abs(cal.gap - S_.base)*100).toFixed(0)}cm 違います。間隔の数字か、カメラの高さを確認してください` : '';
+  const tn = t => t.f || t.t || t.p ? `（微調整 ${t.f}cm / ${t.t.toFixed(1)}° / ${t.p.toFixed(1)}°）` : '';
+  setResult(`メイン: 高さ ${cal.m.h.toFixed(2)}m・下向き ${(cal.m.th*180/Math.PI).toFixed(0)}°・${S_.M.note}${tn(S_.tune.M)}
+2台目: 高さ ${cal.s.h.toFixed(2)}m・下向き ${(cal.s.th*180/Math.PI).toFixed(0)}°・${S_.S.note}${tn(S_.tune.S)}
+2台目はメインの${cal.s.tx > 0 ? '右' : '左'} ${cal.gap.toFixed(2)}m（入力 ${S_.base.toFixed(2)}m）
+4か所の足の位置のずれ: 平均 ${(cal.err*100).toFixed(0)}cm` + warn
+    + ([[S_.M, cal.m, 'メイン'], [S_.S, cal.s, '2台目']].some(([b, c]) => /測れず|入力値/.test(b.note) && c.th*180/Math.PI < 10)
+       ? '\n💡 カメラがほぼ水平です。1.5m以上の高さから少し見下ろす向き（15〜25°）にして高さを入れると、画角も測れて精度が上がります' : '') + (S_.at ? `\n測定: ${new Date(S_.at).toLocaleString('ja-JP')}` : ''), warn || cal.err > .1 ? '' : 'ok');
+}
 function invalidate(msg){
-  if (cal && msg){ setResult(msg, 'bad'); guide(msg, '', 'bad'); }
-  cal = null; $('check').disabled = $('save').disabled = true; readyCheck();
+  cal = sess = null; try { localStorage.removeItem(KEY.sess); } catch (e){}
+  afterUI(); readyCheck();
+  if (msg){ setResult(msg, 'bad'); guide(msg, '', 'bad'); }
 }
+
+// --- 4. 床の微調整（カメラごと） ---
+const tcam = () => document.querySelector('input[name=tcam]:checked').value;
+function afterUI(){
+  $('after').disabled = !cal;
+  const t = sess ? sess.tune[tcam()] : { f:0, t:0, p:0 };
+  $('tf').value = t.f; $('tfV').textContent = t.f; $('tt').value = t.t; $('ttV').textContent = t.t.toFixed(1); $('tp').value = t.p; $('tpV').textContent = t.p.toFixed(1);
+  if (sess){ $('bd').value = sess.boss; $('bdV').textContent = (+sess.boss).toFixed(1); $('bh').value = sess.bossH; $('bhV').textContent = (+sess.bossH).toFixed(1); }
+  $('pickO').textContent = st.pick ? '✖ やめる（図をクリックして決める）' : '立ち位置を図でクリックして動かす';
+}
+function tuneInput(){
+  if (!sess) return;
+  sess.tune[tcam()] = { f:+$('tf').value, t:+$('tt').value, p:+$('tp').value };
+  if (!calBuild(sess, false)) guide('その微調整では足の位置を計算できません', '値を戻してください', 'bad');
+}
+for (const id of ['tf', 'tt', 'tp']) $(id).addEventListener('input', tuneInput);
+for (const r of document.querySelectorAll('input[name=tcam]')) r.addEventListener('change', afterUI);
+$('tReset').onclick = () => { if (!sess) return; sess.tune[tcam()] = { f:0, t:0, p:0 }; calBuild(sess, false); };
+
+// --- 5. 立ち位置とボス ---
+// プレイヤーの「前」= ボスの方向: 前置きなら2台のカメラの方、後ろ置きならカメラが向いている方（2台の並びに直角）
+const fwdDir = () => { const f = cal.rig.f, k = lay() === 'front' ? -1 : 1; return { x:f.x*k, z:f.z*k }; };
+const bossPos = () => { if (!cal) return null; const f = fwdDir(), d = Math.max(minDist(), +sess.boss); return { x:cal.origin.x + f.x*d, z:cal.origin.z + f.z*d }; };
+$('bd').oninput = e => { if (!sess) return; sess.boss = +e.target.value; $('bdV').textContent = sess.boss.toFixed(1); try { localStorage.setItem(KEY.sess, JSON.stringify(sess)); } catch (err){} };
+$('bh').oninput = e => { if (!sess) return; sess.bossH = +e.target.value; $('bhV').textContent = sess.bossH.toFixed(1); try { localStorage.setItem(KEY.sess, JSON.stringify(sess)); } catch (err){} };
+$('pickO').onclick = () => { st.pick = !st.pick; afterUI(); if (st.pick) guide('上から見た図で、立ち位置にしたい場所をクリック', 'メインのカメラに映る範囲（青い扇形）の中で選びます', 'run'); };
+let mapT = null;   // 上から見た図の座標変換（クリック用）
+$('cvMap').addEventListener('click', e => {
+  if (!st.pick || !cal || !mapT) return;
+  const r = $('cvMap').getBoundingClientRect(), d = mapT.d, x = (e.clientX - r.left)*d, y = (e.clientY - r.top)*d;
+  const u = (x - mapT.w/2)/mapT.sc + mapT.cu, v = -(y - mapT.h/2)/mapT.sc + mapT.cv, R_ = cal.rig.r, F_ = cal.rig.f;
+  const p = { x:u*R_.x + v*F_.x, z:u*R_.z + v*F_.z }, q = new THREE.Vector3(p.x, BC_LIFT, p.z).applyMatrix4(cal.m.camF);
+  if (q.z > -.3){ guide('そこはメインのカメラの前ではありません', '青い扇形の中をクリックしてください', 'bad'); return; }
+  sess.originF = p; st.pick = false; calBuild(sess, false);
+  guide('立ち位置を動かしました', 'ゲームではここが始めの位置になり、ボスはここから見た方向に立ちます', 'ok');
+});
 
 // --- 測定後: 2台の足の位置を合成（ゲームと同じ重み付け） ---
 const live = { m:null, s:null, f:null, src:'' };
@@ -459,23 +552,24 @@ function fuseTick(now){
       live.f = new THREE.Vector3(C[0]*bx + C[1]*bz, 0, C[1]*bx + C[2]*bz); live.src = '2台を合成';
     }
   } else if (m){ live.f = m; live.src = 'メインのみ'; } else if (s){ live.f = s; live.src = '2台目のみ'; }
-  if (live.f){ st.trail.push({ x:live.f.x, z:live.f.z, t:now }); }
+  if (live.f) st.trail.push({ x:live.f.x, z:live.f.z, t:now });
   while (st.trail.length && now - st.trail[0].t > 4000) st.trail.shift();
-  // 表示（プレイヤーから見た 左右・前後。前 = ボスの方 = 前置きならカメラの方）
+  // プレイヤーから見た 左右・前後（前 = ボスの方 = 前置きならカメラの方）
   const o = cal.origin, sg = lay() === 'front' ? -1 : 1, R_ = cal.rig.r, F_ = cal.rig.f;
   if (live.f){
     const dx = live.f.x - o.x, dz = live.f.z - o.z, lr = sg*(dx*R_.x + dz*R_.z), fb = sg*(dx*F_.x + dz*F_.z);
     $('pos').innerHTML = `${lr >= 0 ? '右' : '左'} ${Math.abs(lr).toFixed(2)}m　${fb >= 0 ? '前' : '後ろ'} ${Math.abs(fb).toFixed(2)}m`;
     $('fromO').textContent = Math.hypot(dx, dz).toFixed(2) + ' m';
   } else { $('pos').innerHTML = '– <small>足元が見えていません</small>'; $('fromO').textContent = '–'; }
-  $('diff').textContent = m && s ? (Math.hypot(m.x - s.x, m.z - s.z)*100).toFixed(0) + ' cm' : '–';
-  $('diff').style.color = m && s ? (Math.hypot(m.x - s.x, m.z - s.z) < .15 ? 'var(--ok)' : Math.hypot(m.x - s.x, m.z - s.z) < .3 ? 'var(--tape)' : 'var(--bad)') : '';
+  const df = m && s ? Math.hypot(m.x - s.x, m.z - s.z) : null;
+  $('diff').textContent = df === null ? '–' : (df*100).toFixed(0) + ' cm';
+  $('diff').style.color = df === null ? '' : df < .15 ? 'var(--ok)' : df < .3 ? 'var(--tape)' : 'var(--bad)';
   $('src').textContent = live.f ? live.src : '–';
 }
 
 // --- 距離チェック（A点 → B点に立って、その間の距離を出す） ---
-$('check').onclick = () => { if (!cal) return; st.chk = { phase:'A', t0:performance.now(), still:0, A:null, buf:[], last:null }; say('距離チェック。最初の場所に立って、止まってください'); };
-function chkTick(now){
+$('check').onclick = () => { if (!cal) return; st.chk = { phase:'A', buf:[], last:null }; say('距離チェック。最初の場所に立って、止まってください'); };
+function chkTick(){
   const c = st.chk; if (!c || !cal) return;
   const p = live.f, moving = !p || (c.last && Math.hypot(p.x - c.last.x, p.z - c.last.z) > .03); c.last = p;
   const label = c.phase === 'A' ? '距離チェック: 1か所目に立って止まってください' : '距離チェック: 次の場所へ動いて止まってください';
@@ -492,40 +586,37 @@ function chkTick(now){
   say(`2か所の距離は、${d.toFixed(2)}メートルです`);
 }
 
-// --- 保存（ゲームが読む形式で） ---
+// --- 保存（ゲームが読む形式で。微調整は結果に含めて保存する） ---
 $('save').onclick = () => {
-  if (!cal) return;
-  let old = null; try { old = JSON.parse(localStorage.getItem(KEY.bc) || 'null'); } catch (e){}
+  if (!cal || !sess) return;
   const label = c => { const d = camList.find(x => x.deviceId === c.sel.value); return { id:c.sel.value, label:d ? d.label : '' }; };
+  // 立ち位置 → メインの映像上の位置（ゲームはここから床へ投げ直す）
+  const vw = sess.vw, vh = sess.vh, f = (vw/2)/Math.tan(cal.m.hfov*Math.PI/360), o = cal.origin;
+  const q = new THREE.Vector3(o.x, BC_LIFT, o.z).applyMatrix4(cal.m.camF);
+  const originUV = [.5 + f*q.x/-q.z/vw, .5 - f*q.y/-q.z/vh];
   try {
-    localStorage.setItem(KEY.bc, JSON.stringify({ res:{ th:cal.m.th, ph:cal.m.ph, h:cal.m.h }, tune:{ floor:0, th:0, ph:0 }, hfov:cams.M.hfov, originUV:cal.originUV,
-      poseCam:lay(), boss:(old && old.boss) || 8.5, height:num('hgt', 170)/100, bossUV:null, bossH:(old && old.bossH) || 3.6, at:Date.now() }));
-    localStorage.setItem(KEY.dual, JSON.stringify({ res:{ th:cal.s.th, ph:cal.s.ph, h:cal.s.h }, al:{ yaw:cal.s.yaw, tx:cal.s.tx, tz:cal.s.tz }, hfov:cams.S.hfov, camH:num('camHS', 0)/100, cam:label(cams.S).label, at:Date.now() }));
-    localStorage.setItem(KEY.dualOn, '1'); localStorage.setItem(KEY.lay, lay());
+    localStorage.setItem(KEY.bc, JSON.stringify({ res:{ th:cal.m.th, ph:cal.m.ph, h:cal.m.h }, tune:{ floor:0, th:0, ph:0 }, hfov:cal.m.hfov, originUV,
+      poseCam:sess.lay, boss:+sess.boss, height:sess.height, bossUV:null, bossH:+sess.bossH, vw, vh, at:sess.at,
+      faceYaw:(f => Math.atan2(-f.x, -f.z))(fwdDir()) }));   // ゲーム座標の -Z（ボスの方向）
+    localStorage.setItem(KEY.dual, JSON.stringify({ res:{ th:cal.s.th, ph:cal.s.ph, h:cal.s.h }, al:{ yaw:cal.s.yaw, tx:cal.s.tx, tz:cal.s.tz }, hfov:cal.s.hfov,
+      camH:sess.camH.S, cam:label(cams.S).label, at:sess.at }));
+    localStorage.setItem(KEY.dualOn, '1'); localStorage.setItem(KEY.lay, sess.lay);
     localStorage.setItem(KEY.cams, JSON.stringify({ main:label(cams.M), side:label(cams.S), res:$('res').value }));
-    $('saveNote').textContent = '保存しました。ゲームを開くと、このカメラの割り当てと位置合わせが使われます（カメラを動かしたら測り直し）';
-    guide('保存しました', '「ゲームを開く」でゲームへ。カメラは閉じてから開きます', 'ok', '✓', 1); say('保存しました');
+    $('saveNote').textContent = '保存しました（' + new Date().toLocaleTimeString('ja-JP') + '）。ゲームを開くと自動で読み込まれます。カメラを動かしたら測り直してください';
+    guide('保存しました', '「ゲームを開く」でゲームへ（このページのカメラは閉じます）', 'ok', '✓', 1); say('保存しました');
   } catch (e){ $('saveNote').textContent = '保存できませんでした: ' + e.message; }
 };
-// ゲームへ: まずファイルがあるか確かめてから移動（無ければ、どのURLを探したかを表示）
+// ゲームへ: ファイルがあるか確かめてから、カメラを閉じて移動
 const gameUrl = () => ($('gameUrl').value || '').trim() || 'RQ_project_sord_hukan_2cam.html';
-function syncGameLink(){ $('toGame').href = gameUrl(); }
-$('gameUrl').addEventListener('input', () => { syncGameLink(); uiSave(); });
+$('gameUrl').addEventListener('input', () => { $('toGame').href = gameUrl(); uiSave(); });
 $('toGame').onclick = async e => {
   e.preventDefault();
   const url = new URL(gameUrl(), location.href).href;
-  $('gameNote').textContent = '開いています: ' + url;
   if (location.protocol.startsWith('http')){
-    try {
-      const r = await fetch(url, { method:'HEAD', cache:'no-store' });
-      if (!r.ok){
-        const msg = `ゲームのファイルが見つかりません（${r.status}）`;
-        $('gameNote').textContent = msg + ': ' + url + '　→ ファイル名・フォルダを確認して、上の欄を直してください';
-        guide(msg, url, 'bad'); return;
-      }
-    } catch (err){ /* 確認できなくても移動は試す */ }
+    try { const r = await fetch(url, { method:'HEAD', cache:'no-store' });
+      if (!r.ok){ const msg = `ゲームのファイルが見つかりません（${r.status}）`; $('gameNote').textContent = msg + ': ' + url; guide(msg, url, 'bad'); return; } } catch (err){}
   }
-  for (const c of Object.values(cams)) if (c.stream){ c.stream.getTracks().forEach(t => t.stop()); c.stream = null; }   // ゲームがカメラを開けるように先に閉じる
+  for (const c of Object.values(cams)) closeOne(c);
   location.href = url;
 };
 
@@ -534,17 +625,17 @@ function fit(cv){ const r = cv.getBoundingClientRect(), d = devicePixelRatio || 
 function drawCam(c){
   const d = fit(c.cv), x = c.cv.getContext('2d'), w = c.cv.width, h = c.cv.height, v = c.v;
   x.fillStyle = '#000'; x.fillRect(0, 0, w, h);
-  if (!c.stream || !v.videoWidth){ x.fillStyle = '#8fa5b3'; x.font = `${15*d}px sans-serif`; x.textAlign = 'center'; x.fillText(c.stream ? '映像を待っています…' : 'カメラ未接続', w/2, h/2); return; }
+  if (!c.stream || !v.videoWidth){ x.fillStyle = '#8fa5b3'; x.font = `${15*d}px sans-serif`; x.textAlign = 'center'; x.fillText(c.stream ? '映像を待っています…' : 'カメラ未接続（「カメラを開く」）', w/2, h/2); return; }
   const vw = v.videoWidth, vh = v.videoHeight, k = Math.min(w/vw, h/vh), dw = vw*k, dh = vh*k, ox = (w - dw)/2, oy = (h - dh)/2;
   x.drawImage(v, ox, oy, dw, dh);
   const X = u => ox + u*dw, Y = t => oy + t*dh, fp = (vw/2)/Math.tan(c.hfov*Math.PI/360);
-  if (cal){   // 床のマス目（1m）と立ち位置
+  if (cal){   // 床のマス目（1m）・立ち位置・ボス
     const M = c.key === 'M' ? cal.m.camF : cal.s.CamFromF;
     const proj = q => { const p = q.clone().applyMatrix4(M); return p.z < -.1 ? [X(.5 + fp*p.x/-p.z/vw), Y(.5 - fp*p.y/-p.z/vh)] : null; };
     const line = (x0, z0, x1, z1) => { let pv = null; for (let i = 0; i <= 40; i++){ const q = proj(new THREE.Vector3(x0 + (x1 - x0)*i/40, 0, z0 + (z1 - z0)*i/40)); if (q && pv){ x.moveTo(pv[0], pv[1]); x.lineTo(q[0], q[1]); } pv = q; } };
     const o = cal.origin;
     x.save(); x.beginPath(); x.rect(ox, oy, dw, dh); x.clip();
-    x.strokeStyle = 'rgba(242,194,48,.45)'; x.lineWidth = d; x.beginPath();
+    x.strokeStyle = 'rgba(242,194,48,.5)'; x.lineWidth = d; x.beginPath();
     for (let i = -4; i <= 4; i++){ line(o.x + i, o.z - 4, o.x + i, o.z + 4); line(o.x - 4, o.z + i, o.x + 4, o.z + i); }
     x.stroke();
     const dot = (p, col, r) => { const q = p && proj(new THREE.Vector3(p.x, 0, p.z)); if (q){ x.fillStyle = col; x.beginPath(); x.arc(q[0], q[1], r*d, 0, 7); x.fill(); } };
@@ -556,62 +647,75 @@ function drawCam(c){
     for (const [a, b] of POSE_LINKS){ x.moveTo(X(c.n[a].x), Y(c.n[a].y)); x.lineTo(X(c.n[b].x), Y(c.n[b].y)); } x.stroke();
   }
   if (c.o){ const q = [X(.5 + c.o.fx*fp/vw), Y(.5 + c.o.fy*fp/vh)]; x.strokeStyle = c.col; x.lineWidth = 3*d; x.beginPath(); x.arc(q[0], q[1], 9*d, 0, 7); x.stroke(); }
-  // 測定済みの場所
-  if (st.means.length){ x.font = `bold ${14*d}px sans-serif`; st.means.forEach((m, i) => { const o = m[c.key], q = [X(.5 + o.fx*fp/vw), Y(.5 + o.fy*fp/vh)]; x.fillStyle = '#f2c230'; x.beginPath(); x.arc(q[0], q[1], 5*d, 0, 7); x.fill(); x.fillText(String(i + 1), q[0] + 7*d, q[1] - 5*d); }); }
-  // 状態
+  if (st.means.length && st.mode !== 'idle'){ x.font = `bold ${14*d}px sans-serif`; st.means.forEach((m, i) => { const o = m[c.key], q = [X(.5 + o.fx*fp/vw), Y(.5 + o.fy*fp/vh)]; x.fillStyle = '#f2c230'; x.beginPath(); x.arc(q[0], q[1], 5*d, 0, 7); x.fill(); x.fillText(String(i + 1), q[0] + 7*d, q[1] - 5*d); }); }
   const now = performance.now(), seen = c.o && now - c.oT < FRESH_MS;
   x.font = `bold ${14*d}px sans-serif`; x.textAlign = 'right';
   x.fillStyle = !c.lm ? '#f2c230' : seen ? (c.o.upright ? '#6fdc8c' : '#f2c230') : '#ff5d6c';
   x.fillText(!c.lm ? '全身認識 読み込み中' : seen ? (c.o.upright ? '足元まで見えています' : 'まっすぐ立ってください') : (c.n ? '足元が見えません' : '人が見つかりません'), w - 8*d, 20*d);
+  x.textAlign = 'left';
 }
 // --- 描画: 上から見た図（2台のカメラが下、カメラが向く方が上） ---
 function drawMap(){
-  const d = fit($('cvMap')), x = $('cvMap').getContext('2d'), w = $('cvMap').width, h = $('cvMap').height;
-  x.fillStyle = '#0c141a'; x.fillRect(0, 0, w, h);
+  const cv = $('cvMap'), d = fit(cv), x = cv.getContext('2d'), w = cv.width, h = cv.height;
+  cv.style.cursor = st.pick ? 'crosshair' : '';
+  x.fillStyle = '#0c141a'; x.fillRect(0, 0, w, h); mapT = null;
   if (!cal){ x.fillStyle = '#8fa5b3'; x.font = `${15*d}px sans-serif`; x.textAlign = 'center'; x.fillText('測定すると、カメラと自分の位置が上から見た図で出ます', w/2, h/2); return; }
   const R_ = cal.rig.r, F_ = cal.rig.f, U = p => ({ u:p.x*R_.x + p.z*R_.z, v:p.x*F_.x + p.z*F_.z });   // u: 右, v: 奥
-  const pts = [{ x:0, z:0 }, { x:cal.s.tx, z:cal.s.tz }, ...cal.spotsF.map(s => s.m)]; if (live.f) pts.push(live.f);
-  const us = pts.map(U), u0 = Math.min(...us.map(p => p.u)) - 1, u1 = Math.max(...us.map(p => p.u)) + 1, v0 = Math.min(...us.map(p => p.v)) - 1, v1 = Math.max(...us.map(p => p.v)) + 1;
-  const sc = Math.min(w/(u1 - u0), h/(v1 - v0)), cu = (u0 + u1)/2, cv = (v0 + v1)/2;
-  const P = p => { const q = U(p); return [w/2 + (q.u - cu)*sc, h/2 - (q.v - cv)*sc]; };
-  const D = v => { const q = U(v); return [q.u, -q.v]; };   // 方向 → 画面の向き
-  x.strokeStyle = '#1f2f3b'; x.lineWidth = d; x.beginPath();   // 1mのマス（2台の並びにそろえる）
+  const bp = bossPos(), br = num('bh', 3.6)/2;
+  const pts = [{ x:0, z:0 }, { x:cal.s.tx, z:cal.s.tz }, ...cal.spotsF.map(s => s.m), cal.origin]; if (live.f) pts.push(live.f);
+  const us = pts.map(U), u0 = Math.min(...us.map(p => p.u)) - 1.2, u1 = Math.max(...us.map(p => p.u)) + 1.2, v0 = Math.min(...us.map(p => p.v)) - 1.2, v1 = Math.max(...us.map(p => p.v)) + 1.2;
+  const sc = Math.min(w/(u1 - u0), h/(v1 - v0)), cu = (u0 + u1)/2, cvv = (v0 + v1)/2;
+  mapT = { d, w, h, sc, cu, cv:cvv };
+  const P = p => { const q = U(p); return [w/2 + (q.u - cu)*sc, h/2 - (q.v - cvv)*sc]; };
+  const D = v => { const q = U(v); return [q.u, -q.v]; };
+  x.strokeStyle = '#1f2f3b'; x.lineWidth = d; x.beginPath();
   for (let i = Math.floor(u0); i <= u1; i++){ x.moveTo(w/2 + (i - cu)*sc, 0); x.lineTo(w/2 + (i - cu)*sc, h); }
-  for (let i = Math.floor(v0); i <= v1; i++){ x.moveTo(0, h/2 - (i - cv)*sc); x.lineTo(w, h/2 - (i - cv)*sc); }
+  for (let i = Math.floor(v0); i <= v1; i++){ x.moveTo(0, h/2 - (i - cvv)*sc); x.lineTo(w, h/2 - (i - cvv)*sc); }
   x.stroke();
-  const camDraw = (pos, dir, hfov, col, name) => {   // 視野の扇形
-    const a = P(pos), dd = D(dir), ang = Math.atan2(dd[1], dd[0]), half = hfov*Math.PI/360, R = 6*sc;
+  const camDraw = (pos, dir, hfov, col, name) => {
+    const a = P(pos), dd = D(dir), ang = Math.atan2(dd[1], dd[0]), half = hfov*Math.PI/360, R = 8*sc;
     x.fillStyle = col + '22'; x.beginPath(); x.moveTo(a[0], a[1]);
     for (let i = 0; i <= 20; i++){ const t = ang - half + 2*half*i/20; x.lineTo(a[0] + Math.cos(t)*R, a[1] + Math.sin(t)*R); } x.closePath(); x.fill();
     x.fillStyle = col; x.beginPath(); x.arc(a[0], a[1], 8*d, 0, 7); x.fill();
     x.font = `bold ${13*d}px sans-serif`; x.textAlign = 'center'; x.fillText(name, a[0], a[1] + 22*d);
   };
-  camDraw({ x:0, z:0 }, { x:0, z:-1 }, cams.M.hfov, '#59c9e8', 'メイン');
+  camDraw({ x:0, z:0 }, { x:0, z:-1 }, cal.m.hfov, '#59c9e8', 'メイン');
   const sd = new THREE.Vector3(0, 0, -1).transformDirection(cal.s.FfromS);
-  camDraw({ x:cal.s.tx, z:cal.s.tz }, { x:sd.x, z:sd.z }, cams.S.hfov, '#f08c3a', '2台目');
+  camDraw({ x:cal.s.tx, z:cal.s.tz }, { x:sd.x, z:sd.z }, cal.s.hfov, '#f08c3a', '2台目');
   { const a = P({ x:0, z:0 }), b = P({ x:cal.s.tx, z:cal.s.tz }); x.strokeStyle = '#8fa5b3'; x.setLineDash([4*d, 4*d]); x.beginPath(); x.moveTo(a[0], a[1]); x.lineTo(b[0], b[1]); x.stroke(); x.setLineDash([]);
     x.fillStyle = '#8fa5b3'; x.font = `${12*d}px sans-serif`; x.textAlign = 'center'; x.fillText(cal.gap.toFixed(2) + ' m', (a[0] + b[0])/2, (a[1] + b[1])/2 - 6*d); }
   cal.spotsF.forEach((sp, i) => { const a = P(sp.m), b = P(sp.s); x.fillStyle = '#f2c230'; x.font = `bold ${12*d}px sans-serif`; x.fillText(String(i + 1), a[0], a[1] - 9*d);
-    x.strokeStyle = '#f2c230'; x.lineWidth = 2*d; x.beginPath(); x.arc(a[0], a[1], 5*d, 0, 7); x.stroke(); x.beginPath(); x.arc(b[0], b[1], 2.5*d, 0, 7); x.stroke(); });
+    x.strokeStyle = 'rgba(242,194,48,.7)'; x.lineWidth = 1.5*d; x.beginPath(); x.arc(a[0], a[1], 5*d, 0, 7); x.stroke(); x.beginPath(); x.arc(b[0], b[1], 2.5*d, 0, 7); x.stroke(); });
   if (st.chkLine){ const a = P(st.chkLine[0]), b = P(st.chkLine[1]); x.strokeStyle = '#6fdc8c'; x.lineWidth = 2*d; x.beginPath(); x.moveTo(a[0], a[1]); x.lineTo(b[0], b[1]); x.stroke(); }
+  // ボス（図の外なら矢印だけ）
+  { const o = P(cal.origin), b = P(bp), inside = b[0] > 0 && b[0] < w && b[1] > 0 && b[1] < h;
+    x.strokeStyle = '#ff5d6c'; x.fillStyle = '#ff5d6c'; x.lineWidth = 2*d; x.setLineDash([5*d, 4*d]); x.beginPath(); x.moveTo(o[0], o[1]); x.lineTo(b[0], b[1]); x.stroke(); x.setLineDash([]);
+    if (inside){ x.fillStyle = 'rgba(255,93,108,.25)'; x.beginPath(); x.arc(b[0], b[1], br*sc, 0, 7); x.fill(); x.fillStyle = '#ff5d6c'; }
+    const lx = inside ? b[0] : o[0] + (b[0] - o[0])*.35, ly = inside ? b[1] : o[1] + (b[1] - o[1])*.35;
+    x.font = `bold ${12*d}px sans-serif`; x.textAlign = 'center'; x.fillText(`ボス ${Math.max(minDist(), +sess.boss).toFixed(1)}m 先`, lx, ly + 4*d); }
   x.strokeStyle = 'rgba(255,255,255,.35)'; x.lineWidth = 2*d; x.beginPath();
   st.trail.forEach((t, i) => { const a = P(t); if (i) x.lineTo(a[0], a[1]); else x.moveTo(a[0], a[1]); }); x.stroke();
   const dot = (p, col, r) => { if (!p) return; const a = P(p); x.fillStyle = col; x.beginPath(); x.arc(a[0], a[1], r*d, 0, 7); x.fill(); };
+  { const o = P(cal.origin); x.strokeStyle = '#f2c230'; x.lineWidth = 3*d; x.beginPath(); x.arc(o[0], o[1], 10*d, 0, 7); x.stroke(); x.fillStyle = '#f2c230'; x.font = `bold ${12*d}px sans-serif`; x.textAlign = 'left'; x.fillText('立ち位置', o[0] + 14*d, o[1] + 4*d); }
   dot(live.m, '#59c9e8', 5); dot(live.s, '#f08c3a', 5); dot(live.f, '#fff', 8);
-  // ボスの方向（前置き = カメラの方 = 下 / 後ろ置き = 奥 = 上）
-  const o = P(cal.origin), dy = lay() === 'front' ? 1 : -1;
-  x.strokeStyle = '#ff5d6c'; x.fillStyle = '#ff5d6c'; x.lineWidth = 2*d; x.beginPath(); x.moveTo(o[0], o[1]); x.lineTo(o[0], o[1] + dy*1.2*sc); x.stroke();
-  x.font = `bold ${12*d}px sans-serif`; x.textAlign = 'center'; x.fillText('ボスの方向', o[0] + 40*d, o[1] + dy*1.2*sc);
+  if (st.pick){ x.fillStyle = '#f2c230'; x.font = `bold ${15*d}px sans-serif`; x.textAlign = 'center'; x.fillText('立ち位置にしたい場所をクリック', w/2, h - 12*d); }
 }
 
 // --- メインループ ---
 function loop(now){
   detect(cams.M, now); detect(cams.S, now);
-  calTick(now); fuseTick(now); chkTick(now);
+  calTick(now); fuseTick(now); chkTick();
   drawCam(cams.M); drawCam(cams.S); drawMap();
   requestAnimationFrame(loop);
 }
-uiLoad(); syncGameLink(); listCams(); requestAnimationFrame(loop);
+// 前回の測定（微調整・立ち位置・ボスも）を読み込む
+function sessLoad(){
+  let d = null; try { d = JSON.parse(localStorage.getItem(KEY.sess) || 'null'); } catch (e){}
+  if (!d || !d.spots || !d.M || !d.S) return;
+  if (d.lay === 'back') $('layB').checked = true; else $('layF').checked = true;
+  if (calBuild(d, false)) guide('前回の測定を読み込みました', 'カメラを動かしていなければ、そのまま微調整・保存できます。「カメラを開く」で映像と重ねて確認', 'ok');
+}
+uiLoad(); $('toGame').href = gameUrl(); listCams(); sessLoad(); afterUI(); requestAnimationFrame(loop);
 </script>
 </body>
 </html>
