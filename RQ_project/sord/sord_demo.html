@@ -918,12 +918,16 @@ function attack(){
   }
 }
 // 赤く光っている間(予兆〜突進)に押せば、突進が当たる瞬間までパリィが有効（armed）
-function parry(){ if (P.parCd > 0 || P.par > 0 || P.armed || P.guard) return; P.par = .3; P.parAge = 0; P.parCd = .7; P.armed = (B.s === 'wind' || B.s === 'charge') && !B.unp; }
+function parry(){
+  if (P.parCd > 0 || P.par > 0 || P.armed || P.guard) return;
+  P.par = .3; P.parAge = 0; P.parCd = .7;
+  if ((B.s === 'wind' || B.s === 'charge') && !B.unp) parried();   // 床が赤い間（予兆中）でも突進中でも、決めた瞬間に弾き返す
+}
 function parried(){
-  playPary(); const perfect = P.parAge < .45, at = rig.localToWorld(new THREE.Vector3(0, 0, -2.4));
+  playPary(); const perfect = true, at = rig.localToWorld(new THREE.Vector3(0, 0, -2.4));
   hitstop = perfect ? .22 : .14; shake = perfect ? .5 : .3; fovp = perfect ? 14 : 8; flash = perfect ? .8 : .4; flashM.material.color.set(0xfff2b0);
   ring(at, perfect ? 6 : 4, 0xffd35a, .5); ring(at, 2.5, 0xffffff, .3); burst(at, 0xffd35a, perfect ? 90 : 55, 9);
-  popCam(perfect ? 'PERFECT!' : 'PARRY!', '#ffd35a', perfect ? 1.3 : 1, 1);
+  popCam('PARRY!', '#ffd35a', 1.3, 1);
   P.inv = .5; P.par = 0; P.armed = false; P.parCd = .15; wiiRumble(perfect ? 300 : 200);
   B.s = 'knock'; B.stun = true; B.t = perfect ? 3 : 2.2; B.vz = perfect ? -24 : -17;
   P.counter = B.t; P.cBig = perfect ? 140 : 90;
@@ -1497,7 +1501,7 @@ const STAGES = [
     lines:['サンドバッグが紫に光ったら、パリィできない攻撃の合図。', 'Ⓐボタンを長押ししている間ガードになる。突進が当たる瞬間まで押し続けよう。'] },
   { id:'parry', title:'パリィの練習', goal:3, keys:['parry'], atk:'red', pic:'parry',
     hint:'赤く光ったら Ⓑを押しながら振り上げ',
-    lines:['サンドバッグが赤く光ったら、Ⓑボタンを押しながらリモコンを振り上げる。', '光っている間に振れば当たる瞬間まで有効。早めに決めると PERFECT！'] },
+    lines:['サンドバッグが赤く光ったら、Ⓑボタンを押しながらリモコンを振り上げる。', '床が赤くなったら、突進してくる途中でもいつでもOK。決めた瞬間に弾き返して反撃チャンス！'] },
   { id:'vorpal', title:'ヴォーパルストライク', goal:3, keys:['vorpal'], gyro:true, pic:'thrust',
     hint:'リンゴをまっすぐ突き刺す（ねじらない）',
     lines:['リンゴが出てくる。リモコンの先を前に向けて、手首をひねらずにまっすぐ突き刺そう。', '「速く・短く」がコツ。3回決めると剣にリンゴが3個刺さる！'] },
