@@ -83,7 +83,7 @@
     <label>斬りの最小速度 <b id="skPkV">600</b>°/s<input type="range" id="skPk" min="300" max="1200" step="50" value="600"><small>これ未満は構え直しとして無視</small></label>
     <label>ダメージ倍率 ×<b id="skMulV">5</b><input type="range" id="skMul" min="2" max="10" step="0.5" value="5"><small>5が標準（全スキルに掛かる）</small></label>
     <label>四角切りの継続受付 <b id="skSqV">1.1</b>秒<input type="range" id="skSq" min="0.6" max="2" step="0.1" value="1.1"><small>縦横縦横の各斬りの間隔</small></label>
-    <label>縦重撃(ソニックリープ) ∫縦 <b id="skHVV">650</b>°<input type="range" id="skHV" min="200" max="1500" step="10" value="650"></label>
+    <label>縦重撃(ソニックリープ) ∫縦 <b id="skHVV">400</b>°<input type="range" id="skHV" min="200" max="1500" step="10" value="400"></label>
     <label>横重撃(ロータス) ∫横 <b id="skHHV">260</b>°<input type="range" id="skHH" min="100" max="500" step="10" value="260"></label>
     <label>一回転(メテオブレイク) ∫横 <b id="skSpV">360</b>°<input type="range" id="skSp" min="150" max="700" step="10" value="360"></label>
     <label>突き(ヴォーパル) 加速度 <b id="skTAV">4.0</b>g<input type="range" id="skTA" min="2.5" max="8" step="0.1" value="4.0"><small>回転が小さく加速度が大きい動き</small></label>
@@ -1195,6 +1195,8 @@ function onWii(e){
   if (A && !wii.pA) wii.aT = now;
   const pressA = A && !wii.pA;
   const pressPlus = plus && !wii.pPlus, pressHome = home && !wii.pHome;
+  if (!Bb && wii.b) wii.bRel = now;   // Bを離した時刻
+  const bHold = Bb || now - (wii.bRel || -1e9) < 500;   // B押下中＋離してから0.5秒は攻撃判定なし（パリィの振りを斬りと誤認しない）
   wii.pA = A; wii.pPlus = plus; wii.pHome = home; wii.a = A; wii.b = Bb;
   if (pressHome) toggleMenu();
   if (minus && !wii.pMinus) wiiRecal();
@@ -1207,7 +1209,7 @@ function onWii(e){
     if (!wii.gok){ wii.gx = x; wii.gy = y; wii.gz = z; wii.gok = true; }
     else { wii.gx += (x - wii.gx)*.2; wii.gy += (y - wii.gy)*.2; wii.gz += (z - wii.gz)*.2; }
   }
-  if (id === 0x35 && d.byteLength >= 11) wiiGyro(d, x, y, z, m, ts, A || Bb);   // ジャイロ(縦横判定)。通常攻撃/パリィの加速度判定とは独立
+  if (id === 0x35 && d.byteLength >= 11) wiiGyro(d, x, y, z, m, ts, A || bHold);   // ジャイロ(縦横判定)。通常攻撃/パリィの加速度判定とは独立
   if (ctl.mode !== 'wii' || state !== 'play' || menuOn) return;
   // 重力方向(=上)に沿った動的加速度。持ち方に依存せず「上向きに加速」を検出できる
   const gl = Math.hypot(wii.gx, wii.gy, wii.gz) || 1;
@@ -1217,14 +1219,14 @@ function onWii(e){
   if (now - wii.lastSw < 450) return;
   if (wii.b){   // B押しながら振り上げ → パリィ
     if (up > upTh && now - wii.lastNeg > 220){ wii.lastSw = now + 200; parry(); }
-  } else if (!wii.a && m > wii.th){ wii.lastSw = now; attack(); }   // 振り → 通常攻撃
+  } else if (!wii.a && !bHold && m > wii.th){ wii.lastSw = now; attack(); }   // 振り → 通常攻撃
 }
 
 // ===== ソードスキル（MotionPlusのジャイロで 縦斬り→横斬り を判定）=====
 // ジャイロ積分で「上向きベクトル」を追い、角速度を 水平軸まわり(=縦斬り成分) と 鉛直軸まわり(=横斬り成分) に分解する。
 // 握りが回っても縦/横を判定できる（センサー軸 yaw/roll/pitch は縦横に一対一対応しないため）。
 const sk = { on:true, win:1.5, sqWin:1.1, rB:.18, rA:.30, minPk:600, mult:5, dbg:true, st:0, last:null, armedAt:0, lastHead:'',
-             heavyV:650, heavyH:260, spin:360, thrustA:4.0, thrustRot:150, thrustPk:800, lastR:null, lr:false };
+             heavyV:400, heavyH:260, spin:360, thrustA:4.0, thrustRot:150, thrustPk:800, lastR:null, lr:false };
 const GY = { SLOW:440/8192, FAST:2000/440, PRE:120, HOLD:150, MAXSW:1500, CAL_MS:1000, CAL_STD:80, UP_GAIN:.03, UP_TOL:.15 };
 // ==== MP-BEGIN ====
 function calStart(){
