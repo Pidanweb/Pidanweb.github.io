@@ -663,7 +663,7 @@ async function loadPoseModel(){
     const o = d => ({ baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task', delegate:d }, runningMode:'VIDEO', numPoses:1 });
     try { pose.lm = await mp.PoseLandmarker.createFromOptions(fs, o('GPU')); } catch (e){ pose.lm = await mp.PoseLandmarker.createFromOptions(fs, o('CPU')); }
     setBadge('🧍 全身を探しています…');
-  } catch (e){ console.error(e); setBadge('🧍 全身認識を読み込めません: ' + (e && e.message || e)); }
+  } catch (e){ console.error(e); pose.err = String(e && e.message || e); setBadge('🧍 全身認識を読み込めません: ' + pose.err); }
   pose.loading = false;
 }
 async function enterTP(){
@@ -838,9 +838,10 @@ function bcPose(n){
     if (bc.state === 'move') bcSay(far ? 'そこでまっすぐ立って止まってください' : '横に1歩（50cm以上）動いて、止まってください', null, true);
   }
 }
-function bcStart(){
+async function bcStart(){
   if (!tp){ bcSay('先に俯瞰モード（👁 ボタン）にしてください'); return; }
-  if (!pose.lm){ bcSay('全身認識の読み込みを待っています。少ししてからもう一度押してください'); return; }
+  if (['count', 'stand1', 'move', 'stand2'].includes(bc.state)) return;
+  if (!(await poseEnsure(false, bcSay))) return;   // カメラ・モデルがまだなら、ここで準備してから始める
   bc.height = +$('bcH').value/100; bc.camH = +$('bcCamH').value/100; bc.autoFov = $('bcAutoFov').checked;
   if (!(bc.height > 1 && bc.height < 2.3)){ bcSay('身長を正しく入れてください'); return; }
   bc.state = 'count'; bc.res = null; bcTuneUI(); bc.cd = 0; bc.t0 = performance.now(); bc.obsA = []; bc.obs = []; bc.lastF = bc.lastH = null;
@@ -1095,7 +1096,7 @@ async function dualLoadModel(){
     const o = d => ({ baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task', delegate:d }, runningMode:'VIDEO', numPoses:1 });
     try { dual.lm = await mp.PoseLandmarker.createFromOptions(fs, o('GPU')); } catch (e){ dual.lm = await mp.PoseLandmarker.createFromOptions(fs, o('CPU')); }
     if (dual.state === 'off') dualSay('2台目のカメラの準備OK。体キャリブレーションの後に「位置合わせ開始」を押してください');
-  } catch (e){ console.error(e); dualSay('2台目のカメラ用の全身認識を読み込めません: ' + (e && e.message || e)); }
+  } catch (e){ console.error(e); dual.err = String(e && e.message || e); dualSay('2台目のカメラ用の全身認識を読み込めません: ' + dual.err); }
   dual.loading = false;
 }
 async function dualOpen(){
@@ -1247,11 +1248,10 @@ function dualFinish(redo){
   const dist = Math.hypot(tx, tz);
   dualSay(`完了: 2台目のカメラの高さ ${r.h.toFixed(2)}m・メインカメラから ${dist.toFixed(1)}m・2台のずれ ${(err*100).toFixed(0)}cm${note}`, '2台の位置合わせ完了');
 }
-function dualStart(){
+async function dualStart(){
   if (!dual.on){ dualSay('先に「2台モードを使う」をONにしてください'); return; }
   if (bc.state !== 'locked'){ dualSay('先に上の体キャリブレーション（後ろのカメラ）を完了してください'); return; }
-  if (!dual.stream){ dualSay('2台目のカメラが開いていません'); dualOpen(); return; }
-  if (!dual.lm){ dualSay('2台目のカメラ用の全身認識を読み込み中です。少ししてからもう一度押してください'); return; }
+  if (!(await poseEnsure(true, dualSay))) return;
   dual.camH = +$('d2CamH').value/100; dual.autoFov = $('d2AutoFov').checked; dual.hfov = +$('d2Fov').value;
   dual.state = 'count'; dual.t0 = performance.now(); dual.cd = 0; dual.spots = []; dual.s = null; dualSpotReset();
   dualSay('5秒後に位置合わせを始めます。いつもの立ち位置へ');
@@ -1324,6 +1324,31 @@ $('d2Start').onclick = () => layOf() === 'side' ? dualStart() : prStart();
 $('d2Reset').onclick = () => { pr.state = 'off'; dualReset(); };
 try { if (localStorage.getItem(DUAL_ON_KEY) === '1'){ dual.on = true; $('d2On').checked = true; } } catch (e){}
 
+// ===== 全身認識の準備（カメラを開く＋モデル読み込み）を待ってから始める =====
+// 以前は「ゲーム開始（画面クリック）」の時にしかモデルを読み込まなかったので、
+// 先にカメラ設定からキャリブレーションを押すと「読み込みを待っています」のまま進まなかった。
+async function poseEnsure(needDual, say){
+  if (pose.lm && camStream && (!needDual || (dual.lm && dual.stream))) return true;
+  say('全身認識を準備しています…（カメラを開いてモデルを読み込み中。初回は10〜30秒かかることがあります）');
+  pose.err = dual.err = null;
+  try { await enterTP(); } catch (e){ console.error(e); }
+  if (!camStream){ say('メインのカメラを開けません。上の「カメラの割り当て」を確認してください（他のアプリが使用中の可能性も）'); return false; }
+  if (needDual){
+    if (!dual.stream && !(await dualOpen())) return false;   // 理由は dualOpen が表示
+    if (!dual.lm) dualLoadModel();
+  }
+  if (!pose.lm) loadPoseModel();
+  const t0 = performance.now();
+  while (performance.now() - t0 < 60000){
+    if (pose.lm && (!needDual || dual.lm)){ say('全身認識の準備OK'); return true; }
+    const e = (!pose.loading && !pose.lm && pose.err) || (needDual && !dual.loading && !dual.lm && dual.err);
+    if (e){ say('全身認識を準備できませんでした: ' + e + '（ネット接続と、https:// か localhost で開いているかを確認）'); return false; }
+    say(`全身認識を準備しています… ${Math.round((performance.now() - t0)/1000)}秒`);
+    await new Promise(r => setTimeout(r, 250));
+  }
+  say('全身認識の読み込みが60秒たっても終わりません。ネット接続を確認して、ページを再読み込みしてください');
+  return false;
+}
 // ===== 2台の置き方: 体の前（または後ろ）に、横に間隔をあけて左右2台 =====
 // 2台とも同じ向きからプレイヤーを撮るので、足の位置を2方向から見られる（ステレオ）。マーカーは使わない。
 // キャリブレーション: 4か所（真ん中・左・右・前後）に立つ間、2台の映像を同時に集めて
@@ -1338,11 +1363,11 @@ const prGuide = lay => ['プレイする位置（2台の真ん中の正面、2�
   lay === 'front' ? '最初の位置に戻って、カメラの方へ1〜2歩近づいて止まってください' : '最初の位置に戻って、カメラから1〜2歩離れて止まってください'];
 const pr = { state:'off', t0:0, cd:0, k:0, M:[], S:[], cur:{ M:[], S:[] }, c0:0, lastM:null, lastS:null, tM:-1, tS:-1, base:2 };
 function prMeanSpot(L){ return bcMean(L); }
-function prStart(){
+async function prStart(){
   if (!tp){ dualSay('俯瞰モードで使ってください'); return; }
-  if (!dual.on){ dualSay('先に「2台モードを使う」をONにしてください'); return; }
-  if (!dual.stream){ dualSay('2台目のカメラが開いていません'); dualOpen(); return; }
-  if (!pose.lm || !dual.lm){ dualSay('全身認識の読み込みを待っています。少ししてからもう一度押してください'); return; }
+  if (pr.state !== 'off') return;
+  if (!dual.on){ $('d2On').checked = true; await $('d2On').onchange({ target:$('d2On') }); }
+  if (!(await poseEnsure(true, dualSay))) return;
   bc.height = +$('bcH').value/100; bc.camH = +$('bcCamH').value/100; bc.autoFov = $('bcAutoFov').checked;
   if (!(bc.height > 1 && bc.height < 2.3)){ dualSay('上の体キャリブレーションの欄に身長を正しく入れてください'); return; }
   dual.camH = +$('d2CamH').value/100; dual.autoFov = $('d2AutoFov').checked; dual.hfov = +$('d2Fov').value;
