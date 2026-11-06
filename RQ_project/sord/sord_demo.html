@@ -3,148 +3,49 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Radiqle_Project ─ TUTORIAL</title>
+<title>Connect World 剣士 練習モード</title>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#0a1110}
   canvas{display:block;touch-action:none}
   #ui{position:fixed;top:10px;right:10px;z-index:5;font:14px sans-serif;color:#fff;text-align:right}
-  #ui button{background:#0d2a30cc;color:#bfe6ff;border:1px solid #bfe6ff88;border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer}
-  #camPanel{max-height:calc(100vh - 70px);overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;margin-top:6px;padding:10px;background:#000c;border:1px solid #bfe6ff55;border-radius:8px;width:280px;text-align:left}
+  #ui button{background:#0d2a30cc;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer}
+  #camPanel{max-height:calc(100vh - 70px);overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;margin-top:6px;padding:10px;background:#000c;border:1px solid #7ae7ff55;border-radius:8px;width:280px;text-align:left}
   #camPanel select{width:100%;margin:4px 0 8px;padding:4px;font:inherit}
   #camPanel div{margin-top:6px}
-  #camStat{font-size:12px;color:#ff9a3c;word-break:break-all}
+  #camStat{font-size:12px;color:#ffd35a;word-break:break-all}
   #v,#fv,#bgv{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
-  #facePrev{position:fixed;left:10px;bottom:10px;z-index:5;width:240px;height:180px;border:2px solid #bfe6ff88;border-radius:8px;background:#000;pointer-events:none;display:none}
-  #faceBadge{margin-top:6px;font-size:12px;color:#bfe6ff;text-shadow:0 0 4px #000}
+  #facePrev{position:fixed;left:10px;bottom:10px;z-index:5;width:240px;height:180px;border:2px solid #7ae7ff88;border-radius:8px;background:#000;pointer-events:none;display:none}
+  #faceBadge{margin-top:6px;font-size:12px;color:#7ae7ff;text-shadow:0 0 4px #000}
   #camPanel input[type=range]{width:100%}
-  #camPanel input[type=file]{width:100%;margin:4px 0;color:#a9bdd1;font-size:12px}
-  #camPanel small{display:block;color:#a9bdd1;font-size:11px;margin-top:4px}
+  #camPanel input[type=file]{width:100%;margin:4px 0;color:#9fdcea;font-size:12px}
+  #camPanel small{display:block;color:#9fdcea;font-size:11px;margin-top:4px}
   #aimBtn.off,#mAim.off{color:#ff9aa5;border-color:#ff9aa588}
-  #menu{position:fixed;top:0;bottom:0;left:50%;transform:translateX(-50%);width:min(260px,44vw);z-index:9;background:#061418cc;border:1px solid #bfe6ff88;border-radius:12px;padding:16px;display:none;flex-direction:column;gap:12px;justify-content:center;font:15px sans-serif;color:#fff;text-align:center;box-sizing:border-box}
-  #menu.on{display:flex} #menu{overflow-y:auto;gap:8px} #menu>:first-child{margin-top:auto} #menu>:last-child{margin-bottom:auto} #jobs{display:none;flex-direction:column;gap:6px} #jobs.on{display:flex} #menu button:disabled{opacity:.45;cursor:not-allowed} #menu button{background:#0d2a30;color:#bfe6ff;border:1px solid #bfe6ff88;border-radius:8px;padding:10px;font:inherit;cursor:pointer}
-  #wiiDbg{position:fixed;left:10px;top:10px;z-index:6;margin:0;padding:6px 8px;max-width:46vw;font:11px/1.35 monospace;color:#9fffb0;background:#000a;border:1px solid #bfe6ff44;border-radius:6px;pointer-events:none;white-space:pre-wrap}
-  #skMenu{border:1px solid #bfe6ff44;border-radius:8px;padding:6px 8px;font-size:13px;text-align:left} #skMenu summary{cursor:pointer;color:#ff9a3c;font-weight:bold} #skMenu label{display:block;margin-top:6px} #skMenu input[type=range]{width:100%} #skMenu small{color:#a9bdd1}
-  #hCur{position:fixed;left:0;top:0;z-index:20;width:22px;height:22px;margin:-11px 0 0 -11px;border:3px solid #ff9a3c;border-radius:50%;background:#ff9a3c33;box-shadow:0 0 10px #ff9a3c;pointer-events:none;display:none}
+  #menu{position:fixed;top:0;bottom:0;left:50%;transform:translateX(-50%);width:min(260px,44vw);z-index:9;background:#061418cc;border:1px solid #7ae7ff88;border-radius:12px;padding:16px;display:none;flex-direction:column;gap:12px;justify-content:center;font:15px sans-serif;color:#fff;text-align:center;box-sizing:border-box}
+  #menu.on{display:flex} #menu{overflow-y:auto;gap:8px} #menu>:first-child{margin-top:auto} #menu>:last-child{margin-bottom:auto} #jobs{display:none;flex-direction:column;gap:6px} #jobs.on{display:flex} #menu button:disabled{opacity:.45;cursor:not-allowed} #menu button{background:#0d2a30;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:8px;padding:10px;font:inherit;cursor:pointer}
+  #wiiDbg{position:fixed;left:10px;top:10px;z-index:6;margin:0;padding:6px 8px;max-width:46vw;font:11px/1.35 monospace;color:#9fffb0;background:#000a;border:1px solid #7ae7ff44;border-radius:6px;pointer-events:none;white-space:pre-wrap}
+  #skMenu{border:1px solid #7ae7ff44;border-radius:8px;padding:6px 8px;font-size:13px;text-align:left} #skMenu summary{cursor:pointer;color:#ffd35a;font-weight:bold} #skMenu label{display:block;margin-top:6px} #skMenu input[type=range]{width:100%} #skMenu small{color:#9fdcea}
+  #hCur{position:fixed;left:0;top:0;z-index:20;width:22px;height:22px;margin:-11px 0 0 -11px;border:3px solid #ffd35a;border-radius:50%;background:#ffd35a33;box-shadow:0 0 10px #ffd35a;pointer-events:none;display:none}
   #palmRing{position:fixed;left:50%;top:50%;z-index:19;width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:50%;display:none;place-items:center;font-size:40px;pointer-events:none;
-    background:radial-gradient(#061418dd 58%,transparent 60%),conic-gradient(#ff9a3c var(--p,0deg),#bfe6ff33 0);box-shadow:0 0 16px #ff9a3c66}
+    background:radial-gradient(#061418dd 58%,transparent 60%),conic-gradient(#ffd35a var(--p,0deg),#7ae7ff33 0);box-shadow:0 0 16px #ffd35a66}
   #palmRing.on{display:grid}
-  #hCur.on{display:block} #hCur.down{background:#ff9a3ccc;border-color:#fff}
-  #menu .hHover{outline:2px solid #ff9a3c;outline-offset:2px;box-shadow:0 0 12px #ff9a3c88}
-</style>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-<style id="rq-theme">
-/* ===== Radiqle_Project 共通テーマ（AR端末風：白×オレンジ）=====
-   ゲーム側 <style> の後に読み込むので、同じセレクタはこちらが優先されます */
-:root{
-  --rq-ink:#f4f8ff; --rq-sub:#a9bdd1; --rq-dim:#5d7186;
-  --rq-acc:#ff9a3c; --rq-acc2:#ffc078; --rq-ice:#bfe6ff; --rq-ok:#6dffb0; --rq-ng:#ff6b7a;
-  --rq-line:rgba(220,236,255,.30); --rq-glass:rgba(8,16,30,.72);
-  --rq-en:"Rajdhani","Noto Sans JP",sans-serif; --rq-jp:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
-  --rq-cut:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
-}
-html,body{background:#050912}
-
-/* ---- 右上ボタン ---- */
-#ui{font:500 13px var(--rq-jp);top:16px;right:16px}
-#ui button,#ui > button{background:var(--rq-glass);color:var(--rq-ink);border:1px solid var(--rq-line);border-radius:0;padding:7px 12px;
-  font:500 13px var(--rq-jp);letter-spacing:.04em;clip-path:var(--rq-cut);backdrop-filter:blur(4px);transition:background .15s,color .15s,border-color .15s}
-#ui button:hover{background:rgba(255,154,60,.14);color:var(--rq-acc2);border-color:var(--rq-acc)}
-#menuBtn{min-width:40px;font-weight:700 !important}
-#aimBtn.off,#mAim.off{color:var(--rq-ng) !important;border-color:rgba(255,107,122,.6) !important}
-#faceBadge{color:var(--rq-ice);font:500 12px var(--rq-jp)}
-#wiiStat{color:var(--rq-acc2) !important;font:500 12px var(--rq-jp) !important}
-
-/* ---- メニュー（中央の縦パネル）---- */
-#menu{justify-content:flex-start;justify-content:safe center;background:linear-gradient(180deg,rgba(10,20,36,.88),rgba(5,10,20,.92));border:0;border-left:1px solid var(--rq-line);border-right:1px solid var(--rq-line);
-  border-radius:0;font:500 14px var(--rq-jp);color:var(--rq-ink);backdrop-filter:blur(8px);padding:18px 16px;
-  box-shadow:0 0 0 1px rgba(0,0,0,.4),0 0 60px rgba(0,0,0,.6)}
-#menu::before,#menu::after{content:"";position:absolute;display:block;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--rq-acc),transparent)}
-#menu::before{top:0}#menu::after{bottom:0}
-#menu h3{font:300 26px var(--rq-en) !important;letter-spacing:.5em;margin-right:-.5em !important;color:var(--rq-ink)}
-#menu h3::after{content:"RADIQLE SYSTEM";display:block;font:700 10px var(--rq-en);letter-spacing:.5em;color:var(--rq-acc);margin-top:4px}
-#menu button{background:rgba(255,255,255,.04);color:var(--rq-ink);border:1px solid var(--rq-line);border-radius:0;padding:8px 12px;
-  font:500 14px var(--rq-jp);text-align:left;clip-path:var(--rq-cut);position:relative;transition:background .15s,border-color .15s,color .15s,padding .15s}
-#menu button::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:transparent;transition:background .15s}
-#menu button:hover,#menu .hHover{background:rgba(255,154,60,.14) !important;border-color:var(--rq-acc) !important;color:var(--rq-acc2) !important;outline:0 !important;box-shadow:none !important;padding-left:18px}
-#menu button:hover::before,#menu .hHover::before{background:var(--rq-acc)}
-#menu label{font-size:13px;color:var(--rq-sub);text-align:left}
-#menu small{color:var(--rq-dim) !important;font-size:11px}
-#menu #camTabs button.on{background:var(--rq-acc);color:#1a0d00;border-color:var(--rq-acc)}
-#jobs button{padding-left:22px !important}
-
-/* ---- 詳細設定・カメラパネル ---- */
-#camPanel{background:var(--rq-glass);border:1px solid var(--rq-line);border-radius:0;font:400 13px var(--rq-jp);color:var(--rq-ink)}
-#camPanel b,#camPanel .cpH{color:var(--rq-acc2) !important;font-weight:700;letter-spacing:.05em}
-#camPanel small{color:var(--rq-dim)}
-#camPanel hr{border-top-color:var(--rq-line) !important}
-#camStat,#bgStat,#faceStat,#vrmStat{color:var(--rq-acc2) !important}
-#skMenu,.cpGrp{border:1px solid var(--rq-line);border-radius:0;background:rgba(255,255,255,.03)}
-#skMenu summary,.cpGrp summary{color:var(--rq-acc2);letter-spacing:.04em}
-#skMenu b{color:var(--rq-ink)}
-#menu select,#camPanel select,#menu input[type=number]{background:#0b1626;color:var(--rq-ink);border:1px solid var(--rq-line);border-radius:0;padding:5px}
-input[type=range]{accent-color:var(--rq-acc)}
-input[type=checkbox]{accent-color:var(--rq-acc)}
-
-/* ---- デバッグ・カーソル ---- */
-#wiiDbg{background:rgba(5,10,20,.72);border:1px solid var(--rq-line);border-left:3px solid var(--rq-acc);border-radius:0;color:var(--rq-ice);font:11px/1.4 ui-monospace,Consolas,monospace}
-#facePrev,#sidePrev{border:1px solid var(--rq-line) !important;border-radius:0 !important;box-shadow:0 0 0 3px rgba(5,10,20,.6)}
-#hCur{border:2px solid var(--rq-ink);background:rgba(255,154,60,.25);box-shadow:0 0 12px var(--rq-acc)}
-#hCur.down{background:var(--rq-acc);border-color:#fff}
-#palmRing{background:radial-gradient(rgba(5,10,20,.88) 58%,transparent 60%),conic-gradient(var(--rq-acc) var(--p,0deg),rgba(220,236,255,.18) 0);box-shadow:0 0 18px rgba(255,154,60,.45)}
-
-/* ===== rq_theme.js が出すAR HUDフレーム ===== */
-#rqFrame{position:fixed;inset:0;z-index:4;pointer-events:none}
-#rqFrame .c{position:absolute;width:34px;height:34px;border:2px solid var(--rq-ink);opacity:.55}
-#rqFrame .tl{left:12px;top:12px;border-right:0;border-bottom:0}
-#rqFrame .tr{right:12px;top:12px;border-left:0;border-bottom:0}
-#rqFrame .bl{left:12px;bottom:12px;border-right:0;border-top:0}
-#rqFrame .br{right:12px;bottom:12px;border-left:0;border-top:0}
-#rqFrame .c::after{content:"";position:absolute;width:6px;height:6px;background:var(--rq-acc)}
-#rqFrame .tl::after{left:-4px;top:-4px}#rqFrame .tr::after{right:-4px;top:-4px}#rqFrame .bl::after{left:-4px;bottom:-4px}#rqFrame .br::after{right:-4px;bottom:-4px}
-#rqTop{position:absolute;left:50%;top:14px;transform:translateX(-50%);display:flex;gap:14px;align-items:center;
-  font:500 12px var(--rq-en);letter-spacing:.3em;color:var(--rq-sub);text-shadow:0 0 6px #000;white-space:nowrap}
-#rqTop b{color:var(--rq-ink);font-weight:700}
-#rqTop .m{color:var(--rq-acc)}
-#rqClock{font:500 15px var(--rq-en);color:var(--rq-ink);letter-spacing:.15em}
-
-/* ===== リンク到着演出（?link=1）===== */
-#rqLink{position:fixed;inset:0;z-index:200;pointer-events:none;background:#fff;display:grid;place-items:center;transition:background 1.2s ease}
-#rqLink.fade{background:rgba(255,255,255,0)}
-#rqLink .box{text-align:center;transition:opacity .8s,transform .8s}
-#rqLink .l1{font:700 13px var(--rq-en);letter-spacing:.6em;color:var(--rq-acc)}
-#rqLink .l2{font:300 clamp(30px,5vw,58px) var(--rq-en);letter-spacing:.25em;color:#24313f;margin-top:6px;transition:color 1s}
-#rqLink.fade .l2{color:#fff;text-shadow:0 0 18px rgba(120,180,255,.8)}
-#rqLink .bar{width:min(420px,70vw);height:2px;margin:14px auto 0;background:rgba(36,49,63,.15);overflow:hidden}
-#rqLink .bar i{display:block;height:100%;width:0;background:var(--rq-acc);transition:width 1.4s ease}
-#rqLink.go .bar i{width:100%}
-#rqLink.out .box{opacity:0;transform:translateY(-12px)}
-/* ナビゲーター（チュートリアル案内）*/
-#rqNavi{position:fixed;left:50%;top:58px;transform:translateX(-50%) translateY(-16px);z-index:8;pointer-events:none;opacity:0;transition:opacity .5s,transform .5s;
-  width:min(640px,60vw);padding:10px 18px 10px 80px;background:var(--rq-glass);border:1px solid var(--rq-line);clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);backdrop-filter:blur(6px)}
-#rqNavi.on{opacity:1;transform:translateX(-50%) translateY(0)}
-#rqNavi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--rq-acc)}
-#rqNavi .ico{position:absolute;left:18px;top:50%;transform:translateY(-50%);width:50px;height:50px;border-radius:50%;border:2px solid var(--rq-ink);display:grid;place-items:center;
-  font:700 14px var(--rq-en);letter-spacing:.1em;color:var(--rq-acc);box-shadow:0 0 14px rgba(255,154,60,.4),inset 0 0 10px rgba(255,154,60,.3)}
-#rqNavi .who{font:700 11px var(--rq-en);letter-spacing:.4em;color:var(--rq-acc)}
-#rqNavi .say{margin-top:4px;font:500 16px/1.6 var(--rq-jp);color:var(--rq-ink);min-height:1.6em}
-
+  #hCur.on{display:block} #hCur.down{background:#ffd35acc;border-color:#fff}
+  #menu .hHover{outline:2px solid #ffd35a;outline-offset:2px;box-shadow:0 0 12px #ffd35a88}
 </style>
 </head>
-<body data-rq-mode="TUTORIAL">
+<body>
 <div id="ui"><button id="camBtn">📷 カメラ設定</button> <button id="viewBtn">👁 一人称</button> <button id="aimBtn">🎯 視点操作 ON</button> <button id="ctrlBtn">🎮 Wii接続</button> <button id="menuBtn">☰</button>
   <div id="camPanel" hidden>
     <label>⚙ 負荷モード <select id="qMode"><option value="high">高画質（重い）</option><option value="std">標準</option><option value="light" selected>軽量（ノートPC推奨）</option></select></label>
     <small>軽量: 描画解像度を下げ、顔認識20回/秒・手認識5回/秒に間引き、背景カメラを640×360で取得</small>
-    <hr style="border:0;border-top:1px solid #bfe6ff44;margin:10px 0 4px">
-    <b style="color:#ff9a3c">📷 カメラの割り当て</b>
+    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <b style="color:#ffd35a">📷 カメラの割り当て</b>
     <label>フロント（顔・手の認識）<select id="faceSel"></select></label>
     <label>バック（背景の映像）<select id="camSel"></select></label>
     <div><button id="camApply">▶ この割り当てで開く</button> <button id="camRefresh">🔄 カメラを再検出</button> <button id="faceFlip">⇄ 入れ替え</button></div>
     <div id="camStat">「カメラを再検出」で一覧に名前が出ます</div>
     <small>自動: 内蔵カメラ＝フロント、USBカメラ＝バック。違うときは手で選んでください。</small>
-    <hr style="border:0;border-top:1px solid #bfe6ff44;margin:10px 0 4px">
-    <b style="color:#ff9a3c">🖼 敵の背景</b>
+    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <b style="color:#ffd35a">🖼 敵の背景</b>
     <label>背景の種類 <select id="bgMode"><option value="cam">📷 バックカメラの映像</option><option value="video">🎞 動画ファイル</option><option value="image">🖼 画像ファイル</option><option value="none">なし（単色）</option></select></label>
     <div id="bgCamRow"><label><input type="checkbox" id="mir"> 左右反転</label></div>
     <div id="bgFileRow" style="display:none">
@@ -152,28 +53,28 @@ input[type=checkbox]{accent-color:var(--rq-acc)}
       <label><input type="checkbox" id="bgFlip"> 左右反転</label>
     </div>
     <label><input type="checkbox" id="bgTP"> 俯瞰モードでも背景に表示</label>
-    <div id="bgStat" style="font-size:12px;color:#ff9a3c"></div>
-    <hr style="border:0;border-top:1px solid #bfe6ff44;margin:10px 0 4px">
-    <b style="color:#ff9a3c">👤 顔認識</b>
+    <div id="bgStat" style="font-size:12px;color:#ffd35a"></div>
+    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <b style="color:#ffd35a">👤 顔認識</b>
     <label><input type="checkbox" id="faceOn" checked> 顔の動きで視点・照準を操作</label>
     <label>カメラの種類 <select id="faceType"><option value="auto">自動判定</option><option value="front">フロント（鏡像）</option><option value="back">バック（非鏡像）</option></select></label>
     <label>感度 <input type="range" id="faceGain" min="0.5" max="3" step="0.1" value="1.5"></label>
     <label><input type="checkbox" id="facePrevOn" checked> 認識プレビューを表示</label>
     <div><button id="faceStart">顔認識を開始/再起動</button> <button id="faceCal">中心リセット (C)</button></div>
-    <div id="faceStat" style="font-size:12px;color:#ff9a3c"></div>
-    <hr style="border:0;border-top:1px solid #bfe6ff44;margin:10px 0 4px">
-    <b style="color:#ff9a3c">🧍 俯瞰モード（VRMアバター）</b>
+    <div id="faceStat" style="font-size:12px;color:#ffd35a"></div>
+    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <b style="color:#ffd35a">🧍 俯瞰モード（VRMアバター）</b>
     <label>VRMファイル<input type="file" id="vrmFile" accept=".vrm,.glb"></label>
-    <div id="vrmStat" style="font-size:12px;color:#ff9a3c">未読み込み（読み込むまでは簡易アバター）</div>
+    <div id="vrmStat" style="font-size:12px;color:#ffd35a">未読み込み（読み込むまでは簡易アバター）</div>
     <label>カメラの置き方 <select id="poseCam"><option value="front">プレイヤーを正面から撮る（推奨）</option><option value="back">プレイヤーを背後から撮る</option></select></label>
     <label><input type="checkbox" id="poseOn" checked> 映像の動きをアバターに反映</label>
     <label><input type="checkbox" id="poseMove" checked> 体の左右移動で回避</label>
     <small>俯瞰モードでは「バック」のカメラ1台（既定はバックカメラ）だけで全身を認識します。顔用カメラは止めます。全身が映る位置に置いてください。</small>
   </div>
-  <div id="faceBadge"></div><div id="perfStat" style="margin-top:4px;font:12px monospace;color:#9fffb0;text-shadow:0 0 4px #000"></div><div id="wiiStat" style="margin-top:4px;font-size:12px;color:#ff9a3c;text-shadow:0 0 4px #000"></div></div>
+  <div id="faceBadge"></div><div id="perfStat" style="margin-top:4px;font:12px monospace;color:#9fffb0;text-shadow:0 0 4px #000"></div><div id="wiiStat" style="margin-top:4px;font-size:12px;color:#ffd35a;text-shadow:0 0 4px #000"></div></div>
 <div id="menu"><h3 style="margin:0">MENU</h3>
   <button id="mClose">▶ 再開</button><button id="mView">👁 視点: 一人称</button><button id="mAim">🎯 視点操作: ON</button><button id="mFace">⇄ カメラ入れ替え</button><button id="mCtrl">🎮 Wiiリモコン接続</button>
-    <label>効果音 <input type="range" id="mVol" min="0" max="1" step=".1" value=".8"></label><label>BGM <input type="range" id="mBgm" min="0" max="1" step=".05" value=".5"></label><label>Wii振り感度 <input type="range" id="mWiiTh" min="1.2" max="4" step=".1" value="2.2"><br><small style="color:#a9bdd1">左ほど敏感</small></label>
+    <label>効果音 <input type="range" id="mVol" min="0" max="1" step=".1" value=".8"></label><label>BGM <input type="range" id="mBgm" min="0" max="1" step=".05" value=".5"></label><label>Wii振り感度 <input type="range" id="mWiiTh" min="1.2" max="4" step=".1" value="2.2"><br><small style="color:#9fdcea">左ほど敏感</small></label>
   <details id="skMenu"><summary>⚔ ソードスキル（縦→横）</summary>
     <label><input type="checkbox" id="skOn" checked> 有効</label>
     <label>受付時間 <b id="skWinV">1.5</b>秒<input type="range" id="skWin" min="0.5" max="3" step="0.1" value="1.5"><small>縦を斬り終えてから横を振り始めるまで</small></label>
@@ -188,16 +89,21 @@ input[type=checkbox]{accent-color:var(--rq-acc)}
     <label>突き(ヴォーパル) 加速度 <b id="skTAV">4.0</b>g<input type="range" id="skTA" min="2.5" max="8" step="0.1" value="4.0"><small>回転が小さく加速度が大きい動き</small></label>
     <label>突きの回転上限 <b id="skTRV">150</b>°<input type="range" id="skTR" min="30" max="400" step="10" value="150"></label>
     <label>突きの最大速度 <b id="skTPV">800</b>°/s<input type="range" id="skTP" min="300" max="1500" step="50" value="800"></label>
-    <small style="display:block;margin-top:6px;color:#ff9a3c">▼ 反応しない時: その動きを1回だけ行い、直後に押す（キー1〜4）。直近の斬りを基準にしきい値を自動設定</small>
+    <small style="display:block;margin-top:6px;color:#ffd35a">▼ 反応しない時: その動きを1回だけ行い、直後に押す（キー1〜4）。直近の斬りを基準にしきい値を自動設定</small>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px"><button id="skL1">①縦重撃を登録</button><button id="skL2">②突きを登録</button><button id="skL3">③横重撃を登録</button><button id="skL4">④一回転を登録</button></div>
     <label><input type="checkbox" id="skDbg" checked> 判定ログを表示</label>
+    <b style="display:block;margin-top:8px;color:#ffd35a">🗡🗡 二刀流（ヌンチャク）</b>
+    <label><input type="checkbox" id="skDual" checked> 二刀流を使う（ヌンチャクを振る=左の剣）</label>
+    <label>ヌンチャク振り感度 <b id="skNtV">1.8</b>g<input type="range" id="skNt" min="1.2" max="3" step="0.1" value="1.8"><small>判定ログの「左 a=」の最大値を参考に。小さいほど敏感</small></label>
+    <label>ダブルサーキュラー判定 <b id="skDsV">0.65</b><input type="range" id="skDs" min="0.3" max="0.95" step="0.05" value="0.65"><small>両手の動きの似ている度合。大きいほど厳しい（ログの「一致」を参考に）</small></label>
+    <label><input type="checkbox" id="skPass" checked> ヌンチャク併用モード（MotionPlusパススルー）</label><small>ジャイロが不安定になる時はOFF（ヌンチャクは使えなくなる）</small>
     <label><input type="checkbox" id="skLR"> 横斬りの左右を反転<small>→に振ったのに「←」と判定される時はON</small></label>
     <small style="display:block;margin-top:6px">バーチカル:縦→横 / ヴォーパル:突き / ソニックリープ:縦重 / ロータス:横重 / スクエア:縦横縦横 / メテオ:一回転</small>
     <button id="skCal" style="margin-top:6px;width:100%">ジャイロ再キャリブ（−ボタンでも可）</button>
   </details>
-  <button id="mRestart">↻ この練習をやり直す</button><button id="mFirst">⏮ 最初の練習から</button><button id="mMain">⚔ 本番へ</button><button id="mTitle">⌂ タイトルへ</button>
-  <small style="color:#a9bdd1">🖱 Wiiなしで試す: スペース=Ⓐ / P=＋ / 画面をドラッグ=斬る（クリック=突き・円を描く=回転）</small>
-  <small style="color:#a9bdd1">✌ ピースを約1秒キープで開く / 指先でカーソル → Aで決定（スライダーはAを押したまま左右）/ M キーで開閉</small></div>
+  <button id="mFree">🎯 フリー練習（自由に試す）</button><button id="mRestart">↻ この練習をやり直す</button><button id="mFirst">⏮ 最初の練習から</button><button id="mMain">⚔ 本番へ</button><button id="mTitle">⌂ タイトルへ</button>
+  <small style="color:#9fdcea">🖱 Wiiなしで試す: スペース=Ⓐ / P=＋ / 画面をドラッグ=斬る（クリック=突き・円を描く=回転）/ N=疑似ヌンチャク L=左の剣 K=両手同時</small>
+  <small style="color:#9fdcea">✌ ピースを約1秒キープで開く / 指先でカーソル → Aで決定（スライダーはAを押したまま左右）/ M キーで開閉</small></div>
 <div id="hCur"></div><div id="palmRing">✌</div>
 <pre id="wiiDbg"></pre>
 <canvas id="facePrev" width="320" height="240"></canvas>
@@ -208,7 +114,7 @@ input[type=checkbox]{accent-color:var(--rq-acc)}
 <script>
 // ===== GIANT SLIME RAID =====
 // 左クリック: 斬る(長押しでガード) / 右クリック: パリィ / 紫の攻撃はパリィ不可→ガード / Wii: 振る=斬る, B+振り上げ=パリィ, A長押し=ガード / A,D: 左右に回避 / V: VR(左右分割)モード切替 / 視点・照準: 顔の動き(マウスでも可) / C: 顔の中心リセット
-const FONT = '"Rajdhani","Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif';
+const FONT = '"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif';
 const vid = document.getElementById('v');
 const renderer = new THREE.WebGLRenderer({ antialias:true });
 // ===== 負荷モード =====
@@ -356,6 +262,7 @@ const grip = new THREE.Mesh(new THREE.CylinderGeometry(.08, .08, .8, 10), new TH
 const pommel = new THREE.Mesh(new THREE.SphereGeometry(.14, 12, 10), gold); pommel.position.y = -.55;
 sword.add(blade, edge, tip, guard, grip, pommel);
 sword.position.set(.9, -1.1, -1.9); sword.rotation.set(-.95, 0, .3);
+const swordL = sword.clone(); swordL.position.set(-.9, -1.1, -1.9); swordL.rotation.set(-.95, 0, -.3); swordL.visible = false; camera.add(swordL);   // 二刀流（ヌンチャク）の左手の剣
 const shield = new THREE.Group(); shield.position.z = -2.3; shield.visible = false; camera.add(shield);
 shield.add(new THREE.Mesh(new THREE.CircleGeometry(.9, 32), new THREE.MeshBasicMaterial({ color:0xffd35a, transparent:true, opacity:.25, blending:THREE.AdditiveBlending, depthTest:false })));
 shield.add(new THREE.Mesh(new THREE.RingGeometry(.85, .95, 40), new THREE.MeshBasicMaterial({ color:0xffd35a, transparent:true, blending:THREE.AdditiveBlending, depthTest:false })));
@@ -378,7 +285,7 @@ const prim = new THREE.Group(), holder = new THREE.Group();   // prim = 簡易�
 prim.add(mk(new THREE.CylinderGeometry(.3, .28, .6, 12), M(0x223049), 0, .3, 0), mk(new THREE.CylinderGeometry(.32, .38, 1, 12), M(0x3a7bd5), 0, 1.0, 0), headM, cape);
 av.add(prim, holder); av.visible = false; scene.add(av);
 function setView(v){
-  tp = v; av.visible = tp; rig = tp ? aim : camera; rig.add(sword, shield, gShield, arc);
+  tp = v; av.visible = tp; rig = tp ? aim : camera; rig.add(sword, swordL, shield, gShield, arc);
   const t = tp ? '俯瞰(後方)' : '一人称'; $('viewBtn').textContent = '👁 ' + t; $('mView').textContent = '👁 視点: ' + t;
   applyBg(); floorMat.opacity = tp ? .8 : .5;   // 俯瞰ではカメラ映像を背景にしない（カメラはプレイヤーを撮っているため）
   if (tp) enterTP(); else leaveTP();
@@ -396,28 +303,13 @@ function setViewCtl(v){
 // ===== HUD（3Dで描くのでVRモードでも見える）=====
 const hud = new THREE.Group(); camera.add(hud);
 function bar(w, y, hex){
-  const FH = .15, SK = .07, PW = w + .16, PH = .32;   // 中身の高さ / 斜めの量 / 枠の大きさ
-  const frame = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), new THREE.MeshBasicMaterial({ transparent:true, depthTest:false,
-    map:canvasTex(1024, 96, (x, cw, ch) => {
-      const u = cw/PW, v = ch/PH, l = (PW - w)/2*u, r = l + w*u, t = (PH - FH)/2*v, b = t + FH*v, s = SK*u;
-      const para = (o) => { x.beginPath(); x.moveTo(l - o, b + o); x.lineTo(r - s + o*.4, b + o); x.lineTo(r + o, t - o); x.lineTo(l + s - o*.4, t - o); x.closePath(); };
-      para(6); x.fillStyle = 'rgba(6,12,24,.62)'; x.fill();
-      x.lineWidth = 2; x.strokeStyle = 'rgba(230,242,255,.75)'; x.stroke();
-      x.strokeStyle = 'rgba(230,242,255,.22)'; x.lineWidth = 2;   // 10%ごとの目盛り
-      for (let i = 1; i < 10; i++){ const px = l + (r - l)*i/10; x.beginPath(); x.moveTo(px + s*.15, b + 6); x.lineTo(px + s*.15, b + 14); x.stroke(); }
-      x.fillStyle = '#ff9a3c'; x.fillRect(l - 14, t - 6, 5, b - t + 12);   // 左端のオレンジ
-      x.fillRect(r - 40, b + 10, 40, 3);
-    }) }));
-  frame.position.set(0, y, -3); frame.renderOrder = 10;
-  const sh = new THREE.Shape(); sh.moveTo(0, -FH/2); sh.lineTo(w - SK, -FH/2); sh.lineTo(w, FH/2); sh.lineTo(SK, FH/2); sh.closePath();
-  const fill = new THREE.Mesh(new THREE.ShapeGeometry(sh), new THREE.MeshBasicMaterial({ color:hex, depthTest:false, transparent:true, opacity:.95 }));
-  fill.position.set(-w/2, y, -3); fill.renderOrder = 11;
-  const gl = new THREE.Shape(); gl.moveTo(SK*.5, FH*.05); gl.lineTo(w - SK*.5, FH*.05); gl.lineTo(w - SK*.3, FH*.42); gl.lineTo(SK*.8, FH*.42); gl.closePath();
-  const gloss = new THREE.Mesh(new THREE.ShapeGeometry(gl), new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:.28, depthTest:false }));
-  gloss.renderOrder = 12; fill.add(gloss);
-  hud.add(frame, fill); return fill;
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(w + .06, .2), new THREE.MeshBasicMaterial({ color:0, transparent:true, opacity:.6, depthTest:false }));
+  back.position.set(0, y, -3); back.renderOrder = 10;
+  const g = new THREE.PlaneGeometry(w, .14); g.translate(w/2, 0, 0);
+  const fill = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color:hex, depthTest:false })); fill.position.set(-w/2, y, -3); fill.renderOrder = 11;
+  hud.add(back, fill); return fill;
 }
-const bossBar = bar(3.4, 1.55, 0xff9a3c), parBar = bar(1.0, -1.78, 0xbfe6ff);   // bossBar = 練習の進み具合
+const bossBar = bar(3.4, 1.55, 0xffd35a), parBar = bar(1.0, -1.78, 0xffd35a);   // bossBar = 練習の進み具合
 // 横長の文字スプライト（HUD用）
 function mkSpriteW(text, hex, sc){
   const t = canvasTex(1024, 128, (x, w, h) => {
@@ -441,26 +333,17 @@ msg.position.z = -4; msg.renderOrder = 30; camera.add(msg);
 // ===== 照準（顔操作時に表示。ray.setFromCamera と同じNDC位置に置く）=====
 const reticle = new THREE.Sprite(new THREE.SpriteMaterial({ transparent:true, depthTest:false, map:canvasTex(128, 128, (x, w, h) => {
   const segs = [[64,14,64,34],[64,94,64,114],[14,64,34,64],[94,64,114,64]];
-  for (const [col, lw] of [['#000a', 10], ['#bfe6ff', 5]]){
+  for (const [col, lw] of [['#000a', 10], ['#7ae7ff', 5]]){
     x.strokeStyle = col; x.lineWidth = lw; x.beginPath(); x.arc(64, 64, 30, 0, 7); x.stroke();
     x.beginPath(); for (const [a, b, c, d] of segs){ x.moveTo(a, b); x.lineTo(c, d); } x.stroke();
   }
-  x.fillStyle = '#bfe6ff'; x.beginPath(); x.arc(64, 64, 4, 0, 7); x.fill();
+  x.fillStyle = '#7ae7ff'; x.beginPath(); x.arc(64, 64, 4, 0, 7); x.fill();
 }) }));
 reticle.renderOrder = 35; reticle.visible = false; camera.add(reticle);
-function rqPanel(x, w, h){
-  const c = 38, m = 8;
-  x.beginPath(); x.moveTo(m + c, m); x.lineTo(w - m, m); x.lineTo(w - m, h - m - c); x.lineTo(w - m - c, h - m); x.lineTo(m, h - m); x.lineTo(m, m + c); x.closePath();
-  const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(12,24,42,.9)'); g.addColorStop(1, 'rgba(5,10,20,.92)');
-  x.fillStyle = g; x.fill(); x.lineWidth = 2.5; x.strokeStyle = 'rgba(230,242,255,.55)'; x.stroke();
-  x.fillStyle = '#ff9a3c'; x.fillRect(m, m + c + 6, 7, h*.32);                    // 左のアクセント
-  x.fillRect(m + c + 10, m - 1, 160, 4); x.fillRect(w - m - 200, h - m - 3, 150, 4);  // 上下のライン
-  x.fillStyle = 'rgba(230,242,255,.07)'; for (let yy = m + 4; yy < h - m; yy += 4) x.fillRect(m + 2, yy, w - 2*m - 4, 1);   // うっすら走査線
-}
 function setMsg(L){
   if (!L){ msg.visible = false; return; }
   const t = canvasTex(1024, 512, (x, w, h) => {
-    rqPanel(x, w, h);
+    x.fillStyle = 'rgba(0,0,0,.62)'; x.fillRect(0, 0, w, h); x.strokeStyle = '#ffd35a'; x.lineWidth = 4; x.strokeRect(8, 8, w-16, h-16);
     x.textAlign = 'center'; x.textBaseline = 'middle';
     let y = h/2 - L.reduce((a, l) => a + l[2]*1.5, 0)/2;
     for (const [s, c, z] of L){ y += z*.75; x.font = `bold ${z}px ${FONT}`; x.fillStyle = c; x.fillText(s, w/2, y); y += z*.75; }
@@ -669,7 +552,7 @@ function faceDraw(){
   const w = prevC.width, h = prevC.height, v = face.src;
   pctx.fillStyle = '#000'; pctx.fillRect(0, 0, w, h);
   if (!v || v.readyState < 2 || !v.videoWidth){
-    pctx.fillStyle = '#ff9a3c'; pctx.font = 'bold 18px sans-serif'; pctx.textAlign = 'center';
+    pctx.fillStyle = '#ffd35a'; pctx.font = 'bold 18px sans-serif'; pctx.textAlign = 'center';
     pctx.fillText(face.lm || face.loading ? 'カメラ待機中…' : '「顔認識を開始」を押すか、ゲームを開始', w/2, h/2); return;
   }
   pctx.save(); if (faceMirror()){ pctx.translate(w, 0); pctx.scale(-1, 1); }
@@ -677,17 +560,17 @@ function faceDraw(){
   pctx.drawImage(v, (w - dw)/2, (h - dh)/2, dw, dh); pctx.restore();
   const X = x => (faceMirror() ? 1 - x : x)*w, Y = y => y*h;
   if (face.seen && face.pts){
-    pctx.fillStyle = '#6dffb0'; for (const q of face.pts) pctx.fillRect(X(q.x) - 1, Y(q.y) - 1, 2, 2);
+    pctx.fillStyle = '#5ee08a'; for (const q of face.pts) pctx.fillRect(X(q.x) - 1, Y(q.y) - 1, 2, 2);
     pctx.fillStyle = '#ff4d5e'; pctx.beginPath(); pctx.arc(X(face.x), Y(face.y), 5, 0, 7); pctx.fill();   // 鼻先
   }
   if (face.cx !== null){   // 構えた中心
-    pctx.strokeStyle = '#ff9a3c'; pctx.lineWidth = 1.5; const cx = X(face.cx), cy = Y(face.cy);
+    pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 1.5; const cx = X(face.cx), cy = Y(face.cy);
     pctx.beginPath(); pctx.moveTo(cx - 12, cy); pctx.lineTo(cx + 12, cy); pctx.moveTo(cx, cy - 12); pctx.lineTo(cx, cy + 12); pctx.stroke();
     if (face.seen){ pctx.strokeStyle = '#ff4d5e'; pctx.beginPath(); pctx.moveTo(cx, cy); pctx.lineTo(X(face.x), Y(face.y)); pctx.stroke(); }
   }
-  if (hand.palm && hand.prog > 0){ pctx.strokeStyle = '#ff9a3c'; pctx.lineWidth = 4; pctx.beginPath(); pctx.arc(X(hand.palm.x), Y(hand.palm.y), 22, -Math.PI/2, -Math.PI/2 + hand.prog*Math.PI*2); pctx.stroke(); }
+  if (hand.palm && hand.prog > 0){ pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 4; pctx.beginPath(); pctx.arc(X(hand.palm.x), Y(hand.palm.y), 22, -Math.PI/2, -Math.PI/2 + hand.prog*Math.PI*2); pctx.stroke(); }
   pctx.font = 'bold 16px sans-serif'; pctx.textAlign = 'left';
-  pctx.fillStyle = !face.lm ? '#ff9a3c' : face.seen ? '#6dffb0' : '#ff4d5e';
+  pctx.fillStyle = !face.lm ? '#ffd35a' : face.seen ? '#5ee08a' : '#ff4d5e';
   pctx.fillText(!face.lm ? 'モデル読み込み中…' : face.seen ? (face.cx === null ? '顔を中心に構えて…' : '● 追跡中') : '× 顔が見つかりません', 8, 22);
 }
 $('faceOn').onchange = e => {
@@ -806,19 +689,19 @@ function poseDraw(){
   const w = prevC.width, h = prevC.height, v = vid;
   pctx.fillStyle = '#000'; pctx.fillRect(0, 0, w, h);
   if (!camStream || v.readyState < 2 || !v.videoWidth){
-    pctx.fillStyle = '#ff9a3c'; pctx.font = 'bold 16px sans-serif'; pctx.textAlign = 'center'; pctx.fillText('カメラ待機中…', w/2, h/2); return;
+    pctx.fillStyle = '#ffd35a'; pctx.font = 'bold 16px sans-serif'; pctx.textAlign = 'center'; pctx.fillText('カメラ待機中…', w/2, h/2); return;
   }
   const mir = pose.cam === 'front', f = Math.min(w/v.videoWidth, h/v.videoHeight), dw = v.videoWidth*f, dh = v.videoHeight*f, ox = (w - dw)/2, oy = (h - dh)/2;
   pctx.save(); if (mir){ pctx.translate(w, 0); pctx.scale(-1, 1); } pctx.drawImage(v, ox, oy, dw, dh); pctx.restore();
   const X = x => { const p = ox + x*dw; return mir ? w - p : p; }, Y = y => oy + y*dh;
   if (pose.seen && pose.n){
-    const n = pose.n; pctx.strokeStyle = '#6dffb0'; pctx.lineWidth = 3; pctx.beginPath();
+    const n = pose.n; pctx.strokeStyle = '#5ee08a'; pctx.lineWidth = 3; pctx.beginPath();
     for (const [a, b] of POSE_LINKS){ pctx.moveTo(X(n[a].x), Y(n[a].y)); pctx.lineTo(X(n[b].x), Y(n[b].y)); } pctx.stroke();
     pctx.fillStyle = '#ff4d5e'; pctx.beginPath(); pctx.arc(X(n[0].x), Y(n[0].y), 4, 0, 7); pctx.fill();
   }
-  if (pose.cx !== null){ pctx.strokeStyle = '#ff9a3c'; pctx.lineWidth = 1.5; pctx.setLineDash([4, 4]); pctx.beginPath(); pctx.moveTo(X(pose.cx), oy); pctx.lineTo(X(pose.cx), oy + dh); pctx.stroke(); pctx.setLineDash([]); }
+  if (pose.cx !== null){ pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 1.5; pctx.setLineDash([4, 4]); pctx.beginPath(); pctx.moveTo(X(pose.cx), oy); pctx.lineTo(X(pose.cx), oy + dh); pctx.stroke(); pctx.setLineDash([]); }
   pctx.font = 'bold 15px sans-serif'; pctx.textAlign = 'left';
-  pctx.fillStyle = !pose.lm ? '#ff9a3c' : pose.seen ? '#6dffb0' : '#ff4d5e';
+  pctx.fillStyle = !pose.lm ? '#ffd35a' : pose.seen ? '#5ee08a' : '#ff4d5e';
   pctx.fillText(!pose.lm ? 'モデル読み込み中…' : pose.seen ? (pose.cx === null ? 'まっすぐ立って…' : '● 全身追跡中') : '× 全身が見つかりません', 8, 20);
 }
 
@@ -980,11 +863,11 @@ async function flipFaceCam(){   // フロント(顔)とバック(背景)のカ�
   listCams();
 }
 function faceMirror(){ const t = $('faceType').value; return t === 'auto' ? (face.src === vid ? camMirror : face.fm !== false) : t === 'front'; }
-const sPary = new Audio('pary.mp3'); let vol = .8; sPary.preload = 'auto';
-const sAtk = new Audio('atack.mp3'); sAtk.preload = 'auto';
+const sPary = new Audio('sound/pary.mp3'); let vol = .8; sPary.preload = 'auto';
+const sAtk = new Audio('sound/atack.mp3'); sAtk.preload = 'auto';
 function playAtk(){ try { const a = sAtk.cloneNode(); a.volume = vol; a.play().catch(() => {}); } catch (e){} }
 // 戦闘BGM（ループ）
-const bgm = new Audio('battle.mp3'); bgm.loop = true; bgm.preload = 'auto'; bgm.volume = .5;
+const bgm = new Audio('sound/battle.mp3'); bgm.loop = true; bgm.preload = 'auto'; bgm.volume = .5;
 function bgmPlay(restart){ try { if (restart) bgm.currentTime = 0; bgm.play().catch(() => {}); } catch (e){} }
 function bgmStop(){ try { bgm.pause(); } catch (e){} }
 // ガード音（素材なしのため簡易合成）
@@ -1002,8 +885,9 @@ $('mClose').onclick = () => toggleMenu(false); $('mFace').onclick = $('faceFlip'
 $('mVol').oninput = e => vol = +e.target.value; $('mBgm').oninput = e => bgm.volume = +e.target.value;
 $('mRestart').onclick = () => { toggleMenu(false); prGo(PR.i); };
 $('mFirst').onclick = () => { toggleMenu(false); prGo(0); };
-$('mMain').onclick = () => location.href = 'RQ_project_sord_hukan.html?start=1';   // 本番（ファイル名が違う場合はここを変更）
-$('mTitle').onclick = () => location.href = '../RQ_index.html';   // Radiqle タイトル
+$('mFree').onclick = () => { toggleMenu(false); prFree(); };
+$('mMain').onclick = () => location.href = 'Connectworld_sord.html?start=1';   // 本番（ファイル名が違う場合はここを変更）
+$('mTitle').onclick = () => location.href = 'parytitle.html';
 
 // ===== ゲーム状態 =====
 const keys = {}, mouse = { nx:0, ny:0 }, ray = new THREE.Raycaster(), tmp = new THREE.Vector3();
@@ -1018,9 +902,10 @@ function reset(){
 }
 
 function hurtBoss(d, at, big){   // 練習用：サンドバッグは倒れない（数字だけ出す）
+  if (!sb.active) sbHit();
   B.flash = .12; B.wob = .25;
   burst(at, big ? 0xffd35a : 0xffffff, big ? 40 : 22, 6);
-  popup(String(Math.round(d)), big ? '#ff9a3c' : '#ffffff', tmp.copy(at).add(new THREE.Vector3(0, .6, 0)).clone(), big ? 1.1 : .8);
+  popup(String(Math.round(d)), big ? '#ffd35a' : '#ffffff', tmp.copy(at).add(new THREE.Vector3(0, .6, 0)).clone(), big ? 1.1 : .8);
   shake = Math.max(shake, .12); hitstop = Math.max(hitstop, .05);
 }
 const SW_T = .32;   // 斬りモーションの長さ（旧.22。長く・大きくして見やすく）
@@ -1031,13 +916,26 @@ function attack(){
   P.swingCd = .4; P.swing = SW_T; P.dir *= -1;
   arc.position.x = mouse.nx*1.5; arc.position.y = mouse.ny*1.0;
   if (tgMode()) return;   // 的の練習中はサンドバッグがいないので振るモーションだけ
+  swingHit();
+}
+// 二刀流: ヌンチャクを振ると左手の剣で斬る（右手とは別のクールダウン）
+const PL = { swing:0, cd:0, dir:1 };
+function attackL(){
+  if (PL.cd > 0 || P.par > 0 || P.armed || P.guard || sb.active || anim) return;
+  if (sb.ready){ startStarburst(); return; }
+  playAtk(); PL.cd = .3; PL.swing = SW_T; PL.dir *= -1;
+  prCount('left');
+  if (tgMode()) tgSlashPieces({ ang:PL.dir > 0 ? -.25 : Math.PI + .25 });   // 的の練習中は破片だけ斬れる
+  else swingHit();
+}
+function swingHit(){
   ray.setFromCamera(new THREE.Vector2(mouse.nx, mouse.ny), camera);
   const cnt = P.counter > 0;   // パリィ後の1撃だけ大ダメージ（当たったら消費）
   let hit = ray.ray.intersectSphere(new THREE.Sphere(bossG.position.clone(), R*1.4), new THREE.Vector3());
   if (!hit && cnt && B.s !== 'dead') hit = bossG.position.clone();   // カウンター中は目線が外れていても振れば命中（パリィ成功で視線が外れるため）
   if (hit && B.s !== 'dead' && ray.ray.origin.distanceTo(hit) < 25){
     hurtBoss(cnt ? P.cBig : B.weak > 0 ? 9 : 6, hit, cnt);
-    if (cnt){ P.counter = 0; shake = .5; hitstop = .15; popCam('COUNTER!!', '#ff9a3c', 1.2, 1); }
+    if (cnt){ P.counter = 0; shake = .5; hitstop = .15; popCam('COUNTER!!', '#ffd35a', 1.2, 1); }
   }
 }
 // 赤く光っている間(予兆〜突進)に押せば、突進が当たる瞬間までパリィが有効（armed）
@@ -1050,11 +948,11 @@ function parried(){
   playPary(); const perfect = true, at = rig.localToWorld(new THREE.Vector3(0, 0, -2.4));
   hitstop = perfect ? .22 : .14; shake = perfect ? .5 : .3; fovp = perfect ? 14 : 8; flash = perfect ? .8 : .4; flashM.material.color.set(0xfff2b0);
   ring(at, perfect ? 6 : 4, 0xffd35a, .5); ring(at, 2.5, 0xffffff, .3); burst(at, 0xffd35a, perfect ? 90 : 55, 9);
-  popCam('PARRY!', '#ff9a3c', 1.3, 1);
+  popCam('PARRY!', '#ffd35a', 1.3, 1);
   P.inv = .5; P.par = 0; P.armed = false; P.parCd = .15; wiiRumble(perfect ? 300 : 200);
   B.s = 'knock'; B.stun = true; B.t = perfect ? 3 : 2.2; B.vz = perfect ? -24 : -17;
   P.counter = B.t; P.cBig = perfect ? 140 : 90;
-  popup('反撃チャンス!', '#bfe6ff', new THREE.Vector3(0, -.6, -3), .7, 1.2, camera);
+  popup('反撃チャンス!', '#7ae7ff', new THREE.Vector3(0, -.6, -3), .7, 1.2, camera);
   prCount('parry');
 }
 // ガード成功：ダメージ無効。突進を受け止めてボスを押し返す
@@ -1063,13 +961,13 @@ function guarded(){
   const at = rig.localToWorld(new THREE.Vector3(0, 0, -2.2));
   ring(at, 4, 0x7ae7ff, .45); ring(at, 2.2, 0xffffff, .25); burst(at, 0x7ae7ff, 45, 7);
   hitstop = .08; shake = .3; fovp = 5; flash = .35; flashM.material.color.set(0x9fe8ff);
-  popCam('GUARD!', '#bfe6ff', 1, .9);
+  popCam('GUARD!', '#7ae7ff', 1, .9);
   P.inv = .5; P.counter = 0;
   B.s = 'knock'; B.stun = false; B.t = 1.0; B.vz = -12;
   prCount('guard');
 }
 function hurtPlayer(mult = 1){   // 練習用：HPは減らない。失敗のアドバイスだけ出す
-  const st = prSt(), tip = st.id === 'guard' ? (P.par > 0 || P.armed ? '紫はパリィ不可！ Ⓐ長押しでガード' : 'おしい！ Ⓐを当たるまで長押し')
+  const st = prSt(), tip = st.id === 'guard' || (st.id === 'free' && B.unp) ? (P.par > 0 || P.armed ? '紫はパリィ不可！ Ⓐ長押しでガード' : 'おしい！ Ⓐを当たるまで長押し')
                                             : 'おしい！ 赤く光ったら Ⓑ+振り上げ';
   P.inv = 1.2; P.counter = 0; P.armed = false; shake = .5; flash = .4; flashM.material.color.set(0xff2a3a);
   burst(rig.localToWorld(new THREE.Vector3(0, 0, -2)), 0xff4d5e, 40, 7);
@@ -1089,7 +987,7 @@ function bossAI(dt){
     if (B.t <= 0 && !st.atk) B.t = 1;   // ソードスキルの練習中は攻撃してこない
     if (B.t <= 0){
       B.s = 'wind'; P.armed = false; B.t = B.wt = [1.1, .9, .7][ph-1];
-      B.unp = st.atk === 'unp';   // ガード練習 = 紫（パリィ不可）、パリィ練習 = 赤
+      B.unp = st.atk === 'mix' ? Math.random() < .35 : st.atk === 'unp';   // ガード練習 = 紫（パリィ不可）、パリィ練習 = 赤、フリー練習 = ランダム
       popup(B.unp ? '!!' : '!', B.unp ? '#c06bff' : '#ff4d5e', new THREE.Vector3(B.x, 4.6, B.z), 1.2, B.wt);
       if (B.unp) popCam('パリィ不可！ ガード！', '#c06bff', .8, 1);
     }
@@ -1108,7 +1006,7 @@ function bossAI(dt){
         else hurtPlayer();
         B.combo++;
       }
-      else if (P.inv <= 0) popCam('回避!', '#bfe6ff', .9, .8);
+      else if (P.inv <= 0) popCam('回避!', '#7ae7ff', .9, .8);
     }
     if (B.s === 'charge' && B.z > 3){ B.combo++; B.s = 'enter'; B.z = -16; B.x = (Math.random()-.5)*5; B.weak = 2.5; P.armed = false; }
   } else if (B.s === 'knock'){
@@ -1174,6 +1072,8 @@ function skPose(seg, k){
     case 'thrustOut': return { tx:.2, ty:-.7, tz:-.8 - 3.0*e, rx:-1.5, rz:0, ry:0 };                                  // 突き出す
     case 'thrustBack':return { tx:.2, ty:-.7, tz:-3.8 + 1.9*e, rx:-1.5 + .55*e, rz:0, ry:0 };                         // 戻す
     case 'spin':      return { tx:0, ty:-.9, tz:-1.6, rx:0, rz:1.57, ry:Math.PI*2*(seg.k0 + (seg.k1 - seg.k0)*k) };    // 一回転
+    case 'crossWind': return { tx:.9 + .2*e, ty:-1.1 + 1.3*e, tz:-1.9, rx:-.95 + 1.0*e, rz:.3 - .6*e, ry:0 };            // 両手を振りかぶる
+    case 'cross':     return { tx:1.1 - 2.0*e, ty:.2 - 1.3*e, tz:-1.9, rx:.05 - 1.5*e, rz:-.3 + 1.6*e, ry:0 };           // 交差して斬る
     case 'flurry':    return { tx:seg.x0 + (seg.x1 - seg.x0)*e, ty:-1.0 + seg.dy, tz:-1.9, rx:-1.0 + seg.rv, rz:seg.a0 + (seg.a1 - seg.a0)*e, ry:0 };
   }
   return P0;
@@ -1197,6 +1097,24 @@ function updSword(dt){
   sword.rotation.y = ry;   // スピン角はそのまま適用（2πで元に戻る）
   sword.scale.setScalar(sword.scale.x + (sc - sword.scale.x)*Math.min(1, dt*20));
   gShield.visible = P.guard; shield.visible = P.par > 0 || P.armed; if (shield.visible){ const s = .6 + .5*Math.min(1, P.parAge/.1); shield.scale.setScalar(s); }
+  updSwordL(dt, an);
+}
+// 左手の剣（二刀流）: 通常はヌンチャクの振りで斬る。両手スキル中は右手の鏡像で動く
+const MIRROR = { flurry:1, crossWind:1, cross:1 };
+function updSwordL(dt, an){
+  const show = nunOn() && sword.visible;
+  swordL.visible = show; if (!show) return;
+  let tx = -.9 + mouse.nx*.3, ty = -1.1 + mouse.ny*.2, tz = -1.9, rx = -.95, rz = -.3, ry = 0, rate = 14, sc = 1;
+  if (an && MIRROR[an.seg.type]){ const p = skPose(an.seg, an.k); tx = -p.tx; ty = p.ty; tz = p.tz; rx = p.rx; rz = -p.rz; ry = -p.ry; rate = 60; sc = 1.3; }
+  else if (an){ ty = -1.6; rate = 10; }   // 右手だけのスキル中は下げておく
+  else if (PL.swing > 0){
+    const t = 1 - PL.swing/SW_T, a = 1 - Math.pow(1 - t, 3);
+    rz = -PL.dir*(2.1 - 4.2*a); rx = -1.0 + .5*Math.sin(t*Math.PI); tx = -(.2 + PL.dir*(-1.5 + 3.0*a)); ty = -1.0; rate = 60; sc = 1.3;
+  } else if (P.guard){ tx = -.3; ty = -.9; rx = -.3; rz = -.1; rate = 40; }
+  const k = Math.min(1, dt*rate), s = swordL;
+  s.position.x += (tx - s.position.x)*k; s.position.y += (ty - s.position.y)*k; s.position.z += (tz - s.position.z)*k;
+  s.rotation.x += (rx - s.rotation.x)*k; s.rotation.z += (rz - s.rotation.z)*k; s.rotation.y = ry;
+  s.scale.setScalar(s.scale.x + (sc - s.scale.x)*Math.min(1, dt*20));
 }
 
 function update(dt){
@@ -1210,7 +1128,7 @@ function update(dt){
     P.guard = gIn && P.par <= 0 && !P.armed && P.swing <= 0;
     P.x = Math.max(-3.2, Math.min(3.2, P.x + mv*(P.par > 0 || P.guard ? 3 : 6)*dt));
     if (tp && pose.move && poseReady() && !mv) P.x += (pose.tx - P.x)*Math.min(1, dt*8);   // 俯瞰：体を左右に動かして回避
-    P.counter -= dt; P.swing -= dt; P.swingCd -= dt; P.inv -= dt; P.parCd -= dt;
+    P.counter -= dt; P.swing -= dt; P.swingCd -= dt; PL.swing -= dt; PL.cd -= dt; P.inv -= dt; P.parCd -= dt;
     if (P.par > 0 || P.armed) P.parAge += dt;
     if (P.par > 0) P.par -= dt;
     bossAI(dt);
@@ -1232,7 +1150,7 @@ function update(dt){
   if (tp) poseApply(dt);   // VRMの骨を全身ポーズに合わせる
   if (tp){ camera.rotation.set(mouse.ny*.12 - .22, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + 1.5 + sh*.6, 4.2); }
   else { camera.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + sh*.6, 0); }
-  bossBar.scale.x = Math.max(.0001, Math.min(1, PR.n/prSt().goal));
+  bossBar.scale.x = PR.free ? .0001 : Math.max(.0001, Math.min(1, PR.n/prSt().goal));
   parBar.scale.x = Math.max(.0001, P.parCd > 0 ? 1 - P.parCd/.7 : 1);
   hud.visible = state === 'play' || state === 'clear'; $('ui').style.display = vr ? 'none' : '';
   const asp = vr ? W/2/H : W/H, mw = Math.min(7, 5.3*asp); msg.scale.set(mw, mw/2, 1);
@@ -1262,7 +1180,9 @@ const ctl = { mode:'wii' }, mdn = { on:false, t:0 };
 const WVID = 0x057e, WPIDS = [0x0306, 0x0330];
 const wii = { dev:null, leds:1, a:false, b:false, aT:0, pA:false, pPlus:false, pHome:false,
               gx:0, gy:0, gz:1, gok:false, lastSw:0, lastNeg:-1e9, th:2.2, rt:0,
-              mode:0x35, modeT:0, pMinus:false,
+              mode:0x35, modeT:0, pMinus:false, passOn:false, mpOnce:false, rSwT:-1e9, dualCd:0, am:1, apk:1, lastDual:null,
+              nun:{ seen:-1e9, ext:false, c:false, z:false, a:1, pk:1, g1:51, prev:0, swT:-1e9, pend:0, gv:null, fake:false, n:0 },
+              hist:{ R:[], N:[] },
               mp:{ state:'off', ok:false, calibrated:false, zero:[8192, 8192, 8192], cal:null, calPct:0, up:null, upT:0, lastValid:0, sw:null, ring:[], to:0 } };
 function wiiMsg(t){ $('wiiStat').textContent = t; }
 function setCtl(){   // 練習モードは Wiiリモコン専用
@@ -1282,17 +1202,22 @@ async function openWii(d){
   setCtl('wii'); wiiMsg('🎮 Wii: 接続中');
 }
 // MotionPlus有効化: 0xA600FE ← 0x04 → ステータス応答(0x20)でレポートモード0x35を再設定。一定時間データが来なければ従来の0x31(加速度のみ)へフォールバック
-async function wiiEnableMP(){
+// pass=true: ヌンチャク パススルー(0x05)。ジャイロとヌンチャクのデータが交互に届く。失敗したら通常(0x04)で再試行
+const wreg = (addr, v) => { const b = new Array(21).fill(0); b[0] = 0x04; b[1] = (addr >> 16) & 255; b[2] = (addr >> 8) & 255; b[3] = addr & 255; b[4] = 1; b[5] = v; return b; };
+const wsleep = ms => new Promise(r => setTimeout(r, ms));
+async function wiiEnableMP(pass = sk.pass){
   const m = wii.mp; clearTimeout(m.to);
   m.ok = false; m.state = 'activating'; m.calibrated = false; m.cal = null; m.up = null; m.sw = null; m.ring.length = 0; m.lastValid = 0;
-  wii.mode = 0x35; dbg('MotionPlus有効化…');
+  wii.mode = 0x35; wii.passOn = pass; dbg('MotionPlus有効化…' + (pass ? '（ヌンチャク併用）' : ''));
   await wsend(0x12, [0x04, 0x35]);
-  const b = new Array(21).fill(0); b[0] = 0x04; b[1] = 0xA6; b[2] = 0x00; b[3] = 0xFE; b[4] = 1; b[5] = 0x04;
-  await wsend(0x16, b);
-  await new Promise(r => setTimeout(r, 150));
+  if (wii.mpOnce){ await wsend(0x16, wreg(0xA400F0, 0x55)); await wsleep(120); }   // 有効化済みなら一度無効化してからモードを切り替える
+  await wsend(0x16, wreg(0xA600FE, pass ? 0x05 : 0x04));
+  wii.mpOnce = true;
+  await wsleep(150);
   await wsend(0x15, [0x00]);
   m.to = setTimeout(() => {
     if (m.ok || !wii.dev) return;
+    if (pass){ dbg('ヌンチャク併用で開始できず → 通常のMotionPlusで再試行'); wiiEnableMP(false); return; }
     wii.mode = 0x31; m.state = 'none'; wsend(0x12, [0x04, 0x31]);
     wiiMsg('🎮 Wii: ジャイロなし（加速度のみ・従来操作）'); dbg('ジャイロを検出できず → 加速度のみ(従来動作)');
   }, 3000);
@@ -1337,6 +1262,8 @@ function onWii(e){
     else { wii.gx += (x - wii.gx)*.2; wii.gy += (y - wii.gy)*.2; wii.gz += (z - wii.gz)*.2; }
   }
   if (id === 0x35 && d.byteLength >= 11) wiiGyro(d, x, y, z, m, ts, A || bHold);   // ジャイロ(縦横判定)。通常攻撃/パリィの加速度判定とは独立
+  wii.am = m; wii.apk = Math.max(m, wii.apk*.985);   // 数値表示用（右手の|a|と最近の最大値）
+  { const gl0 = Math.hypot(wii.gx, wii.gy, wii.gz) || 1; histPush(wii.hist.R, { t:now, m, v:(x*wii.gx + y*wii.gy + z*wii.gz)/gl0 - gl0 }); }   // 両手の動き比較用
   if (ctl.mode !== 'wii' || state !== 'play' || menuOn) return;
   // 重力方向(=上)に沿った動的加速度。持ち方に依存せず「上向きに加速」を検出できる
   const gl = Math.hypot(wii.gx, wii.gy, wii.gz) || 1;
@@ -1346,14 +1273,18 @@ function onWii(e){
   if (now - wii.lastSw < 450) return;
   if (wii.b){   // B押しながら振り上げ → パリィ
     if (up > upTh && now - wii.lastNeg > 220){ wii.lastSw = now + 200; parry(); }
-  } else if (!wii.a && !bHold && m > wii.th){ wii.lastSw = now; attack(); }   // 振り → 通常攻撃
+  } else if (!wii.a && !bHold && m > wii.th){   // 振り → 通常攻撃
+    wii.lastSw = now;
+    if (!dualPair('R', now)) attack();   // 直前に左手も振っていたら「同じ動きか」を判定（同じ=ダブルサーキュラー / 違う=つられ動きとして無視）
+    wii.rSwT = now;
+  }
 }
 
 // ===== ソードスキル（MotionPlusのジャイロで 縦斬り→横斬り を判定）=====
 // ジャイロ積分で「上向きベクトル」を追い、角速度を 水平軸まわり(=縦斬り成分) と 鉛直軸まわり(=横斬り成分) に分解する。
 // 握りが回っても縦/横を判定できる（センサー軸 yaw/roll/pitch は縦横に一対一対応しないため）。
 const sk = { on:true, win:1.5, sqWin:1.1, rB:.18, rA:.30, minPk:600, mult:5, dbg:true, st:0, last:null, armedAt:0, lastHead:'',
-             heavyV:400, heavyH:260, spin:360, thrustA:4.0, thrustRot:150, thrustPk:800, lastR:null, lr:false };
+             heavyV:400, heavyH:260, spin:360, thrustA:4.0, thrustRot:150, thrustPk:800, lastR:null, lr:false, dual:true, pass:true, nunTh:1.8, dualSim:.65, dbgT:0 };
 const GY = { SLOW:440/8192, FAST:2000/440, PRE:120, HOLD:150, MAXSW:1500, CAL_MS:1000, CAL_STD:80, UP_GAIN:.03, UP_TOL:.15 };
 // ==== MP-BEGIN ====
 function calStart(){
@@ -1391,8 +1322,11 @@ function gyOrient(wyrp, ax, ay, az, a, t){
 }
 function wiiGyro(d, ax, ay, az, a, t, held){
   const m = wii.mp, e = []; for (let i = 0; i < 6; i++) e.push(d.getUint8(5 + i));
-  const valid = !e.every(v => v === 0xff) && !e.every(v => v === 0) && (e[5] & 3) === 2;   // byte5下位2bit=10 がMotionPlusデータ
+  const allFF = e.every(v => v === 0xff), all0 = e.every(v => v === 0);
+  if (wii.passOn && !allFF && !all0 && (e[5] & 3) === 0){ nunFeed(e); return; }   // パススルー: byte5下位2bit=00 がヌンチャクのデータ
+  const valid = !allFF && !all0 && (e[5] & 3) === 2;   // byte5下位2bit=10 がMotionPlusデータ
   if (!valid){ if (m.ok && t - m.lastValid > 1000){ m.ok = false; m.state = 'lost'; m.sw = null; dbg('ジャイロのデータが止まりました'); } return; }
+  wii.nun.ext = !!(e[4] & 1);   // byte4 bit0 = 拡張(ヌンチャク)接続
   m.lastValid = t;
   const raw = [e[0] | ((e[3] & 0xfc) << 6), e[1] | ((e[4] & 0xfc) << 6), e[2] | ((e[5] & 0xfc) << 6)];   // yaw, roll, pitch
   const slow = [!!(e[3] & 2), !!(e[4] & 2), !!(e[3] & 1)];
@@ -1476,6 +1410,81 @@ function skStroke(r){
   sk.last = r; sk.armedAt = performance.now();
   if (sk.st === 1 || sk.st === 3) dbg(`${sk.st === 3 ? '縦横+縦' : '縦'}OK → 横を`);
 }
+// ===== 二刀流（ヌンチャク）=====
+function nunOn(){ return sk.dual && (wii.nun.fake || performance.now() - wii.nun.seen < 1500); }
+// ヌンチャク（パススルー時のデータ）: SX,SY,AX<9:2>,AY<9:2>,AZ<9:3>|EXT, AZ<2:1>AY<1>AX<1> C Z 0 0（C/Zは0で押下）
+function nunFeed(e){
+  const n = wii.nun, now = performance.now(); n.seen = now; n.n++;
+  n.c = !(e[5] & 8); n.z = !(e[5] & 4);
+  const x = e[2] - 128, y = e[3] - 128, z = (e[4] & 0xfe) - 128, mag = Math.hypot(x, y, z);
+  if (Math.abs(mag - n.prev) < 2 && mag > 35 && mag < 75) n.g1 += (mag - n.g1)*.02;   // 静止時の大きさ=1g を学習
+  n.prev = mag; n.a = mag/n.g1; n.pk = Math.max(n.a, n.pk*.985);
+  // 重力方向（静止に近い時だけ更新）と、それに沿った動的加速度(上下成分)
+  if (Math.abs(n.a - 1) < .1){ const l = mag || 1; n.gv = n.gv ? n.gv.map((g, i) => g + ([x, y, z][i]/l - g)*.1) : [x/l, y/l, z/l]; }
+  const gv = n.gv || [0, 0, 1], gl = Math.hypot(gv[0], gv[1], gv[2]) || 1;
+  histPush(wii.hist.N, { t:now, m:n.a, v:(x*gv[0] + y*gv[1] + z*gv[2])/gl/n.g1 - 1 });
+  if (!(sk.dual && state === 'play' && !menuOn)) return;
+  // 左は120ms待ってから確定: その間に右も振られていれば「同じ動きか」を判定する
+  if (n.a >= sk.nunTh && now - n.swT > 380 && !n.pend){
+    n.swT = now; n.swPk = n.a;
+    n.pend = setTimeout(() => {
+      n.pend = 0;
+      if (!(sk.dual && state === 'play' && !menuOn)) return;
+      dbg(`左(ヌンチャク)振り 最大${n.pk.toFixed(2)}g / しきい値${sk.nunTh}g`);
+      if (!dualPair('L', performance.now())) attackL();
+    }, 120);
+  }
+}
+function histPush(a, p){ a.push(p); while (a.length && p.t - a[0].t > 600) a.shift(); }
+// 直近350msの右(リモコン)と左(ヌンチャク)の動きを比べる: |a|の波形の相関・上下成分の相関・強さの比
+function dualSim(T){
+  const W = 350, BW = 20, nb = W/BW;
+  const bin = arr => {
+    const s = Array.from({ length:nb }, () => [0, 0, 0]);
+    for (const p of arr){ const i = Math.floor((p.t - (T - W))/BW); if (i >= 0 && i < nb){ s[i][0] += Math.min(3, p.m); s[i][1] += p.v; s[i][2]++; } }
+    let lm = 1, lv = 0; return s.map(b => { if (b[2]){ lm = b[0]/b[2]; lv = b[1]/b[2]; } return [lm, lv]; });
+  };
+  const corr = (a, b) => {
+    const n = a.length, ma = a.reduce((s, v) => s + v, 0)/n, mb = b.reduce((s, v) => s + v, 0)/n;
+    let sab = 0, saa = 0, sbb = 0; for (let i = 0; i < n; i++){ const da = a[i] - ma, db = b[i] - mb; sab += da*db; saa += da*da; sbb += db*db; }
+    return saa > 1e-6 && sbb > 1e-6 ? sab/Math.sqrt(saa*sbb) : 0;
+  };
+  const sd = a => { const n = a.length, mu = a.reduce((s, v) => s + v, 0)/n; return Math.sqrt(a.reduce((s, v) => s + (v - mu)**2, 0)/n); };
+  const R = bin(wii.hist.R), N = bin(wii.hist.N), Rm = R.map(p => p[0]), Nm = N.map(p => p[0]), Rv = R.map(p => p[1]), Nv = N.map(p => p[1]);
+  const cm = corr(Rm, Nm), cv = corr(Rv, Nv), pr = Math.max(...Rm), pn = Math.max(...Nm), ratio = Math.min(pr, pn)/Math.max(pr, pn, 1e-6);
+  const vert = sd(Rv) > .3 || sd(Nv) > .3;   // 横振りなど上下成分が小さい時は波形だけで判定
+  const score = vert ? (cm + cv)/2 : cm;
+  return { cm, cv, ratio, score, vert, pr, pn, ok:score >= sk.dualSim && ratio >= .6 };
+}
+// 片方が振られた時、もう片方が250ms以内に振られていたら判定。true=処理済み（ダブルサーキュラー or つられ動きとして無視）
+function dualPair(side, now){
+  if (!nunOn() || !sk.on) return false;
+  const n = wii.nun;
+  if (side === 'R'){ if (n.pend || now - n.swT > 250) return false; }   // 左が判定待ちなら左側で判定する
+  else if (now - wii.rSwT > 370) return false;                         // 左の確定は120ms後なので、その分広め
+  const r = dualSim(now), f = v => v.toFixed(2);
+  wii.lastDual = Object.assign({ t:now }, r);
+  const msg = `両手 一致${f(r.score)}/${f(sk.dualSim)}（相関${f(r.cm)} 上下${r.vert ? f(r.cv) : '-'}）強さ比${f(r.ratio)}/0.60 → `;
+  if (state === 'play' && (prSt().id === 'dcirc' || PR.free)) prSay(`両手の一致 ${f(r.score)} / ${f(sk.dualSim)}　強さ比 ${f(r.ratio)} / 0.60`, r.ok ? '#5ee08a' : '#ff9aa5');
+  if (r.ok){
+    if (now > wii.dualCd){ wii.dualCd = now + 1200; dbg(msg + '同じ動き'); cast('dcircular'); }
+    return true;
+  }
+  dbg(msg + `別の動き（${side === 'R' ? '右' : '左'}はつられ動きとして無視）`);
+  if (state === 'play' && prSt().id === 'dcirc' && TG.obj && !TG.obj.userData.done) tgFail(r.ratio < .6 ? '両手の強さをそろえよう' : '両手の動きをそろえよう');
+  return true;
+}
+// 数値表示（判定ログの上に常時表示）
+function nunLine(){
+  const n = wii.nun, f2 = v => v.toFixed(2);
+  if (!wii.dev && !n.fake) return '';
+  let s = `\n右 a=${f2(wii.am)}g 最大${f2(wii.apk)} / 振り≥${wii.th}g`;
+  s += `\nヌンチャク: ${nunOn() ? (n.fake ? '二刀流（疑似）' : '二刀流') : !sk.dual ? 'OFF' : n.ext ? '接続中（併用モードOFF?）' : wii.passOn ? '未検出' : 'なし（併用モードOFF）'}`;
+  if (nunOn() && !n.fake) s += ` / 左 a=${f2(n.a)}g 最大${f2(n.pk)} / 振り≥${sk.nunTh}g / 1g=${n.g1.toFixed(0)} / C${n.c ? '●' : '○'} Z${n.z ? '●' : '○'}`;
+  const d = wii.lastDual;
+  if (d) s += `\n直近の両手判定: 一致${f2(d.score)}/${f2(sk.dualSim)} 相関${f2(d.cm)} 上下${d.vert ? f2(d.cv) : '-'} 強さ比${f2(d.ratio)}/0.60 → ${d.ok ? '✔同じ' : '✕別'}`;
+  return s;
+}
 // ==== MP-END ====
 const dbgLines = [], SK_T0 = performance.now();
 function dbg(t){ dbgLines.push(((performance.now() - SK_T0)/1000).toFixed(1) + ' ' + t); if (dbgLines.length > 9) dbgLines.shift(); dbgDraw(); try { console.log('[wii] ' + t); } catch (e){} }
@@ -1484,12 +1493,13 @@ function skHead(){
   let t = !wii.dev ? 'Wii未接続' : m.state === 'none' ? 'ジャイロ: なし（加速度のみ）' : m.state === 'cal' ? 'ジャイロ: 静止して調整中 ' + m.calPct + '%'
         : m.state === 'ready' ? 'ジャイロ: 有効' + (m.sw ? ' / 斬り中' : '') + (sk.st === 1 || sk.st === 3 ? ' / 縦OK→横を！' : sk.st === 2 ? ' / 続けて縦横でスクエア' : ' / 待機')
         : m.state === 'lost' ? 'ジャイロ: データ停止' : 'ジャイロ: 有効化中…';
-  return t + (sk.on ? '' : '（スキルOFF）') + (sb.ready ? ' / STARBURST READY' : sb.n ? ' / CHAIN ' + sb.n + '/16' : '');
+  return t + (sk.on ? '' : '（スキルOFF）') + (sb.ready ? ' / STARBURST READY' : sb.n ? ' / CHAIN ' + sb.n + '/16' : '') + nunLine();
 }
 function dbgDraw(){ const el = $('wiiDbg'); el.style.display = sk.dbg ? '' : 'none'; if (sk.dbg) el.textContent = (sk.lastHead = skHead()) + '\n' + dbgLines.join('\n'); }
 function skTick(){
   if (sk.st && !wii.mp.sw && performance.now() - sk.armedAt > sk.win*1000 + 100) sk.st = 0;
-  if (sk.dbg && skHead() !== sk.lastHead) dbgDraw();
+  const now = performance.now();   // 数値は0.1秒ごとに更新
+  if (sk.dbg && now - sk.dbgT > 100){ sk.dbgT = now; if (skHead() !== sk.lastHead) dbgDraw(); }
 }
 // ---- 斬撃エフェクト（カメラ前の光る線）----
 const skMat = c => new THREE.MeshBasicMaterial({ color:c, transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthTest:false, depthWrite:false });
@@ -1510,10 +1520,10 @@ function updSkillFx(dt){
 const fxDown = hex => fxLine(-Math.PI/2, 0, 3.2, 6.4, hex), fxRight = hex => fxLine(0, -3.2, 0, 6.4, hex), fxLeft = hex => fxLine(Math.PI, 3.2, 0, 6.4, hex);
 // ---- スキル定義 ----
 const SKD = {
-  vertical:{ en:'VERTICAL', jp:'バーチカル', c:'#bfe6ff' }, vorpal:{ en:'VORPAL STRIKE', jp:'ヴォーパルストライク', c:'#b8f0ff' },
-  sonic:{ en:'SONIC LEAP', jp:'ソニックリープ', c:'#ff9a3c' }, lotus:{ en:'LOTUS SLASH', jp:'ロータススラッシュ', c:'#ff9ae0' },
-  square:{ en:'HORIZONTAL SQUARE', jp:'ホリゾンタルスクエア', c:'#bfe6ff' }, meteor:{ en:'METEOR BREAK', jp:'メテオブレイク', c:'#ff9a20' },
-  starburst:{ en:'STARBURST STREAM', jp:'スターバーストストライク', c:'#ff9a3c' } };
+  vertical:{ en:'VERTICAL', jp:'バーチカル', c:'#7ae7ff' }, vorpal:{ en:'VORPAL STRIKE', jp:'ヴォーパルストライク', c:'#b8f0ff' },
+  sonic:{ en:'SONIC LEAP', jp:'ソニックリープ', c:'#ffd35a' }, lotus:{ en:'LOTUS SLASH', jp:'ロータススラッシュ', c:'#ff9ae0' },
+  square:{ en:'HORIZONTAL SQUARE', jp:'ホリゾンタルスクエア', c:'#7ae7ff' }, meteor:{ en:'METEOR BREAK', jp:'メテオブレイク', c:'#ff9a20' },
+  starburst:{ en:'STARBURST STREAM', jp:'スターバーストストリーム', c:'#ffd35a' }, dcircular:{ en:'DOUBLE CIRCULAR', jp:'ダブルサーキュラー', c:'#dff6ff' } };
 function skBanner(k){ const d = SKD[k]; popCam(d.en, d.c, 1.4, 1.5); popup(d.jp, '#ffffff', new THREE.Vector3(0, -.15, -3), .6, 1.5, camera); }
 // 倍率mのダメージ（通常攻撃6/弱点9 × m × 設定倍率/5）。照準に関わらずボスへ命中（オートロック）
 const skHit = (m, big = true) => { if (tgMode()){ playAtk(); return; } if ((state !== 'play' && state !== 'clear') || B.s === 'dead') return; hurtBoss((B.weak > 0 ? 9 : 6)*m*sk.mult/5, bossG.position.clone(), big); playAtk(); };
@@ -1544,32 +1554,39 @@ function cast(name, r){
   else if (name === 'lotus') seq = [
     { type:'sweepWind', d:.26 },
     { type:'sweepR', d:.16, on:() => { skHit(5); skImpact(.6, .6, 10, 0xffd0f0); fxRight(0xff9ae0); fxLine(0, -3.2, .5, 6.4, 0xffffff, .3, .12); ring2(6, 0xff9ae0); burst(at(), 0xff9ae0, 90, 10); } } ];
+  else if (name === 'dcircular') seq = [
+    { type:'crossWind', d:.14 },
+    { type:'cross', d:.16, on:() => { skHit(3.5); mrDiag(1, 1.15, 0xdff6ff, .4, .16); mrDiag(-1, 1.15, 0xffd35a, .4, .16); skImpact(.5, .5, 8); burst(at(), 0xdff6ff, 70, 10); } },
+    { type:'idle', d:.14, on:() => { skHit(3.5); ring2(6, 0xffd35a); } } ];
   else seq = [   // meteor: 3ヒットで一回転
     { type:'spin', k0:0, k1:.34, d:.2, on:() => { skHit(2.3); skImpact(.4, .4, 6, 0xffd0a0); ring2(6, 0xff9a20); burst(at(), 0xff9a20, 50, 9); } },
     { type:'spin', k0:.34, k1:.67, d:.2, on:() => { skHit(2.3); skImpact(.4, .4, 6, 0xffd0a0); ring2(7, 0xff9a20); } },
     { type:'spin', k0:.67, k1:1, d:.2, on:() => { skHit(2.4); skImpact(.7, .7, 12, 0xffd0a0); ring2(9, 0xffd35a); burst(at(), 0xff9a20, 110, 12); } } ];
   startAnim(seq); wiiRumble(380);
 }
+function mrDiag(sx, k, hex, dur, th){ const x0 = -1.1*sx*k, y0 = .9*k; fxLine(Math.atan2(-1.8*k, 2.2*sx*k), x0, y0, Math.hypot(2.2, 1.8)*k, hex, dur, th); }
 // ---- スターバーストストライク: 被ダメ0で16ヒット → READY → 次に振ると16連撃 ----
 const sb = { n:0, ready:false, active:false };
 let chainS = null;
 function sbDraw(){
   if (chainS){ hud.remove(chainS); chainS.material.map.dispose(); chainS.material.dispose(); chainS = null; }
-  if (sb.n <= 0 && !sb.ready) return;
-  chainS = mkSprite(sb.ready ? 'STARBURST READY! 振って発動' : 'CHAIN ' + sb.n + ' / 16', sb.ready ? '#ff9a3c' : '#bfe6ff', .32);
+  if (!sbOK() || (sb.n <= 0 && !sb.ready)) return;   // 二刀流の練習以外ではゲージを出さない
+  chainS = mkSprite(sb.ready ? 'STARBURST READY! 振って発動' : 'CHAIN ' + sb.n + ' / 16', sb.ready ? '#ffd35a' : '#7ae7ff', .32);
   chainS.position.set(0, 1.28, -3); hud.add(chainS);
 }
+// スターバーストストリームは二刀流（ヌンチャク接続中）で、その練習 or フリー練習の時だけ
+function sbOK(){ return nunOn() && (prSt().id === 'starburst' || PR.free); }
 function sbHit(){
-  return;   // 練習モードでは16連撃（隠しコマンド）は使わない
+  if (!sbOK()) return;
   if (sb.ready || sb.active || state !== 'play') return;
   sb.n++; sbDraw();
-  if (sb.n >= 16){ sb.ready = true; sbDraw(); popCam('STARBURST READY!', '#ff9a3c', 1.2, 1.4); dbg('★ 16連撃達成 → STARBURST READY（次の斬りで発動）'); wiiRumble(200); }
+  if (sb.n >= 16){ sb.ready = true; sbDraw(); popCam('STARBURST READY!', '#ffd35a', 1.2, 1.4); dbg('★ 16連撃達成 → STARBURST READY（次の斬りで発動）'); wiiRumble(200); }
 }
 function startStarburst(){
   if (state !== 'play' || B.s === 'dead') return;
   sb.ready = false; sb.active = true; sb.n = 0; sbDraw();
   P.inv = Math.max(P.inv, 2.2); P.swingCd = 2; P.swing = 0;
-  dbg('★ スターバーストストライク 16連撃！'); skBanner('starburst');
+  dbg('★ スターバーストストリーム 16連撃！'); skBanner('starburst');
   skImpact(.6, .3, 8, 0xfff2b0);
   const seq = [];
   for (let i = 0; i < 16; i++){
@@ -1581,7 +1598,7 @@ function startStarburst(){
         fxLine(ang, cx - Math.cos(ang)*len/2, cy - Math.sin(ang)*len/2, len, i % 2 ? 0xffd35a : 0xdff6ff, .25, .14);
         burst(bossG.position, 0xffffff, 12, 7); shake = Math.max(shake, .15);
         if (i % 4 === 0) wiiRumble(80);
-        if (last){ skImpact(.9, .8, 14, 0xfff2b0); ring(bossG.position, 8, 0xffd35a, .6); burst(bossG.position, 0xffd35a, 160, 14); }
+        if (last){ skImpact(.9, .8, 14, 0xfff2b0); ring(bossG.position, 8, 0xffd35a, .6); burst(bossG.position, 0xffd35a, 160, 14); prCount('starburst'); }
       } });
   }
   seq.push({ type:'idle', d:.25, on:() => { sb.active = false; } });
@@ -1590,7 +1607,7 @@ function startStarburst(){
 // メニュー設定（sk[key] ⇔ スライダー ⇔ 表示ラベル）
 const f2 = v => v.toFixed(2), f1 = v => v.toFixed(1);
 const SK_UI = { win:['skWin','skWinV'], rB:['skRB','skRBV',f2], rA:['skRA','skRAV',f2], minPk:['skPk','skPkV'], mult:['skMul','skMulV'], sqWin:['skSq','skSqV'],
-  heavyV:['skHV','skHVV'], heavyH:['skHH','skHHV'], spin:['skSp','skSpV'], thrustA:['skTA','skTAV',f1], thrustRot:['skTR','skTRV'], thrustPk:['skTP','skTPV'] };
+  heavyV:['skHV','skHVV'], heavyH:['skHH','skHHV'], spin:['skSp','skSpV'], thrustA:['skTA','skTAV',f1], thrustRot:['skTR','skTRV'], thrustPk:['skTP','skTPV'], nunTh:['skNt','skNtV',f1], dualSim:['skDs','skDsV',f2] };
 function skSet(key, v){ const [i, l, fm] = SK_UI[key], el = $(i); el.value = v; sk[key] = +el.value; $(l).textContent = fm ? fm(sk[key]) : sk[key]; }
 for (const key in SK_UI) $(SK_UI[key][0]).oninput = e => skSet(key, +e.target.value);
 // 直近の斬りを基準にしきい値を登録（実際の動きに合わせる）
@@ -1608,6 +1625,8 @@ for (let n = 1; n <= 4; n++) $('skL' + n).onclick = () => skLearn(n);
 addEventListener('keydown', e => { if (e.key >= '1' && e.key <= '4') skLearn(+e.key); });
 $('skOn').onchange = e => { sk.on = e.target.checked; dbgDraw(); };
 $('skDbg').onchange = e => { sk.dbg = e.target.checked; dbgDraw(); };
+$('skDual').onchange = e => { sk.dual = e.target.checked; };
+$('skPass').onchange = e => { sk.pass = e.target.checked; if (wii.dev) wiiEnableMP(); };
 $('skLR').onchange = e => { sk.lr = e.target.checked; try { localStorage.setItem('cw_skLR', sk.lr ? '1' : '0'); } catch (err){} };
 try { if (localStorage.getItem('cw_skLR') === '1'){ sk.lr = true; $('skLR').checked = true; } } catch (err){}
 $('skCal').onclick = wiiRecal;
@@ -1638,13 +1657,35 @@ const STAGES = [
     hint:'水平にぐるっと一周して竹を輪切り',
     lines:['竹が出てくる。リモコンを水平に構えて、ぐるっと一周振り回す。', '回り切ると竹が輪切りになる。体ごと回ってもOK。'] },
 ];
-const PR = { i:0, n:0, by:{}, res:[], lock:0, clearAt:0, clearShown:false, camInit:false, sig:'' };
-const prSt = () => STAGES[Math.min(PR.i, STAGES.length - 1)];
-const KEY_JP = { guard:'ガード', parry:'パリィ', vorpal:'ヴォーパル', lotus:'横の重撃', sonic:'縦の重撃', vertical:'十字切り', meteor:'回転斬り', square:'スクエア' };
+// 二刀流モード（説明画面の間にヌンチャクを認識したら追加）
+const DUAL_STAGES = [
+  { id:'left', title:'二刀流：左手の剣', goal:5, keys:['left'], dual:true, pic:'left',
+    hint:'ヌンチャクを振って左の剣で斬る',
+    lines:['ヌンチャクを振ると左手の剣で斬れる。', '右手（リモコン）とは別に振れるので、左右交互にテンポよく斬ろう。'] },
+  { id:'dcirc', title:'ダブルサーキュラー', goal:3, keys:['dcircular'], dual:true, tg:true, pic:'dcirc',
+    hint:'リモコンとヌンチャクを同時に同じ動きで',
+    lines:['リモコンとヌンチャクを同時に、同じ向き・同じ強さで振る。', '両手がそろうと的が×の字に4つに割れる。画面下に「一致」の数値が出る。'] },
+  { id:'starburst', title:'スターバーストストリーム', goal:1, keys:['starburst'], dual:true, pic:'starburst',
+    hint:'左右交互に16回当てる → READYでもう一度振る',
+    lines:['左右の剣を交互に振って、サンドバッグに16回当てる。', '「STARBURST READY」が出たら、もう一度振ると16連撃！'] },
+];
+// フリー練習（全部終わった後。カウントなしで自由に試す → 満足したらメニューから本番へ）
+const FREE = { id:'free', title:'フリー練習', goal:1, keys:[], atk:'mix', hint:'自由に試そう　HOME → メニュー →「⚔ 本番へ」' };
+const PR = { i:0, n:0, by:{}, res:[], lock:0, clearAt:0, clearShown:false, camInit:false, sig:'', dual:false, free:false };
+const prSt = () => PR.free ? FREE : STAGES[Math.min(PR.i, STAGES.length - 1)];
+function prSetDual(){   // ヌンチャクを認識 → 二刀流の練習を最後に追加
+  if (PR.dual) return; PR.dual = true; STAGES.push(...DUAL_STAGES);
+  dbg('ヌンチャクを認識 → 二刀流モード（練習が' + DUAL_STAGES.length + '個増えました）'); wiiRumble(200);
+}
+const KEY_JP = { guard:'ガード', parry:'パリィ', vorpal:'ヴォーパル', lotus:'横の重撃', sonic:'縦の重撃', vertical:'十字切り', meteor:'回転斬り', square:'スクエア', left:'左手の剣', dcircular:'ダブルサーキュラー', starburst:'スターバースト' };
 
 // ---- 説明パネル（msg スプライトに描く）----
 function setMsgDraw(fn){
-  const t = canvasTex(1024, 512, (x, w, h) => { rqPanel(x, w, h); fn(x, w, h); });
+  const t = canvasTex(1024, 512, (x, w, h) => {
+    rrect(x, 6, 6, w - 12, h - 12, 28); x.fillStyle = 'rgba(4,16,20,.86)'; x.fill();
+    x.strokeStyle = '#ffd35a'; x.lineWidth = 4; x.stroke();
+    fn(x, w, h);
+  });
   if (msg.material.map) msg.material.map.dispose();
   msg.material.map = t; msg.material.needsUpdate = true; msg.visible = true;
 }
@@ -1663,10 +1704,10 @@ function wrap(x, s, px, py, maxW, size, col, lh){   // 日本語は1文字ずつ
 // ---- ピクトグラム ----
 function remote(x, cx, cy, ang, o = {}){
   const sc = o.sc || 1; x.save(); x.translate(cx, cy); x.rotate(ang); x.scale(sc, sc);
-  if (o.b){ rrect(x, -20, -78, 40, 40, 8); x.fillStyle = '#ff9a3c'; x.fill(); }   // 裏のBトリガー（はみ出して見せる）
+  if (o.b){ rrect(x, -20, -78, 40, 40, 8); x.fillStyle = '#ffd35a'; x.fill(); }   // 裏のBトリガー（はみ出して見せる）
   rrect(x, -26, -90, 52, 180, 18); x.fillStyle = '#f4f7fa'; x.fill(); x.strokeStyle = '#8a98a6'; x.lineWidth = 3; x.stroke();
   x.fillStyle = '#4a5560'; x.fillRect(-15, -71, 30, 9); x.fillRect(-4.5, -81, 9, 29);   // 十字キー
-  x.beginPath(); x.arc(0, -32, 13, 0, 7); x.fillStyle = o.a ? '#ff9a3c' : '#c8ced6'; x.fill();
+  x.beginPath(); x.arc(0, -32, 13, 0, 7); x.fillStyle = o.a ? '#ffd35a' : '#c8ced6'; x.fill();
   if (o.a){ x.strokeStyle = '#fff'; x.lineWidth = 3; x.stroke(); }
   txt(x, 'A', 0, -26, 16, '#334', 'center');
   x.fillStyle = '#c8ced6'; for (const yy of [8, 46, 66]){ x.beginPath(); x.arc(0, yy, yy === 8 ? 6 : 9, 0, 7); x.fill(); }
@@ -1690,7 +1731,7 @@ function arcA(x, cx, cy, r, a0, a1, col, lw = 10){
   head(x, cx + Math.cos(a1)*r, cy + Math.sin(a1)*r, a1 + (ccw ? -Math.PI/2 : Math.PI/2), col);
 }
 function drawPic(x, kind, cx, cy){
-  const G = '#ff9a3c', C = '#bfe6ff', Pk = '#ff9ae0', Pu = '#c06bff', O = '#ff9a20';
+  const G = '#ffd35a', C = '#7ae7ff', Pk = '#ff9ae0', Pu = '#c06bff', O = '#ff9a20';
   if (kind === 'guard'){
     x.beginPath(); for (let i = 0; i < 6; i++){ const a = i*Math.PI/3 + Math.PI/6; x.lineTo(cx + Math.cos(a)*100, cy + Math.sin(a)*100); }
     x.closePath(); x.fillStyle = 'rgba(122,231,255,.18)'; x.fill(); x.strokeStyle = C; x.lineWidth = 5; x.stroke();
@@ -1710,12 +1751,27 @@ function drawPic(x, kind, cx, cy){
     txt(x, '横', cx - 68, cy + 82, 30, Pk, 'center');
     arcA(x, cx + 68, cy + 5, 72, -Math.PI*.45, Math.PI*.45, G);
     txt(x, '縦', cx + 40, cy + 16, 30, G, 'center');
-    txt(x, 'or', cx, cy + 10, 22, '#a9bdd1', 'center');
+    txt(x, 'or', cx, cy + 10, 22, '#9fdcea', 'center');
     txt(x, 'おおきく振り抜く！', cx, cy - 88, 26, '#fff', 'center');
   } else if (kind === 'cross'){
     arrowL(x, [[cx, cy - 95], [cx, cy + 80]], G, 12);
     arrowL(x, [[cx - 105, cy - 5], [cx + 100, cy - 5]], C, 12);
     txt(x, '① 縦', cx + 18, cy - 80, 26, G); txt(x, '② 横', cx + 40, cy + 40, 26, C);
+  } else if (kind === 'left'){
+    x.save(); x.translate(cx - 50, cy + 10); x.rotate(-.3);   // ヌンチャク
+    rrect(x, -30, -60, 60, 120, 30); x.fillStyle = '#f4f7fa'; x.fill(); x.strokeStyle = '#8a98a6'; x.lineWidth = 3; x.stroke();
+    x.beginPath(); x.arc(0, -36, 13, 0, 7); x.fillStyle = '#c8ced6'; x.fill(); txt(x, 'C', 0, -30, 14, '#334', 'center');
+    x.restore();
+    arcA(x, cx - 40, cy + 30, 80, -Math.PI*.9, -Math.PI*.15, C);
+    txt(x, '左手', cx - 50, cy + 110, 26, C, 'center');
+    remote(x, cx + 85, cy + 25, .25, { sc:.55 }); txt(x, '右手', cx + 85, cy + 110, 22, '#9fdcea', 'center');
+  } else if (kind === 'dcirc'){
+    arrowL(x, [[cx - 100, cy - 80], [cx + 90, cy + 70]], C, 12);
+    arrowL(x, [[cx + 100, cy - 80], [cx - 90, cy + 70]], G, 12);
+    txt(x, '両手同時に！', cx, cy + 110, 28, '#ffffff', 'center');
+  } else if (kind === 'starburst'){
+    for (let i = 0; i < 16; i++){ const a = i*Math.PI/8; x.strokeStyle = i % 2 ? G : C; x.lineWidth = 5; x.beginPath(); x.moveTo(cx + Math.cos(a)*40, cy + Math.sin(a)*40); x.lineTo(cx + Math.cos(a)*105, cy + Math.sin(a)*105); x.stroke(); }
+    txt(x, '16', cx, cy + 22, 64, '#ffffff', 'center'); txt(x, 'L R L R …', cx, cy - 92, 24, G, 'center');
   } else if (kind === 'spin'){
     remote(x, cx, cy + 5, Math.PI/2, { sc:.6 });
     arcA(x, cx, cy + 5, 92, -Math.PI/2, Math.PI*1.3, O, 11);
@@ -1724,13 +1780,14 @@ function drawPic(x, kind, cx, cy){
 }
 // 接続・ジャイロの状態（説明画面の注意書き）
 function prWarn(st){
-  if (!wii.dev) return ['⚠ Wiiリモコン未接続：右上の「🎮 Wii接続」から接続してください', '#ff8a95'];
+  if (!wii.dev && !wii.nun.fake) return ['⚠ Wiiリモコン未接続：右上の「🎮 Wii接続」から接続してください', '#ff8a95'];
+  if (st.dual && !nunOn()) return ['⚠ ヌンチャクが認識されていません（挿し直す / メニューの「ヌンチャク併用モード」を確認）', '#ff8a95'];
   if (st.gyro){
     const m = wii.mp.state;
     if (m === 'none') return ['⚠ MotionPlus（ジャイロ）が見つかりません。ソードスキルには必要です', '#ff8a95'];
-    if (m === 'cal') return ['⏳ ジャイロ調整中… リモコンを置いて静止してください ' + wii.mp.calPct + '%', '#ff9a3c'];
-    if (m !== 'ready') return ['⏳ ジャイロを準備中…', '#ff9a3c'];
-    return ['「−」ボタン：ジャイロ再調整（リモコンを置いて静止）', '#a9bdd1'];
+    if (m === 'cal') return ['⏳ ジャイロ調整中… リモコンを置いて静止してください ' + wii.mp.calPct + '%', '#ffd35a'];
+    if (m !== 'ready') return ['⏳ ジャイロを準備中…', '#ffd35a'];
+    return ['「−」ボタン：ジャイロ再調整（リモコンを置いて静止）', '#9fdcea'];
   }
   return null;
 }
@@ -1738,29 +1795,32 @@ function drawIntro(){
   const st = prSt(), warn = prWarn(st);
   PR.sig = prSigOf();
   setMsgDraw((x, w, h) => {
-    txt(x, `TUTORIAL  //  STEP ${PR.i + 1} / ${STAGES.length}`, 56, 64, 24, '#bfe6ff');
+    txt(x, `STEP ${PR.i + 1} / ${STAGES.length}`, 48, 62, 26, '#7ae7ff');
+    if (PR.dual) txt(x, '🗡🗡 二刀流モード', 260, 62, 24, '#5ee08a');   // ヌンチャクを認識した
+    else if (PR.i === 0) txt(x, 'ヌンチャクを挿すと二刀流モード', 260, 62, 22, '#9fdcea');
     for (let i = 0; i < STAGES.length; i++){   // 進み具合のドット
       const px = w - 60 - (STAGES.length - 1 - i)*34; x.beginPath(); x.arc(px, 53, 10, 0, 7);
-      if (i < PR.i){ x.fillStyle = PR.res[i] === 'skip' ? '#6a7a80' : '#ff9a3c'; x.fill(); }
+      if (i < PR.i){ x.fillStyle = PR.res[i] === 'skip' ? '#6a7a80' : '#ffd35a'; x.fill(); }
       else if (i === PR.i){ x.fillStyle = '#fff'; x.fill(); }
-      else { x.strokeStyle = '#bfe6ff88'; x.lineWidth = 3; x.stroke(); }
+      else { x.strokeStyle = '#7ae7ff88'; x.lineWidth = 3; x.stroke(); }
     }
-    txt(x, st.title, 48, 128, 52, '#ff9a3c');
-    txt(x, `目標 ${st.goal}回`, w - 48, 128, 34, '#6dffb0', 'right');
-    rrect(x, 40, 158, 300, 246, 4); x.fillStyle = 'rgba(191,230,255,.07)'; x.fill(); x.strokeStyle = 'rgba(230,242,255,.25)'; x.lineWidth = 2; x.stroke();
+    txt(x, st.title, 48, 128, 52, '#ffd35a');
+    txt(x, `目標 ${st.goal}回`, w - 48, 128, 34, '#5ee08a', 'right');
+    rrect(x, 40, 158, 300, 246, 20); x.fillStyle = 'rgba(122,231,255,.08)'; x.fill();
     drawPic(x, st.pic, 190, 285);
     let y = 200; for (const l of st.lines) y = wrap(x, l, 370, y, 610, 28, '#ffffff', 40) + 12;
-    x.strokeStyle = '#ff9a3c55'; x.lineWidth = 2; x.beginPath(); x.moveTo(40, 420); x.lineTo(w - 40, 420); x.stroke();
+    x.strokeStyle = '#ffd35a55'; x.lineWidth = 2; x.beginPath(); x.moveTo(40, 420); x.lineTo(w - 40, 420); x.stroke();
     if (warn) txt(x, warn[0], 48, 456, 24, warn[1]);
     txt(x, 'Ⓐ スタート', w - 260, 492, 32, '#ffffff', 'right');
-    txt(x, '＋ スキップ', w - 48, 492, 26, '#a9bdd1', 'right');
+    txt(x, '＋ スキップ', w - 48, 492, 26, '#9fdcea', 'right');
   });
 }
-const prSigOf = () => { const w = prWarn(prSt()); return (w ? w[0] : '') + '|' + PR.i; };
+const prSigOf = () => { const w = prWarn(prSt()); return (w ? w[0] : '') + '|' + PR.i + '|' + PR.dual + '|' + STAGES.length; };
 
 // ---- 進行 ----
 function prGo(i){
-  PR.i = i; PR.n = 0; PR.by = {}; if (i === 0) PR.res = [];
+  PR.i = i; PR.n = 0; PR.by = {}; PR.free = false; if (i === 0) PR.res = [];
+  sb.n = 0; sb.ready = false; sb.active = false; sbDraw();
   state = 'intro'; P.guard = false; anim = null; sk.st = 0; lane.visible = false; tgReset();
   PR.lock = performance.now() + 500;   // 直前のⒶ連打でいきなり始まらないように
   drawIntro(); prHud();
@@ -1774,7 +1834,12 @@ function prStart(){
   Object.assign(B, { x:0, z:HOVER, vz:0, s:'idle', t:1.6, hit:false, weak:0, combo:0, stun:false, phase:1, unp:false });
   sk.st = 0; anim = null; PR.n = 0; PR.by = {};
   state = 'play'; setMsg(null); prHud(); bgmPlay(true);
-  tgReset(); if (prSt().gyro) TG.respawn = .6;   // 的は少し間をおいて出す
+  tgReset(); if (prSt().gyro || prSt().tg) TG.respawn = .6;   // 的は少し間をおいて出す
+  sb.n = 0; sb.ready = false; sb.active = false; sbDraw();
+}
+function prFree(){   // フリー練習: カウントなし・サンドバッグは赤/紫ランダムで攻撃してくる・スキルは全部使える
+  PR.free = true; prStart();
+  popCam('フリー練習', '#7ae7ff', 1.1, 1.6);
 }
 function prNext(){
   if (PR.i + 1 < STAGES.length) prGo(PR.i + 1);
@@ -1784,21 +1849,22 @@ function prSkip(){ PR.res[PR.i] = 'skip'; prNext(); }
 function prInput(pressA, pressPlus){
   if (performance.now() < PR.lock) return;
   if (state === 'intro'){ if (pressA) prStart(); else if (pressPlus) prSkip(); }
-  else if (state === 'play'){ if (pressPlus){ bgmStop(); prGo(PR.i); } }   // ＋で説明に戻る
-  else if (state === 'done'){ if (pressA) prGo(0); }
+  else if (state === 'play'){ if (pressPlus && !PR.free){ bgmStop(); prGo(PR.i); } }   // ＋で説明に戻る（フリー練習中は無効）
+  else if (state === 'done'){ if (pressA) prFree(); else if (pressPlus) prGo(0); }
 }
 // 成功の数え上げ（guarded / parried / cast から呼ばれる）
 function prCount(key, fromTarget){
   if (state !== 'play') return;
   const st = prSt();
-  if (st.gyro && !fromTarget && st.keys.includes(key)) return;   // ソードスキルの練習は「的を矢印どおりに斬れた時」だけ数える（tgCast）
+  if ((st.gyro || st.tg) && !fromTarget && st.keys.includes(key)) return;
+  if (PR.free) return;   // フリー練習は数えない   // ソードスキルの練習は「的を矢印どおりに斬れた時」だけ数える（tgCast）
   if (!st.keys.includes(key)){   // 別の技が出た → ひとこと
-    if (key === 'guard' && st.id === 'parry') prSay('ガードできた！ でも今回はパリィで', '#a9bdd1');
-    else if (KEY_JP[key]) prSay(`今のは「${KEY_JP[key]}」`, '#a9bdd1');
+    if (key === 'guard' && st.id === 'parry') prSay('ガードできた！ でも今回はパリィで', '#9fdcea');
+    else if (KEY_JP[key]) prSay(`今のは「${KEY_JP[key]}」`, '#9fdcea');
     return;
   }
   PR.n++; PR.by[key] = (PR.by[key] || 0) + 1;
-  popup(`${PR.n} / ${st.goal}`, '#6dffb0', new THREE.Vector3(0, -.45, -3), .9, .8, camera);
+  popup(`${PR.n} / ${st.goal}`, '#5ee08a', new THREE.Vector3(0, -.45, -3), .9, .8, camera);
   wiiRumble(120); prHud();
   if (PR.n >= st.goal) prClear();
 }
@@ -1812,38 +1878,40 @@ function prDone(){
   state = 'done'; bgmStop(); PR.lock = performance.now() + 700; prHud();
   const ok = PR.res.filter(r => r === 'clear').length;
   setMsgDraw((x, w, h) => {
-    txt(x, ok === STAGES.length ? '練習コンプリート！' : '練習おつかれさま！', w/2, 100, 60, '#ff9a3c', 'center');
+    txt(x, ok === STAGES.length ? '練習コンプリート！' : '練習おつかれさま！', w/2, 100, 60, '#ffd35a', 'center');
+    const rh = STAGES.length > 6 ? 44 : 62, fs = STAGES.length > 6 ? 26 : 30;
     STAGES.forEach((st, i) => {
-      const col = i % 2, row = (i/2) | 0, px = 90 + col*440, py = 175 + row*62, r = PR.res[i];
-      txt(x, r === 'clear' ? '✔' : '－', px, py, 34, r === 'clear' ? '#6dffb0' : '#6a7a80');
-      txt(x, st.title, px + 50, py, 30, r === 'clear' ? '#ffffff' : '#8a9aa0');
+      const col = i % 2, row = (i/2) | 0, px = 90 + col*440, py = 165 + row*rh, r = PR.res[i];
+      txt(x, r === 'clear' ? '✔' : '－', px, py, fs + 4, r === 'clear' ? '#5ee08a' : '#6a7a80');
+      txt(x, st.title, px + 50, py, fs, r === 'clear' ? '#ffffff' : '#8a9aa0');
     });
-    txt(x, 'Ⓐ もう一度最初から', w/2, 420, 34, '#ffffff', 'center');
-    txt(x, 'HOMEボタン → メニュー →「⚔ 本番へ」でボス戦', w/2, 470, 24, '#a9bdd1', 'center');
+    txt(x, 'Ⓐ フリー練習へ（満足するまで自由に試せる）', w/2, 418, 32, '#ffffff', 'center');
+    txt(x, 'そのあと HOME → メニュー →「⚔ 本番へ」でボス戦　／　＋ もう一度最初から', w/2, 466, 22, '#9fdcea', 'center');
   });
 }
 function prSay(t, c = '#ffffff'){ PR.fbT = performance.now(); setHudTxt('fb', t, c, .32, -1.1); }   // 判定のひとこと（画面下）
 function prTick(now){
   if (PR.fbT && now - PR.fbT > 1800){ PR.fbT = 0; setHudTxt('fb', ''); }
   sword.visible = state === 'play' || (state === 'clear' && !PR.clearShown);   // 説明パネルの手前に剣が出ないように
+  if (!PR.dual && nunOn() && state === 'intro') prSetDual();   // 説明画面の間にヌンチャクを認識 → 二刀流モード
   if (state === 'intro'){ if (prSigOf() !== PR.sig) drawIntro(); }   // 接続・ジャイロ状態が変わったら描き直す
   else if (state === 'clear'){
     if (!PR.clearShown && now - PR.clearAt > 900){
       PR.clearShown = true; wiiRumble(250);
       const nx = STAGES[PR.i + 1];
-      setMsg([['CLEAR!', '#ff9a3c', 96], [`${prSt().title}　${PR.n} / ${prSt().goal}`, '#ffffff', 36],
-              [nx ? `次は「${nx.title}」` : 'これで全部の練習が終わりです', '#bfe6ff', 32]]);
+      setMsg([['CLEAR!', '#ffd35a', 96], [`${prSt().title}　${PR.n} / ${prSt().goal}`, '#ffffff', 36],
+              [nx ? `次は「${nx.title}」` : 'これで全部の練習が終わりです', '#7ae7ff', 32]]);
     }
     if (now - PR.clearAt > 3000){ bgmStop(); prNext(); }
   }
 }
 function prHud(){
   const st = prSt(), on = state === 'play' || state === 'clear';
-  setHudTxt('name', on ? `STEP ${PR.i + 1}  ${st.title}` : '', '#ffffff', .3, 1.85);
-  let cnt = `${Math.min(PR.n, st.goal)} / ${st.goal}`;
+  setHudTxt('name', on ? (PR.free ? `${st.title}（カウントなし）` : `STEP ${PR.i + 1}  ${st.title}`) : '', '#ffffff', .3, 1.85);
+  let cnt = PR.free ? '' : `${Math.min(PR.n, st.goal)} / ${st.goal}`;
   if (st.id === 'heavy') cnt += `（横 ${PR.by.lotus || 0}　縦 ${PR.by.sonic || 0}）`;
-  setHudTxt('cnt', on ? cnt : '', '#6dffb0', .28, 1.3);
-  setHudTxt('hint', state === 'play' ? st.hint + '　（＋：説明に戻る）' : '', '#ff9a3c', .3, -1.48);
+  setHudTxt('cnt', on ? cnt : '', '#5ee08a', .28, 1.3);
+  setHudTxt('hint', state === 'play' ? st.hint + (PR.free ? '' : '　（＋：説明に戻る）') : '', '#ffd35a', .3, -1.48);
 }
 // ジャイロの判定結果を練習用に言葉で返す（何が足りなかったかが分かるように）
 function prStroke(r){
@@ -1856,15 +1924,15 @@ function prStroke(r){
     else say(`手首が回っています（回転 ${f(r.rot)}° → ${sk.thrustRot}° 未満）`);
   } else if (st.id === 'heavy'){
     if (r.kind === '横') say(`横 ${f(H)}° / ${sk.heavyH}°　もっと大きく！`, '#ff9ae0');
-    else if (r.kind === '縦') say(`縦 ${f(V)}° / ${sk.heavyV}°　もっと大きく！`, '#ff9a3c');
+    else if (r.kind === '縦') say(`縦 ${f(V)}° / ${sk.heavyV}°　もっと大きく！`, '#ffd35a');
     else if (r.kind === '回転') say('回りすぎ！ 半周くらいで止めよう', '#ff9a20');
   } else if (st.id === 'cross'){
-    if (sk.st === 1) say('縦OK！ すぐ横へ！', '#ff9a3c');
-    else if (r.kind === '横' && sk.st === 0) say('先に縦から振り下ろそう', '#bfe6ff');
+    if (sk.st === 1) say('縦OK！ すぐ横へ！', '#ffd35a');
+    else if (r.kind === '横' && sk.st === 0) say('先に縦から振り下ろそう', '#7ae7ff');
   } else if (st.id === 'spin' && r.kind !== '回転'){
     if (r.kind !== '小') say(`回転 ${f(H)}° / ${sk.spin}°　水平にぐるっと！`, '#ff9a20');
   }
-  if (r.kind === '小') say('振りが小さい・遅いみたい', '#a9bdd1');
+  if (r.kind === '小') say('振りが小さい・遅いみたい', '#9fdcea');
 }
 
 // ===== 試し斬りの的（ソードスキルの練習で使用）=====
@@ -1872,7 +1940,7 @@ function prStroke(r){
 // 1つの的は最初の成功だけ数える（破片はその後も斬れるがカウントしない）。突きは剣にリンゴが刺さっていく。
 const V3 = THREE.Vector3;
 const TG = { obj:null, pieces:[], skewer:[], sched:[], respawn:0, fx:new V3(0, 1.5, -3.4), id:0, lastKind:'', castR:null, step1:false, arrow:null, arrowKey:'', t:0 };
-const tgMode = () => !!prSt().gyro && (state === 'play' || state === 'clear');
+const tgMode = () => { const st = prSt(); return !!(st.gyro || st.tg) && (state === 'play' || state === 'clear'); };
 const TG_Z = -3.4, TG_MAXP = 48;
 
 // ---- テクスチャ（円形の断面は中心=UV(.5,.5)、外周=半径.48）----
@@ -2093,7 +2161,7 @@ function tgSlashPieces(r){
 const TGA = {};
 function tgArrowTex(key){
   if (TGA[key]) return TGA[key];
-  const G = '#ff9a3c', C = '#bfe6ff', Gr = '#6dffb0';
+  const G = '#ffd35a', C = '#7ae7ff', Gr = '#5ee08a';
   const glowLine = (x, pts, col, lw) => { x.lineCap = 'round'; x.lineJoin = 'round';
     for (const [c, w] of [['rgba(0,0,0,.65)', lw + 14], [col + '66', lw + 10], [col, lw], ['#ffffffcc', lw*.3]]){ x.strokeStyle = c; x.lineWidth = w; x.beginPath(); pts.forEach(([a, b], i) => i ? x.lineTo(a, b) : x.moveTo(a, b)); x.stroke(); } };
   const tri = (x, ax, ay, ang, col, s) => { const P = [[ax + Math.cos(ang)*s, ay + Math.sin(ang)*s], [ax + Math.cos(ang + 2.4)*s, ay + Math.sin(ang + 2.4)*s], [ax + Math.cos(ang - 2.4)*s, ay + Math.sin(ang - 2.4)*s]];
@@ -2106,6 +2174,11 @@ function tgArrowTex(key){
   else if (key === 'thrust') t = canvasTex(256, 256, x => {
     x.lineWidth = 8; for (const [r, c] of [[100, C], [64, G], [26, '#ffffff']]){ x.strokeStyle = 'rgba(0,0,0,.55)'; x.lineWidth = 14; x.beginPath(); x.arc(128, 128, r, 0, 7); x.stroke(); x.strokeStyle = c; x.lineWidth = 7; x.beginPath(); x.arc(128, 128, r, 0, 7); x.stroke(); }
     for (let i = 0; i < 4; i++){ const a = i*Math.PI/2 + Math.PI/4; tri(x, 128 + Math.cos(a)*84, 128 + Math.sin(a)*84, a + Math.PI, G, 20); }
+  });
+  else if (key === 'dual') t = canvasTex(256, 256, x => {   // 両手の×
+    glowLine(x, [[40, 40], [196, 196]], C, 18); tri(x, 204, 204, Math.PI/4, C, 34);
+    glowLine(x, [[216, 40], [60, 196]], G, 18); tri(x, 52, 204, Math.PI*.75, G, 34);
+    x.font = `bold 34px ${FONT}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineWidth = 8; x.strokeStyle = '#000c'; x.strokeText('両手', 128, 28); x.fillStyle = '#ffffff'; x.fillText('両手', 128, 28);
   });
   else if (key === 'spin') t = canvasTex(512, 256, x => {
     x.save(); x.translate(256, 128); x.scale(1, .42);
@@ -2125,7 +2198,7 @@ function tgArrowSet(){
   const o = TG.obj, show = o && !o.userData.done;
   if (!TG.arrow){ TG.arrow = new THREE.Sprite(new THREE.SpriteMaterial({ transparent:true, depthTest:false, depthWrite:false })); TG.arrow.renderOrder = 25; scene.add(TG.arrow); }
   TG.arrow.visible = !!show; if (!show) return;
-  const need = o.userData.need, key = need === 'T' ? 'thrust' : need === 'S' ? 'spin' : need === 'X' ? (TG.step1 ? 'cross1' : 'cross0') : 'dir';
+  const need = o.userData.need, key = need === 'W' ? 'dual' : need === 'T' ? 'thrust' : need === 'S' ? 'spin' : need === 'X' ? (TG.step1 ? 'cross1' : 'cross0') : 'dir';
   if (TG.arrowKey !== key){ TG.arrowKey = key; TG.arrow.material.map = tgArrowTex(key); TG.arrow.material.needsUpdate = true; }
   TG.arrow.material.rotation = need === 'R' ? 0 : need === 'L' ? Math.PI : need === 'D' ? -Math.PI/2 : 0;
 }
@@ -2134,10 +2207,11 @@ const NEED_JP = { R:'→ 右へ横斬り', L:'← 左へ横斬り', D:'↓ 縦�
 // ---- 進行 ----
 const pick = a => a[Math.random()*a.length | 0];
 function tgSpawn(){
-  const st = prSt(); if (!st.gyro || state !== 'play') return;
+  const st = prSt(); if (!(st.gyro || st.tg) || state !== 'play') return;
   let kind, need;
   if (st.id === 'vorpal'){ kind = 'apple'; need = 'T'; }
   else if (st.id === 'heavy'){ need = pick(['R', 'L', 'D']); const L = (need === 'D' ? ['log', 'suika', 'mikan', 'gem'] : ['take', 'mikan', 'apple', 'gem', 'suika']).filter(k => k !== TG.lastKind); kind = pick(L); }
+  else if (st.id === 'dcirc'){ need = 'W'; kind = pick(['suika', 'mikan', 'gem', 'apple', 'log'].filter(k => k !== TG.lastKind)); }
   else if (st.id === 'cross'){ need = 'X'; kind = pick(['suika', 'mikan', 'gem', 'apple'].filter(k => k !== TG.lastKind)); }
   else { need = 'S'; kind = 'take'; }
   TG.lastKind = kind;
@@ -2145,7 +2219,7 @@ function tgSpawn(){
   G.position.set(P.x, K.y, TG_Z); G.scale.setScalar(.01);
   Object.assign(G.userData, { need, fam:++TG.id, born:TG.t, baseY:K.y, wob:0, fresh:true });
   scene.add(G); TG.obj = G; TG.fx.set(P.x, K.y, TG_Z); TG.step1 = false; tgArrowSet();
-  if (need === 'R' || need === 'L' || need === 'D') prSay(`${K.name}：${NEED_JP[need]}`, '#ff9a3c');
+  if (need === 'R' || need === 'L' || need === 'D') prSay(`${K.name}：${NEED_JP[need]}`, '#ffd35a');
 }
 function tgReset(){
   for (const g of [...TG.pieces, ...TG.skewer]) tgDisposeG(g);
@@ -2180,11 +2254,12 @@ function tgCast(name, r){
   TG.pieces.push(o); o.userData.hold = true;   // 以後は破片と同じ扱い（成功は1回だけ）。切断の瞬間まではその場で止める
   if (name === 'vorpal') o.userData.impaled = true;
   const at = o.position.clone(), fam = o.userData.fam, sz = o.userData.size;
-  popup('OK!', '#6dffb0', at.clone().add(new V3(0, sz + .35, 0)), 1, .9); playOK();
+  popup('OK!', '#5ee08a', at.clone().add(new V3(0, sz + .35, 0)), 1, .9); playOK();
   prCount(name, true);
   const off = () => at.clone().add(new V3((Math.random() - .5)*.2*sz, (Math.random() - .5)*.2*sz, 0));
   const S = (t, f) => TG.sched.push({ t, f });
   if (name === 'vorpal') S(.2, () => tgImpale(o));
+  else if (name === 'dcircular') S(.14, () => { tgCutFam(fam, tgPlane(-.75, at), .6); tgCutFam(fam, tgPlane(.75, at), 1.4); });   // ×の字に4つ
   else if (name === 'lotus') S(.26, () => tgCutFam(fam, tgPlane(cutAng(r), off()), 1.6));
   else if (name === 'sonic') S(.24, () => tgCutFam(fam, tgPlane(cutAng(r), off()), 1.6));
   else if (name === 'vertical'){
@@ -2297,6 +2372,9 @@ addEventListener('keydown', e => {
   if (menuOn || e.repeat) return;
   if (e.key === ' '){ e.preventDefault(); prInput(true, false); }
   else if (e.key === 'p' || e.key === 'P' || e.key === '+'){ prInput(false, true); }
+  else if (e.key === 'n' || e.key === 'N'){ wii.nun.fake = !wii.nun.fake; dbg('疑似ヌンチャク ' + (wii.nun.fake ? 'ON' : 'OFF')); dbgDraw(); }   // Wiiなしでの確認用
+  else if ((e.key === 'l' || e.key === 'L') && nunOn() && state === 'play'){ attackL(); }
+  else if ((e.key === 'k' || e.key === 'K') && nunOn() && state === 'play'){ cast('dcircular'); }
 });
 
 
@@ -2309,7 +2387,7 @@ function perfTick(now){
   const n = perf.n, fps = n*1000/(now - perf.t0), cams = (camStream ? 1 : 0) + (face.stream ? 1 : 0), f = v => (v/n).toFixed(1);
   $('perfStat').textContent = `FPS ${fps.toFixed(0)} | 顔${f(perf.face)} 手${f(perf.hand)}` + (tp ? ` 全身${f(perf.pose)}` : '') + ` 描画${f(perf.rend)}ms/フレーム | カメラ${cams}台`
     + (bgMode === 'video' && bgVidTex ? '+背景動画' : bgMode === 'image' && bgImgTex ? '+背景画像' : '');
-  $('perfStat').style.color = fps < 30 ? '#ff4d5e' : fps < 50 ? '#ff9a3c' : '#9fffb0';
+  $('perfStat').style.color = fps < 30 ? '#ff4d5e' : fps < 50 ? '#ffd35a' : '#9fffb0';
   perf.n = perf.face = perf.hand = perf.pose = perf.rend = 0; perf.t0 = now;
 }
 function setQuality(k){
@@ -2326,145 +2404,6 @@ function loop(now){
 requestAnimationFrame(loop);
 prGo(0);
 setCtl();
-</script>
-<script id="rq-theme-js">
-// ===== Radiqle_Project 共通UI（AR HUDフレーム・リンク到着演出・ナビゲーター）=====
-// 使い方: <body data-rq-mode="TUTORIAL"> のように画面名を付け、</body> の直前で読み込む
-(function(){
-  const mode = document.body.dataset.rqMode || 'FIELD';
-  const el = (tag, attrs, html) => { const e = document.createElement(tag); Object.assign(e, attrs || {}); if (html) e.innerHTML = html; return e; };
-
-  // ---- AR HUDフレーム（四隅＋上部の帯）----
-  const frame = el('div', { id:'rqFrame' },
-    '<div class="c tl"></div><div class="c tr"></div><div class="c bl"></div><div class="c br"></div>' +
-    `<div id="rqTop"><b>RADIQLE</b><span>//</span><span class="m">${mode}</span><span>//</span><span id="rqClock">--:--</span></div>`);
-  document.body.appendChild(frame);
-  const clk = () => { const d = new Date(); document.getElementById('rqClock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
-  clk(); setInterval(clk, 10000);
-
-  // ---- ナビゲーター（画面下の案内）----
-  const navi = el('div', { id:'rqNavi' }, '<div class="ico">NAV</div><div class="who">SYSTEM NAVIGATOR</div><div class="say"></div>');
-  document.body.appendChild(navi);
-  let naviTimer = 0, typeTimer = 0;
-  function say(text, ms = 4000){
-    clearTimeout(naviTimer); clearInterval(typeTimer);
-    const s = navi.querySelector('.say'); s.textContent = ''; navi.classList.add('on');
-    let i = 0; const chars = [...text];
-    typeTimer = setInterval(() => { s.textContent += chars[i++] || ''; if (i >= chars.length) clearInterval(typeTimer); }, 38);
-    return new Promise(res => { naviTimer = setTimeout(() => { res(); }, chars.length*38 + ms); });
-  }
-  function hide(){ navi.classList.remove('on'); }
-  window.RQ = { say, hide, mode };
-
-  // ===== システム効果音 =====
-  // 基本は WebAudio で合成。sord/se_名前.mp3 を置くと、そのファイルが優先されます
-  // 名前: cursor decide open close panel start count clear complete skill hurt victory gameover navi link
-  const SE_NAMES = ['cursor','decide','open','close','panel','start','count','clear','complete','skill','hurt','victory','gameover','navi','link'];
-  const seFile = {};
-  for (const n of SE_NAMES){ const a = new Audio('se_' + n + '.mp3'); a.preload = 'auto'; a.addEventListener('canplaythrough', () => seFile[n] = a, { once:true }); a.onerror = () => {}; }
-  let AC = null, out = null;
-  function ac(){
-    if (!AC){ try { AC = new (window.AudioContext || window.webkitAudioContext)(); out = AC.createGain(); out.connect(AC.destination); } catch (e){ return null; } }
-    if (AC.state === 'suspended') AC.resume().catch(() => {});
-    return AC;
-  }
-  ['pointerdown', 'keydown'].forEach(ev => addEventListener(ev, ac, { capture:true }));   // 最初の操作で音を有効化
-  const V = () => (typeof vol !== 'undefined' ? vol : .8);
-  function tone(f, d = .2, type = 'sine', v = .15, at = 0, f2 = 0){
-    const t = AC.currentTime + at, o = AC.createOscillator(), g = AC.createGain();
-    o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d);
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .008); g.gain.exponentialRampToValueAtTime(.0001, t + d);
-    o.connect(g); g.connect(out); o.start(t); o.stop(t + d + .05);
-  }
-  function hiss(d, f0, f1, v = .2, at = 0){
-    const t = AC.currentTime + at, n = Math.floor(AC.sampleRate*d), b = AC.createBuffer(1, n, AC.sampleRate), c = b.getChannelData(0);
-    for (let i = 0; i < n; i++) c[i] = Math.random()*2 - 1;
-    const s = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
-    s.buffer = b; f.type = 'bandpass'; f.Q.value = 1.5; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + d);
-    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
-    s.connect(f); f.connect(g); g.connect(out); s.start(t);
-  }
-  const SYN = {
-    cursor(){ tone(1800, .05, 'sine', .06); },
-    decide(){ tone(880, .09, 'sine', .12); tone(1320, .16, 'sine', .1, .05); },
-    open(){ tone(600, .12, 'triangle', .08, 0, 1200); tone(1500, .2, 'sine', .06, .08); hiss(.18, 2000, 6000, .05); },
-    close(){ tone(1100, .14, 'triangle', .07, 0, 500); },
-    panel(){ tone(1046, .12, 'sine', .08); tone(1568, .25, 'sine', .07, .07); hiss(.25, 6000, 2500, .04); },
-    start(){ [523, 784, 1046].forEach((f, i) => tone(f, .18, 'triangle', .1, i*.05)); hiss(.35, 800, 5000, .08); },
-    count(){ tone(1318, .08, 'square', .05); tone(1975, .16, 'sine', .08, .04); },
-    clear(){ [659, 784, 988, 1318].forEach((f, i) => tone(f, .5, 'triangle', .1, i*.08)); tone(2637, .6, 'sine', .04, .32); },
-    complete(){ [523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, .9, 'triangle', .09, i*.1)); [262, 392].forEach(f => tone(f, 1.6, 'sine', .08, .5)); },
-    skill(){ hiss(.4, 1500, 9000, .12); tone(1760, .35, 'sine', .08, .05); tone(2637, .45, 'sine', .05, .1); tone(220, .3, 'sawtooth', .05, 0, 880); },
-    hurt(){ tone(180, .25, 'sawtooth', .12, 0, 70); hiss(.2, 1200, 300, .15); },
-    victory(){ [392, 523, 659, 784].forEach((f, i) => tone(f, .35, 'triangle', .1, i*.12)); [523, 659, 784, 1046].forEach(f => tone(f, 1.8, 'triangle', .07, .55)); },
-    gameover(){ [440, 415, 392, 330].forEach((f, i) => tone(f, .6, 'triangle', .09, i*.28)); tone(110, 2, 'sine', .1, .3); },
-    navi(){ tone(1568, .06, 'sine', .06); tone(2093, .1, 'sine', .05, .06); },
-    link(){ [784, 1046, 1318, 1568].forEach((f, i) => tone(f, .7, 'sine', .07, i*.09)); hiss(1.2, 8000, 1500, .06); },
-  };
-  let lastSe = {};
-  function se(n){
-    const now = performance.now(); if (now - (lastSe[n] || 0) < 40) return; lastSe[n] = now;   // 同じ音の連打を間引く
-    if (seFile[n]){ try { const a = seFile[n].cloneNode(); a.volume = Math.min(1, V()); a.play().catch(() => {}); } catch (e){} return; }
-    if (!ac() || AC.state !== 'running') return;
-    out.gain.value = V()*.9; try { SYN[n] && SYN[n](); } catch (e){}
-  }
-  RQ.se = se;
-
-  // ---- ゲーム側の関数に音を差し込む（元の処理はそのまま呼ぶ）----
-  function hook(name, fn){
-    const orig = window[name]; if (typeof orig !== 'function') return;
-    window[name] = function(){ try { fn.apply(this, arguments); } catch (e){} return orig.apply(this, arguments); };
-  }
-  function after(name, fn){
-    const orig = window[name]; if (typeof orig !== 'function') return;
-    window[name] = function(){ const r = orig.apply(this, arguments); try { fn.apply(this, arguments); } catch (e){} return r; };
-  }
-  hook('toggleMenu', f => { const on = !document.getElementById('menu').classList.contains('on'); se((f === undefined ? on : f) ? 'open' : 'close'); });
-  hook('hcClick', () => se('decide'));
-  hook('setMsg', L => {
-    if (!L) return; const t = String(L[0] && L[0][0] || '');
-    se(/VICTORY/.test(t) ? 'victory' : /GAME OVER/.test(t) ? 'gameover' : /CLEAR/.test(t) ? 'clear' : 'panel');
-  });
-  hook('prGo', () => se('panel'));
-  hook('prStart', () => se('start'));
-  after('prDone', () => se('complete'));
-  if (typeof window.prCount === 'function'){   // 成功数が増えた時だけ鳴らす
-    const orig = window.prCount;
-    window.prCount = function(){ const n0 = (typeof PR !== 'undefined') ? PR.n : 0; const r = orig.apply(this, arguments); try { if (typeof PR !== 'undefined' && PR.n > n0) se('count'); } catch (e){} return r; };
-  }
-  hook('skBanner', () => se('skill'));
-  hook('startBattle', () => se('start'));
-  if (mode !== 'TUTORIAL') hook('hurtPlayer', () => se('hurt'));
-  // HTMLのボタン：カーソルが乗った音・押した音
-  document.addEventListener('pointerover', e => { const b = e.target.closest && e.target.closest('button,summary'); if (b && !b.contains(e.relatedTarget)) se('cursor'); });
-  document.addEventListener('click', e => { if (e.target.closest && e.target.closest('#menu button,#ui button,summary')) se('decide'); });
-  // 指先カーソルで項目に乗った時も鳴らす
-  new MutationObserver(ms => { for (const m of ms) if (m.target.classList && m.target.classList.contains('hHover') && !(m.oldValue || '').includes('hHover')) { se('cursor'); break; } })
-    .observe(document.getElementById('menu') || document.body, { subtree:true, attributes:true, attributeFilter:['class'], attributeOldValue:true });
-  const _say = say; RQ.say = (t, ms) => { se('navi'); return _say(t, ms); };
-
-  // ---- タイトルからリンクして来た時の到着演出 ----
-  const fromLink = /[?&]link=1/.test(location.search);
-  if (!fromLink) return;
-  const ov = el('div', { id:'rqLink' }, '<div class="box"><div class="l1">LINK ESTABLISHED</div><div class="l2">TUTORIAL FIELD</div><div class="bar"><i></i></div></div>');
-  document.body.appendChild(ov);
-  requestAnimationFrame(() => ov.classList.add('go')); se('link');
-  setTimeout(() => ov.classList.add('fade'), 1500);
-  setTimeout(() => ov.classList.add('out'), 2600);
-  setTimeout(() => ov.remove(), 3600);
-  // URLから link=1 を外しておく（リロードで演出が繰り返されないように）
-  try { history.replaceState(null, '', location.pathname + location.search.replace(/([?&])link=1&?/, '$1').replace(/[?&]$/, '') + location.hash); } catch (e){}
-  if (mode === 'TUTORIAL'){
-    (async () => {
-      await new Promise(r => setTimeout(r, 3000));
-      await RQ.say('ようこそ、RADIQLEへ。ジョブ「剣士」でリンクが確立されました。', 1400);
-      await RQ.say('ここはチュートリアルフィールド。まずは剣の基本操作を覚えましょう。', 1600);
-      await RQ.say('説明パネルを読んだら Ⓐボタン でスタート。＋ボタンでスキップできます。', 2600);
-      hide();
-    })();
-  }
-})();
-
 </script>
 </body>
 </html>
