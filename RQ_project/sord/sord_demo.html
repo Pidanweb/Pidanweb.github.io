@@ -980,11 +980,11 @@ async function flipFaceCam(){   // フロント(顔)とバック(背景)のカ�
   listCams();
 }
 function faceMirror(){ const t = $('faceType').value; return t === 'auto' ? (face.src === vid ? camMirror : face.fm !== false) : t === 'front'; }
-const sPary = new Audio('sound/pary.mp3'); let vol = .8; sPary.preload = 'auto';
-const sAtk = new Audio('sound/atack.mp3'); sAtk.preload = 'auto';
+const sPary = new Audio('pary.mp3'); let vol = .8; sPary.preload = 'auto';
+const sAtk = new Audio('atack.mp3'); sAtk.preload = 'auto';
 function playAtk(){ try { const a = sAtk.cloneNode(); a.volume = vol; a.play().catch(() => {}); } catch (e){} }
 // 戦闘BGM（ループ）
-const bgm = new Audio('sound/battle.mp3'); bgm.loop = true; bgm.preload = 'auto'; bgm.volume = .5;
+const bgm = new Audio('battle.mp3'); bgm.loop = true; bgm.preload = 'auto'; bgm.volume = .5;
 function bgmPlay(restart){ try { if (restart) bgm.currentTime = 0; bgm.play().catch(() => {}); } catch (e){} }
 function bgmStop(){ try { bgm.pause(); } catch (e){} }
 // ガード音（素材なしのため簡易合成）
@@ -1003,7 +1003,7 @@ $('mVol').oninput = e => vol = +e.target.value; $('mBgm').oninput = e => bgm.vol
 $('mRestart').onclick = () => { toggleMenu(false); prGo(PR.i); };
 $('mFirst').onclick = () => { toggleMenu(false); prGo(0); };
 $('mMain').onclick = () => location.href = 'RQ_project_sord_hukan.html?start=1';   // 本番（ファイル名が違う場合はここを変更）
-$('mTitle').onclick = () => location.href = 'index.html';   // Radiqle タイトル
+$('mTitle').onclick = () => location.href = '../RQ_index.html';   // Radiqle タイトル
 
 // ===== ゲーム状態 =====
 const keys = {}, mouse = { nx:0, ny:0 }, ray = new THREE.Raycaster(), tmp = new THREE.Vector3();
@@ -2357,11 +2357,11 @@ setCtl();
   window.RQ = { say, hide, mode };
 
   // ===== システム効果音 =====
-  // 基本は WebAudio で合成。sound/se_名前.mp3 を置くと、そのファイルが優先されます
+  // 基本は WebAudio で合成。sord/se_名前.mp3 を置くと、そのファイルが優先されます
   // 名前: cursor decide open close panel start count clear complete skill hurt victory gameover navi link
   const SE_NAMES = ['cursor','decide','open','close','panel','start','count','clear','complete','skill','hurt','victory','gameover','navi','link'];
   const seFile = {};
-  for (const n of SE_NAMES){ const a = new Audio('sound/se_' + n + '.mp3'); a.preload = 'auto'; a.addEventListener('canplaythrough', () => seFile[n] = a, { once:true }); a.onerror = () => {}; }
+  for (const n of SE_NAMES){ const a = new Audio('se_' + n + '.mp3'); a.preload = 'auto'; a.addEventListener('canplaythrough', () => seFile[n] = a, { once:true }); a.onerror = () => {}; }
   let AC = null, out = null;
   function ac(){
     if (!AC){ try { AC = new (window.AudioContext || window.webkitAudioContext)(); out = AC.createGain(); out.connect(AC.destination); } catch (e){ return null; } }
@@ -2457,7 +2457,7 @@ setCtl();
   if (mode === 'TUTORIAL'){
     (async () => {
       await new Promise(r => setTimeout(r, 3000));
-      await RQ.say('ようこそ、RADIQLEへ。リンクは正常に確立されました。', 1400);
+      await RQ.say('ようこそ、RADIQLEへ。ジョブ「剣士」でリンクが確立されました。', 1400);
       await RQ.say('ここはチュートリアルフィールド。まずは剣の基本操作を覚えましょう。', 1600);
       await RQ.say('説明パネルを読んだら Ⓐボタン でスタート。＋ボタンでスキップできます。', 2600);
       hide();
