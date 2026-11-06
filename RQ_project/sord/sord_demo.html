@@ -1181,7 +1181,8 @@ const WVID = 0x057e, WPIDS = [0x0306, 0x0330];
 const wii = { dev:null, leds:1, a:false, b:false, aT:0, pA:false, pPlus:false, pHome:false,
               gx:0, gy:0, gz:1, gok:false, lastSw:0, lastNeg:-1e9, th:2.2, rt:0,
               mode:0x35, modeT:0, pMinus:false, passOn:false, mpOnce:false, rSwT:-1e9, dualCd:0, am:1, apk:1, lastDual:null,
-              nun:{ seen:-1e9, ext:false, c:false, z:false, a:1, pk:1, g1:51, prev:0, swT:-1e9, pend:0, gv:null, fake:false, n:0 },
+              cal:{ z:[128, 128, 128], g:[26, 26, 26], ok:false },
+              nun:{ seen:-1e9, ext:false, extT:-1e9, reT:-1e9, retry:0, c:false, z:false, a:1, pk:1, g1:51, prev:0, swT:-1e9, pend:0, gv:null, fake:false, n:0 },
               hist:{ R:[], N:[] },
               mp:{ state:'off', ok:false, calibrated:false, zero:[8192, 8192, 8192], cal:null, calPct:0, up:null, upT:0, lastValid:0, sw:null, ring:[], to:0 } };
 function wiiMsg(t){ $('wiiStat').textContent = t; }
@@ -1193,10 +1194,21 @@ function setCtl(){   // 練習モードは Wiiリモコン専用
 const wsend = async (id, bytes) => { if (!wii.dev) return; try { await wii.dev.sendReport(id, new Uint8Array(bytes)); } catch (e){} };
 const wLed = (r = 0) => wsend(0x11, [(wii.leds << 4) | r]);
 function wiiRumble(ms){ if (!wii.dev) return; wLed(1); clearTimeout(wii.rt); wii.rt = setTimeout(() => wLed(0), ms); }
+// 加速度の校正値（リモコン内蔵メモリ 0x0016〜: 0g の値と 1g の値）。読めなければ 0g=128, 1g=+26 のまま
+function wiiCalRead(d){
+  if (d.byteLength < 16) return;
+  const se = d.getUint8(2), addr = (d.getUint8(3) << 8) | d.getUint8(4);
+  if ((se & 0x0f) || addr !== 0x0016) return;
+  const b = i => d.getUint8(5 + i), z = [b(0), b(1), b(2)], g = [b(4) - b(0), b(5) - b(1), b(6) - b(2)];
+  if (g.some(v => v < 10 || v > 60)){ dbg(`加速度の校正値が不正 → 既定値のまま（0g=${z} 1g差=${g}）`); return; }
+  wii.cal = { z, g, ok:true }; wii.gok = false;
+  dbg(`加速度の校正値を読み込み 0g=${z.join('/')} 1g差=${g.join('/')}`);
+}
 async function openWii(d){
   wii.dev = d; if (!d.opened) await d.open();
   d.oninputreport = onWii;   // 再接続しても二重登録にならないよう代入式にする
   wii.gok = false;
+  await wsend(0x17, [0x00, 0x00, 0x00, 0x16, 0x00, 0x0A]); await wsleep(100);   // 加速度の校正値を読む（応答は 0x21）
   await wiiEnableMP();
   await wLed();
   setCtl('wii'); wiiMsg('🎮 Wii: 接続中');
@@ -1205,19 +1217,22 @@ async function openWii(d){
 // pass=true: ヌンチャク パススルー(0x05)。ジャイロとヌンチャクのデータが交互に届く。失敗したら通常(0x04)で再試行
 const wreg = (addr, v) => { const b = new Array(21).fill(0); b[0] = 0x04; b[1] = (addr >> 16) & 255; b[2] = (addr >> 8) & 255; b[3] = addr & 255; b[4] = 1; b[5] = v; return b; };
 const wsleep = ms => new Promise(r => setTimeout(r, ms));
-async function wiiEnableMP(pass = sk.pass){
+async function wiiEnableMP(pass = sk.pass, keepCal = false){   // keepCal=true: ヌンチャク再接続時など、ジャイロのゼロ点を捨てずに再起動
   const m = wii.mp; clearTimeout(m.to);
-  m.ok = false; m.state = 'activating'; m.calibrated = false; m.cal = null; m.up = null; m.sw = null; m.ring.length = 0; m.lastValid = 0;
+  m.ok = false; m.state = 'activating'; if (!keepCal){ m.calibrated = false; m.cal = null; } m.up = null; m.sw = null; m.ring.length = 0; m.lastValid = 0;
   wii.mode = 0x35; wii.passOn = pass; dbg('MotionPlus有効化…' + (pass ? '（ヌンチャク併用）' : ''));
   await wsend(0x12, [0x04, 0x35]);
-  if (wii.mpOnce){ await wsend(0x16, wreg(0xA400F0, 0x55)); await wsleep(120); }   // 有効化済みなら一度無効化してからモードを切り替える
+  // 併用モードは「先にヌンチャクを初期化 → MotionPlusをパススルーで有効化」の順でないとヌンチャクのデータが来ない
+  // （0xA400F0 ← 0x55 は MotionPlus が有効なら一度無効化も兼ねる）
+  if (pass || wii.mpOnce){ await wsend(0x16, wreg(0xA400F0, 0x55)); await wsleep(150); }
+  if (pass){ await wsend(0x16, wreg(0xA400FB, 0x00)); await wsleep(150); }   // 有効化済みなら一度無効化してからモードを切り替える
   await wsend(0x16, wreg(0xA600FE, pass ? 0x05 : 0x04));
   wii.mpOnce = true;
   await wsleep(150);
   await wsend(0x15, [0x00]);
   m.to = setTimeout(() => {
     if (m.ok || !wii.dev) return;
-    if (pass){ dbg('ヌンチャク併用で開始できず → 通常のMotionPlusで再試行'); wiiEnableMP(false); return; }
+    if (pass){ dbg('ヌンチャク併用で開始できず → 通常のMotionPlusで再試行'); wiiEnableMP(false, keepCal); return; }
     wii.mode = 0x31; m.state = 'none'; wsend(0x12, [0x04, 0x31]);
     wiiMsg('🎮 Wii: ジャイロなし（加速度のみ・従来操作）'); dbg('ジャイロを検出できず → 加速度のみ(従来動作)');
   }, 3000);
@@ -1240,6 +1255,7 @@ if ('hid' in navigator){
 function onWii(e){
   const d = e.data, id = e.reportId, now = performance.now(), ts = e.timeStamp || now;
   if (id === 0x20){ wsend(0x12, [0x04, wii.mode]); return; }   // ステータス応答(MotionPlus有効化後にも来る)でモードが戻るので再設定
+  if (id === 0x21){ wiiCalRead(d); return; }   // メモリ読み出しの応答（加速度の校正値）
   if (id !== 0x31 && id !== 0x35) return;
   if (id !== wii.mode && now - wii.modeT > 1000){ wii.modeT = now; wsend(0x12, [0x04, wii.mode]); }
   const b0 = d.getUint8(0), b1 = d.getUint8(1);
@@ -1256,7 +1272,7 @@ function onWii(e){
   if (!menuOn) prInput(pressA, pressPlus);   // 説明画面: A=スタート / +=スキップ・説明に戻る
   if (pressA && menuOn) hcClick();   // 指先カーソルで指している項目を決定
   // 加速度（0g=128, 1g≒26）
-  const x = (d.getUint8(2) - 128)/26, y = (d.getUint8(3) - 128)/26, z = (d.getUint8(4) - 128)/26, m = Math.hypot(x, y, z);
+  const C = wii.cal, x = (d.getUint8(2) - C.z[0])/C.g[0], y = (d.getUint8(3) - C.z[1])/C.g[1], z = (d.getUint8(4) - C.z[2])/C.g[2], m = Math.hypot(x, y, z);
   if (Math.abs(m - 1) < .12){   // ほぼ静止している時だけ重力方向を更新
     if (!wii.gok){ wii.gx = x; wii.gy = y; wii.gz = z; wii.gok = true; }
     else { wii.gx += (x - wii.gx)*.2; wii.gy += (y - wii.gy)*.2; wii.gz += (z - wii.gz)*.2; }
@@ -1326,7 +1342,16 @@ function wiiGyro(d, ax, ay, az, a, t, held){
   if (wii.passOn && !allFF && !all0 && (e[5] & 3) === 0){ nunFeed(e); return; }   // パススルー: byte5下位2bit=00 がヌンチャクのデータ
   const valid = !allFF && !all0 && (e[5] & 3) === 2;   // byte5下位2bit=10 がMotionPlusデータ
   if (!valid){ if (m.ok && t - m.lastValid > 1000){ m.ok = false; m.state = 'lost'; m.sw = null; dbg('ジャイロのデータが止まりました'); } return; }
-  wii.nun.ext = !!(e[4] & 1);   // byte4 bit0 = 拡張(ヌンチャク)接続
+  // byte4 bit0 = 拡張(ヌンチャク)接続。起動後に挿した時は併用モードを掛け直さないとヌンチャクのデータが来ないので、自動で再起動する
+  { const n = wii.nun, ext = !!(e[4] & 1);
+    if (ext && !n.ext){ n.extT = t; dbg('ヌンチャクの接続を検出'); }
+    if (!ext && n.ext){ n.retry = 0; dbg('ヌンチャクが外れました'); }
+    n.ext = ext;
+    if (ext && sk.dual && sk.pass && t - n.seen > 1500 && t - n.extT > 600 && t - (n.reT || -1e9) > 4000 && (n.retry || 0) < 3){
+      n.reT = t; n.retry = (n.retry || 0) + 1;
+      dbg(`ヌンチャクのデータが来ない → 併用モードで再起動（${n.retry}/3）`); wiiEnableMP(true, true); return;
+    }
+    if (!ext && t - n.seen > 1500) n.retry = 0; }
   m.lastValid = t;
   const raw = [e[0] | ((e[3] & 0xfc) << 6), e[1] | ((e[4] & 0xfc) << 6), e[2] | ((e[5] & 0xfc) << 6)];   // yaw, roll, pitch
   const slow = [!!(e[3] & 2), !!(e[4] & 2), !!(e[3] & 1)];
@@ -1478,8 +1503,8 @@ function dualPair(side, now){
 function nunLine(){
   const n = wii.nun, f2 = v => v.toFixed(2);
   if (!wii.dev && !n.fake) return '';
-  let s = `\n右 a=${f2(wii.am)}g 最大${f2(wii.apk)} / 振り≥${wii.th}g`;
-  s += `\nヌンチャク: ${nunOn() ? (n.fake ? '二刀流（疑似）' : '二刀流') : !sk.dual ? 'OFF' : n.ext ? '接続中（併用モードOFF?）' : wii.passOn ? '未検出' : 'なし（併用モードOFF）'}`;
+  let s = `\n右 a=${f2(wii.am)}g 最大${f2(wii.apk)} / 振り≥${wii.th}g / 校正${wii.cal.ok ? '読込済' : '既定値'}（静止で1.00前後が正常）`;
+  s += `\nヌンチャク: ${nunOn() ? (n.fake ? '二刀流（疑似）' : '二刀流') : !sk.dual ? '二刀流OFF（メニュー）' : wii.mp.state === 'none' ? '使えません（MotionPlusなし）' : n.ext ? (wii.passOn ? '挿さっているがデータ待ち…' : '挿さっている（併用モードOFF）') : '挿さっていない'} / 併用モード${wii.passOn ? 'ON' : 'OFF'} / データ${n.n}件`;
   if (nunOn() && !n.fake) s += ` / 左 a=${f2(n.a)}g 最大${f2(n.pk)} / 振り≥${sk.nunTh}g / 1g=${n.g1.toFixed(0)} / C${n.c ? '●' : '○'} Z${n.z ? '●' : '○'}`;
   const d = wii.lastDual;
   if (d) s += `\n直近の両手判定: 一致${f2(d.score)}/${f2(sk.dualSim)} 相関${f2(d.cm)} 上下${d.vert ? f2(d.cv) : '-'} 強さ比${f2(d.ratio)}/0.60 → ${d.ok ? '✔同じ' : '✕別'}`;
@@ -1893,7 +1918,11 @@ function prSay(t, c = '#ffffff'){ PR.fbT = performance.now(); setHudTxt('fb', t,
 function prTick(now){
   if (PR.fbT && now - PR.fbT > 1800){ PR.fbT = 0; setHudTxt('fb', ''); }
   sword.visible = state === 'play' || (state === 'clear' && !PR.clearShown);   // 説明パネルの手前に剣が出ないように
-  if (!PR.dual && nunOn() && state === 'intro') prSetDual();   // 説明画面の間にヌンチャクを認識 → 二刀流モード
+  if (!PR.dual && nunOn()){   // ヌンチャクを認識 → 二刀流モード（説明画面でも練習中でも）
+    prSetDual();
+    if (state === 'play' || state === 'clear') popCam('二刀流モード！', '#5ee08a', 1, 1.4);
+    else if (state === 'done') prDone();
+  }
   if (state === 'intro'){ if (prSigOf() !== PR.sig) drawIntro(); }   // 接続・ジャイロ状態が変わったら描き直す
   else if (state === 'clear'){
     if (!PR.clearShown && now - PR.clearAt > 900){
