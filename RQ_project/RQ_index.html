@@ -258,8 +258,8 @@ body.jobmode #title,body.jobmode #prompt,body.jobmode #blink,body.jobmode #statu
 
 <script>
 // ===== 設定 =====
-const NEXT = 'sord_demo.html?link=1';          // 剣士を選んだ後に行くチュートリアル
-const RAID = 'RQ_project_sord_hukan.html?start=1';
+const NEXT = 'sord/sord_demo.html?link=1';          // 剣士を選んだ後に行くチュートリアル
+const RAID = 'sord/RQ_project_sord_hukan.html?start=1';
 const $ = id => document.getElementById(id);
 const lsGet = k => { try { return localStorage.getItem(k); } catch (e){ return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e){} };
@@ -348,9 +348,10 @@ const sfx = {
   welcome(){ [392, 523, 659, 784].forEach(f => tone(f, 2.2, 'triangle', .07)); [1047, 1319, 1568].forEach((f, i) => tone(f, 1.6, 'sine', .07, .15 + i*.12)); }
 };
 
-// ===== タイトルBGM：sound/title.mp3 があればそれを、無ければ合成のアンビエント =====
-const titleMp3 = new Audio('sound/title.mp3'); titleMp3.loop = true; titleMp3.volume = .45; let titleMp3Ok = false;
-titleMp3.addEventListener('canplaythrough', () => titleMp3Ok = true, { once:true }); titleMp3.onerror = () => {};
+// ===== タイトルBGM：sounds/title.mp3（無ければ sound/title.mp3）があればそれを、無ければ合成のアンビエント =====
+const titleMp3 = new Audio('sounds/title.mp3'); titleMp3.loop = true; titleMp3.volume = .45; let titleMp3Ok = false;
+titleMp3.addEventListener('canplaythrough', () => titleMp3Ok = true, { once:true });
+titleMp3.onerror = () => { if (!titleMp3.src.includes('/sound/')){ titleMp3.src = 'sound/title.mp3'; titleMp3.load(); } };   // フォルダ名 sound でも可
 const amb = { on:false, bus:null, timer:0, i:0 };
 function bgmStart(){
   if (titleMp3Ok){ titleMp3.currentTime = 0; titleMp3.play().catch(() => {}); return; }
@@ -591,7 +592,6 @@ function linkTick(now, dt){
     $('circles').style.transition = $('lines').style.transition = $('check').querySelector('.hdr').style.transition = 'opacity .5s';
     $('circles').style.opacity = $('lines').style.opacity = $('check').querySelector('.hdr').style.opacity = 0;
     $('welcome').classList.add('on'); sfx.welcome();
-    try { const u = new SpeechSynthesisUtterance('Welcome to Radiqle.'); u.lang = 'en-US'; u.rate = .95; u.pitch = 1.05; speechSynthesis.speak(u); } catch (e){}
   });
   once('go', tw - 10.5, showJobs);   // ホワイトアウト中にジョブ選択へ
 }
