@@ -718,7 +718,8 @@ function bcApply(){
   if (!p) return false;
   bc.origin = p;
   // ゲームの前方: ボスを指定していれば立ち位置→ボスの方向。なければ 正面撮り → カメラの方 / 背後撮り → カメラの向く方
-  bc.bossF = bc.bossUV ? bcRay({ fx:(bc.bossUV[0] - .5)*W_/f, fy:(bc.bossUV[1] - .5)*H_/f }) : null;
+  bc.bossF = bc.bossUV ? bcRay({ fx:(bc.bossUV[0] - .5)*W_/f, fy:(bc.bossUV[1] - .5)*H_/f })
+           : bc.bossXZ ? new THREE.Vector3(bc.bossXZ.x, 0, bc.bossXZ.z) : null;   // 床座標で保存したボスの位置（カメラの後ろでも可）
   let yaw = (bc.poseCam || pose.cam) === 'front' ? Math.PI : 0;
   if (typeof bc.faceYaw === 'number') yaw = bc.faceYaw;   // キャリブレーションのページで決めた「前」（2台のカメラの並びに直角）
   if (bc.bossF){
@@ -750,7 +751,7 @@ function bcLoadSaved(){   // 保存した結果を読み込む（カメラを開
   bc.triedLoad = true;
   if (!d || !d.res || !d.originUV) return;
   Object.assign(bc, { vw:d.vw || 0, vh:d.vh || 0, res:d.res, tune:d.tune || { floor:0, th:0, ph:0 }, hfov:d.hfov || bc.hfov, originUV:d.originUV,
-    poseCam:d.poseCam, boss:d.boss || bc.boss, bossUV:d.bossUV || null, height:d.height || bc.height, faceYaw:typeof d.faceYaw === 'number' ? d.faceYaw : null });
+    poseCam:d.poseCam, boss:d.boss || bc.boss, bossUV:d.bossUV || null, height:d.height || bc.height, faceYaw:typeof d.faceYaw === 'number' ? d.faceYaw : null, bossXZ:d.bossXZ || null });
   if (d.bossH) R = d.bossH/2;
   if (!bcApply()){ bcSay('保存した結果を使えませんでした。キャリブレーションのページで測り直してください'); return; }
   pose.cam = d.poseCam === 'back' ? 'back' : 'front'; poseRecenter(); pose.camAuto = true;   // 測ったときの向きから始めて、あとは位置で自動判定

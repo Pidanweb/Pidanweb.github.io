@@ -40,6 +40,8 @@
   a.btnlink:hover{background:#2a3f4e} a.btnlink:focus-visible{outline:2px solid var(--tape);outline-offset:2px}
   fieldset{border:0;margin:0;padding:0;min-width:0} fieldset:disabled{opacity:.45}
   input[type=range]{width:100%;accent-color:var(--tape)}
+  figure.adj{box-shadow:0 0 0 3px var(--tape)} figure .adjTag{position:absolute;right:0;bottom:0;padding:3px 10px;background:var(--tape);color:#1a1405;font-weight:800;font-size:13px;border-top-left-radius:6px;display:none}
+  figure.adj .adjTag{display:block} figure.main,figure.side{cursor:pointer}
   button.go{background:var(--tape);color:#1a1405;border-color:var(--tape);font-weight:800;width:100%;padding:12px;font-size:17px;margin-top:6px}
   button.go:hover{background:#ffd44a}
   .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px} .btns button{flex:1}
@@ -85,7 +87,7 @@
 
   <h2>3. 床（カメラごとに、映像のマス目を床に合わせる）</h2>
   <div class="note" id="floorNote"></div>
-  <div class="seg"><input type="radio" name="tcam" id="tcM" value="M" checked><label for="tcM">メイン</label><input type="radio" name="tcam" id="tcS" value="S"><label for="tcS">2台目</label></div>
+  <div class="seg"><input type="radio" name="tcam" id="tcM" value="M" checked><label for="tcM">メインの床</label><input type="radio" name="tcam" id="tcS" value="S"><label for="tcS">2台目の床</label></div>
   <label>カメラの高さ <b id="fhV">150</b> cm<input type="range" id="fh" min="30" max="300" step="1" value="150"></label>
   <label>下向きの角度 <b id="ftV">15.0</b>°<input type="range" id="ft" min="-10" max="60" step="0.5" value="15"></label>
   <label>左右の傾き <b id="fpV">0.0</b>°<input type="range" id="fp" min="-20" max="20" step="0.2" value="0"></label>
@@ -101,8 +103,9 @@
 
   <fieldset id="after" disabled>
   <h2>5. 立ち位置とボス</h2>
-  <div class="btns"><button id="pickO">立ち位置を図でクリックして動かす</button></div>
-  <label>ボスまでの距離 <b id="bdV">8.5</b> m<input type="range" id="bd" min="2" max="12" step="0.5" value="8.5"><small>図の赤い丸がボス。近すぎる時は「大きさ＋1.5m」まで離します</small></label>
+  <div class="btns"><button id="pickO">立ち位置を図でクリック</button><button id="pickB">ボスの位置を図でクリック</button></div>
+  <div class="btns"><button id="bossFwd">ボスを正面に戻す</button></div>
+  <label>ボスまでの距離 <b id="bdV">8.5</b> m<input type="range" id="bd" min="2" max="12" step="0.5" value="8.5"><small>図の赤い丸がボス。立ち位置からの距離です（近すぎる時は「大きさの半分＋1.5m」まで離します）</small></label>
   <label>ボスの大きさ（高さ） <b id="bhV">3.6</b> m<input type="range" id="bh" min="0.6" max="3.6" step="0.1" value="3.6"><small>部屋が狭いときは小さくすると近くに置けます</small></label>
 
   <h2>6. 確かめる・保存</h2>
@@ -522,21 +525,25 @@ function floorMats(k){   // そのカメラ自身の床座標での行列（グ�
 function floorSave(){ try { localStorage.setItem(KEY.floor, JSON.stringify(flo)); } catch (e){} }
 function floorUI(){
   const k = tcam(), f = floorNow(k);
+  for (const c of Object.values(cams)) c.cv.parentNode.classList.toggle('adj', c.key === k);
   $('fh').value = Math.round(f.h*100); $('fhV').textContent = Math.round(f.h*100);
   $('ft').value = (f.th*R2D).toFixed(1); $('ftV').textContent = (f.th*R2D).toFixed(1);
   $('fp').value = (f.ph*R2D).toFixed(1); $('fpV').textContent = (f.ph*R2D).toFixed(1);
   $('ff').value = (+f.hfov).toFixed(1); $('ffV').textContent = (+f.hfov).toFixed(1);
-  $('fReset').hidden = !sess; $('fAuto').hidden = !!sess;
-  $('floorNote').textContent = sess
+  $('fReset').hidden = !sess;
+  $('floorNote').textContent = (sess
     ? '測定した床です。黄色いマス目（1m）が床に乗り、足元から立つ黄色い縦線の上端が自分の目に届くように微調整します（2台の位置関係も自動で計算し直します）'
-    : 'まず「床を認識」で大まかに合わせ、スライダーで仕上げます（上でカメラの高さを入れておくと、認識がずっと正確になります）。マス目（1m）が床に乗り、足元から立つ黄色い縦線の上端が目に届けばOK。2台とも合わせたら、下の測定で「床は…合わせた値を使う」にすると正確です';
+    : 'まず「床を認識」で大まかに合わせ、スライダーで仕上げます（上でカメラの高さを入れておくと、認識がずっと正確になります）。マス目（1m）が床に乗り、足元から立つ黄色い縦線の上端が目に届けばOK。2台とも合わせたら、下の測定で「床は…合わせた値を使う」にすると正確です')
+    + '　床はカメラごとに別々です（上の切り替えで、黄色い枠の映像の床を調整。映像をクリックしても切り替わります）。位置の基準はメインです';
   $('useFloor').disabled = !!sess || !(flo.M.set && flo.S.set);
   if ($('useFloor').disabled && !sess) $('useFloor').checked = false;
 }
 function afterUI(){
   $('after').disabled = !cal; floorUI();
   if (sess){ $('bd').value = sess.boss; $('bdV').textContent = (+sess.boss).toFixed(1); $('bh').value = sess.bossH; $('bhV').textContent = (+sess.bossH).toFixed(1); }
-  $('pickO').textContent = st.pick ? '✖ やめる（図をクリックして決める）' : '立ち位置を図でクリックして動かす';
+  $('pickO').textContent = st.pick === 'origin' ? '✖ やめる' : '立ち位置を図でクリック';
+  $('pickB').textContent = st.pick === 'boss' ? '✖ やめる' : 'ボスの位置を図でクリック';
+  if (sess){ $('bd').min = 1; $('bd').max = 12; }
 }
 function floorInput(){
   const k = tcam(), h = +$('fh').value/100, th = +$('ft').value/R2D, ph = +$('fp').value/R2D, fov = +$('ff').value;
@@ -556,6 +563,8 @@ function floorInput(){
 }
 for (const id of ['fh', 'ft', 'fp', 'ff']) $(id).addEventListener('input', floorInput);
 for (const r of document.querySelectorAll('input[name=tcam]')) r.addEventListener('change', floorUI);
+for (const c of Object.values(cams)){ const tag = document.createElement('span'); tag.className = 'adjTag'; tag.textContent = '▲ 床を調整中'; c.cv.parentNode.appendChild(tag);
+  c.cv.addEventListener('click', () => { $(c.key === 'M' ? 'tcM' : 'tcS').checked = true; floorUI(); }); }
 $('fReset').onclick = () => { if (!sess) return; sess.tune[tcam()] = { f:0, t:0, p:0 }; calBuild(sess, false); floorUI(); };
 // 床を認識: まっすぐ立った姿（かかと・目の位置）から、見えているカメラの床を大まかに求める
 $('fAuto').onclick = () => {
@@ -584,9 +593,12 @@ function floorTick(now){
     const hK = num(k === 'M' ? 'camHM' : 'camHS', 0)/100, r = bcSolve(F[k], eye(), hK, false), c = cams[k];
     const px = r.rms*(c.v.videoWidth/2)/Math.tan(c.hfov*Math.PI/360);
     if (px > 30 || !(r.h > .2 && r.h < 3.4)) continue;
-    flo[k] = { th:r.th, ph:r.ph, h:hK || r.h, hfov:c.hfov, set:true }; done.push(cams[k].name);
+    const nh = hK || r.h;
+    if (sess){ const b = sess[k]; sess.tune[k] = { f:Math.round((b.h - nh)*100), t:(r.th - b.th)*R2D, p:(r.ph - b.ph)*R2D }; }
+    else flo[k] = { th:r.th, ph:r.ph, h:nh, hfov:c.hfov, set:true };
+    done.push(cams[k].name);
   }
-  st.fl = null; floorSave(); floorUI(); beep(1100, 140);
+  st.fl = null; floorSave(); if (sess && done.length) calBuild(sess, false); floorUI(); beep(1100, 140);
   if (done.length){ guide(`床を認識しました（${done.join('・')}）`, '黄色いマス目と縦線を見て、スライダーで仕上げてください', 'ok', '✓', 1); say('床を認識しました。スライダーで仕上げてください'); }
   else { guide('床を認識できませんでした', '身長・カメラの高さの入力を確認して、もう一度', 'bad'); say('認識できませんでした'); }
 }
@@ -594,16 +606,31 @@ function floorTick(now){
 // --- 5. 立ち位置とボス ---
 // プレイヤーの「前」= ボスの方向: 前置きなら2台のカメラの方、後ろ置きならカメラが向いている方（2台の並びに直角）
 const fwdDir = () => { const f = cal.rig.f, k = lay() === 'front' ? -1 : 1; return { x:f.x*k, z:f.z*k }; };
-const bossPos = () => { if (!cal) return null; const f = fwdDir(), d = Math.max(minDist(), +sess.boss); return { x:cal.origin.x + f.x*d, z:cal.origin.z + f.z*d }; };
-$('bd').oninput = e => { if (!sess) return; sess.boss = +e.target.value; $('bdV').textContent = sess.boss.toFixed(1); try { localStorage.setItem(KEY.sess, JSON.stringify(sess)); } catch (err){} };
+// ボスの方向: 図でクリックした位置があればそちら、なければ正面
+const bossDirNow = () => { if (sess && sess.bossXZ){ const dx = sess.bossXZ.x - cal.origin.x, dz = sess.bossXZ.z - cal.origin.z, n = Math.hypot(dx, dz); if (n > .3) return { x:dx/n, z:dz/n }; } return fwdDir(); };
+const bossPos = () => { if (!cal) return null; const f = bossDirNow(), d = Math.max(minDist(), +sess.boss); return { x:cal.origin.x + f.x*d, z:cal.origin.z + f.z*d }; };
+function sessKeep(){ try { localStorage.setItem(KEY.sess, JSON.stringify(sess)); } catch (e){} }
+$('bd').oninput = e => { if (!sess) return; sess.boss = +e.target.value; $('bdV').textContent = sess.boss.toFixed(1);
+  if (sess.bossXZ){ const f = bossDirNow(); sess.bossXZ = { x:cal.origin.x + f.x*sess.boss, z:cal.origin.z + f.z*sess.boss }; }   // 方向はそのまま、距離だけ変える
+  sessKeep(); };
 $('bh').oninput = e => { if (!sess) return; sess.bossH = +e.target.value; $('bhV').textContent = sess.bossH.toFixed(1); try { localStorage.setItem(KEY.sess, JSON.stringify(sess)); } catch (err){} };
-$('pickO').onclick = () => { st.pick = !st.pick; afterUI(); if (st.pick) guide('上から見た図で、立ち位置にしたい場所をクリック', 'メインのカメラに映る範囲（青い扇形）の中で選びます', 'run'); };
+$('pickO').onclick = () => { st.pick = st.pick === 'origin' ? false : 'origin'; afterUI(); if (st.pick) guide('上から見た図で、立ち位置にしたい場所をクリック', 'メインのカメラに映る範囲（青い扇形）の中で選びます', 'run'); };
+$('pickB').onclick = () => { st.pick = st.pick === 'boss' ? false : 'boss'; afterUI(); if (st.pick) guide('上から見た図で、ボスを置きたい場所をクリック', 'カメラの後ろ（壁の向こう）でも置けます。プレイヤーは立ち位置からボスの方を向いて戦います', 'run'); };
+$('bossFwd').onclick = () => { if (!sess) return; sess.bossXZ = null; sessKeep(); guide('ボスを正面に戻しました', '', 'ok'); };
 let mapT = null;   // 上から見た図の座標変換（クリック用）
 $('cvMap').addEventListener('click', e => {
   if (!st.pick || !cal || !mapT) return;
   const r = $('cvMap').getBoundingClientRect(), d = mapT.d, x = (e.clientX - r.left)*d, y = (e.clientY - r.top)*d;
   const u = (x - mapT.w/2)/mapT.sc + mapT.cu, v = -(y - mapT.h/2)/mapT.sc + mapT.cv, R_ = cal.rig.r, F_ = cal.rig.f;
-  const p = { x:u*R_.x + v*F_.x, z:u*R_.z + v*F_.z }, q = new THREE.Vector3(p.x, BC_LIFT, p.z).applyMatrix4(cal.m.camF);
+  const p = { x:u*R_.x + v*F_.x, z:u*R_.z + v*F_.z };
+  if (st.pick === 'boss'){
+    const d = Math.hypot(p.x - cal.origin.x, p.z - cal.origin.z);
+    if (d < .5){ guide('立ち位置に近すぎます', 'もう少し離れた場所をクリックしてください', 'bad'); return; }
+    sess.bossXZ = p; sess.boss = Math.round(d*10)/10; st.pick = false; sessKeep(); afterUI();
+    guide(`ボスを置きました（立ち位置から ${d.toFixed(1)}m）`, d < minDist() ? `近すぎるので、ゲームでは ${minDist().toFixed(1)}m まで離れます（ボスを小さくすると近くに置けます）` : 'プレイヤーはこの方向を向いて戦います', 'ok');
+    return;
+  }
+  const q = new THREE.Vector3(p.x, BC_LIFT, p.z).applyMatrix4(cal.m.camF);
   if (q.z > -.3){ guide('そこはメインのカメラの前ではありません', '青い扇形の中をクリックしてください', 'bad'); return; }
   sess.originF = p; st.pick = false; calBuild(sess, false);
   guide('立ち位置を動かしました', 'ゲームではここが始めの位置になり、ボスはここから見た方向に立ちます', 'ok');
@@ -671,7 +698,7 @@ $('save').onclick = () => {
   try {
     localStorage.setItem(KEY.bc, JSON.stringify({ res:{ th:cal.m.th, ph:cal.m.ph, h:cal.m.h }, tune:{ floor:0, th:0, ph:0 }, hfov:cal.m.hfov, originUV,
       poseCam:sess.lay, boss:+sess.boss, height:sess.height, bossUV:null, bossH:+sess.bossH, vw, vh, at:sess.at,
-      faceYaw:(f => Math.atan2(-f.x, -f.z))(fwdDir()) }));   // ゲーム座標の -Z（ボスの方向）
+      faceYaw:(f => Math.atan2(-f.x, -f.z))(bossDirNow()), bossXZ:sess.bossXZ ? bossPos() : null }));   // ゲーム座標の -Z（ボスの方向）
     localStorage.setItem(KEY.dual, JSON.stringify({ res:{ th:cal.s.th, ph:cal.s.ph, h:cal.s.h }, al:{ yaw:cal.s.yaw, tx:cal.s.tx, tz:cal.s.tz }, hfov:cal.s.hfov,
       camH:sess.camH.S, cam:label(cams.S).label, at:sess.at }));
     localStorage.setItem(KEY.dualOn, '1'); localStorage.setItem(KEY.lay, sess.lay);
@@ -745,6 +772,7 @@ function drawMap(){
   const R_ = cal.rig.r, F_ = cal.rig.f, U = p => ({ u:p.x*R_.x + p.z*R_.z, v:p.x*F_.x + p.z*F_.z });   // u: 右, v: 奥
   const bp = bossPos(), br = num('bh', 3.6)/2;
   const pts = [{ x:0, z:0 }, { x:cal.s.tx, z:cal.s.tz }, ...cal.spotsF.map(s => s.m), cal.origin]; if (live.f) pts.push(live.f);
+  if (Math.hypot(bp.x - cal.origin.x, bp.z - cal.origin.z) < 7) pts.push({ x:bp.x - br, z:bp.z - br }, { x:bp.x + br, z:bp.z + br });
   const us = pts.map(U), u0 = Math.min(...us.map(p => p.u)) - 1.2, u1 = Math.max(...us.map(p => p.u)) + 1.2, v0 = Math.min(...us.map(p => p.v)) - 1.2, v1 = Math.max(...us.map(p => p.v)) + 1.2;
   const sc = Math.min(w/(u1 - u0), h/(v1 - v0)), cu = (u0 + u1)/2, cvv = (v0 + v1)/2;
   mapT = { d, w, h, sc, cu, cv:cvv };
@@ -780,7 +808,7 @@ function drawMap(){
   const dot = (p, col, r) => { if (!p) return; const a = P(p); x.fillStyle = col; x.beginPath(); x.arc(a[0], a[1], r*d, 0, 7); x.fill(); };
   { const o = P(cal.origin); x.strokeStyle = '#f2c230'; x.lineWidth = 3*d; x.beginPath(); x.arc(o[0], o[1], 10*d, 0, 7); x.stroke(); x.fillStyle = '#f2c230'; x.font = `bold ${12*d}px sans-serif`; x.textAlign = 'left'; x.fillText('立ち位置', o[0] + 14*d, o[1] + 4*d); }
   dot(live.m, '#59c9e8', 5); dot(live.s, '#f08c3a', 5); dot(live.f, '#fff', 8);
-  if (st.pick){ x.fillStyle = '#f2c230'; x.font = `bold ${15*d}px sans-serif`; x.textAlign = 'center'; x.fillText('立ち位置にしたい場所をクリック', w/2, h - 12*d); }
+  if (st.pick){ x.fillStyle = st.pick === 'boss' ? '#ff5d6c' : '#f2c230'; x.font = `bold ${15*d}px sans-serif`; x.textAlign = 'center'; x.fillText(st.pick === 'boss' ? 'ボスを置きたい場所をクリック' : '立ち位置にしたい場所をクリック', w/2, h - 12*d); }
 }
 
 // --- メインループ ---
