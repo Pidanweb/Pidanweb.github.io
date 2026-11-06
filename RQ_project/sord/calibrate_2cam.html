@@ -83,21 +83,23 @@
   <div class="row"><label>2台目の高さ<small>両方入れると画角も測れて正確</small></label><input type="number" id="camHS" value="0" min="0" max="300"> cm</div>
   <div class="row"><label>画角（測れない時に使う）<small>カメラ仕様の水平画角</small></label><input type="number" id="fov0" value="65" min="35" max="110"> °</div>
 
-  <h2>3. 測定</h2>
+  <h2>3. 床（カメラごとに、映像のマス目を床に合わせる）</h2>
+  <div class="note" id="floorNote"></div>
+  <div class="seg"><input type="radio" name="tcam" id="tcM" value="M" checked><label for="tcM">メイン</label><input type="radio" name="tcam" id="tcS" value="S"><label for="tcS">2台目</label></div>
+  <label>カメラの高さ <b id="fhV">150</b> cm<input type="range" id="fh" min="30" max="300" step="1" value="150"></label>
+  <label>下向きの角度 <b id="ftV">15.0</b>°<input type="range" id="ft" min="-10" max="60" step="0.5" value="15"></label>
+  <label>左右の傾き <b id="fpV">0.0</b>°<input type="range" id="fp" min="-20" max="20" step="0.2" value="0"></label>
+  <label>画角（水平） <b id="ffV">65.0</b>°<input type="range" id="ff" min="35" max="110" step="0.5" value="65"></label>
+  <div class="btns"><button id="fAuto">🧍 床を認識（まっすぐ2秒立つ）</button><button id="fReset">測定値に戻す</button></div>
+
+  <h2>4. 測定（2台の位置関係）</h2>
   <div class="note">2台とも足元まで全身が映る位置で、4か所（真ん中 → 左 → 右 → 前後）に2〜3秒ずつ、まっすぐ立って止まります。1か所ごとに1m近く大きく動くほど正確です。</div>
+  <label><input type="checkbox" id="useFloor"> 床は「3. 床」で合わせた値を使う（2台の位置関係だけ測る）</label>
   <button class="go" id="start" disabled>測定を始める</button>
   <div class="btns"><button id="stop" disabled>中止</button><label style="margin:0;align-self:center;flex:1"><input type="checkbox" id="voice" checked> 音声で案内</label></div>
   <div id="result">まだ測定していません</div>
 
   <fieldset id="after" disabled>
-  <h2>4. 床の微調整</h2>
-  <div class="note">映像の黄色いマス目（1m）が実際の床に乗るように合わせます。2台の位置関係も自動で計算し直します。</div>
-  <div class="seg"><input type="radio" name="tcam" id="tcM" value="M" checked><label for="tcM">メイン</label><input type="radio" name="tcam" id="tcS" value="S"><label for="tcS">2台目</label></div>
-  <label>床を上下 <b id="tfV">0</b> cm<input type="range" id="tf" min="-40" max="40" step="1" value="0"><small>＋でマス目が上がる / −で下がる</small></label>
-  <label>前後の傾き <b id="ttV">0.0</b>°<input type="range" id="tt" min="-12" max="12" step="0.2" value="0"></label>
-  <label>左右の傾き <b id="tpV">0.0</b>°<input type="range" id="tp" min="-12" max="12" step="0.2" value="0"></label>
-  <div class="btns"><button id="tReset">このカメラの微調整を0に戻す</button></div>
-
   <h2>5. 立ち位置とボス</h2>
   <div class="btns"><button id="pickO">立ち位置を図でクリックして動かす</button></div>
   <label>ボスまでの距離 <b id="bdV">8.5</b> m<input type="range" id="bd" min="2" max="12" step="0.5" value="8.5"><small>図の赤い丸がボス。近すぎる時は「大きさ＋1.5m」まで離します</small></label>
@@ -233,7 +235,7 @@ function bcRayM(o, FfromCam){   // FfromCam: カメラ座標 → そのカメラ
 // ===== ここからキャリブレーション専用ページ =====
 const $ = id => document.getElementById(id);
 const KEY = { bc:'connectworld_bodycal_v1', dual:'connectworld_dualcal_v1', dualOn:'connectworld_dual_on', lay:'connectworld_dual_layout',
-  cams:'connectworld_cams_v1', ui:'connectworld_calib_ui', sess:'connectworld_calib_session' };
+  cams:'connectworld_cams_v1', ui:'connectworld_calib_ui', sess:'connectworld_calib_session', floor:'connectworld_calib_floor' };
 const POSE_LINKS = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
 const FRESH_MS = 250, STILL = .012, FAR = .09, COUNT_MS = 5000, STAND1_MS = 3000, STAND_MS = 2000, SPOTS = 4;
 const cams = {
@@ -243,6 +245,9 @@ const cams = {
 let camList = [];
 // sess = 測定結果のもと（保存して、ページを開き直しても微調整・保存できる）/ cal = sess から計算した行列など
 let sess = null, cal = null;
+// flo = 測定前の床（カメラごと。「床を認識」とスライダーで合わせる）。測定後は sess の値＋微調整を使う
+const R2D = 180/Math.PI;
+let flo = { M:{ th:15/R2D, ph:0, h:1.5, hfov:65, set:false }, S:{ th:15/R2D, ph:0, h:1.5, hfov:65, set:false } };
 const st = { mode:'idle', t0:0, cd:0, k:0, all:[], cur:{ M:[], S:[] }, means:[], c0:0, lastM:null, lastS:null, tM:-1, tS:-1, chk:null, chkLine:null, trail:[], pick:false };
 const lay = () => document.querySelector('input[name=lay]:checked').value;
 const num = (id, d) => { const v = +$(id).value; return isFinite(v) ? v : d; };
@@ -377,7 +382,10 @@ const spotGuide = () => ['真ん中に立って、止まってください', '�
   lay() === 'front' ? '真ん中に戻って、カメラの方へ1歩大きく近づいて止まってください' : '真ん中に戻って、カメラから1歩大きく離れて止まってください'];
 function startCal(){
   const h = num('hgt', 170)/100; if (!(h > 1 && h < 2.3)){ guide('身長を正しく入れてください', '', 'bad'); return; }
-  cams.M.hfov = cams.S.hfov = num('fov0', 65);
+  const uf = $('useFloor').checked;
+  if (uf && !(flo.M.set && flo.S.set)){ guide('先に「3. 床」で2台とも床を合わせてください', '「床を認識」かスライダーで、マス目を床に合わせます', 'bad'); return; }
+  st.useFloor = uf;
+  cams.M.hfov = uf ? flo.M.hfov : num('fov0', 65); cams.S.hfov = uf ? flo.S.hfov : num('fov0', 65);
   Object.assign(st, { mode:'count', t0:performance.now(), cd:0, k:0, all:[], means:[], cur:{ M:[], S:[] }, lastM:null, lastS:null, chk:null, chkLine:null, trail:[], pick:false });
   $('start').disabled = true; $('stop').disabled = false;
   setResult('測定中…'); say('5秒後に測定を始めます。2台の真ん中の、プレイする位置に立ってください');
@@ -434,8 +442,9 @@ function solveCam(c, obsAll, camH){
 function solve(){
   const cp = L => L.map(o => ({ ...o }));   // 画角に合わせて書き換えるのでコピー
   const spots = st.all.map(s => ({ M:cp(s.M), S:cp(s.S) }));
-  const m = solveCam(cams.M, spots.flatMap(s => s.M), num('camHM', 0)/100);
-  const s = solveCam(cams.S, spots.flatMap(s => s.S), num('camHS', 0)/100);
+  const fixed = k => ({ th:flo[k].th, ph:flo[k].ph, h:flo[k].h, hfov:flo[k].hfov, px:0, note:'床は手で合わせた値' });
+  const m = st.useFloor ? fixed('M') : solveCam(cams.M, spots.flatMap(s => s.M), num('camHM', 0)/100);
+  const s = st.useFloor ? fixed('S') : solveCam(cams.S, spots.flatMap(s => s.S), num('camHS', 0)/100);
   const bad = (r, nm) => (r.px > 25 || r.h < .2 || r.h > 3.4) ? `${nm}の床を測れませんでした（誤差 ${r.px.toFixed(0)}px・高さ ${r.h.toFixed(2)}m）。身長・カメラの高さの入力を確認して、測り直してください` : '';
   const e1 = bad(m, 'メイン') || bad(s, '2台目'); if (e1) return fail(e1);
   const old = sess || {};
@@ -445,7 +454,7 @@ function solve(){
   if (!calBuild(ns, true)) return fail(cal && cal.why || '足の位置を計算できない場所がありました。測り直してください');
   if (cal.err > .5){ const t = `2台の足の位置が合いませんでした（ずれ ${(cal.err*100).toFixed(0)}cm）。身長・カメラの高さ・間隔の入力を確認して、測り直してください`; cal = null; sess = null; return fail(t); }
   say('測定完了です。歩いて、図の白い点が自分の動きと合うか確かめてください');
-  readyCheck(); guide('測定完了。歩いて確かめてください', '白い点が自分の動きと合うか → 必要なら「床の微調整」→「保存する」', 'ok', '✓', 1);
+  readyCheck(); guide('測定完了。歩いて確かめてください', '白い点が自分の動きと合うか → 必要なら「3. 床」で微調整 →「保存する」', 'ok', '✓', 1);
   function fail(t){ readyCheck(); setResult(t, 'bad'); guide('測定できませんでした', t, 'bad'); say('測定できませんでした'); }
 }
 // --- 計算 ② sess（測定結果＋微調整）から、床・2台の位置関係を作る。微調整のたびに呼ぶ ---
@@ -495,27 +504,92 @@ function showResult(){
 }
 function invalidate(msg){
   cal = sess = null; try { localStorage.removeItem(KEY.sess); } catch (e){}
+  for (const k of ['M', 'S']) cams[k].hfov = flo[k].hfov;
   afterUI(); readyCheck();
   if (msg){ setResult(msg, 'bad'); guide(msg, '', 'bad'); }
 }
 
-// --- 4. 床の微調整（カメラごと） ---
+// --- 3. 床（カメラごと）: 測定前は flo を直接、測定後は 測定値＋微調整 を動かす ---
 const tcam = () => document.querySelector('input[name=tcam]:checked').value;
+function floorNow(k){   // いまの床（表示・計算に使う値）
+  if (sess){ const b = sess[k], t = sess.tune[k]; return { th:b.th + t.t/R2D, ph:b.ph + t.p/R2D, h:Math.max(.2, b.h - t.f/100), hfov:b.hfov }; }
+  return flo[k];
+}
+function floorMats(k){   // そのカメラ自身の床座標での行列（グリッド・目の高さの線に使う）
+  const f = floorNow(k), camF = dualCamMat(f.th, f.ph, f.h);
+  return { camF, FfromCam:camF.clone().invert(), hfov:f.hfov };
+}
+function floorSave(){ try { localStorage.setItem(KEY.floor, JSON.stringify(flo)); } catch (e){} }
+function floorUI(){
+  const k = tcam(), f = floorNow(k);
+  $('fh').value = Math.round(f.h*100); $('fhV').textContent = Math.round(f.h*100);
+  $('ft').value = (f.th*R2D).toFixed(1); $('ftV').textContent = (f.th*R2D).toFixed(1);
+  $('fp').value = (f.ph*R2D).toFixed(1); $('fpV').textContent = (f.ph*R2D).toFixed(1);
+  $('ff').value = (+f.hfov).toFixed(1); $('ffV').textContent = (+f.hfov).toFixed(1);
+  $('fReset').hidden = !sess; $('fAuto').hidden = !!sess;
+  $('floorNote').textContent = sess
+    ? '測定した床です。黄色いマス目（1m）が床に乗り、足元から立つ黄色い縦線の上端が自分の目に届くように微調整します（2台の位置関係も自動で計算し直します）'
+    : 'まず「床を認識」で大まかに合わせ、スライダーで仕上げます（上でカメラの高さを入れておくと、認識がずっと正確になります）。マス目（1m）が床に乗り、足元から立つ黄色い縦線の上端が目に届けばOK。2台とも合わせたら、下の測定で「床は…合わせた値を使う」にすると正確です';
+  $('useFloor').disabled = !!sess || !(flo.M.set && flo.S.set);
+  if ($('useFloor').disabled && !sess) $('useFloor').checked = false;
+}
 function afterUI(){
-  $('after').disabled = !cal;
-  const t = sess ? sess.tune[tcam()] : { f:0, t:0, p:0 };
-  $('tf').value = t.f; $('tfV').textContent = t.f; $('tt').value = t.t; $('ttV').textContent = t.t.toFixed(1); $('tp').value = t.p; $('tpV').textContent = t.p.toFixed(1);
+  $('after').disabled = !cal; floorUI();
   if (sess){ $('bd').value = sess.boss; $('bdV').textContent = (+sess.boss).toFixed(1); $('bh').value = sess.bossH; $('bhV').textContent = (+sess.bossH).toFixed(1); }
   $('pickO').textContent = st.pick ? '✖ やめる（図をクリックして決める）' : '立ち位置を図でクリックして動かす';
 }
-function tuneInput(){
-  if (!sess) return;
-  sess.tune[tcam()] = { f:+$('tf').value, t:+$('tt').value, p:+$('tp').value };
-  if (!calBuild(sess, false)) guide('その微調整では足の位置を計算できません', '値を戻してください', 'bad');
+function floorInput(){
+  const k = tcam(), h = +$('fh').value/100, th = +$('ft').value/R2D, ph = +$('fp').value/R2D, fov = +$('ff').value;
+  if (sess){
+    const b = sess[k];
+    if (Math.abs(fov - b.hfov) > 1e-6){   // 画角を変えたら、測った足の位置（正規化座標）も合わせて直す
+      const r = Math.tan(fov*Math.PI/360)/Math.tan(b.hfov*Math.PI/360);
+      for (const sp of sess.spots){ const o = sp[k]; o.fx *= r; o.fy *= r; o.hx *= r; o.hy *= r; }
+      b.hfov = fov; b.note = `画角 ${fov}°（手で調整）`;
+    }
+    sess.tune[k] = { f:Math.round((b.h - h)*100), t:(th - b.th)*R2D, p:(ph - b.ph)*R2D };
+    if (!calBuild(sess, false)) guide('その値では足の位置を計算できません', '値を戻してください', 'bad');
+  } else {
+    flo[k] = { th, ph, h, hfov:fov, set:true }; cams[k].hfov = fov; floorSave();
+  }
+  floorUI();
 }
-for (const id of ['tf', 'tt', 'tp']) $(id).addEventListener('input', tuneInput);
-for (const r of document.querySelectorAll('input[name=tcam]')) r.addEventListener('change', afterUI);
-$('tReset').onclick = () => { if (!sess) return; sess.tune[tcam()] = { f:0, t:0, p:0 }; calBuild(sess, false); };
+for (const id of ['fh', 'ft', 'fp', 'ff']) $(id).addEventListener('input', floorInput);
+for (const r of document.querySelectorAll('input[name=tcam]')) r.addEventListener('change', floorUI);
+$('fReset').onclick = () => { if (!sess) return; sess.tune[tcam()] = { f:0, t:0, p:0 }; calBuild(sess, false); floorUI(); };
+// 床を認識: まっすぐ立った姿（かかと・目の位置）から、見えているカメラの床を大まかに求める
+$('fAuto').onclick = () => {
+  if (!cams.M.lm && !cams.S.lm){ guide('先に「カメラを開く」を押してください', '', 'bad'); return; }
+  st.fl = { t0:performance.now(), cd:0, M:[], S:[], last:{} };
+  say('床を認識します。プレイする場所でまっすぐ立って、止まってください');
+};
+function floorTick(now){
+  const F = st.fl; if (!F) return;
+  const wait = 3000 - (now - F.t0);
+  if (wait > 0){ const l = Math.ceil(wait/1000); if (l !== F.cd){ F.cd = l; beep(660, 60); } guide(`${l}秒後に床を認識します`, 'プレイする場所でまっすぐ立ってください', 'run', l, 1 - wait/3000); return; }
+  for (const c of Object.values(cams)){
+    const o = c.o && now - c.oT < FRESH_MS ? c.o : null, lst = F.last[c.key];
+    if (o === lst) continue;   // 新しいフレームだけ
+    if (!o || !o.upright || (lst && Math.hypot(o.fx - lst.fx, o.fy - lst.fy) > STILL*1.5)) F[c.key] = [];
+    else F[c.key].push(o);
+    F.last[c.key] = o;
+  }
+  const n = Math.max(F.M.length, F.S.length);
+  guide('そのまま止まって…', `メイン ${F.M.length}　2台目 ${F.S.length}（足元まで映っているカメラだけ認識します）`, 'run', '🧍', Math.min(1, n/40));
+  if (now - F.t0 > 15000 && n < 20){ st.fl = null; guide('床を認識できませんでした', 'カメラに足元まで全身が映る場所で、まっすぐ立ってください', 'bad'); say('認識できませんでした'); return; }
+  if (n < 40) return;
+  const done = [];
+  for (const k of ['M', 'S']){
+    if (F[k].length < 20) continue;
+    const hK = num(k === 'M' ? 'camHM' : 'camHS', 0)/100, r = bcSolve(F[k], eye(), hK, false), c = cams[k];
+    const px = r.rms*(c.v.videoWidth/2)/Math.tan(c.hfov*Math.PI/360);
+    if (px > 30 || !(r.h > .2 && r.h < 3.4)) continue;
+    flo[k] = { th:r.th, ph:r.ph, h:hK || r.h, hfov:c.hfov, set:true }; done.push(cams[k].name);
+  }
+  st.fl = null; floorSave(); floorUI(); beep(1100, 140);
+  if (done.length){ guide(`床を認識しました（${done.join('・')}）`, '黄色いマス目と縦線を見て、スライダーで仕上げてください', 'ok', '✓', 1); say('床を認識しました。スライダーで仕上げてください'); }
+  else { guide('床を認識できませんでした', '身長・カメラの高さの入力を確認して、もう一度', 'bad'); say('認識できませんでした'); }
+}
 
 // --- 5. 立ち位置とボス ---
 // プレイヤーの「前」= ボスの方向: 前置きなら2台のカメラの方、後ろ置きならカメラが向いている方（2台の並びに直角）
@@ -629,17 +703,25 @@ function drawCam(c){
   const vw = v.videoWidth, vh = v.videoHeight, k = Math.min(w/vw, h/vh), dw = vw*k, dh = vh*k, ox = (w - dw)/2, oy = (h - dh)/2;
   x.drawImage(v, ox, oy, dw, dh);
   const X = u => ox + u*dw, Y = t => oy + t*dh, fp = (vw/2)/Math.tan(c.hfov*Math.PI/360);
-  if (cal){   // 床のマス目（1m）・立ち位置・ボス
-    const M = c.key === 'M' ? cal.m.camF : cal.s.CamFromF;
+  {   // 床のマス目（1m）と、足元から立つ「目の高さ」の線
+    const own = floorMats(c.key), M = cal ? (c.key === 'M' ? cal.m.camF : cal.s.CamFromF) : own.camF;
     const proj = q => { const p = q.clone().applyMatrix4(M); return p.z < -.1 ? [X(.5 + fp*p.x/-p.z/vw), Y(.5 - fp*p.y/-p.z/vh)] : null; };
     const line = (x0, z0, x1, z1) => { let pv = null; for (let i = 0; i <= 40; i++){ const q = proj(new THREE.Vector3(x0 + (x1 - x0)*i/40, 0, z0 + (z1 - z0)*i/40)); if (q && pv){ x.moveTo(pv[0], pv[1]); x.lineTo(q[0], q[1]); } pv = q; } };
-    const o = cal.origin;
+    const o = cal ? cal.origin : (() => { const f = floorNow(c.key), dd = Math.min(5, Math.max(1.5, f.h/Math.tan(Math.max(.15, f.th)))); return new THREE.Vector3(0, 0, -dd); })();
     x.save(); x.beginPath(); x.rect(ox, oy, dw, dh); x.clip();
     x.strokeStyle = 'rgba(242,194,48,.5)'; x.lineWidth = d; x.beginPath();
     for (let i = -4; i <= 4; i++){ line(o.x + i, o.z - 4, o.x + i, o.z + 4); line(o.x - 4, o.z + i, o.x + 4, o.z + i); }
     x.stroke();
     const dot = (p, col, r) => { const q = p && proj(new THREE.Vector3(p.x, 0, p.z)); if (q){ x.fillStyle = col; x.beginPath(); x.arc(q[0], q[1], r*d, 0, 7); x.fill(); } };
-    dot(o, '#f2c230', 6); dot(live.f, '#fff', 6);
+    if (cal){ dot(o, '#f2c230', 6); dot(live.f, '#fff', 6); }
+    // 自分の足元（このカメラが見たかかと）から目の高さまでの縦線: 上端が目に届けば床が合っている
+    if (c.o){
+      const pr = q => { const p = q.clone().applyMatrix4(own.camF); return p.z < -.1 ? [X(.5 + fp*p.x/-p.z/vw), Y(.5 - fp*p.y/-p.z/vh)] : null; };
+      const ft = bcRayM(c.o, own.FfromCam), a = ft && pr(new THREE.Vector3(ft.x, 0, ft.z)), b = ft && pr(new THREE.Vector3(ft.x, eye(), ft.z));
+      if (a && b){ x.strokeStyle = '#f2c230'; x.lineWidth = 3*d; x.beginPath(); x.moveTo(a[0], a[1]); x.lineTo(b[0], b[1]); x.stroke();
+        x.beginPath(); x.moveTo(b[0] - 10*d, b[1]); x.lineTo(b[0] + 10*d, b[1]); x.stroke();
+        x.fillStyle = '#f2c230'; x.font = `bold ${12*d}px sans-serif`; x.fillText('目の高さ', b[0] + 12*d, b[1] + 4*d); }
+    }
     x.restore();
   }
   if (c.n){
@@ -704,7 +786,7 @@ function drawMap(){
 // --- メインループ ---
 function loop(now){
   detect(cams.M, now); detect(cams.S, now);
-  calTick(now); fuseTick(now); chkTick();
+  calTick(now); floorTick(now); fuseTick(now); chkTick();
   drawCam(cams.M); drawCam(cams.S); drawMap();
   requestAnimationFrame(loop);
 }
@@ -715,7 +797,13 @@ function sessLoad(){
   if (d.lay === 'back') $('layB').checked = true; else $('layF').checked = true;
   if (calBuild(d, false)) guide('前回の測定を読み込みました', 'カメラを動かしていなければ、そのまま微調整・保存できます。「カメラを開く」で映像と重ねて確認', 'ok');
 }
-uiLoad(); $('toGame').href = gameUrl(); listCams(); sessLoad(); afterUI(); requestAnimationFrame(loop);
+function floorLoad(){
+  let d = null; try { d = JSON.parse(localStorage.getItem(KEY.floor) || 'null'); } catch (e){}
+  if (d && d.M && d.S) flo = d;
+  else for (const k of ['M', 'S']){ const h = num(k === 'M' ? 'camHM' : 'camHS', 0); if (h) flo[k].h = h/100; flo[k].hfov = num('fov0', 65); }
+  for (const k of ['M', 'S']) cams[k].hfov = flo[k].hfov;
+}
+uiLoad(); $('toGame').href = gameUrl(); listCams(); floorLoad(); sessLoad(); afterUI(); requestAnimationFrame(loop);
 </script>
 </body>
 </html>
