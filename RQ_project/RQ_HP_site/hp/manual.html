@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MANUAL ─ RADIQLE_PROJECT</title>
+<meta name="description" content="RADIQLEの動作環境・はじめかた・操作一覧・困ったときの対処。">
+<meta property="og:title" content="MANUAL ─ RADIQLE_PROJECT">
+<meta property="og:description" content="RADIQLEの動作環境・はじめかた・操作一覧・困ったときの対処。">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#060a12">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23060a12'/%3E%3Cpolygon points='16,3 27,9.5 27,22.5 16,29 5,22.5 5,9.5' fill='none' stroke='%23eef4fb' stroke-width='1.5'/%3E%3Cpath d='M16 6 L18 10 L17.4 24 L14.6 24 L14 10 Z' fill='%23eef4fb'/%3E%3Cpath d='M21 22 Q24 25 27 25' stroke='%23ff9a3c' stroke-width='2' fill='none'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;600;700&family=Noto+Sans+JP:wght@400;500;700;900&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#060a12; --bg2:#0a111d; --bg3:#0e1726;
+  --ink:#eef4fb; --sub:#9aaec3; --dim:#5a6e84;
+  --line:rgba(205,225,245,.14); --line2:rgba(205,225,245,.3);
+  --acc:#ff9a3c; --acc2:#ffc078; --ice:#bfe6ff; --red:#ff5a6a; --pur:#b77bff; --grn:#6dffb0;
+  --en:"Rajdhani","Noto Sans JP",sans-serif;
+  --jp:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  --w:1180px;
+  --cut:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15.5px/1.95 var(--jp);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    linear-gradient(rgba(190,215,240,.035) 1px,transparent 1px) 0 0/100% 64px,
+    linear-gradient(90deg,rgba(190,215,240,.035) 1px,transparent 1px) 0 0/64px 100%,
+    radial-gradient(ellipse at 70% -10%,#12213a 0,transparent 60%),var(--bg)}
+img{max-width:100%;display:block}
+a{color:inherit}
+::selection{background:var(--acc);color:#140900}
+.wrap{max-width:var(--w);margin:0 auto;padding:0 28px}
+.mono{font-family:var(--mono);letter-spacing:.02em}
+.en{font-family:var(--en)}
+.acc{color:var(--acc)}
+kbd{display:inline-block;min-width:1.9em;text-align:center;font:600 12px/1 var(--mono);padding:5px 7px 4px;border:1px solid var(--line2);border-bottom-width:2px;background:var(--bg3);color:var(--ink)}
+
+/* ---------- NAV ---------- */
+.nav{position:fixed;left:0;right:0;top:0;z-index:50;height:64px;transition:background .3s,border-color .3s;border-bottom:1px solid transparent}
+.nav.solid{background:rgba(6,10,18,.86);backdrop-filter:blur(10px);border-bottom-color:var(--line)}
+.nav .wrap{height:100%;display:flex;align-items:center;gap:28px;max-width:none;padding:0 28px}
+.hud{display:flex;align-items:center;gap:12px;text-decoration:none;min-width:0}
+.hud .gem{width:30px;height:30px;flex:none}
+.hud .who{line-height:1.1}
+.hud .who b{display:block;font:700 15px var(--en);letter-spacing:.28em}
+.hud .who b i{font-style:normal;color:var(--acc)}
+.hud .bar{display:flex;align-items:center;gap:6px;margin-top:4px;font:600 10px var(--mono);color:var(--sub)}
+.hud .bar span{position:relative;display:block;width:110px;height:5px;background:rgba(255,255,255,.1);transform:skewX(-24deg);overflow:hidden}
+.hud .bar span i{position:absolute;inset:0;width:var(--p,0%);background:linear-gradient(90deg,var(--grn),#b6ffd8);transition:width .15s linear}
+.nav ul{display:flex;gap:4px;list-style:none;margin:0 0 0 auto;padding:0}
+.nav ul a{display:block;padding:8px 12px;text-decoration:none;font:600 13px var(--en);letter-spacing:.2em;color:var(--sub);position:relative}
+.nav ul a small{display:block;font:400 10px var(--jp);letter-spacing:.1em;color:var(--dim);margin-top:-2px}
+.nav ul a:hover,.nav ul a.cur{color:var(--ink)}
+.nav ul a.cur::after{content:"";position:absolute;left:12px;right:12px;bottom:2px;height:2px;background:var(--acc)}
+.play{display:inline-flex;align-items:center;gap:10px;padding:10px 20px;text-decoration:none;font:700 14px var(--en);letter-spacing:.24em;background:var(--acc);color:#170a00;clip-path:var(--cut);transition:filter .2s,transform .2s}
+.play:hover{filter:brightness(1.1)}
+.play svg{width:11px;height:11px}
+.burger{display:none;background:none;border:1px solid var(--line2);color:var(--ink);width:40px;height:40px;cursor:pointer;margin-left:auto}
+@media (max-width:980px){
+  .nav ul{position:fixed;top:64px;left:0;right:0;flex-direction:column;background:rgba(6,10,18,.97);border-bottom:1px solid var(--line);padding:10px 20px 18px;display:none}
+  .nav.open ul{display:flex}
+  .burger{display:block}
+  .nav .play{padding:9px 14px}
+  .hud .bar span{width:70px}
+}
+@media (max-width:520px){ .nav .play b{display:none} .hud .who b{letter-spacing:.18em} }
+
+/* ---------- BUTTONS ---------- */
+.btn{display:inline-flex;align-items:center;gap:12px;padding:15px 26px;text-decoration:none;font:700 15px var(--en);letter-spacing:.22em;clip-path:var(--cut);transition:background .2s,color .2s,filter .2s;border:0;cursor:pointer}
+.btn small{font:500 12px var(--jp);letter-spacing:.05em;opacity:.75}
+.btn.p{background:var(--acc);color:#170a00}
+.btn.p:hover{filter:brightness(1.1)}
+.btn.g{background:rgba(255,255,255,.05);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line2)}
+.btn.g:hover{background:rgba(255,154,60,.12);color:var(--acc2)}
+.btn .ar{width:18px;height:1px;background:currentColor;position:relative}
+.btn .ar::after{content:"";position:absolute;right:0;top:-3px;width:7px;height:7px;border-top:1px solid currentColor;border-right:1px solid currentColor;transform:rotate(45deg)}
+
+/* ---------- SECTION HEADER ---------- */
+.sec{position:relative;padding:130px 0}
+.sh{display:flex;align-items:center;gap:14px;font:600 12px var(--mono);letter-spacing:.2em;color:var(--sub);margin-bottom:22px}
+.sh b{color:var(--acc);font-weight:700}
+.sh::after{content:"";flex:0 0 60px;height:1px;background:var(--line2)}
+h2.big{font:700 clamp(30px,4.4vw,52px)/1.28 var(--jp);letter-spacing:-.01em;margin:0 0 26px}
+h2.big em{font-style:normal;color:var(--acc)}
+.lead{color:var(--sub);max-width:640px;margin:0}
+p{margin:0 0 1em}
+
+/* ---------- FRAME（四隅のブラケット付き画像） ---------- */
+.frame{position:relative;margin:0}
+.frame img{width:100%;height:auto;border:1px solid var(--line)}
+.frame::before,.frame::after{content:"";position:absolute;width:22px;height:22px;border:2px solid var(--ink);pointer-events:none}
+.frame::before{left:-7px;top:-7px;border-right:0;border-bottom:0}
+.frame::after{right:-7px;bottom:-7px;border-left:0;border-top:0}
+.frame figcaption{display:flex;justify-content:space-between;gap:12px;margin-top:10px;font:500 12px var(--mono);color:var(--sub)}
+.frame figcaption b{color:var(--ink);font-weight:600}
+
+/* ---------- SYSTEM WINDOW（明るいシステムウィンドウ） ---------- */
+.win{position:relative;background:linear-gradient(180deg,rgba(246,249,252,.96),rgba(226,234,243,.94));color:#1d2935;
+  box-shadow:0 30px 60px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.6) inset;clip-path:polygon(0 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%)}
+.win .wt{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(29,41,53,.12);font:700 12px var(--en);letter-spacing:.32em;color:#59697a}
+.win .wt i{display:flex;gap:6px}
+.win .wt i u{display:block;width:9px;height:9px;border-radius:50%;background:#c7d2dd}
+.win .wt i u:first-child{background:var(--acc)}
+.win .wb{padding:16px 18px 20px}
+.win .row{display:grid;grid-template-columns:78px 1fr;gap:12px;padding:7px 0;border-bottom:1px dashed rgba(29,41,53,.14);font-size:14px;align-items:center}
+.win .row:last-child{border-bottom:0}
+.win .row > span:first-child{font:700 11px var(--en);letter-spacing:.22em;color:#7a8a9b}
+.win .row b{font-weight:700}
+.win .hp{display:flex;align-items:center;gap:10px}
+.win .hp span{flex:1;height:8px;background:rgba(29,41,53,.12);transform:skewX(-24deg);position:relative;overflow:hidden}
+.win .hp span i{position:absolute;inset:0;width:var(--p,100%);background:linear-gradient(90deg,#2fd27d,#8ff0b9)}
+.win .hp span.r i{background:linear-gradient(90deg,#ff4d5e,#ff9aa5)}
+.win .hp em{font:700 13px var(--mono);font-style:normal;color:#3c4b5a}
+
+/* ---------- MISC ---------- */
+.tape{position:absolute;left:-20%;right:-20%;top:46%;transform:rotate(-9deg);padding:7px 0;text-align:center;background:var(--acc);color:#170a00;font:700 15px var(--jp);letter-spacing:.32em;z-index:2;box-shadow:0 6px 24px rgba(0,0,0,.45)}
+.tape small{display:block;font:700 10px var(--en);letter-spacing:.5em;margin-top:-4px}
+.rv{opacity:0;transform:translateY(18px);transition:opacity .8s ease,transform .8s ease}
+.rv.in{opacity:1;transform:none}
+.rv.d1{transition-delay:.1s}.rv.d2{transition-delay:.2s}.rv.d3{transition-delay:.3s}
+@media (prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}html{scroll-behavior:auto}}
+
+/* ---------- FOOTER ---------- */
+.ft{border-top:1px solid var(--line);padding:70px 0 40px;background:rgba(4,7,13,.7);font-size:13px;color:var(--sub)}
+.ft .cols{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:40px}
+.ft .logo{font:300 30px var(--en);letter-spacing:.3em;color:var(--ink)}
+.ft .logo i{font-style:normal;color:var(--acc);font-weight:500}
+.ft .logo + small{display:block;font:700 11px var(--en);letter-spacing:.5em;color:var(--acc);margin:2px 0 14px}
+.ft h4{margin:0 0 12px;font:700 11px var(--en);letter-spacing:.35em;color:var(--dim)}
+.ft ul{list-style:none;margin:0;padding:0;line-height:2.2}
+.ft ul a{text-decoration:none;color:var(--sub)}
+.ft ul a:hover{color:var(--acc2)}
+.ft .legal{margin-top:50px;padding-top:22px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;font-size:11.5px;color:var(--dim);line-height:1.9}
+@media (max-width:800px){.ft .cols{grid-template-columns:1fr 1fr}.ft .cols > :first-child{grid-column:1/-1}.sec{padding:90px 0}.wrap{padding:0 20px}}
+
+.mh{padding:150px 0 60px;border-bottom:1px solid var(--line)}
+.crumb{font:600 11.5px var(--mono);letter-spacing:.16em;color:var(--sub);margin-bottom:26px}
+.crumb a{text-decoration:none;color:var(--sub)} .crumb a:hover{color:var(--acc2)}
+.crumb i{font-style:normal;margin:0 10px;color:var(--dim)}
+.mh .wrap{display:flex;justify-content:space-between;align-items:flex-end;gap:40px;flex-wrap:wrap}
+.mh h1{margin:0;font:300 clamp(54px,8vw,104px)/.9 var(--en);letter-spacing:.14em}
+.mh h1 + p{margin:14px 0 0;font:700 17px var(--jp);color:var(--sub);letter-spacing:.1em}
+.mh .ver{font:500 12px/1.9 var(--mono);color:var(--dim);text-align:right}
+.mh .ver b{color:var(--sub);font-weight:600}
+
+.doc .wrap{display:grid;grid-template-columns:220px 1fr;gap:70px;padding-top:70px;padding-bottom:110px}
+.toc{position:sticky;top:96px;align-self:start;font-size:13.5px}
+.toc b{display:block;font:700 10px var(--en);letter-spacing:.35em;color:var(--dim);margin-bottom:12px}
+.toc ol{list-style:none;margin:0;padding:0;border-left:1px solid var(--line)}
+.toc a{display:flex;gap:10px;padding:7px 0 7px 16px;text-decoration:none;color:var(--sub);margin-left:-1px;border-left:2px solid transparent}
+.toc a span{font:600 11px var(--mono);color:var(--dim);padding-top:2px}
+.toc a:hover{color:var(--ink)}
+.toc a.on{color:var(--ink);border-left-color:var(--acc)}
+.toc a.on span{color:var(--acc)}
+
+.ch{padding-bottom:80px;margin-bottom:80px;border-bottom:1px solid var(--line)}
+.ch:last-child{border-bottom:0;margin-bottom:0;padding-bottom:0}
+.ch > .no{font:600 12px var(--mono);letter-spacing:.2em;color:var(--acc)}
+.ch h2{margin:6px 0 20px;font:700 clamp(26px,3vw,34px)/1.35 var(--jp)}
+.ch h3{margin:36px 0 12px;font:700 18px var(--jp);display:flex;align-items:center;gap:12px}
+.ch h3::before{content:"";width:8px;height:8px;background:var(--acc);flex:none}
+.ch p{color:var(--sub);max-width:720px}
+.ch p b,.ch li b{color:var(--ink)}
+
+.spec{display:grid;grid-template-columns:180px 1fr;border-top:1px solid var(--line2);max-width:820px}
+.spec > *{padding:14px 0;border-bottom:1px solid var(--line)}
+.spec dt{font:700 11px var(--en);letter-spacing:.24em;color:var(--sub);padding-top:17px}
+.spec dd{margin:0;font-size:14.5px}
+.spec dd small{display:block;color:var(--dim);font-size:12.5px}
+
+.flow{list-style:none;margin:28px 0 0;padding:0;counter-reset:f;max-width:820px}
+.flow li{position:relative;padding:0 0 30px 70px;counter-increment:f}
+.flow li::before{content:counter(f,decimal-leading-zero);position:absolute;left:0;top:-4px;font:600 30px var(--en);color:transparent;-webkit-text-stroke:1px var(--acc)}
+.flow li::after{content:"";position:absolute;left:20px;top:40px;bottom:6px;width:1px;background:var(--line2)}
+.flow li:last-child::after{display:none}
+.flow b{display:block;font-size:16px;margin-bottom:2px}
+.flow span{color:var(--sub);font-size:14px}
+
+.tblw{overflow-x:auto;border:1px solid var(--line);margin-top:18px}
+.tbl{width:100%;border-collapse:collapse;min-width:620px;font-size:14px}
+.tbl th,.tbl td{padding:13px 16px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl thead th{font:700 11px var(--en);letter-spacing:.28em;color:var(--sub);background:rgba(255,255,255,.03)}
+.tbl tbody th{font-weight:700;white-space:nowrap}
+.tbl td{color:var(--sub)}
+.tbl tr:last-child th,.tbl tr:last-child td{border-bottom:0}
+
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);margin-top:18px}
+.modes div{background:var(--bg);padding:22px 24px}
+.modes .k{font:700 11px var(--en);letter-spacing:.28em;color:var(--acc)}
+.modes h4{margin:4px 0 6px;font:700 16px var(--jp)}
+.modes p{margin:0;font-size:13.5px}
+
+.memo{position:relative;margin:26px 0 0;padding:16px 20px 16px 22px;max-width:760px;background:rgba(255,154,60,.07);border-left:2px solid var(--acc);font-size:14px;color:var(--sub)}
+.memo b{color:var(--acc2)}
+
+.faq details{border-top:1px solid var(--line);max-width:820px}
+.faq details:last-child{border-bottom:1px solid var(--line)}
+.faq summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:44px 1fr 20px;gap:10px;align-items:center;padding:18px 0;font-weight:700}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary span{font:600 12px var(--mono);color:var(--acc)}
+.faq summary::after{content:"+";font:300 22px var(--en);color:var(--sub);transition:transform .2s}
+.faq details[open] summary::after{transform:rotate(45deg)}
+.faq .a{padding:0 0 20px 54px;color:var(--sub);font-size:14.5px}
+.faq .a ul{margin:6px 0 0;padding-left:18px}
+
+.tech{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.tech span{font:500 12.5px var(--mono);padding:6px 12px;border:1px solid var(--line2);color:var(--sub)}
+
+@media (max-width:900px){
+  .doc .wrap{grid-template-columns:1fr;gap:30px}
+  .toc{position:static}.toc ol{display:flex;flex-wrap:wrap;border-left:0;gap:4px}.toc a{border:1px solid var(--line);padding:6px 10px;margin:0}
+  .modes{grid-template-columns:1fr}
+  .spec{grid-template-columns:1fr}.spec dt{border-bottom:0;padding-bottom:0}
+  .mh .ver{text-align:left}
+}
+
+</style>
+</head>
+<body id="top">
+<header class="nav"><div class="wrap">
+  <a class="hud" href="../RQ_HP.html" aria-label="RADIQLE トップへ"><svg class="gem" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,2 28,9 28,23 16,30 4,23 4,9" fill="none" stroke="#eef4fb" stroke-opacity=".7" stroke-width="1.2"/><path d="M16 5 L18.2 10 L17.5 25 L14.5 25 L13.8 10 Z" fill="#eef4fb"/><path d="M20.5 22.5 Q24 26 28 26" stroke="#ff9a3c" stroke-width="2" fill="none" stroke-linecap="round"/></svg><span class="who"><b>RADI<i>Q</i>LE</b><span class="bar"><span ><i></i></span><em class="lv" style="font-style:normal">Lv.1</em></span></span></a>
+  <ul><li><a href="../RQ_HP.html">TOP<small>トップ</small></a></li><li><a href="../RQ_HP.html#boot">START<small>起動</small></a></li><li><a href="../RQ_HP.html#jobs">JOBS<small>ジョブ</small></a></li><li><a href="../hp/quest.html">QUEST<small>クエスト</small></a></li><li><a href="../hp/manual.html" class="cur">MANUAL<small>マニュアル</small></a></li><li><a href="../RQ_HP.html#log">LOG<small>更新履歴</small></a></li></ul>
+  <button class="burger" aria-label="メニュー">≡</button>
+  <a class="play" href="../RQ_index.html"><svg viewBox="0 0 10 10"><path d="M1 0 L10 5 L1 10 Z" fill="currentColor"/></svg><b>PLAY</b></a>
+</div></header>
+<main>
+
+<section class="mh">
+  <div class="wrap">
+    <div>
+      <div class="crumb"><a href="../RQ_HP.html">TOP</a><i>/</i>MANUAL</div>
+      <h1>MANUAL</h1>
+      <p>取扱説明書</p>
+    </div>
+    <div class="ver">DOCUMENT <b>RQ-MAN-01</b><br>FOR <b>VER.1.0</b><br>UPDATED <b>2026.11.06</b></div>
+  </div>
+</section>
+
+<section class="doc">
+  <div class="wrap">
+    <nav class="toc" aria-label="目次">
+      <b>CONTENTS</b>
+      <ol>
+        <li><a href="#env"><span>01</span>動作環境</a></li>
+        <li><a href="#start"><span>02</span>はじめかた</a></li>
+        <li><a href="#boot"><span>03</span>起動とジョブ選択</a></li>
+        <li><a href="#ctrl"><span>04</span>操作一覧</a></li>
+        <li><a href="#modes"><span>05</span>入力とモード</a></li>
+        <li><a href="#tips"><span>06</span>設定のコツ</a></li>
+        <li><a href="#faq"><span>07</span>困ったとき</a></li>
+        <li><a href="#tech"><span>08</span>使用技術</a></li>
+      </ol>
+    </nav>
+
+    <div>
+      <article class="ch" id="env"><div class="no">01</div><h2>動作環境</h2>
+        <p>PCのブラウザで動きます。スマートフォン・タブレットでの動作は想定していません。</p>
+        <dl class="spec">
+          <dt>BROWSER</dt><dd>Google Chrome ／ Microsoft Edge（最新版）<small>Wiiリモコン接続（WebHID）と音声認識がこの2つでしか動きません</small></dd>
+          <dt>PC</dt><dd>Windows ／ Mac<small>ノートPCでも可。カクつく場合は「軽量モード」で</small></dd>
+          <dt>NETWORK</dt><dd>必要<small>3D描画・顔認識ライブラリの読み込みと、音声認識に使います</small></dd>
+          <dt>CAMERA</dt><dd>任意<small>顔で照準・手でメニュー操作・AR背景・俯瞰モードに使用</small></dd>
+          <dt>CONTROLLER</dt><dd>任意：Wiiリモコン（MotionPlus推奨）・ヌンチャク<small>Bluetoothでペアリングして使います</small></dd>
+          <dt>MIC</dt><dd>任意<small>起動ワード用。なくても Enter キーで起動できます</small></dd>
+        </dl>
+      </article>
+
+      <article class="ch" id="start"><div class="no">02</div><h2>はじめかた</h2>
+        <ol class="flow">
+          <li><b>Chrome か Edge でタイトル画面を開く</b><span>トップの「PLAY」から。最初に「SYSTEM STANDBY」と出たら、画面をクリックします。</span></li>
+          <li><b>マイクの使用を許可する</b><span>ブラウザに聞かれたら「許可」。起動ワードの聞き取りに使います。</span></li>
+          <li><b>（任意）Wiiリモコンをつなぐ</b><span>先にPCとBluetoothでペアリングしておき、右下の「🎮 Wiiリモコン接続」から選びます。一度つなげば、次からは自動で認識されます。</span></li>
+          <li><b>Ⓐを押しながら「ハロー・ニューワールド」</b><span>リンク演出が始まります。そのあとジョブを選ぶと、練習モードへ。</span></li>
+          <li><b>練習モードを終えたら、ボス戦へ</b><span>HOMEボタン（キーボードは <kbd>M</kbd>）でメニュー →「⚔ 本番へ」。</span></li>
+        </ol>
+        <p class="memo"><b>MEMO</b>　ゲームを開いた直後は、一度クリックかキーを押すまで音が鳴りません。ブラウザの仕様で、Wiiリモコンのボタンだけでは音を出す許可にならないためです。</p>
+      </article>
+
+      <article class="ch" id="boot"><div class="no">03</div><h2>起動とジョブ選択</h2>
+        <p>タイトル画面では、<b>Ⓐを押している間だけ</b>マイクが音声を聞き取ります。「ハロー・ニューワールド」と認識されるとリンク開始。多少の聞き間違い（「ハロー ニュー ワールド」「Hello New World」など）は通るようにしてあります。</p>
+        <div class="tblw"><table class="tbl">
+          <thead><tr><th>場面</th><th>Wiiリモコン</th><th>キーボード / マウス</th></tr></thead>
+          <tbody>
+            <tr><th>音声を聞かせる</th><td>Ⓐを押し続ける</td><td><kbd>Space</kbd> 長押し ／ 画面のⒶを長押し</td></tr>
+            <tr><th>声を使わずに起動</th><td>─</td><td><kbd>Enter</kbd></td></tr>
+            <tr><th>ジョブを選ぶ</th><td>十字キー</td><td><kbd>←</kbd> <kbd>→</kbd> ／ カーソルを乗せる</td></tr>
+            <tr><th>決定</th><td>Ⓐ</td><td><kbd>Enter</kbd> ／ クリック</td></tr>
+            <tr><th>タイトルに戻る</th><td>Ⓑ</td><td><kbd>Esc</kbd></td></tr>
+          </tbody>
+        </table></div>
+        <p class="memo"><b>MEMO</b>　いま選べるジョブは剣士だけです。魔法使い・ガンナーは「準備中」と表示されます。</p>
+      </article>
+
+      <article class="ch" id="ctrl"><div class="no">04</div><h2>操作一覧（剣士）</h2>
+        <h3>バトル</h3>
+        <div class="tblw"><table class="tbl">
+          <thead><tr><th>アクション</th><th>マウス / キーボード</th><th>Wiiリモコン</th></tr></thead>
+          <tbody>
+            <tr><th>斬る</th><td>左クリック</td><td>振る</td></tr>
+            <tr><th>ガード</th><td>左クリック長押し</td><td>Ⓐ長押し</td></tr>
+            <tr><th>パリィ</th><td>右クリック</td><td>Ⓑを押しながら振り上げ</td></tr>
+            <tr><th>回避</th><td><kbd>A</kbd> / <kbd>D</kbd></td><td>俯瞰モードでは体を左右に動かす</td></tr>
+            <tr><th>狙う</th><td>マウス、または顔の動き</td><td>顔の動き</td></tr>
+            <tr><th>ソードスキル</th><td>─</td><td>振り方で発動（<a href="../hp/quest.html">一覧</a>）</td></tr>
+          </tbody>
+        </table></div>
+        <h3>システム</h3>
+        <div class="tblw"><table class="tbl">
+          <thead><tr><th>操作</th><th>キーボード</th><th>Wiiリモコン / ジェスチャー</th></tr></thead>
+          <tbody>
+            <tr><th>メニュー</th><td><kbd>M</kbd></td><td>HOME ／ ピースサインを約1秒キープ</td></tr>
+            <tr><th>メニューの決定</th><td>クリック</td><td>指先でカーソル → Ⓐ（スライダーはⒶを押したまま左右）</td></tr>
+            <tr><th>顔の中心リセット</th><td><kbd>C</kbd></td><td>─</td></tr>
+            <tr><th>VR（左右分割）表示</th><td><kbd>V</kbd></td><td>─</td></tr>
+            <tr><th>視点操作 ON / OFF</th><td><kbd>F</kbd></td><td>─</td></tr>
+            <tr><th>ジャイロ再調整</th><td>─</td><td>－ボタン（リモコンを置いて静止）</td></tr>
+          </tbody>
+        </table></div>
+        <h3>練習モード</h3>
+        <div class="tblw"><table class="tbl">
+          <thead><tr><th>操作</th><th>Wiiリモコン</th><th>Wiiなしで試す</th></tr></thead>
+          <tbody>
+            <tr><th>スタート</th><td>Ⓐ</td><td><kbd>Space</kbd></td></tr>
+            <tr><th>スキップ ／ 説明に戻る</th><td>＋</td><td><kbd>P</kbd></td></tr>
+            <tr><th>斬る</th><td>振る</td><td>画面をドラッグ（クリック＝突き、円を描く＝回転）</td></tr>
+          </tbody>
+        </table></div>
+      </article>
+
+      <article class="ch" id="modes"><div class="no">05</div><h2>入力とモード</h2>
+        <p>どれも組み合わせ自由です。手元にあるものから足していってください。</p>
+        <div class="modes">
+          <div><div class="k">MOUSE &amp; KEY</div><h4>マウス＆キーボード</h4><p>いちばん手軽な標準操作。カメラなしでも最後まで遊べます。</p></div>
+          <div><div class="k">FACE TRACKING</div><h4>顔トラッキング</h4><p>Webカメラで顔の向きを読み、視点と照準を動かします。感度・中心位置を調整可能。</p></div>
+          <div><div class="k">HAND GESTURE</div><h4>ハンドジェスチャー</h4><p>ピースサインでメニューを開き、指先でカーソル操作。リモコンを置かずに設定を変えられます。</p></div>
+          <div><div class="k">WII REMOTE</div><h4>Wiiリモコン＋ヌンチャク</h4><p>MotionPlusのジャイロでソードスキル、ヌンチャクで二刀流。当たると振動します。</p></div>
+          <div><div class="k">THIRD PERSON</div><h4>俯瞰モード（VRM）</h4><p>VRMアバターを読み込み、全身の動きを反映。体を左右に動かして回避します。カメラは1台（バック）を使います。</p></div>
+          <div><div class="k">AR VIEW</div><h4>AR背景</h4><p>2台目のカメラ映像、または手持ちの動画・画像をボスの背景に。タイトル画面でも「📷 AR背景」で切り替えられます。</p></div>
+        </div>
+      </article>
+
+      <article class="ch" id="tips"><div class="no">06</div><h2>設定のコツ</h2>
+        <h3>重いときは「軽量モード」</h3>
+        <p>カメラ設定の「負荷モード」で切り替えます（初期設定は軽量）。描画解像度を下げ、顔認識は1秒に20回、手の認識は5回に間引き、背景カメラを640×360で取り込みます。</p>
+        <h3>カメラが逆になる</h3>
+        <p>内蔵カメラはフロント（顔・手の認識）、USBカメラはバック（背景）に自動で割り当てます。逆になったら「⇄ 入れ替え」で。</p>
+        <h3>ソードスキルが出にくい</h3>
+        <p>メニューの「⚔ ソードスキル」で判定のしきい値を変えられます。いちばん簡単なのは、出したい動きを1回だけやって、直後に「①縦重撃を登録」などのボタン（キー <kbd>1</kbd>〜<kbd>4</kbd>）を押す方法。直前の振りを基準に自動で調整されます。</p>
+        <h3>横斬りの左右が逆に判定される</h3>
+        <p>「横斬りの左右を反転」をONにしてください。リモコンの持ち方によって起こることがあります。</p>
+      </article>
+
+      <article class="ch faq" id="faq"><div class="no">07</div><h2>困ったとき</h2>
+        <details><summary><span>Q.01</span>音が鳴らない</summary><div class="a">ゲームを開いてから一度、画面をクリックするかキーを押してください。ブラウザは、ユーザーが操作するまで音を出さない仕組みになっています。メニューの効果音・BGMの音量も確認を。</div></details>
+        <details><summary><span>Q.02</span>「ハロー・ニューワールド」に反応しない</summary><div class="a">
+          <ul><li>Chrome か Edge で開いているか</li><li>マイクの使用を「許可」したか（アドレスバー左の鍵マークから変更できます）</li><li>ネットにつながっているか（音声認識はオンラインで動きます）</li><li>Ⓐ（または Space）を押したまま話しているか</li></ul>
+          どうしても反応しないときは <kbd>Enter</kbd> で声なしで起動できます。</div></details>
+        <details><summary><span>Q.03</span>Wiiリモコンがつながらない</summary><div class="a">先にOSのBluetooth設定でペアリングしてから、ゲーム内の「Wiiリモコン接続」を押してください。一覧に出ない場合はリモコンの1+2ボタンを押して接続待ちにします。MotionPlusが見つからないときは加速度だけの操作になり、ソードスキルは使えません。</div></details>
+        <details><summary><span>Q.04</span>カメラが映らない・顔を認識しない</summary><div class="a">他のアプリ（ビデオ会議など）がカメラを使っていると開けません。顔認識は明るい場所のほうが安定します。中心がずれたら <kbd>C</kbd> でリセット。</div></details>
+        <details><summary><span>Q.05</span>ファイルを直接開くとうまく動かない</summary><div class="a">PCに保存したファイルをダブルクリックで開くと、マイクやカメラが制限されることがあります。GitHub Pagesなどで公開したURLから開くか、フォルダで <code class="mono">python -m http.server</code> を実行して <code class="mono">localhost</code> から開いてください。</div></details>
+      </article>
+
+      <article class="ch" id="tech"><div class="no">08</div><h2>使用技術</h2>
+        <p>すべてブラウザの中で動いています。サーバー側の処理はありません。</p>
+        <div class="tech"><span>Three.js</span><span>MediaPipe Face / Hand / Pose Landmarker</span><span>WebHID API</span><span>Web Speech API</span><span>Web Audio API</span><span>VRM</span></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+</main>
+<script>
+// 目次：いま読んでいる章を光らせる
+(function(){
+  const links = [...document.querySelectorAll('.toc a')], map = new Map(links.map(a => [a.getAttribute('href').slice(1), a]));
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting){ links.forEach(a => a.classList.remove('on')); const a = map.get(e.target.id); if (a) a.classList.add('on'); } }), { rootMargin:'-30% 0px -60% 0px' });
+  document.querySelectorAll('.ch').forEach(c => io.observe(c));
+})();
+</script>
+<footer class="ft"><div class="wrap">
+  <div class="cols">
+    <div><div class="logo">RADI<i>Q</i>LE</div><small>_PROJECT</small>
+      <p style="max-width:360px">顔で狙ってリモコンで斬る、ブラウザ発のAR剣戟アクション。個人で少しずつ作っています。</p></div>
+    <div><h4>SITE</h4><ul><li><a href="../RQ_HP.html">トップ</a></li><li><a href="../hp/quest.html">クエスト：GIANT SLIME RAID</a></li><li><a href="../hp/manual.html">マニュアル</a></li><li><a href="../RQ_HP.html#log">更新履歴</a></li></ul></div>
+    <div><h4>GAME</h4><ul><li><a href="../RQ_index.html">タイトル画面から起動</a></li><li><a href="../sord/sord_demo.html">練習モード（チュートリアル）</a></li><li><a href="../sord/RQ_project_sord_hukan.html">レイドを直接開く</a></li></ul></div>
+  </div>
+  <div class="legal"><span>© 2026 RQ project ／ Radiqle_Project</span>
+    <span>※ 一部の技名はさまざまな作品へのオマージュです。各作品・権利者とは関係ありません。<br>※ Wii は任天堂の商標です。本作は任天堂とは関係ありません。</span></div>
+</div></footer>
+<script>
+(function(){
+  const nav = document.querySelector('.nav'), bar = document.querySelector('.hud .bar span'), lv = document.querySelector('.hud .lv');
+  function onScroll(){
+    const y = scrollY, max = document.documentElement.scrollHeight - innerHeight;
+    nav.classList.toggle('solid', y > 30);
+    const k = max > 0 ? Math.min(1, y/max) : 0;
+    if (bar) bar.style.setProperty('--p', (k*100).toFixed(1) + '%');
+    if (lv) lv.textContent = 'Lv.' + (1 + Math.floor(k*9.99));   // 読み進めるほどレベルが上がる
+  }
+  addEventListener('scroll', onScroll, { passive:true }); onScroll();
+  const bg = document.querySelector('.burger');
+  if (bg) bg.addEventListener('click', () => nav.classList.toggle('open'));
+  document.querySelectorAll('.nav ul a').forEach(a => a.addEventListener('click', () => nav.classList.remove('open')));
+
+  // スクロールで要素を出す
+  const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin:'0px 0px -8% 0px' }) : null;
+  document.querySelectorAll('.rv').forEach(el => io ? io.observe(el) : el.classList.add('in'));
+
+  // ネタバレ隠し
+  document.querySelectorAll('.spoil').forEach(el => el.addEventListener('click', () => el.classList.add('open')));
+
+  // ヒーロー背景（六角グリッド・光の粒・地平線）
+  const cv = document.getElementById('fx'); if (!cv) return;
+  const x = cv.getContext('2d'); let W = 0, H = 0, D = 1, run = true;
+  const dust = Array.from({ length:70 }, () => ({ x:Math.random(), y:Math.random(), z:Math.random(), s:Math.random()*1.6 + .4 }));
+  function size(){ D = Math.min(devicePixelRatio || 1, 2); W = cv.clientWidth; H = cv.clientHeight; cv.width = W*D; cv.height = H*D; }
+  size(); addEventListener('resize', size);
+  new IntersectionObserver(e => run = e[0].isIntersecting).observe(cv);
+  function hex(cx, cy, r){ x.beginPath(); for (let i = 0; i < 6; i++){ const a = Math.PI/3*i + Math.PI/6; x[i ? 'lineTo' : 'moveTo'](cx + r*Math.cos(a), cy + r*Math.sin(a)); } x.closePath(); }
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function frame(ms){
+    requestAnimationFrame(frame); if (!run) return;
+    const t = still ? 0 : ms/1000; x.setTransform(D, 0, 0, D, 0, 0); x.clearRect(0, 0, W, H);
+    const hy = H*.72; x.strokeStyle = '#86b8ff';
+    for (let i = 0; i < 12; i++){ const k = (i + (t*.1) % 1)/12, y = hy + Math.pow(k, 2.2)*(H - hy); x.globalAlpha = .28*k; x.beginPath(); x.moveTo(0, y); x.lineTo(W, y); x.stroke(); }
+    x.globalAlpha = .08; for (let i = -18; i <= 18; i++){ x.beginPath(); x.moveTo(W*.62 + i*22, hy); x.lineTo(W*.62 + i*W*.11, H); x.stroke(); }
+    x.globalAlpha = 1;
+    const R = 30, hw = R*Math.sqrt(3);
+    for (let row = -1; row < H/(R*1.5) + 1; row++) for (let col = -1; col < W/hw + 1; col++){
+      const cx = col*hw + (row & 1 ? hw/2 : 0), cy = row*R*1.5;
+      const n = Math.sin(col*1.7 + row*2.3 + t*.5)*Math.sin(col*.37 - row*.91 + t*.21);
+      if (n < .6) continue;
+      x.strokeStyle = `rgba(190,225,255,${(n - .6)*.45})`; hex(cx, cy, R - 3); x.stroke();
+      if (n > .93){ x.fillStyle = `rgba(255,154,60,${(n - .93)*1.2})`; x.fill(); }
+    }
+    x.globalCompositeOperation = 'lighter';
+    for (const d of dust){
+      if (!still){ d.y -= (.0015 + d.z*.004); if (d.y < -.02){ d.y = 1.02; d.x = Math.random(); } }
+      const a = .2 + .5*Math.abs(Math.sin(t*1.2 + d.x*30));
+      x.fillStyle = d.z > .82 ? `rgba(255,170,90,${a})` : `rgba(210,235,255,${a*.8})`;
+      x.beginPath(); x.arc(d.x*W, d.y*H, d.s*(.5 + d.z), 0, 7); x.fill();
+    }
+    x.globalCompositeOperation = 'source-over';
+  }
+  requestAnimationFrame(frame);
+})();
+
+</script>
+</body>
+</html>

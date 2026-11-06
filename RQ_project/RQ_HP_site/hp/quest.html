@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIANT SLIME RAID ─ RADIQLE_PROJECT</title>
+<meta name="description" content="現在のクエスト「GIANT SLIME RAID」。ボスの攻撃パターン、フェーズごとの変化、ソードスキルの出し方。">
+<meta property="og:title" content="GIANT SLIME RAID ─ RADIQLE_PROJECT">
+<meta property="og:description" content="現在のクエスト「GIANT SLIME RAID」。ボスの攻撃パターン、フェーズごとの変化、ソードスキルの出し方。">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#060a12">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23060a12'/%3E%3Cpolygon points='16,3 27,9.5 27,22.5 16,29 5,22.5 5,9.5' fill='none' stroke='%23eef4fb' stroke-width='1.5'/%3E%3Cpath d='M16 6 L18 10 L17.4 24 L14.6 24 L14 10 Z' fill='%23eef4fb'/%3E%3Cpath d='M21 22 Q24 25 27 25' stroke='%23ff9a3c' stroke-width='2' fill='none'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;600;700&family=Noto+Sans+JP:wght@400;500;700;900&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#060a12; --bg2:#0a111d; --bg3:#0e1726;
+  --ink:#eef4fb; --sub:#9aaec3; --dim:#5a6e84;
+  --line:rgba(205,225,245,.14); --line2:rgba(205,225,245,.3);
+  --acc:#ff9a3c; --acc2:#ffc078; --ice:#bfe6ff; --red:#ff5a6a; --pur:#b77bff; --grn:#6dffb0;
+  --en:"Rajdhani","Noto Sans JP",sans-serif;
+  --jp:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  --w:1180px;
+  --cut:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15.5px/1.95 var(--jp);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    linear-gradient(rgba(190,215,240,.035) 1px,transparent 1px) 0 0/100% 64px,
+    linear-gradient(90deg,rgba(190,215,240,.035) 1px,transparent 1px) 0 0/64px 100%,
+    radial-gradient(ellipse at 70% -10%,#12213a 0,transparent 60%),var(--bg)}
+img{max-width:100%;display:block}
+a{color:inherit}
+::selection{background:var(--acc);color:#140900}
+.wrap{max-width:var(--w);margin:0 auto;padding:0 28px}
+.mono{font-family:var(--mono);letter-spacing:.02em}
+.en{font-family:var(--en)}
+.acc{color:var(--acc)}
+kbd{display:inline-block;min-width:1.9em;text-align:center;font:600 12px/1 var(--mono);padding:5px 7px 4px;border:1px solid var(--line2);border-bottom-width:2px;background:var(--bg3);color:var(--ink)}
+
+/* ---------- NAV ---------- */
+.nav{position:fixed;left:0;right:0;top:0;z-index:50;height:64px;transition:background .3s,border-color .3s;border-bottom:1px solid transparent}
+.nav.solid{background:rgba(6,10,18,.86);backdrop-filter:blur(10px);border-bottom-color:var(--line)}
+.nav .wrap{height:100%;display:flex;align-items:center;gap:28px;max-width:none;padding:0 28px}
+.hud{display:flex;align-items:center;gap:12px;text-decoration:none;min-width:0}
+.hud .gem{width:30px;height:30px;flex:none}
+.hud .who{line-height:1.1}
+.hud .who b{display:block;font:700 15px var(--en);letter-spacing:.28em}
+.hud .who b i{font-style:normal;color:var(--acc)}
+.hud .bar{display:flex;align-items:center;gap:6px;margin-top:4px;font:600 10px var(--mono);color:var(--sub)}
+.hud .bar span{position:relative;display:block;width:110px;height:5px;background:rgba(255,255,255,.1);transform:skewX(-24deg);overflow:hidden}
+.hud .bar span i{position:absolute;inset:0;width:var(--p,0%);background:linear-gradient(90deg,var(--grn),#b6ffd8);transition:width .15s linear}
+.nav ul{display:flex;gap:4px;list-style:none;margin:0 0 0 auto;padding:0}
+.nav ul a{display:block;padding:8px 12px;text-decoration:none;font:600 13px var(--en);letter-spacing:.2em;color:var(--sub);position:relative}
+.nav ul a small{display:block;font:400 10px var(--jp);letter-spacing:.1em;color:var(--dim);margin-top:-2px}
+.nav ul a:hover,.nav ul a.cur{color:var(--ink)}
+.nav ul a.cur::after{content:"";position:absolute;left:12px;right:12px;bottom:2px;height:2px;background:var(--acc)}
+.play{display:inline-flex;align-items:center;gap:10px;padding:10px 20px;text-decoration:none;font:700 14px var(--en);letter-spacing:.24em;background:var(--acc);color:#170a00;clip-path:var(--cut);transition:filter .2s,transform .2s}
+.play:hover{filter:brightness(1.1)}
+.play svg{width:11px;height:11px}
+.burger{display:none;background:none;border:1px solid var(--line2);color:var(--ink);width:40px;height:40px;cursor:pointer;margin-left:auto}
+@media (max-width:980px){
+  .nav ul{position:fixed;top:64px;left:0;right:0;flex-direction:column;background:rgba(6,10,18,.97);border-bottom:1px solid var(--line);padding:10px 20px 18px;display:none}
+  .nav.open ul{display:flex}
+  .burger{display:block}
+  .nav .play{padding:9px 14px}
+  .hud .bar span{width:70px}
+}
+@media (max-width:520px){ .nav .play b{display:none} .hud .who b{letter-spacing:.18em} }
+
+/* ---------- BUTTONS ---------- */
+.btn{display:inline-flex;align-items:center;gap:12px;padding:15px 26px;text-decoration:none;font:700 15px var(--en);letter-spacing:.22em;clip-path:var(--cut);transition:background .2s,color .2s,filter .2s;border:0;cursor:pointer}
+.btn small{font:500 12px var(--jp);letter-spacing:.05em;opacity:.75}
+.btn.p{background:var(--acc);color:#170a00}
+.btn.p:hover{filter:brightness(1.1)}
+.btn.g{background:rgba(255,255,255,.05);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line2)}
+.btn.g:hover{background:rgba(255,154,60,.12);color:var(--acc2)}
+.btn .ar{width:18px;height:1px;background:currentColor;position:relative}
+.btn .ar::after{content:"";position:absolute;right:0;top:-3px;width:7px;height:7px;border-top:1px solid currentColor;border-right:1px solid currentColor;transform:rotate(45deg)}
+
+/* ---------- SECTION HEADER ---------- */
+.sec{position:relative;padding:130px 0}
+.sh{display:flex;align-items:center;gap:14px;font:600 12px var(--mono);letter-spacing:.2em;color:var(--sub);margin-bottom:22px}
+.sh b{color:var(--acc);font-weight:700}
+.sh::after{content:"";flex:0 0 60px;height:1px;background:var(--line2)}
+h2.big{font:700 clamp(30px,4.4vw,52px)/1.28 var(--jp);letter-spacing:-.01em;margin:0 0 26px}
+h2.big em{font-style:normal;color:var(--acc)}
+.lead{color:var(--sub);max-width:640px;margin:0}
+p{margin:0 0 1em}
+
+/* ---------- FRAME（四隅のブラケット付き画像） ---------- */
+.frame{position:relative;margin:0}
+.frame img{width:100%;height:auto;border:1px solid var(--line)}
+.frame::before,.frame::after{content:"";position:absolute;width:22px;height:22px;border:2px solid var(--ink);pointer-events:none}
+.frame::before{left:-7px;top:-7px;border-right:0;border-bottom:0}
+.frame::after{right:-7px;bottom:-7px;border-left:0;border-top:0}
+.frame figcaption{display:flex;justify-content:space-between;gap:12px;margin-top:10px;font:500 12px var(--mono);color:var(--sub)}
+.frame figcaption b{color:var(--ink);font-weight:600}
+
+/* ---------- SYSTEM WINDOW（明るいシステムウィンドウ） ---------- */
+.win{position:relative;background:linear-gradient(180deg,rgba(246,249,252,.96),rgba(226,234,243,.94));color:#1d2935;
+  box-shadow:0 30px 60px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.6) inset;clip-path:polygon(0 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%)}
+.win .wt{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(29,41,53,.12);font:700 12px var(--en);letter-spacing:.32em;color:#59697a}
+.win .wt i{display:flex;gap:6px}
+.win .wt i u{display:block;width:9px;height:9px;border-radius:50%;background:#c7d2dd}
+.win .wt i u:first-child{background:var(--acc)}
+.win .wb{padding:16px 18px 20px}
+.win .row{display:grid;grid-template-columns:78px 1fr;gap:12px;padding:7px 0;border-bottom:1px dashed rgba(29,41,53,.14);font-size:14px;align-items:center}
+.win .row:last-child{border-bottom:0}
+.win .row > span:first-child{font:700 11px var(--en);letter-spacing:.22em;color:#7a8a9b}
+.win .row b{font-weight:700}
+.win .hp{display:flex;align-items:center;gap:10px}
+.win .hp span{flex:1;height:8px;background:rgba(29,41,53,.12);transform:skewX(-24deg);position:relative;overflow:hidden}
+.win .hp span i{position:absolute;inset:0;width:var(--p,100%);background:linear-gradient(90deg,#2fd27d,#8ff0b9)}
+.win .hp span.r i{background:linear-gradient(90deg,#ff4d5e,#ff9aa5)}
+.win .hp em{font:700 13px var(--mono);font-style:normal;color:#3c4b5a}
+
+/* ---------- MISC ---------- */
+.tape{position:absolute;left:-20%;right:-20%;top:46%;transform:rotate(-9deg);padding:7px 0;text-align:center;background:var(--acc);color:#170a00;font:700 15px var(--jp);letter-spacing:.32em;z-index:2;box-shadow:0 6px 24px rgba(0,0,0,.45)}
+.tape small{display:block;font:700 10px var(--en);letter-spacing:.5em;margin-top:-4px}
+.rv{opacity:0;transform:translateY(18px);transition:opacity .8s ease,transform .8s ease}
+.rv.in{opacity:1;transform:none}
+.rv.d1{transition-delay:.1s}.rv.d2{transition-delay:.2s}.rv.d3{transition-delay:.3s}
+@media (prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}html{scroll-behavior:auto}}
+
+/* ---------- FOOTER ---------- */
+.ft{border-top:1px solid var(--line);padding:70px 0 40px;background:rgba(4,7,13,.7);font-size:13px;color:var(--sub)}
+.ft .cols{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:40px}
+.ft .logo{font:300 30px var(--en);letter-spacing:.3em;color:var(--ink)}
+.ft .logo i{font-style:normal;color:var(--acc);font-weight:500}
+.ft .logo + small{display:block;font:700 11px var(--en);letter-spacing:.5em;color:var(--acc);margin:2px 0 14px}
+.ft h4{margin:0 0 12px;font:700 11px var(--en);letter-spacing:.35em;color:var(--dim)}
+.ft ul{list-style:none;margin:0;padding:0;line-height:2.2}
+.ft ul a{text-decoration:none;color:var(--sub)}
+.ft ul a:hover{color:var(--acc2)}
+.ft .legal{margin-top:50px;padding-top:22px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;font-size:11.5px;color:var(--dim);line-height:1.9}
+@media (max-width:800px){.ft .cols{grid-template-columns:1fr 1fr}.ft .cols > :first-child{grid-column:1/-1}.sec{padding:90px 0}.wrap{padding:0 20px}}
+
+/* ===== PAGE HEAD ===== */
+.ph{position:relative;padding:170px 0 90px;overflow:hidden;border-bottom:1px solid var(--line)}
+.ph .bgi{position:absolute;inset:0;background-size:cover;background-position:center 35%;opacity:.5}
+.ph::before{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,var(--bg) 10%,rgba(6,10,18,.55) 60%,rgba(6,10,18,.75)),linear-gradient(transparent 60%,var(--bg))}
+.ph .wrap{position:relative;z-index:2}
+.crumb{font:600 11.5px var(--mono);letter-spacing:.16em;color:var(--sub);margin-bottom:28px}
+.crumb a{text-decoration:none;color:var(--sub)} .crumb a:hover{color:var(--acc2)}
+.crumb i{font-style:normal;margin:0 10px;color:var(--dim)}
+.ph .qno{font:700 12px var(--en);letter-spacing:.5em;color:var(--acc)}
+.ph h1{margin:8px 0 6px;font:600 clamp(48px,8vw,112px)/.92 var(--en);letter-spacing:.05em}
+.ph .jp{font:700 18px var(--jp);color:var(--sub);letter-spacing:.12em}
+.ph dl{display:flex;flex-wrap:wrap;gap:0;margin:40px 0 0;border:1px solid var(--line2);width:fit-content;max-width:100%;background:rgba(6,10,18,.6)}
+.ph dl div{padding:12px 22px;border-right:1px solid var(--line)}
+.ph dl div:last-child{border-right:0}
+.ph dt{font:700 10px var(--en);letter-spacing:.3em;color:var(--dim)}
+.ph dd{margin:0;font:700 15px var(--jp)}
+
+/* ===== MONSTER DATA ===== */
+.data .wrap{display:grid;grid-template-columns:400px 1fr;gap:70px;align-items:start}
+.data .win .face{height:170px;background:#0b1424 url(img/raid_purple.jpg) center 40%/180% auto;border-bottom:1px solid rgba(29,41,53,.12);position:relative}
+.data .win .face::after{content:"ID: GSL-001";position:absolute;right:10px;bottom:8px;font:600 10px var(--mono);color:#cfe0f0;letter-spacing:.1em}
+.prose p{color:var(--sub)}
+.prose p b{color:var(--ink)}
+.prose h3{font:700 19px var(--jp);margin:34px 0 10px}
+.dmg{display:grid;grid-template-columns:repeat(3,1fr);margin-top:30px;border:1px solid var(--line)}
+.dmg div{padding:18px 20px;border-right:1px solid var(--line)}
+.dmg div:last-child{border-right:0}
+.dmg b{display:block;font:600 34px var(--en);line-height:1.1}
+.dmg span{font-size:12.5px;color:var(--sub)}
+
+/* ===== SIGNALS ===== */
+.sigs{display:grid;gap:80px;margin-top:60px}
+.sig{display:grid;grid-template-columns:1.15fr 1fr;gap:56px;align-items:center}
+.sig:nth-child(even) .frame{order:2}
+.sig .lab{display:inline-flex;align-items:center;gap:12px;font:700 13px var(--en);letter-spacing:.35em;margin-bottom:12px}
+.sig .lab i{width:14px;height:14px;border-radius:50%;background:var(--c);box-shadow:0 0 14px var(--c)}
+.sig h3{margin:0 0 14px;font:900 clamp(26px,3vw,36px)/1.3 var(--jp)}
+.sig h3 em{font-style:normal;color:var(--c)}
+.sig p{color:var(--sub)}
+.sig .frame::before,.sig .frame::after{border-color:var(--c)}
+.sig .tips{margin:18px 0 0;padding:0;list-style:none;border-top:1px solid var(--line)}
+.sig .tips li{padding:10px 0;border-bottom:1px solid var(--line);font-size:14px;display:grid;grid-template-columns:110px 1fr;gap:14px}
+.sig .tips li span{font:600 11px var(--mono);color:var(--dim);padding-top:3px}
+
+/* ===== PHASE ===== */
+.pbar{display:grid;grid-template-columns:40fr 30fr 30fr;margin-top:50px;height:54px;transform:skewX(-14deg);margin-left:8px;margin-right:8px}
+.pbar div{display:flex;align-items:center;justify-content:center;font:700 14px var(--en);letter-spacing:.3em}
+.pbar div span{transform:skewX(14deg)}
+.pbar .a{background:linear-gradient(90deg,#1f8f59,#2fd27d)} .pbar .b{background:linear-gradient(90deg,#b98014,#f0b43a);color:#1a0f00} .pbar .c{background:linear-gradient(90deg,#c22b3c,#ff5a6a)}
+.pmark{display:grid;grid-template-columns:40fr 30fr 30fr;margin-top:10px;font:600 12px var(--mono);color:var(--sub)}
+.pmark span:last-child{display:flex;justify-content:space-between}
+.tblw{margin-top:40px;overflow-x:auto;border:1px solid var(--line)}
+.tbl{width:100%;border-collapse:collapse;min-width:640px;font-size:14.5px}
+.tbl th,.tbl td{padding:14px 18px;text-align:left;border-bottom:1px solid var(--line)}
+.tbl thead th{font:700 12px var(--en);letter-spacing:.3em;color:var(--sub);background:rgba(255,255,255,.03)}
+.tbl thead th:nth-child(2){color:#5fe39b}.tbl thead th:nth-child(3){color:#f0b43a}.tbl thead th:nth-child(4){color:var(--red)}
+.tbl tbody th{font-weight:500;color:var(--sub);white-space:nowrap}
+.tbl td{font:600 15px var(--mono)}
+.tbl td small{font:400 12px var(--jp);color:var(--dim);margin-left:4px}
+.tbl tr:last-child th,.tbl tr:last-child td{border-bottom:0}
+.fine{font-size:13px;color:var(--dim);margin-top:14px}
+
+/* ===== SKILLS ===== */
+.skills .win{margin-top:56px}
+.sk{display:grid;grid-template-columns:64px 1.1fr 1.4fr 90px;gap:20px;align-items:center;padding:16px 22px;border-bottom:1px solid rgba(29,41,53,.12);transition:background .2s}
+.sk:hover{background:rgba(255,154,60,.08)}
+.sk:last-child{border-bottom:0}
+.sk svg{width:48px;height:48px;stroke:#2b3b4c;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.sk svg .h{stroke:var(--acc)}
+.sk .nm b{display:block;font:700 12px var(--en);letter-spacing:.24em;color:#7a8a9b}
+.sk .nm span{font:900 18px var(--jp);color:#1d2935}
+.sk .how{font-size:14px;color:#3c4b5a}
+.sk .lv{font:700 11px var(--en);letter-spacing:.2em;color:#7a8a9b;text-align:right}
+.sk .lv i{display:block;font:600 10px var(--mono);font-style:normal;color:#9aa8b6;letter-spacing:.05em}
+.skhead{display:grid;grid-template-columns:64px 1.1fr 1.4fr 90px;gap:20px;padding:10px 22px;font:700 10px var(--en);letter-spacing:.3em;color:#9aa8b6;border-bottom:1px solid rgba(29,41,53,.12)}
+.ult{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:40px}
+.u{position:relative;padding:28px 30px;border:1px solid var(--line);background:linear-gradient(160deg,rgba(20,34,56,.7),rgba(8,14,26,.8));overflow:hidden}
+.u::before{content:attr(data-n);position:absolute;right:16px;top:6px;font:600 72px var(--en);color:rgba(255,255,255,.05);line-height:1}
+.u .en{font:700 12px var(--en);letter-spacing:.3em;color:var(--c,var(--acc))}
+.u h3{margin:6px 0 10px;font:900 22px var(--jp)}
+.u p{margin:0;color:var(--sub);font-size:14.5px}
+.u .ready{display:inline-block;margin-top:14px;font:700 11px var(--en);letter-spacing:.3em;padding:3px 10px;border:1px solid var(--c,var(--acc));color:var(--c,var(--acc))}
+
+/* ===== SECRET ===== */
+.secret .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-top:40px}
+.spoil{position:relative;padding:24px 26px;background:var(--bg2);cursor:pointer;min-height:130px}
+.spoil .en{font:700 12px var(--en);letter-spacing:.3em;color:var(--acc)}
+.spoil h3{margin:4px 0 6px;font:700 18px var(--jp)}
+.spoil p{margin:0;font-size:14px;color:var(--sub)}
+.spoil .body{filter:blur(7px);transition:filter .4s;user-select:none}
+.spoil::after{content:"CLICK TO REVEAL ─ ネタバレ注意";position:absolute;inset:0;display:grid;place-items:center;font:700 11px var(--en);letter-spacing:.3em;color:var(--sub);transition:opacity .3s}
+.spoil.open .body{filter:none;user-select:auto}
+.spoil.open::after{opacity:0;pointer-events:none}
+.spoil:not(.open):hover{background:#0d1626}
+
+.next{border-top:1px solid var(--line);padding:90px 0;text-align:center}
+.next p{color:var(--sub);margin:0 0 26px}
+
+@media (max-width:900px){
+  .data .wrap{grid-template-columns:1fr;gap:40px}
+  .sig{grid-template-columns:1fr;gap:26px}.sig:nth-child(even) .frame{order:0}
+  .ult,.secret .grid{grid-template-columns:1fr}
+  .sk,.skhead{grid-template-columns:52px 1fr;gap:4px 14px}
+  .sk .how{grid-column:2}.sk .lv{grid-column:2;text-align:left}.skhead{display:none}
+  .sk svg{grid-row:span 3}
+  .dmg{grid-template-columns:1fr}.dmg div{border-right:0;border-bottom:1px solid var(--line)}
+}
+
+</style>
+</head>
+<body id="top">
+<header class="nav"><div class="wrap">
+  <a class="hud" href="../RQ_HP.html" aria-label="RADIQLE トップへ"><svg class="gem" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,2 28,9 28,23 16,30 4,23 4,9" fill="none" stroke="#eef4fb" stroke-opacity=".7" stroke-width="1.2"/><path d="M16 5 L18.2 10 L17.5 25 L14.5 25 L13.8 10 Z" fill="#eef4fb"/><path d="M20.5 22.5 Q24 26 28 26" stroke="#ff9a3c" stroke-width="2" fill="none" stroke-linecap="round"/></svg><span class="who"><b>RADI<i>Q</i>LE</b><span class="bar"><span ><i></i></span><em class="lv" style="font-style:normal">Lv.1</em></span></span></a>
+  <ul><li><a href="../RQ_HP.html">TOP<small>トップ</small></a></li><li><a href="../RQ_HP.html#boot">START<small>起動</small></a></li><li><a href="../RQ_HP.html#jobs">JOBS<small>ジョブ</small></a></li><li><a href="../hp/quest.html" class="cur">QUEST<small>クエスト</small></a></li><li><a href="../hp/manual.html">MANUAL<small>マニュアル</small></a></li><li><a href="../RQ_HP.html#log">LOG<small>更新履歴</small></a></li></ul>
+  <button class="burger" aria-label="メニュー">≡</button>
+  <a class="play" href="../RQ_index.html"><svg viewBox="0 0 10 10"><path d="M1 0 L10 5 L1 10 Z" fill="currentColor"/></svg><b>PLAY</b></a>
+</div></header>
+<main>
+
+<section class="ph">
+  <div class="bgi" style="background-image:url(img/raid_purple.jpg)"></div>
+  <div class="wrap">
+    <div class="crumb"><a href="../RQ_HP.html">TOP</a><i>/</i>QUEST<i>/</i>01</div>
+    <div class="qno">QUEST 01 ─ SWORDSMAN</div>
+    <h1>GIANT SLIME<br>RAID</h1>
+    <div class="jp">巨大スライム討伐</div>
+    <dl>
+      <div><dt>JOB</dt><dd>剣士</dd></div>
+      <div><dt>BOSS</dt><dd>ジャイアントスライム ×1</dd></div>
+      <div><dt>VIEW</dt><dd>一人称 ／ 俯瞰</dd></div>
+      <div><dt>INPUT</dt><dd>マウス ／ Wiiリモコン</dd></div>
+    </dl>
+  </div>
+</section>
+
+<!-- MONSTER DATA -->
+<section class="sec data">
+  <div class="wrap">
+    <div class="win rv">
+      <div class="wt">MONSTER DATA<i><u></u><u></u><u></u></i></div>
+      <div class="face" role="img" aria-label="紫に光るジャイアントスライム"></div>
+      <div class="wb">
+        <div class="row"><span>NAME</span><b>GIANT SLIME</b></div>
+        <div class="row"><span>HP</span><div class="hp"><span class="r" style="--p:100%"><i></i></span><em>800</em></div></div>
+        <div class="row"><span>ATTACK</span><b>突進のみ</b></div>
+        <div class="row"><span>SIGNAL</span><b><span style="color:#e2384b">●</span> 赤　<span style="color:#9a5ae6">●</span> 紫</b></div>
+        <div class="row"><span>PHASE</span><b>3段階</b></div>
+        <div class="row"><span>WEAK</span><b>突進を外した直後</b></div>
+      </div>
+    </div>
+    <div class="prose">
+      <div class="sh rv"><b>01</b>TARGET</div>
+      <h2 class="big rv">攻撃はひとつ。<br>でも、読み違えると<em>痛い</em>。</h2>
+      <p class="rv">ジャイアントスライムの攻撃は<b>突進だけ</b>です。そのかわり、突っ込んでくる前に体を縮めて光ります。その色で「弾ける突進」か「受けるしかない突進」かが決まります。</p>
+      <p class="rv">床にのびる帯は突進のコース。帯から外れれば当たりませんし、回避（<kbd>A</kbd> <kbd>D</kbd>、俯瞰モードなら体を左右に）も使えます。ただ、いちばん稼げるのはパリィからの反撃です。</p>
+      <div class="dmg rv">
+        <div><b>6</b><span>通常攻撃のダメージ</span></div>
+        <div><b class="acc">9</b><span>弱点中の通常攻撃</span></div>
+        <div><b style="color:var(--ice)">140</b><span>PERFECTパリィ後の反撃</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SIGNALS -->
+<section class="sec" style="padding-top:40px">
+  <div class="wrap">
+    <div class="sh rv"><b>02</b>SIGNALS</div>
+    <h2 class="big rv">色を見て、一瞬で決める。</h2>
+    <div class="sigs">
+      <div class="sig" style="--c:var(--red)">
+        <figure class="frame rv"><img src="img/fp_red.jpg" alt="赤く光るスライムと床にのびる赤い帯" loading="lazy" width="1280" height="720"><figcaption><b>赤い予兆</b><span>帯＝突進コース</span></figcaption></figure>
+        <div class="rv d1"><div class="lab"><i></i>RED → PARRY</div>
+          <h3><em>赤</em>は、弾く。</h3>
+          <p>光っている間に右クリック（Wiiなら Ⓑを押しながら振り上げ）。弾き返すとスライムがスタンして、次の一撃が大ダメージの COUNTER になります。</p>
+          <ul class="tips">
+            <li><span>PERFECT</span>ぶつかる直前、約0.45秒以内に弾く。スタン3秒・反撃140</li>
+            <li><span>PARRY</span>それより早く弾いた場合。スタン2.2秒・反撃90</li>
+            <li><span>GUARD</span>赤い突進もガードなら無傷で受けられる（反撃はなし）</li>
+          </ul></div>
+      </div>
+      <div class="sig" style="--c:var(--pur)">
+        <figure class="frame rv"><img src="img/fp_purple.jpg" alt="紫に光るスライムと「パリィ不可！ガード！」の表示" loading="lazy" width="1280" height="720"><figcaption><b>紫の予兆</b><span>「パリィ不可！」</span></figcaption></figure>
+        <div class="rv d1"><div class="lab"><i></i>PURPLE → GUARD</div>
+          <h3><em>紫</em>は、受け止める。</h3>
+          <p>「パリィ不可！ ガード！」の合図。ここで弾こうとすると被弾します。左クリック長押し（Wiiなら Ⓐ長押し）でガードして、突進ごと押し返してください。</p>
+          <ul class="tips">
+            <li><span>RATE</span>紫になる確率はフェーズごとに 25% → 33% → 40%</li>
+            <li><span>TIP</span>早めに押して、ぶつかるまで離さない</li>
+          </ul></div>
+      </div>
+      <div class="sig" style="--c:var(--ice)">
+        <figure class="frame rv"><img src="img/fp_hurt.jpg" alt="突進を受けて画面全体が赤く染まる" loading="lazy" width="1280" height="720"><figcaption><b>被弾</b><span>画面が赤く染まる</span></figcaption></figure>
+        <div class="rv d1"><div class="lab"><i></i>AFTER → WEAK</div>
+          <h3>外したら、<em>攻める</em>。</h3>
+          <p>突進が空振りすると、スライムは奥に戻って体勢を立て直します。その約2.5秒間は弱点状態で、通常攻撃が 6 → 9 に。回避が決まったら、すかさず斬りに行きましょう。</p>
+          <ul class="tips">
+            <li><span>DAMAGE</span>被弾すると 20 / 25 / 30（フェーズ1〜3）</li>
+            <li><span>PLAYER HP</span>250。だいたい10回で力尽きます</li>
+          </ul></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PHASE -->
+<section class="sec" style="padding-top:40px">
+  <div class="wrap">
+    <div class="sh rv"><b>03</b>PHASE</div>
+    <h2 class="big rv">HPが減るほど、<em>速く</em>なる。</h2>
+    <p class="lead rv">HPが60%と30%を切ったところで「RAGE!!」。予兆が短くなり、突進が速くなり、紫の割合が増えます。最終フェーズでは間を空けずに2回続けて突っ込んでくることも。</p>
+    <div class="pbar rv"><div class="a"><span>PHASE 1</span></div><div class="b"><span>PHASE 2</span></div><div class="c"><span>PHASE 3</span></div></div>
+    <div class="pmark rv"><span>HP 100%</span><span>60% ─ RAGE!!</span><span><span>30% ─ RAGE!!</span><span>0%</span></span></div>
+    <div class="tblw rv"><table class="tbl">
+      <thead><tr><th></th><th>PHASE 1</th><th>PHASE 2</th><th>PHASE 3</th></tr></thead>
+      <tbody>
+        <tr><th>ボスのHP</th><td>800〜480</td><td>480〜240</td><td>240〜0</td></tr>
+        <tr><th>次の突進までの間</th><td>2.1〜2.6<small>秒</small></td><td>1.5〜2.0<small>秒</small></td><td>1.1〜1.6<small>秒（連続突進あり）</small></td></tr>
+        <tr><th>予兆（光っている時間）</th><td>1.1<small>秒</small></td><td>0.9<small>秒</small></td><td>0.7<small>秒</small></td></tr>
+        <tr><th>突進の速さ</th><td>17</td><td>20</td><td>24</td></tr>
+        <tr><th>紫（パリィ不可）の確率</th><td>25<small>%</small></td><td>33<small>%</small></td><td>40<small>%</small></td></tr>
+        <tr><th>被弾ダメージ</th><td>20</td><td>25</td><td>30</td></tr>
+      </tbody>
+    </table></div>
+    <p class="fine rv">※ 数値はバージョン1.0時点のものです。調整で変わることがあります。</p>
+  </div>
+</section>
+
+<!-- SKILLS -->
+<section class="sec skills" style="padding-top:40px">
+  <div class="wrap">
+    <div class="sh rv"><b>04</b>SWORD SKILLS</div>
+    <h2 class="big rv">振り方が、そのまま技になる。</h2>
+    <p class="lead rv">MotionPlus付きのWiiリモコンなら、ジャイロで振りの向きと強さを読み取ってソードスキルが出ます。スキルはボスに自動で当たり、通常攻撃よりずっと重い一撃に。反応しにくいときは、メニューから自分の振りを登録して判定を合わせられます。</p>
+    <div class="win rv">
+      <div class="wt">SKILL LIST ─ SWORDSMAN<i><u></u><u></u><u></u></i></div>
+      <div class="skhead"><span>MOTION</span><span>NAME</span><span>INPUT</span><span style="text-align:right">PRACTICE</span></div>
+      <div class="sk"><svg viewBox="0 0 48 48"><path d="M24 6 V30"/><path d="M18 24 L24 30 L30 24"/><path class="h" d="M8 38 H40"/><path class="h" d="M34 32 L40 38 L34 44"/></svg>
+        <div class="nm"><b>VERTICAL</b><span>バーチカル</span></div><div class="how">縦に振る → 続けて横に振る</div><div class="lv">STEP 5<i>十字切り</i></div></div>
+      <div class="sk"><svg viewBox="0 0 48 48"><path d="M10 10 H38 V38 H10 Z"/><path class="h" d="M33 5 L38 10 L33 15"/></svg>
+        <div class="nm"><b>HORIZONTAL SQUARE</b><span>ホリゾンタルスクエア</span></div><div class="how">縦 → 横 → 縦 → 横 の4連撃（1.1秒以内につなぐ）</div><div class="lv">─<i>応用</i></div></div>
+      <div class="sk"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="16"/><circle class="h" cx="24" cy="24" r="4"/><path class="h" d="M24 2 V10 M24 38 V46 M2 24 H10 M38 24 H46"/></svg>
+        <div class="nm"><b>VORPAL STRIKE</b><span>ヴォーパルストライク</span></div><div class="how">手首をひねらず、まっすぐ前へ突く</div><div class="lv">STEP 3<i>突き</i></div></div>
+      <div class="sk"><svg viewBox="0 0 48 48"><path d="M10 40 C 6 18, 22 4, 36 8"/><path class="h" d="M24 8 V42"/><path class="h" d="M17 35 L24 42 L31 35"/></svg>
+        <div class="nm"><b>SONIC LEAP</b><span>ソニックリープ</span></div><div class="how">大きく振りかぶって、縦に強く振り下ろす</div><div class="lv">STEP 4<i>重撃（縦）</i></div></div>
+      <div class="sk"><svg viewBox="0 0 48 48"><path class="h" d="M4 24 H40" stroke-width="5"/><path class="h" d="M32 15 L42 24 L32 33"/><path d="M8 14 H22 M8 34 H22"/></svg>
+        <div class="nm"><b>LOTUS SLASH</b><span>ロータススラッシュ</span></div><div class="how">左から右へ、強く横に薙ぐ</div><div class="lv">STEP 4<i>重撃（横）</i></div></div>
+      <div class="sk"><svg viewBox="0 0 48 48"><path d="M40 24 A16 16 0 1 1 30 9"/><path class="h" d="M24 4 L31 9 L25 15"/></svg>
+        <div class="nm"><b>METEOR BREAK</b><span>メテオブレイク</span></div><div class="how">リモコンを持ったまま、その場で一回転</div><div class="lv">STEP 6<i>回転斬り</i></div></div>
+    </div>
+
+    <div class="ult">
+      <div class="u rv" data-n="16" style="--c:var(--acc)"><div class="en">STARBURST STREAM</div><h3>スターバーストストライク</h3>
+        <p>二刀流（ヌンチャク接続）のときだけ。一度も被弾せずに16回当てると準備完了、次の斬りで16連撃を叩き込みます。途中で被弾するとカウントはリセット。</p><span class="ready">16 HIT → READY</span></div>
+      <div class="u rv d1" data-n="11" style="--c:#d8b8ff"><div class="en">MOTHER'S ROSARIO</div><h3>マザーズ・ロザリオ</h3>
+        <p>ヴォーパルストライクを11回決めると準備完了。次の突きが、十字を描く11連撃に変わります。</p><span class="ready">VORPAL ×11 → READY</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- SECRET -->
+<section class="sec secret" style="padding-top:40px">
+  <div class="wrap">
+    <div class="sh rv"><b>05</b>SECRET</div>
+    <h2 class="big rv">隠しコマンド</h2>
+    <p class="lead rv">自力で見つけたい人は読まずにどうぞ。カードをクリックすると中身が出ます。一部のモードでのみ使えます。</p>
+    <div class="grid rv">
+      <div class="spoil"><div class="body"><div class="en">EXCALIBUR</div><h3>エクスカリバー</h3><p>切っ先を真上に向けて頭上で止める → そのまま振り下ろす。</p></div></div>
+      <div class="spoil"><div class="body"><div class="en">ZANTETSUKEN</div><h3>斬鉄剣</h3><p>切っ先を下に向けたまま、素早く上下に揺らす。ボスのHPが30%以下なら一刀両断。</p></div></div>
+      <div class="spoil"><div class="body"><div class="en">STRASH</div><h3>ストラッシュ</h3><p>構えて止めていた時間で溜めLv.1〜3 → 右から左へ薙ぐ。</p></div></div>
+      <div class="spoil"><div class="body"><div class="en">DOUBLE CIRCULAR</div><h3>ダブルサーキュラー</h3><p>二刀流のとき、リモコンとヌンチャクで同じ動きを同時に。</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="next">
+  <div class="wrap">
+    <p>いきなりボスは不安、という人は練習モードから。ガードからメテオブレイクまで、1つずつ確かめられます。</p>
+    <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+      <a class="btn p" href="../RQ_index.html">PLAY <small>タイトルから起動</small><span class="ar"></span></a>
+      <a class="btn g" href="../sord/RQ_project_sord_hukan.html">レイドを直接開く</a>
+    </div>
+  </div>
+</section>
+
+</main>
+<footer class="ft"><div class="wrap">
+  <div class="cols">
+    <div><div class="logo">RADI<i>Q</i>LE</div><small>_PROJECT</small>
+      <p style="max-width:360px">顔で狙ってリモコンで斬る、ブラウザ発のAR剣戟アクション。個人で少しずつ作っています。</p></div>
+    <div><h4>SITE</h4><ul><li><a href="../RQ_HP.html">トップ</a></li><li><a href="../hp/quest.html">クエスト：GIANT SLIME RAID</a></li><li><a href="../hp/manual.html">マニュアル</a></li><li><a href="../RQ_HP.html#log">更新履歴</a></li></ul></div>
+    <div><h4>GAME</h4><ul><li><a href="../RQ_index.html">タイトル画面から起動</a></li><li><a href="../sord/sord_demo.html">練習モード（チュートリアル）</a></li><li><a href="../sord/RQ_project_sord_hukan.html">レイドを直接開く</a></li></ul></div>
+  </div>
+  <div class="legal"><span>© 2026 RQ project ／ Radiqle_Project</span>
+    <span>※ 一部の技名はさまざまな作品へのオマージュです。各作品・権利者とは関係ありません。<br>※ Wii は任天堂の商標です。本作は任天堂とは関係ありません。</span></div>
+</div></footer>
+<script>
+(function(){
+  const nav = document.querySelector('.nav'), bar = document.querySelector('.hud .bar span'), lv = document.querySelector('.hud .lv');
+  function onScroll(){
+    const y = scrollY, max = document.documentElement.scrollHeight - innerHeight;
+    nav.classList.toggle('solid', y > 30);
+    const k = max > 0 ? Math.min(1, y/max) : 0;
+    if (bar) bar.style.setProperty('--p', (k*100).toFixed(1) + '%');
+    if (lv) lv.textContent = 'Lv.' + (1 + Math.floor(k*9.99));   // 読み進めるほどレベルが上がる
+  }
+  addEventListener('scroll', onScroll, { passive:true }); onScroll();
+  const bg = document.querySelector('.burger');
+  if (bg) bg.addEventListener('click', () => nav.classList.toggle('open'));
+  document.querySelectorAll('.nav ul a').forEach(a => a.addEventListener('click', () => nav.classList.remove('open')));
+
+  // スクロールで要素を出す
+  const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin:'0px 0px -8% 0px' }) : null;
+  document.querySelectorAll('.rv').forEach(el => io ? io.observe(el) : el.classList.add('in'));
+
+  // ネタバレ隠し
+  document.querySelectorAll('.spoil').forEach(el => el.addEventListener('click', () => el.classList.add('open')));
+
+  // ヒーロー背景（六角グリッド・光の粒・地平線）
+  const cv = document.getElementById('fx'); if (!cv) return;
+  const x = cv.getContext('2d'); let W = 0, H = 0, D = 1, run = true;
+  const dust = Array.from({ length:70 }, () => ({ x:Math.random(), y:Math.random(), z:Math.random(), s:Math.random()*1.6 + .4 }));
+  function size(){ D = Math.min(devicePixelRatio || 1, 2); W = cv.clientWidth; H = cv.clientHeight; cv.width = W*D; cv.height = H*D; }
+  size(); addEventListener('resize', size);
+  new IntersectionObserver(e => run = e[0].isIntersecting).observe(cv);
+  function hex(cx, cy, r){ x.beginPath(); for (let i = 0; i < 6; i++){ const a = Math.PI/3*i + Math.PI/6; x[i ? 'lineTo' : 'moveTo'](cx + r*Math.cos(a), cy + r*Math.sin(a)); } x.closePath(); }
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function frame(ms){
+    requestAnimationFrame(frame); if (!run) return;
+    const t = still ? 0 : ms/1000; x.setTransform(D, 0, 0, D, 0, 0); x.clearRect(0, 0, W, H);
+    const hy = H*.72; x.strokeStyle = '#86b8ff';
+    for (let i = 0; i < 12; i++){ const k = (i + (t*.1) % 1)/12, y = hy + Math.pow(k, 2.2)*(H - hy); x.globalAlpha = .28*k; x.beginPath(); x.moveTo(0, y); x.lineTo(W, y); x.stroke(); }
+    x.globalAlpha = .08; for (let i = -18; i <= 18; i++){ x.beginPath(); x.moveTo(W*.62 + i*22, hy); x.lineTo(W*.62 + i*W*.11, H); x.stroke(); }
+    x.globalAlpha = 1;
+    const R = 30, hw = R*Math.sqrt(3);
+    for (let row = -1; row < H/(R*1.5) + 1; row++) for (let col = -1; col < W/hw + 1; col++){
+      const cx = col*hw + (row & 1 ? hw/2 : 0), cy = row*R*1.5;
+      const n = Math.sin(col*1.7 + row*2.3 + t*.5)*Math.sin(col*.37 - row*.91 + t*.21);
+      if (n < .6) continue;
+      x.strokeStyle = `rgba(190,225,255,${(n - .6)*.45})`; hex(cx, cy, R - 3); x.stroke();
+      if (n > .93){ x.fillStyle = `rgba(255,154,60,${(n - .93)*1.2})`; x.fill(); }
+    }
+    x.globalCompositeOperation = 'lighter';
+    for (const d of dust){
+      if (!still){ d.y -= (.0015 + d.z*.004); if (d.y < -.02){ d.y = 1.02; d.x = Math.random(); } }
+      const a = .2 + .5*Math.abs(Math.sin(t*1.2 + d.x*30));
+      x.fillStyle = d.z > .82 ? `rgba(255,170,90,${a})` : `rgba(210,235,255,${a*.8})`;
+      x.beginPath(); x.arc(d.x*W, d.y*H, d.s*(.5 + d.z), 0, 7); x.fill();
+    }
+    x.globalCompositeOperation = 'source-over';
+  }
+  requestAnimationFrame(frame);
+})();
+
+</script>
+</body>
+</html>
