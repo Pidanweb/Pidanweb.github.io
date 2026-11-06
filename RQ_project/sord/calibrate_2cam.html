@@ -107,6 +107,7 @@
   <div class="btns"><button id="bossFwd">ボスを正面に戻す</button></div>
   <label>ボスまでの距離 <b id="bdV">8.5</b> m<input type="range" id="bd" min="2" max="12" step="0.5" value="8.5"><small>図の赤い丸がボス。立ち位置からの距離です（近すぎる時は「大きさの半分＋1.5m」まで離します）</small></label>
   <label>ボスの大きさ（高さ） <b id="bhV">3.6</b> m<input type="range" id="bh" min="0.6" max="3.6" step="0.1" value="3.6"><small>部屋が狭いときは小さくすると近くに置けます</small></label>
+  <div class="note" id="orbNote"></div>
 
   <h2>6. 確かめる・保存</h2>
   <div class="note">「距離チェック」で2か所に立つと、その間の距離が出ます。メジャーで測った値と比べてください。</div>
@@ -136,7 +137,8 @@
         <span class="dot" style="background:var(--side)"></span>2台目から見た足<br>
         <span class="dot" style="background:#fff"></span>2台を合わせた位置
         <span class="dot" style="background:var(--tape)"></span>測定した立ち位置<br>
-        「2台の見え方の差」が小さいほど正確です（目安 15cm 以内）
+        「2台の見え方の差」が小さいほど正確です（目安 15cm 以内）<br>
+        図の緑の所 = カメラに全身が映る床（濃い = 2台とも）。円 = ボスの周りを歩く道
       </div>
     </div>
   </div>
@@ -763,6 +765,18 @@ function drawCam(c){
   x.fillText(!c.lm ? '全身認識 読み込み中' : seen ? (c.o.upright ? '足元まで見えています' : 'まっすぐ立ってください') : (c.n ? '足元が見えません' : '人が見つかりません'), w - 8*d, 20*d);
   x.textAlign = 'left';
 }
+// --- カメラに映る床の範囲（足元と頭が両方映る場所 = ゲームで位置が取れる場所） ---
+function seenBy(M, hfov, vw, vh, x, z){
+  const f = (vw/2)/Math.tan(hfov*Math.PI/360), ok = y => { const p = new THREE.Vector3(x, y, z).applyMatrix4(M); if (p.z > -.3) return false;
+    const u = .5 + f*p.x/-p.z/vw, v = .5 - f*p.y/-p.z/vh; return u > .03 && u < .97 && v > .01 && v < .98; };
+  return ok(BC_LIFT) && ok(eye());
+}
+function seenCount(x, z){
+  const vw = sess.vw, vh = sess.vh, vs = cams.S.v.videoWidth || vw, hs = cams.S.v.videoHeight || vh;
+  return (seenBy(cal.m.camF, cal.m.hfov, vw, vh, x, z) ? 1 : 0) + (seenBy(cal.s.CamFromF, cal.s.hfov, vs, hs, x, z) ? 1 : 0);
+}
+let orbMsg = '';
+
 // --- 描画: 上から見た図（2台のカメラが下、カメラが向く方が上） ---
 function drawMap(){
   const cv = $('cvMap'), d = fit(cv), x = cv.getContext('2d'), w = cv.width, h = cv.height;
@@ -772,7 +786,7 @@ function drawMap(){
   const R_ = cal.rig.r, F_ = cal.rig.f, U = p => ({ u:p.x*R_.x + p.z*R_.z, v:p.x*F_.x + p.z*F_.z });   // u: 右, v: 奥
   const bp = bossPos(), br = num('bh', 3.6)/2;
   const pts = [{ x:0, z:0 }, { x:cal.s.tx, z:cal.s.tz }, ...cal.spotsF.map(s => s.m), cal.origin]; if (live.f) pts.push(live.f);
-  if (Math.hypot(bp.x - cal.origin.x, bp.z - cal.origin.z) < 7) pts.push({ x:bp.x - br, z:bp.z - br }, { x:bp.x + br, z:bp.z + br });
+  { const rr = Math.hypot(bp.x - cal.origin.x, bp.z - cal.origin.z); if (rr < 7) pts.push({ x:bp.x - rr, z:bp.z - rr }, { x:bp.x + rr, z:bp.z + rr }, { x:bp.x - rr, z:bp.z + rr }, { x:bp.x + rr, z:bp.z - rr }); }
   const us = pts.map(U), u0 = Math.min(...us.map(p => p.u)) - 1.2, u1 = Math.max(...us.map(p => p.u)) + 1.2, v0 = Math.min(...us.map(p => p.v)) - 1.2, v1 = Math.max(...us.map(p => p.v)) + 1.2;
   const sc = Math.min(w/(u1 - u0), h/(v1 - v0)), cu = (u0 + u1)/2, cvv = (v0 + v1)/2;
   mapT = { d, w, h, sc, cu, cv:cvv };
@@ -789,6 +803,12 @@ function drawMap(){
     x.fillStyle = col; x.beginPath(); x.arc(a[0], a[1], 8*d, 0, 7); x.fill();
     x.font = `bold ${13*d}px sans-serif`; x.textAlign = 'center'; x.fillText(name, a[0], a[1] + 22*d);
   };
+  // 位置が取れる床（濃い = 2台とも / 薄い = 1台だけ）
+  { const step = 9*d;
+    for (let py = step/2; py < h; py += step) for (let px = step/2; px < w; px += step){
+      const uu = (px - w/2)/sc + cu, vv = -(py - h/2)/sc + cvv, X_ = uu*R_.x + vv*F_.x, Z_ = uu*R_.z + vv*F_.z, n = seenCount(X_, Z_);
+      if (n){ x.fillStyle = n === 2 ? 'rgba(111,220,140,.30)' : 'rgba(111,220,140,.13)'; x.fillRect(px - step/2, py - step/2, step, step); }
+    } }
   camDraw({ x:0, z:0 }, { x:0, z:-1 }, cal.m.hfov, '#59c9e8', 'メイン');
   const sd = new THREE.Vector3(0, 0, -1).transformDirection(cal.s.FfromS);
   camDraw({ x:cal.s.tx, z:cal.s.tz }, { x:sd.x, z:sd.z }, cal.s.hfov, '#f08c3a', '2台目');
@@ -803,6 +823,19 @@ function drawMap(){
     if (inside){ x.fillStyle = 'rgba(255,93,108,.25)'; x.beginPath(); x.arc(b[0], b[1], br*sc, 0, 7); x.fill(); x.fillStyle = '#ff5d6c'; }
     const lx = inside ? b[0] : o[0] + (b[0] - o[0])*.35, ly = inside ? b[1] : o[1] + (b[1] - o[1])*.35;
     x.font = `bold ${12*d}px sans-serif`; x.textAlign = 'center'; x.fillText(`ボス ${Math.max(minDist(), +sess.boss).toFixed(1)}m 先`, lx, ly + 4*d); }
+  // 回り込む円（ボスの周りを歩く道。赤い所はカメラに映らないので位置が取れない）
+  { const rr = Math.hypot(cal.origin.x - bp.x, cal.origin.z - bp.z), N = 72; let ok = 0;
+    for (let i = 0; i < N; i++){
+      const a0 = i/N*2*Math.PI, a1 = (i + 1)/N*2*Math.PI, p0 = { x:bp.x + rr*Math.sin(a0), z:bp.z + rr*Math.cos(a0) }, p1 = { x:bp.x + rr*Math.sin(a1), z:bp.z + rr*Math.cos(a1) };
+      const seen = seenCount((p0.x + p1.x)/2, (p0.z + p1.z)/2) > 0; if (seen) ok++;
+      const A = P(p0), B = P(p1); x.strokeStyle = seen ? 'rgba(111,220,140,.9)' : 'rgba(255,93,108,.9)'; x.lineWidth = 2.5*d;
+      x.setLineDash(seen ? [] : [4*d, 4*d]); x.beginPath(); x.moveTo(A[0], A[1]); x.lineTo(B[0], B[1]); x.stroke();
+    }
+    x.setLineDash([]);
+    const pct = Math.round(ok/N*100), m = pct >= 90 ? `✔ ボスの周り（半径 ${rr.toFixed(1)}m の円）をほぼ一周、カメラで追えます`
+      : `⚠ ボスの周り（半径 ${rr.toFixed(1)}m の円）のうち、カメラで追えるのは ${pct}% だけです。赤い点線の所に行くと位置が取れず、回り込めません。`
+        + 'ボスを「緑の濃い所（2台とも映る所）」の真ん中に置き、ボスを小さくして円を小さくしてください（円の半径は最低「大きさの半分＋1.5m」）';
+    if (m !== orbMsg){ orbMsg = m; $('orbNote').textContent = m; $('orbNote').style.color = pct >= 90 ? 'var(--ok)' : 'var(--tape)'; } }
   x.strokeStyle = 'rgba(255,255,255,.35)'; x.lineWidth = 2*d; x.beginPath();
   st.trail.forEach((t, i) => { const a = P(t); if (i) x.lineTo(a[0], a[1]); else x.moveTo(a[0], a[1]); }); x.stroke();
   const dot = (p, col, r) => { if (!p) return; const a = P(p); x.fillStyle = col; x.beginPath(); x.arc(a[0], a[1], r*d, 0, 7); x.fill(); };

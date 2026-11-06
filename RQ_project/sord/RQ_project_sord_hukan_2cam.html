@@ -1228,6 +1228,8 @@ $('jobBtn').onclick = () => $('jobs').classList.toggle('on');
 // ===== ゲーム状態 =====
 const keys = {}, mouse = { nx:0, ny:0 }, ray = new THREE.Raycaster(), tmp = new THREE.Vector3();
 const PMAX = 250;   // プレイヤー最大HP（旧100）
+const orbRing = new THREE.Mesh(new THREE.RingGeometry(.97, 1, 96), new THREE.MeshBasicMaterial({ color:0x6fdc8c, transparent:true, opacity:.45, depthWrite:false, side:THREE.DoubleSide }));
+orbRing.rotation.x = -Math.PI/2; orbRing.visible = false; scene.add(orbRing);
 const D = { x:0, z:0 };   // 表示用の位置（実際の足の位置。戦闘の判定は P）
 const P = { z:0, armed:false, x:0, hp:PMAX, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, dir:1, counter:0, cBig:0, guard:false };
 const B = { x:0, z:-16, vz:0, s:'enter', t:1, wt:1, hp:800, max:800, hit:false, weak:0, flash:0, combo:0, stun:false, phase:1, wob:0, time:0, unp:false };
@@ -1474,6 +1476,8 @@ function update(dt){
   // 表示の位置: 足の位置が取れていれば実際の位置（ボスの横・後ろにも回れる）。取れなければ戦闘の位置 P
   if (tp && pose.move && bcFeetOK()){ const k = Math.min(1, dt*10); D.x += (bc.feetX - D.x)*k; D.z += (bc.feetZ - D.z)*k; } else { D.x = P.x; D.z = P.z; }
   const room = tp && bc.state === 'locked' && bc.G0;   // 部屋に固定（カメラ・床）
+  orbRing.visible = !!(orbActive() && tp);
+  if (orbRing.visible){ orbRing.position.set(0, .015, HOVER); orbRing.scale.setScalar(bc.orbD); }
   if (room){ const f = new THREE.Vector3(0, 0, -16).applyMatrix4(bc.G0).applyMatrix4(bc.GfromF); floor.position.set(f.x, 0, f.z); floor.rotation.set(-Math.PI/2, bc.orbYaw0 - bc.orbYaw, 0); }
   else { floor.position.set(0, 0, -16); floor.rotation.set(-Math.PI/2, 0, 0); }
   aim.position.set(D.x, EYE, D.z); aim.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0);
