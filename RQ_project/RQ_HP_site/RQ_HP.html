@@ -122,10 +122,7 @@ p{margin:0 0 1em}
 /* ---------- MISC ---------- */
 .tape{position:absolute;left:-20%;right:-20%;top:46%;transform:rotate(-9deg);padding:7px 0;text-align:center;background:var(--acc);color:#170a00;font:700 15px var(--jp);letter-spacing:.32em;z-index:2;box-shadow:0 6px 24px rgba(0,0,0,.45)}
 .tape small{display:block;font:700 10px var(--en);letter-spacing:.5em;margin-top:-4px}
-.rv{opacity:0;transform:translateY(18px);transition:opacity .8s ease,transform .8s ease}
-.rv.in{opacity:1;transform:none}
-.rv.d1{transition-delay:.1s}.rv.d2{transition-delay:.2s}.rv.d3{transition-delay:.3s}
-@media (prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}html{scroll-behavior:auto}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.stage .win{animation:none}}
 
 /* ---------- FOOTER ---------- */
 .ft{border-top:1px solid var(--line);padding:70px 0 40px;background:rgba(4,7,13,.7);font-size:13px;color:var(--sub)}
@@ -139,6 +136,14 @@ p{margin:0 0 1em}
 .ft ul a:hover{color:var(--acc2)}
 .ft .legal{margin-top:50px;padding-top:22px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;font-size:11.5px;color:var(--dim);line-height:1.9}
 @media (max-width:800px){.ft .cols{grid-template-columns:1fr 1fr}.ft .cols > :first-child{grid-column:1/-1}.sec{padding:90px 0}.wrap{padding:0 20px}}
+
+.ft .contact{display:flex;flex-wrap:wrap;align-items:center;gap:14px 28px;font-size:13px;color:var(--sub)}
+.ft .contact a{color:var(--ink);text-decoration:none}
+.ft .contact a:hover{color:var(--acc2)}
+.ft .tw{display:inline-flex;align-items:center;gap:10px}
+.ft .tw img{width:34px;height:34px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1px var(--line2)}
+.ft .tw span{display:flex;flex-direction:column;line-height:1.3;font-size:11px;color:var(--dim);letter-spacing:.08em}
+.ft .tw b{font:600 13px var(--jp);color:var(--ink);letter-spacing:0}
 
 /* ===== HERO ===== */
 .hero{position:relative;min-height:100vh;min-height:100svh;display:flex;flex-direction:column;overflow:hidden}
@@ -154,10 +159,10 @@ p{margin:0 0 1em}
 .mark-sub::after{content:"";width:80px;height:1px;background:var(--acc)}
 .hero h1{font:900 clamp(30px,3.6vw,46px)/1.35 var(--jp);margin:34px 0 18px;letter-spacing:.02em}
 .hero h1 span{display:inline-block}
-.hero .lead{font-size:16px;max-width:520px}
+.hero .lead{font-size:16px;max-width:520px;line-height:2.1}
+.hero ruby rt{font:700 10px var(--jp);letter-spacing:.18em;color:var(--acc)}
+.hero ruby{ruby-align:center;color:var(--ink);font-weight:700}
 .cta{display:flex;flex-wrap:wrap;gap:14px;margin-top:36px}
-.req{margin-top:22px;font:500 12px var(--mono);color:var(--dim);letter-spacing:.06em}
-.req b{color:var(--sub);font-weight:600}
 
 .stage{position:relative;perspective:1400px;height:100%;min-height:440px}
 .stage .shot{position:absolute;right:-22%;top:10%;width:128%;transform:rotateY(-16deg) rotateX(4deg);transform-origin:left center;box-shadow:-40px 40px 80px rgba(0,0,0,.6)}
@@ -169,17 +174,14 @@ p{margin:0 0 1em}
 .stage .ping i{width:7px;height:7px;border-radius:50%;background:var(--grn);box-shadow:0 0 8px var(--grn);animation:blink 1.6s infinite}
 @keyframes blink{50%{opacity:.3}}
 
-.ticker{position:relative;z-index:1;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:rgba(6,10,18,.75);overflow:hidden;white-space:nowrap}
-.ticker .lab{position:absolute;left:0;top:0;bottom:0;z-index:2;display:flex;align-items:center;padding:0 18px;background:var(--acc);color:#170a00;font:700 11px var(--en);letter-spacing:.3em}
-.ticker .run{display:inline-flex;gap:56px;padding:13px 0 13px 230px;font:500 13px var(--jp);color:var(--sub);animation:tick 48s linear infinite}
-.ticker .run b{color:var(--ink);font-weight:500}
-.ticker .run span::before{content:"▸";color:var(--acc);margin-right:12px}
-@keyframes tick{to{transform:translateX(-50%)}}
 
-/* ===== 01 WORLD ===== */
-.world .wrap{display:grid;grid-template-columns:5fr 7fr;gap:70px}
-.world .stick{position:sticky;top:110px;align-self:start}
-.world h2.big{font-size:clamp(28px,3.1vw,40px)}
+/* ===== 01 WORLD（1画面に収める）===== */
+.world{min-height:100vh;min-height:100svh;display:flex;align-items:center;padding:96px 0 56px}
+.world .wrap{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center}
+.world h2.big{font-size:clamp(28px,3vw,40px);margin-bottom:16px}
+.world .lead{margin-bottom:30px}
+.world .frame{max-width:540px}
+@media (min-width:981px) and (max-height:860px){.world .frame{max-width:420px}.world{padding:84px 0 40px}}
 .feat{border-top:1px solid var(--line2)}
 .feat li{list-style:none;display:grid;grid-template-columns:64px 1fr auto;gap:18px;padding:22px 0;border-bottom:1px solid var(--line);align-items:baseline}
 .feat ol{margin:0;padding:0}
@@ -188,27 +190,6 @@ p{margin:0 0 1em}
 .feat p{margin:0;color:var(--sub);font-size:14.5px}
 .feat .tag{font:700 10px var(--en);letter-spacing:.25em;padding:3px 8px;border:1px solid var(--line2);color:var(--sub);white-space:nowrap}
 .feat .tag.req{border-color:var(--acc);color:var(--acc)}
-.duo{display:grid;grid-template-columns:1.3fr 1fr;gap:34px;margin-top:70px;align-items:end}
-.duo .frame:nth-child(2){margin-bottom:-50px}
-.note{margin-top:22px;padding-left:16px;border-left:2px solid var(--acc);font-size:13.5px;color:var(--sub)}
-
-/* ===== 02 BOOT ===== */
-.boot{background:linear-gradient(180deg,transparent,rgba(14,23,38,.55) 20%,rgba(14,23,38,.55) 80%,transparent)}
-.phrase{margin:10px 0 0;font:300 clamp(36px,6.4vw,92px)/1 var(--en);letter-spacing:.06em;white-space:nowrap}
-.phrase em{font-style:normal;color:var(--acc)}
-.phrase-jp{font:500 15px var(--jp);color:var(--sub);margin-top:12px}
-.steps{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(300px,1fr);gap:22px;margin-top:60px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:18px;scrollbar-width:thin;scrollbar-color:var(--acc) transparent}
-.step{scroll-snap-align:start;position:relative}
-.step .im{position:relative;overflow:hidden;border:1px solid var(--line)}
-.step .im img{aspect-ratio:16/10;object-fit:cover;width:100%;transition:transform .6s}
-.step:hover .im img{transform:scale(1.04)}
-.step .n{display:flex;align-items:baseline;gap:10px;margin-top:16px}
-.step .n b{font:600 30px var(--en);color:var(--acc);line-height:1}
-.step .n span{font:700 11px var(--en);letter-spacing:.3em;color:var(--sub)}
-.step h3{margin:6px 0 4px;font:700 17px var(--jp)}
-.step p{margin:0;font-size:14px;color:var(--sub)}
-.step::after{content:"";position:absolute;top:calc(31.25% - 1px);right:-22px;width:22px;height:1px;background:var(--line2)}
-.step:last-child::after{display:none}
 
 /* ===== 03 JOBS ===== */
 .jobs .grid{display:grid;grid-template-columns:1.7fr 1fr;gap:22px;margin-top:56px}
@@ -261,19 +242,6 @@ p{margin:0 0 1em}
 .chk b{display:block;font-weight:700}
 .chk span{font-size:13.5px;color:var(--sub)}
 
-/* ===== 06 LOG ===== */
-.log .wrap{display:grid;grid-template-columns:4fr 8fr;gap:70px}
-.entries{border-top:1px solid var(--line2)}
-.entry{display:grid;grid-template-columns:130px 1fr;gap:24px;padding:24px 0;border-bottom:1px solid var(--line)}
-.entry time{font:600 14px var(--mono);color:var(--acc)}
-.entry time small{display:block;font:500 10px var(--en);letter-spacing:.3em;color:var(--dim);margin-top:4px}
-.entry ul{margin:0;padding:0;list-style:none}
-.entry li{position:relative;padding-left:18px;margin-bottom:6px;font-size:14.5px}
-.entry li::before{content:"";position:absolute;left:0;top:.85em;width:8px;height:1px;background:var(--sub)}
-.entry .k{display:inline-block;font:700 10px var(--en);letter-spacing:.2em;padding:1px 6px;margin-right:8px;border:1px solid var(--line2);color:var(--sub);vertical-align:2px}
-.entry .k.new{border-color:var(--grn);color:var(--grn)}
-.entry .k.fix{border-color:var(--ice);color:var(--ice)}
-
 /* ===== FINAL ===== */
 .final{text-align:center;padding:150px 0 140px;position:relative;overflow:hidden}
 .final::before{content:"";position:absolute;left:50%;top:50%;width:900px;height:900px;transform:translate(-50%,-50%);border-radius:50%;
@@ -287,9 +255,7 @@ p{margin:0 0 1em}
   .stage .shot{position:relative;right:auto;top:auto;width:100%;transform:none}
   .stage .win{position:relative;left:auto;bottom:auto;margin:-40px 0 0 auto;width:250px;animation:none}
   .stage .ping{display:none}
-  .world .wrap,.log .wrap{grid-template-columns:1fr;gap:40px}
-  .world .stick{position:static}
-  .duo{grid-template-columns:1fr}.duo .frame:nth-child(2){margin-bottom:0}
+  .world{min-height:0;padding:90px 0}.world .wrap{grid-template-columns:1fr;gap:40px}
   .jobs .grid{grid-template-columns:1fr}
   .quest .wrap{grid-template-columns:1fr;padding-top:100px;padding-bottom:100px}
   .quest .win{justify-self:start}
@@ -298,7 +264,6 @@ p{margin:0 0 1em}
 @media (max-width:600px){
   .jc.main{grid-template-columns:1fr}.jc .art{display:none}
   .feat li{grid-template-columns:40px 1fr}.feat .tag{grid-column:2;justify-self:start}
-  .entry{grid-template-columns:1fr;gap:8px}
   .phrase{white-space:normal}
   .jc .in{padding:26px 22px}
 }
@@ -307,8 +272,8 @@ p{margin:0 0 1em}
 </head>
 <body id="top">
 <header class="nav"><div class="wrap">
-  <a class="hud" href="#top" aria-label="RADIQLE トップへ"><svg class="gem" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,2 28,9 28,23 16,30 4,23 4,9" fill="none" stroke="#eef4fb" stroke-opacity=".7" stroke-width="1.2"/><path d="M16 5 L18.2 10 L17.5 25 L14.5 25 L13.8 10 Z" fill="#eef4fb"/><path d="M20.5 22.5 Q24 26 28 26" stroke="#ff9a3c" stroke-width="2" fill="none" stroke-linecap="round"/></svg><span class="who"><b>RADI<i>Q</i>LE</b><span class="bar"><span ><i></i></span><em class="lv" style="font-style:normal">Lv.1</em></span></span></a>
-  <ul><li><a href="#top" class="cur">TOP<small>トップ</small></a></li><li><a href="#boot">START<small>起動</small></a></li><li><a href="#jobs">JOBS<small>ジョブ</small></a></li><li><a href="hp/quest.html">QUEST<small>クエスト</small></a></li><li><a href="hp/manual.html">MANUAL<small>マニュアル</small></a></li><li><a href="#log">LOG<small>更新履歴</small></a></li></ul>
+  <a class="hud" href="#top" aria-label="RADIQLE トップへ"><svg class="gem" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,2 28,9 28,23 16,30 4,23 4,9" fill="none" stroke="#eef4fb" stroke-opacity=".7" stroke-width="1.2"/><path d="M16 5 L18.2 10 L17.5 25 L14.5 25 L13.8 10 Z" fill="#eef4fb"/><path d="M20.5 22.5 Q24 26 28 26" stroke="#ff9a3c" stroke-width="2" fill="none" stroke-linecap="round"/></svg><span class="who"><b>RADI<i>Q</i>LE</b><span class="bar"><span ><i></i></span></span></span></a>
+  <ul><li><a href="#top" class="cur">TOP<small>トップ</small></a></li><li><a href="#jobs">JOBS<small>ジョブ</small></a></li><li><a href="hp/quest.html">QUEST<small>クエスト</small></a></li><li><a href="hp/manual.html">MANUAL<small>マニュアル</small></a></li></ul>
   <button class="burger" aria-label="メニュー">≡</button>
   <a class="play" href="RQ_index.html"><svg viewBox="0 0 10 10"><path d="M1 0 L10 5 L1 10 Z" fill="currentColor"/></svg><b>PLAY</b></a>
 </div></header>
@@ -319,18 +284,17 @@ p{margin:0 0 1em}
   <canvas id="fx" aria-hidden="true"></canvas>
   <div class="wrap">
     <div>
-      <div class="meta rv"><span>AR BLADE ACTION</span><span>BROWSER GAME</span><span>VER.1.0</span></div>
-      <div class="mark rv d1" aria-label="RADIQLE">RADI<i>Q</i>LE</div>
-      <div class="mark-sub rv d1">_PROJECT</div>
-      <h1 class="rv d2"><span>顔で狙い、</span><span>リモコンで斬る。</span></h1>
-      <p class="lead rv d2">Webカメラが顔の向きを読み取り、Wiiリモコンの振りがそのまま剣になる。インストールは要りません。ブラウザを開いたら、そこがもうフィールドです。</p>
-      <div class="cta rv d3">
+      <div class="meta"><span>AR BLADE ACTION</span><span>BROWSER GAME</span><span>VER.1.0</span></div>
+      <div class="mark" aria-label="RADIQLE">RADI<i>Q</i>LE</div>
+      <div class="mark-sub">_PROJECT</div>
+      <h1><span>体を動かし、</span><span>敵を斬る。</span></h1>
+      <p class="lead">実際に体を動かし、Wiiリモコンがそのまま剣になる。<br>もちろんインストールは要りません。<br>ブラウザを開いたら、<br>そこがもうあなたの<ruby>新しい世界<rt>ニューワールド</rt></ruby>。</p>
+      <div class="cta">
         <a class="btn p" href="RQ_index.html">PLAY <small>ゲームを起動</small><span class="ar"></span></a>
-        <a class="btn g" href="#boot">起動のしかた</a>
+        <a class="btn g" href="hp/manual.html">マニュアル</a>
       </div>
-      <div class="req rv d3"><b>CHROME / EDGE</b>（PC）　WEBCAM・WII REMOTE は任意 ─ マウスだけでも遊べます</div>
     </div>
-    <div class="stage rv d2" aria-hidden="true">
+    <div class="stage" aria-hidden="true">
       <figure class="frame shot"><img src="hp/img/title.jpg" alt="" width="1280" height="720"></figure>
       <div class="ping"><i></i>LINK READY</div>
       <div class="win">
@@ -344,77 +308,33 @@ p{margin:0 0 1em}
       </div>
     </div>
   </div>
-  <div class="ticker" aria-label="お知らせ">
-    <div class="lab">SYSTEM</div>
-    <div class="run">
-      <span>起動ワードは <b>「ハロー・ニューワールド」</b>。Ⓐを押しながら話しかけてください</span>
-      <span>新ジョブ <b>魔法使い・ガンナー</b> を開発中</span>
-      <span>練習モード（全6ステップ）で、ガードからソードスキルまで順番に覚えられます</span>
-      <span>Wiiリモコンは <b>MotionPlus</b> 付きだとソードスキルが使えます</span>
-      <span>起動ワードは <b>「ハロー・ニューワールド」</b>。Ⓐを押しながら話しかけてください</span>
-      <span>新ジョブ <b>魔法使い・ガンナー</b> を開発中</span>
-      <span>練習モード（全6ステップ）で、ガードからソードスキルまで順番に覚えられます</span>
-      <span>Wiiリモコンは <b>MotionPlus</b> 付きだとソードスキルが使えます</span>
-    </div>
-  </div>
 </section>
 
 <!-- ============ 01 WORLD ============ -->
 <section class="sec world" id="world">
   <div class="wrap">
-    <div class="stick">
-      <div class="sh rv"><b>01</b>WORLD</div>
-      <h2 class="big rv">画面の向こうじゃなく、<br><em>こっち側</em>で戦う。</h2>
-      <p class="lead rv">RADIQLE（ラディクル）は、現実の部屋をそのまま戦場にするAR剣戟アクションです。首を振れば視線が動き、腕を振れば剣が走る。コントローラーを「操作する」より、体で「動く」ことを大事にしています。</p>
-      <p class="note rv">いまは剣士で遊べるクエストが1つ。少しずつ増やしていきます。</p>
+    <div class="wl">
+      <div class="sh"><b>01</b>WORLD</div>
+      <h2 class="big">画面の向こうじゃなく、<br><em>こっち側</em>で戦う。</h2>
+      <p class="lead">RADIQLE（ラディキュル）は、現実の部屋をそのまま戦場にするAR剣戟アクションです。腕を振れば剣が走る。コントローラーを「操作する」より、体で「動く」ことを大事にしています。</p>
+      <figure class="frame"><img src="hp/img/fp_slash.jpg" alt="一人称視点で大剣をスライムに振り下ろす" width="1280" height="720"><figcaption><b>一人称モード</b><span>FIRST PERSON</span></figcaption></figure>
     </div>
-    <div>
-      <ol class="feat rv">
-        <li><span class="no">F-01</span><div><h3>顔の向きで、狙う</h3><p>Webカメラが顔を認識して、そのまま視点と照準に反映します。中心位置と感度はあとから調整できます。</p></div><span class="tag">WEBCAM</span></li>
-        <li><span class="no">F-02</span><div><h3>リモコンを、振る</h3><p>Wiiリモコンをブラウザから直接つないで、振る・突く・薙ぐの動きを読み取ります。MotionPlusがあればソードスキルも。</p></div><span class="tag">WII REMOTE</span></li>
-        <li><span class="no">F-03</span><div><h3>声で、起動する</h3><p>タイトルでⒶを押しながら「ハロー・ニューワールド」。光のトンネルを抜けたら、ジョブを選んでログインです。</p></div><span class="tag">MIC</span></li>
-        <li><span class="no">F-04</span><div><h3>自分の部屋に、ボスを出す</h3><p>2台目のカメラ映像や手持ちの動画を背景にできます。見慣れた部屋にスライムが現れる、ちょっと変な体験。</p></div><span class="tag">AR VIEW</span></li>
-        <li><span class="no">F-05</span><div><h3>アバターで、俯瞰する</h3><p>好きなVRMを読み込むと、全身の動きをカメラが拾って反映。体を左右に動かせば、そのまま回避になります。</p></div><span class="tag">VRM</span></li>
-        <li><span class="no">F-06</span><div><h3>マウスだけでも、最後まで</h3><p>機材がなくても大丈夫。左クリックで斬って、右クリックでパリィ。まずはここから。</p></div><span class="tag req">REQUIRED</span></li>
-      </ol>
-      <div class="duo">
-        <figure class="frame rv"><img src="hp/img/fp_slash.jpg" alt="一人称視点で大剣をスライムに振り下ろす" loading="lazy" width="1280" height="720"><figcaption><b>一人称モード</b><span>FIRST PERSON</span></figcaption></figure>
-        <figure class="frame rv d1"><img src="hp/img/raid.jpg" alt="俯瞰視点でアバターが剣を構え、正面にスライム" loading="lazy" width="1280" height="720"><figcaption><b>俯瞰モード</b><span>VRM AVATAR</span></figcaption></figure>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============ 02 BOOT ============ -->
-<section class="sec boot" id="boot">
-  <div class="wrap">
-    <div class="sh rv"><b>02</b>BOOT SEQUENCE</div>
-    <h2 class="big rv">Ⓐを押して、こう言うだけ。</h2>
-    <p class="phrase rv">“HELLO, <em>NEW</em> WORLD.”</p>
-    <p class="phrase-jp rv">─ ハロー・ニューワールド。声が届いたら、リンクが始まります。</p>
-    <div class="steps">
-      <article class="step rv"><div class="im"><img src="hp/img/title.jpg" alt="タイトル画面。Ⓐボタンのリングが光り、音声を待っている" loading="lazy"></div>
-        <div class="n"><b>01</b><span>VOICE COMMAND</span></div><h3>Ⓐを押しながら話す</h3><p>押している間だけマイクが聞き取ります。キーボードならSpace長押しでもOK。</p></article>
-      <article class="step rv d1"><div class="im"><img src="hp/img/tunnel.jpg" alt="虹色の光の線が中心に向かって流れるトンネル" loading="lazy"></div>
-        <div class="n"><b>02</b><span>LINK</span></div><h3>光のトンネルを抜ける</h3><p>加速して、真っ白に。ここは見ているだけで大丈夫です。</p></article>
-      <article class="step rv d2"><div class="im"><img src="hp/img/check.jpg" alt="白い画面に色付きの丸が並び、OKやSKIPが表示される" loading="lazy"></div>
-        <div class="n"><b>03</b><span>SYSTEM CHECK</span></div><h3>機材をチェック</h3><p>カメラ・音・コントローラー・マイクを順に確認。つないでいないものはSKIPになります。</p></article>
-      <article class="step rv d3"><div class="im"><img src="hp/img/jobs.jpg" alt="剣士・魔法使い・ガンナーの3枚のカード。剣士だけ選べる" loading="lazy"></div>
-        <div class="n"><b>04</b><span>JOB SELECT</span></div><h3>ジョブを選ぶ</h3><p>十字キーで選んでⒶで決定。いまは剣士のみ、ほかは準備中です。</p></article>
-      <article class="step rv"><div class="im"><img src="hp/img/tutorial.jpg" alt="練習モードの説明パネル。ヴォーパルストライクの出し方" loading="lazy"></div>
-        <div class="n"><b>05</b><span>TUTORIAL</span></div><h3>練習モードへ</h3><p>ガード、パリィ、ソードスキル。全6ステップを順番に。＋ボタンで飛ばせます。</p></article>
-    </div>
+    <ol class="feat">
+      <li><span class="no">F-01</span><div><h3>顔の向きで、狙う</h3><p>Webカメラが顔を認識して、そのまま視点と照準に反映します。中心位置と感度はあとから調整できます。</p></div><span class="tag">WEBCAM</span></li>
+      <li><span class="no">F-02</span><div><h3>リモコンを、振る</h3><p>Wiiリモコンをブラウザから直接つないで、振る・突くの動きを読み取ります。MotionPlusがあればソードスキルも。</p></div><span class="tag">WII REMOTE</span></li>
+      <li><span class="no">F-03</span><div><h3>声で、起動する</h3><p>タイトルでⒶを押しながら「ハロー・ニューワールド」。光のトンネルを抜けたら、ジョブを選んでログインです。</p></div><span class="tag">MIC</span></li>
+    </ol>
   </div>
 </section>
 
 <!-- ============ 03 JOBS ============ -->
 <section class="sec jobs" id="jobs">
   <div class="wrap">
-    <div class="sh rv"><b>03</b>JOBS</div>
-    <h2 class="big rv">ジョブで、体の使い方が変わる。</h2>
-    <p class="lead rv">同じリモコンでも、剣士なら「振る」、魔法使いなら「描く」、ガンナーなら「狙う」。ジョブごとに別の遊び方を用意するつもりです。</p>
+    <div class="sh"><b>02</b>JOBS</div>
+    <h2 class="big">ジョブで、体の使い方が変わる。</h2>
+    <p class="lead">同じリモコンでも、剣士なら「振る」、魔法使いなら「描く」、ガンナーなら「狙う」。ジョブごとに別の遊び方を用意するつもりです。</p>
     <div class="grid">
-      <article class="jc main rv">
+      <article class="jc main">
         <div class="in">
           <div class="top"><span>JOB 01</span><span class="ok">● AVAILABLE</span></div>
           <h3>剣士<span>SWORDSMAN</span></h3>
@@ -434,10 +354,10 @@ p{margin:0 0 1em}
         </div>
       </article>
       <div class="side">
-        <article class="jc soon rv d1"><div class="tape">準備中<small>UNDER DEVELOPMENT</small></div>
+        <article class="jc soon"><div class="tape">準備中<small>UNDER DEVELOPMENT</small></div>
           <div class="in"><div class="top"><span>JOB 02</span><span class="s">COMING SOON</span></div>
             <h3>魔法使い<span>WIZARD</span></h3><p>杖の先で魔法陣を描き、声で詠唱する遠距離職。</p></div></article>
-        <article class="jc soon rv d2"><div class="tape">準備中<small>UNDER DEVELOPMENT</small></div>
+        <article class="jc soon"><div class="tape">準備中<small>UNDER DEVELOPMENT</small></div>
           <div class="in"><div class="top"><span>JOB 03</span><span class="s">COMING SOON</span></div>
             <h3>ガンナー<span>GUNNER</span></h3><p>リモコンのポインターで照準を合わせて撃ち抜く射撃職。</p></div></article>
       </div>
@@ -450,13 +370,13 @@ p{margin:0 0 1em}
   <div class="bgi" style="background-image:url(hp/img/raid_rage.jpg)"></div>
   <div class="wrap">
     <div>
-      <div class="sh rv"><b>04</b>CURRENT QUEST</div>
-      <h2 class="qtitle rv">GIANT SLIME<br>RAID<small>巨大スライム討伐</small></h2>
-      <p class="motto rv"><span class="r">赤</span>は弾け。<span class="p">紫</span>は受け止めろ。</p>
-      <p class="lead rv">相手はジャイアントスライム一体だけ。突進の色を見て、パリィ・ガード・回避を一瞬で選ぶボス戦です。HPが減るほど速く、短く、容赦がなくなります。</p>
-      <div class="cta rv"><a class="btn p" href="hp/quest.html">クエスト詳細<span class="ar"></span></a><a class="btn g" href="sord/RQ_project_sord_hukan.html">レイドを直接開く</a></div>
+      <div class="sh"><b>03</b>CURRENT QUEST</div>
+      <h2 class="qtitle">GIANT SLIME<br>RAID<small>巨大スライム討伐</small></h2>
+      <p class="motto"><span class="r">赤</span>は弾け。<span class="p">紫</span>は受け止めろ。</p>
+      <p class="lead">相手はジャイアントスライム一体だけ。突進の色を見て、パリィ・ガード・回避を一瞬で選ぶボス戦です。HPが減るほど速く、短く、容赦がなくなります。</p>
+      <div class="cta"><a class="btn p" href="hp/quest.html">クエスト詳細<span class="ar"></span></a><a class="btn g" href="sord/RQ_project_sord_hukan.html">レイドを直接開く</a></div>
     </div>
-    <div class="win rv d1">
+    <div class="win">
       <div class="wt">QUEST INFO<i><u></u><u></u><u></u></i></div>
       <div class="wb">
         <div class="row"><span>TARGET</span><b>GIANT SLIME</b></div>
@@ -473,10 +393,10 @@ p{margin:0 0 1em}
 <!-- ============ 05 SETUP ============ -->
 <section class="sec setup" id="setup">
   <div class="wrap">
-    <div class="sh rv"><b>05</b>SETUP</div>
-    <h2 class="big rv">用意するもの</h2>
-    <p class="lead rv">最低限はPCとブラウザだけ。あとは手元にあるものを足すほど、体を使う遊びになっていきます。</p>
-    <div class="cols rv">
+    <div class="sh"><b>04</b>SETUP</div>
+    <h2 class="big">用意するもの</h2>
+    <p class="lead">最低限はPCとブラウザだけ。あとは手元にあるものを足すほど、体を使う遊びになっていきます。</p>
+    <div class="cols">
       <div class="col"><h3>これだけは必要<small>REQUIRED</small></h3>
         <ul class="chk">
           <li><b>PC（Windows / Mac）</b><span>ノートPCなら「軽量モード」推奨（初期設定）</span></li>
@@ -491,43 +411,17 @@ p{margin:0 0 1em}
           <li><b>2台目のカメラ・VRMアバター</b><span>AR背景や俯瞰モードで使います</span></li>
         </ul></div>
     </div>
-    <div class="cta rv"><a class="btn g" href="hp/manual.html">マニュアルを読む<span class="ar"></span></a></div>
-  </div>
-</section>
-
-<!-- ============ 06 LOG ============ -->
-<section class="sec log" id="log">
-  <div class="wrap">
-    <div>
-      <div class="sh rv"><b>06</b>SYSTEM LOG</div>
-      <h2 class="big rv">更新履歴</h2>
-      <p class="lead rv">気づいたところから直しています。不具合や「ここ遊びにくい」があれば教えてください。</p>
-    </div>
-    <div class="entries rv">
-      <div class="entry"><time>2026.11.06<small>UPDATE</small></time><ul>
-        <li><span class="k new">NEW</span>公式サイトをリニューアル（トップ／クエスト／マニュアル）</li>
-        <li><span class="k new">NEW</span>起動後にジョブ選択画面を追加（剣士のみ選択可・ほかは準備中）</li>
-        <li><span class="k fix">FIX</span>ファイル構成を整理。剣士関連は sord フォルダへ</li>
-        <li><span class="k fix">FIX</span>起動演出の英語音声アナウンスを削除</li></ul></div>
-      <div class="entry"><time>2026.11.05<small>UPDATE</small></time><ul>
-        <li><span class="k new">NEW</span>タイトル画面を刷新。Ⓐ＋「ハロー・ニューワールド」の音声で起動</li>
-        <li><span class="k new">NEW</span>リンク演出（光のトンネル → システムチェック → WELCOME）</li>
-        <li><span class="k new">NEW</span>システム効果音とタイトルBGMを追加</li>
-        <li><span class="k">UI</span>ゲーム内のパネル・HPバー・メニューをAR端末風のデザインに統一</li></ul></div>
-      <div class="entry"><time>EARLIER<small>ALPHA</small></time><ul>
-        <li><span class="k">QUEST</span>GIANT SLIME RAID（剣士）を公開</li>
-        <li><span class="k">TRAIN</span>練習モード（全6ステップ）を追加</li></ul></div>
-    </div>
+    <div class="cta"><a class="btn g" href="hp/manual.html">マニュアルを読む<span class="ar"></span></a></div>
   </div>
 </section>
 
 <!-- ============ FINAL ============ -->
 <section class="final">
   <div class="wrap">
-    <div class="sh rv" style="justify-content:center">READY TO LINK</div>
-    <p class="phrase rv">HELLO, <em>NEW</em> WORLD.</p>
-    <p class="rv">準備ができたら、タイトル画面へ。</p>
-    <a class="btn p rv" href="RQ_index.html">PLAY <small>ゲームを起動</small><span class="ar"></span></a>
+    <div class="sh" style="justify-content:center">READY TO LINK</div>
+    <p class="phrase">HELLO, <em>NEW</em> WORLD.</p>
+    <p>準備ができたら、タイトル画面へ。</p>
+    <a class="btn p" href="RQ_index.html">PLAY <small>ゲームを起動</small><span class="ar"></span></a>
   </div>
 </section>
 
@@ -536,30 +430,25 @@ p{margin:0 0 1em}
   <div class="cols">
     <div><div class="logo">RADI<i>Q</i>LE</div><small>_PROJECT</small>
       <p style="max-width:360px">顔で狙ってリモコンで斬る、ブラウザ発のAR剣戟アクション。個人で少しずつ作っています。</p></div>
-    <div><h4>SITE</h4><ul><li><a href="RQ_HP.html">トップ</a></li><li><a href="hp/quest.html">クエスト：GIANT SLIME RAID</a></li><li><a href="hp/manual.html">マニュアル</a></li><li><a href="RQ_HP.html#log">更新履歴</a></li></ul></div>
+    <div><h4>SITE</h4><ul><li><a href="RQ_HP.html">トップ</a></li><li><a href="hp/quest.html">クエスト：GIANT SLIME RAID</a></li><li><a href="hp/manual.html">マニュアル</a></li></ul></div>
     <div><h4>GAME</h4><ul><li><a href="RQ_index.html">タイトル画面から起動</a></li><li><a href="sord/sord_demo.html">練習モード（チュートリアル）</a></li><li><a href="sord/RQ_project_sord_hukan.html">レイドを直接開く</a></li></ul></div>
   </div>
-  <div class="legal"><span>© 2026 RQ project ／ Radiqle_Project</span>
+  <div class="legal"><div class="contact"><span>連絡先：<a href="mailto:rdiqulproject@gmail.com">rdiqulproject@gmail.com</a></span><a class="tw" href="https://x.com/RadiqleProject" target="_blank" rel="noopener"><img src="hp/img/icon.jpg" alt="RadiqleProject のアイコン" width="34" height="34" loading="lazy"><span>Twitter<b>@RadiqleProject</b></span></a></div>
     <span>※ 一部の技名はさまざまな作品へのオマージュです。各作品・権利者とは関係ありません。<br>※ Wii は任天堂の商標です。本作は任天堂とは関係ありません。</span></div>
 </div></footer>
 <script>
 (function(){
-  const nav = document.querySelector('.nav'), bar = document.querySelector('.hud .bar span'), lv = document.querySelector('.hud .lv');
+  const nav = document.querySelector('.nav'), bar = document.querySelector('.hud .bar span');
   function onScroll(){
     const y = scrollY, max = document.documentElement.scrollHeight - innerHeight;
     nav.classList.toggle('solid', y > 30);
     const k = max > 0 ? Math.min(1, y/max) : 0;
     if (bar) bar.style.setProperty('--p', (k*100).toFixed(1) + '%');
-    if (lv) lv.textContent = 'Lv.' + (1 + Math.floor(k*9.99));   // 読み進めるほどレベルが上がる
   }
   addEventListener('scroll', onScroll, { passive:true }); onScroll();
   const bg = document.querySelector('.burger');
   if (bg) bg.addEventListener('click', () => nav.classList.toggle('open'));
   document.querySelectorAll('.nav ul a').forEach(a => a.addEventListener('click', () => nav.classList.remove('open')));
-
-  // スクロールで要素を出す
-  const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin:'0px 0px -8% 0px' }) : null;
-  document.querySelectorAll('.rv').forEach(el => io ? io.observe(el) : el.classList.add('in'));
 
   // ネタバレ隠し
   document.querySelectorAll('.spoil').forEach(el => el.addEventListener('click', () => el.classList.add('open')));

@@ -122,10 +122,7 @@ p{margin:0 0 1em}
 /* ---------- MISC ---------- */
 .tape{position:absolute;left:-20%;right:-20%;top:46%;transform:rotate(-9deg);padding:7px 0;text-align:center;background:var(--acc);color:#170a00;font:700 15px var(--jp);letter-spacing:.32em;z-index:2;box-shadow:0 6px 24px rgba(0,0,0,.45)}
 .tape small{display:block;font:700 10px var(--en);letter-spacing:.5em;margin-top:-4px}
-.rv{opacity:0;transform:translateY(18px);transition:opacity .8s ease,transform .8s ease}
-.rv.in{opacity:1;transform:none}
-.rv.d1{transition-delay:.1s}.rv.d2{transition-delay:.2s}.rv.d3{transition-delay:.3s}
-@media (prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}html{scroll-behavior:auto}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.stage .win{animation:none}}
 
 /* ---------- FOOTER ---------- */
 .ft{border-top:1px solid var(--line);padding:70px 0 40px;background:rgba(4,7,13,.7);font-size:13px;color:var(--sub)}
@@ -139,6 +136,14 @@ p{margin:0 0 1em}
 .ft ul a:hover{color:var(--acc2)}
 .ft .legal{margin-top:50px;padding-top:22px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;font-size:11.5px;color:var(--dim);line-height:1.9}
 @media (max-width:800px){.ft .cols{grid-template-columns:1fr 1fr}.ft .cols > :first-child{grid-column:1/-1}.sec{padding:90px 0}.wrap{padding:0 20px}}
+
+.ft .contact{display:flex;flex-wrap:wrap;align-items:center;gap:14px 28px;font-size:13px;color:var(--sub)}
+.ft .contact a{color:var(--ink);text-decoration:none}
+.ft .contact a:hover{color:var(--acc2)}
+.ft .tw{display:inline-flex;align-items:center;gap:10px}
+.ft .tw img{width:34px;height:34px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1px var(--line2)}
+.ft .tw span{display:flex;flex-direction:column;line-height:1.3;font-size:11px;color:var(--dim);letter-spacing:.08em}
+.ft .tw b{font:600 13px var(--jp);color:var(--ink);letter-spacing:0}
 
 /* ===== PAGE HEAD ===== */
 .ph{position:relative;padding:170px 0 90px;overflow:hidden;border-bottom:1px solid var(--line)}
@@ -252,8 +257,8 @@ p{margin:0 0 1em}
 </head>
 <body id="top">
 <header class="nav"><div class="wrap">
-  <a class="hud" href="../RQ_HP.html" aria-label="RADIQLE トップへ"><svg class="gem" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,2 28,9 28,23 16,30 4,23 4,9" fill="none" stroke="#eef4fb" stroke-opacity=".7" stroke-width="1.2"/><path d="M16 5 L18.2 10 L17.5 25 L14.5 25 L13.8 10 Z" fill="#eef4fb"/><path d="M20.5 22.5 Q24 26 28 26" stroke="#ff9a3c" stroke-width="2" fill="none" stroke-linecap="round"/></svg><span class="who"><b>RADI<i>Q</i>LE</b><span class="bar"><span ><i></i></span><em class="lv" style="font-style:normal">Lv.1</em></span></span></a>
-  <ul><li><a href="../RQ_HP.html">TOP<small>トップ</small></a></li><li><a href="../RQ_HP.html#boot">START<small>起動</small></a></li><li><a href="../RQ_HP.html#jobs">JOBS<small>ジョブ</small></a></li><li><a href="../hp/quest.html" class="cur">QUEST<small>クエスト</small></a></li><li><a href="../hp/manual.html">MANUAL<small>マニュアル</small></a></li><li><a href="../RQ_HP.html#log">LOG<small>更新履歴</small></a></li></ul>
+  <a class="hud" href="../RQ_HP.html" aria-label="RADIQLE トップへ"><svg class="gem" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,2 28,9 28,23 16,30 4,23 4,9" fill="none" stroke="#eef4fb" stroke-opacity=".7" stroke-width="1.2"/><path d="M16 5 L18.2 10 L17.5 25 L14.5 25 L13.8 10 Z" fill="#eef4fb"/><path d="M20.5 22.5 Q24 26 28 26" stroke="#ff9a3c" stroke-width="2" fill="none" stroke-linecap="round"/></svg><span class="who"><b>RADI<i>Q</i>LE</b><span class="bar"><span ><i></i></span></span></span></a>
+  <ul><li><a href="../RQ_HP.html">TOP<small>トップ</small></a></li><li><a href="../RQ_HP.html#jobs">JOBS<small>ジョブ</small></a></li><li><a href="../hp/quest.html" class="cur">QUEST<small>クエスト</small></a></li><li><a href="../hp/manual.html">MANUAL<small>マニュアル</small></a></li></ul>
   <button class="burger" aria-label="メニュー">≡</button>
   <a class="play" href="../RQ_index.html"><svg viewBox="0 0 10 10"><path d="M1 0 L10 5 L1 10 Z" fill="currentColor"/></svg><b>PLAY</b></a>
 </div></header>
@@ -278,7 +283,7 @@ p{margin:0 0 1em}
 <!-- MONSTER DATA -->
 <section class="sec data">
   <div class="wrap">
-    <div class="win rv">
+    <div class="win">
       <div class="wt">MONSTER DATA<i><u></u><u></u><u></u></i></div>
       <div class="face" role="img" aria-label="紫に光るジャイアントスライム"></div>
       <div class="wb">
@@ -291,11 +296,11 @@ p{margin:0 0 1em}
       </div>
     </div>
     <div class="prose">
-      <div class="sh rv"><b>01</b>TARGET</div>
-      <h2 class="big rv">攻撃はひとつ。<br>でも、読み違えると<em>痛い</em>。</h2>
-      <p class="rv">ジャイアントスライムの攻撃は<b>突進だけ</b>です。そのかわり、突っ込んでくる前に体を縮めて光ります。その色で「弾ける突進」か「受けるしかない突進」かが決まります。</p>
-      <p class="rv">床にのびる帯は突進のコース。帯から外れれば当たりませんし、回避（<kbd>A</kbd> <kbd>D</kbd>、俯瞰モードなら体を左右に）も使えます。ただ、いちばん稼げるのはパリィからの反撃です。</p>
-      <div class="dmg rv">
+      <div class="sh"><b>01</b>TARGET</div>
+      <h2 class="big">攻撃はひとつ。<br>でも、読み違えると<em>痛い</em>。</h2>
+      <p>ジャイアントスライムの攻撃は<b>突進だけ</b>です。そのかわり、突っ込んでくる前に体を縮めて光ります。その色で「弾ける突進」か「受けるしかない突進」かが決まります。</p>
+      <p>床にのびる帯は突進のコース。帯から外れれば当たりませんし、回避（<kbd>A</kbd> <kbd>D</kbd>、俯瞰モードなら体を左右に）も使えます。ただ、いちばん稼げるのはパリィからの反撃です。</p>
+      <div class="dmg">
         <div><b>6</b><span>通常攻撃のダメージ</span></div>
         <div><b class="acc">9</b><span>弱点中の通常攻撃</span></div>
         <div><b style="color:var(--ice)">140</b><span>PERFECTパリィ後の反撃</span></div>
@@ -307,12 +312,12 @@ p{margin:0 0 1em}
 <!-- SIGNALS -->
 <section class="sec" style="padding-top:40px">
   <div class="wrap">
-    <div class="sh rv"><b>02</b>SIGNALS</div>
-    <h2 class="big rv">色を見て、一瞬で決める。</h2>
+    <div class="sh"><b>02</b>SIGNALS</div>
+    <h2 class="big">色を見て、一瞬で決める。</h2>
     <div class="sigs">
       <div class="sig" style="--c:var(--red)">
-        <figure class="frame rv"><img src="img/fp_red.jpg" alt="赤く光るスライムと床にのびる赤い帯" loading="lazy" width="1280" height="720"><figcaption><b>赤い予兆</b><span>帯＝突進コース</span></figcaption></figure>
-        <div class="rv d1"><div class="lab"><i></i>RED → PARRY</div>
+        <figure class="frame"><img src="img/fp_red.jpg" alt="赤く光るスライムと床にのびる赤い帯" loading="lazy" width="1280" height="720"><figcaption><b>赤い予兆</b><span>帯＝突進コース</span></figcaption></figure>
+        <div><div class="lab"><i></i>RED → PARRY</div>
           <h3><em>赤</em>は、弾く。</h3>
           <p>光っている間に右クリック（Wiiなら Ⓑを押しながら振り上げ）。弾き返すとスライムがスタンして、次の一撃が大ダメージの COUNTER になります。</p>
           <ul class="tips">
@@ -322,8 +327,8 @@ p{margin:0 0 1em}
           </ul></div>
       </div>
       <div class="sig" style="--c:var(--pur)">
-        <figure class="frame rv"><img src="img/fp_purple.jpg" alt="紫に光るスライムと「パリィ不可！ガード！」の表示" loading="lazy" width="1280" height="720"><figcaption><b>紫の予兆</b><span>「パリィ不可！」</span></figcaption></figure>
-        <div class="rv d1"><div class="lab"><i></i>PURPLE → GUARD</div>
+        <figure class="frame"><img src="img/fp_purple.jpg" alt="紫に光るスライムと「パリィ不可！ガード！」の表示" loading="lazy" width="1280" height="720"><figcaption><b>紫の予兆</b><span>「パリィ不可！」</span></figcaption></figure>
+        <div><div class="lab"><i></i>PURPLE → GUARD</div>
           <h3><em>紫</em>は、受け止める。</h3>
           <p>「パリィ不可！ ガード！」の合図。ここで弾こうとすると被弾します。左クリック長押し（Wiiなら Ⓐ長押し）でガードして、突進ごと押し返してください。</p>
           <ul class="tips">
@@ -332,8 +337,8 @@ p{margin:0 0 1em}
           </ul></div>
       </div>
       <div class="sig" style="--c:var(--ice)">
-        <figure class="frame rv"><img src="img/fp_hurt.jpg" alt="突進を受けて画面全体が赤く染まる" loading="lazy" width="1280" height="720"><figcaption><b>被弾</b><span>画面が赤く染まる</span></figcaption></figure>
-        <div class="rv d1"><div class="lab"><i></i>AFTER → WEAK</div>
+        <figure class="frame"><img src="img/fp_hurt.jpg" alt="突進を受けて画面全体が赤く染まる" loading="lazy" width="1280" height="720"><figcaption><b>被弾</b><span>画面が赤く染まる</span></figcaption></figure>
+        <div><div class="lab"><i></i>AFTER → WEAK</div>
           <h3>外したら、<em>攻める</em>。</h3>
           <p>突進が空振りすると、スライムは奥に戻って体勢を立て直します。その約2.5秒間は弱点状態で、通常攻撃が 6 → 9 に。回避が決まったら、すかさず斬りに行きましょう。</p>
           <ul class="tips">
@@ -348,12 +353,12 @@ p{margin:0 0 1em}
 <!-- PHASE -->
 <section class="sec" style="padding-top:40px">
   <div class="wrap">
-    <div class="sh rv"><b>03</b>PHASE</div>
-    <h2 class="big rv">HPが減るほど、<em>速く</em>なる。</h2>
-    <p class="lead rv">HPが60%と30%を切ったところで「RAGE!!」。予兆が短くなり、突進が速くなり、紫の割合が増えます。最終フェーズでは間を空けずに2回続けて突っ込んでくることも。</p>
-    <div class="pbar rv"><div class="a"><span>PHASE 1</span></div><div class="b"><span>PHASE 2</span></div><div class="c"><span>PHASE 3</span></div></div>
-    <div class="pmark rv"><span>HP 100%</span><span>60% ─ RAGE!!</span><span><span>30% ─ RAGE!!</span><span>0%</span></span></div>
-    <div class="tblw rv"><table class="tbl">
+    <div class="sh"><b>03</b>PHASE</div>
+    <h2 class="big">HPが減るほど、<em>速く</em>なる。</h2>
+    <p class="lead">HPが60%と30%を切ったところで「RAGE!!」。予兆が短くなり、突進が速くなり、紫の割合が増えます。最終フェーズでは間を空けずに2回続けて突っ込んでくることも。</p>
+    <div class="pbar"><div class="a"><span>PHASE 1</span></div><div class="b"><span>PHASE 2</span></div><div class="c"><span>PHASE 3</span></div></div>
+    <div class="pmark"><span>HP 100%</span><span>60% ─ RAGE!!</span><span><span>30% ─ RAGE!!</span><span>0%</span></span></div>
+    <div class="tblw"><table class="tbl">
       <thead><tr><th></th><th>PHASE 1</th><th>PHASE 2</th><th>PHASE 3</th></tr></thead>
       <tbody>
         <tr><th>ボスのHP</th><td>800〜480</td><td>480〜240</td><td>240〜0</td></tr>
@@ -364,17 +369,17 @@ p{margin:0 0 1em}
         <tr><th>被弾ダメージ</th><td>20</td><td>25</td><td>30</td></tr>
       </tbody>
     </table></div>
-    <p class="fine rv">※ 数値はバージョン1.0時点のものです。調整で変わることがあります。</p>
+    <p class="fine">※ 数値はバージョン1.0時点のものです。調整で変わることがあります。</p>
   </div>
 </section>
 
 <!-- SKILLS -->
 <section class="sec skills" style="padding-top:40px">
   <div class="wrap">
-    <div class="sh rv"><b>04</b>SWORD SKILLS</div>
-    <h2 class="big rv">振り方が、そのまま技になる。</h2>
-    <p class="lead rv">MotionPlus付きのWiiリモコンなら、ジャイロで振りの向きと強さを読み取ってソードスキルが出ます。スキルはボスに自動で当たり、通常攻撃よりずっと重い一撃に。反応しにくいときは、メニューから自分の振りを登録して判定を合わせられます。</p>
-    <div class="win rv">
+    <div class="sh"><b>04</b>SWORD SKILLS</div>
+    <h2 class="big">振り方が、そのまま技になる。</h2>
+    <p class="lead">MotionPlus付きのWiiリモコンなら、ジャイロで振りの向きと強さを読み取ってソードスキルが出ます。スキルはボスに自動で当たり、通常攻撃よりずっと重い一撃に。反応しにくいときは、メニューから自分の振りを登録して判定を合わせられます。</p>
+    <div class="win">
       <div class="wt">SKILL LIST ─ SWORDSMAN<i><u></u><u></u><u></u></i></div>
       <div class="skhead"><span>MOTION</span><span>NAME</span><span>INPUT</span><span style="text-align:right">PRACTICE</span></div>
       <div class="sk"><svg viewBox="0 0 48 48"><path d="M24 6 V30"/><path d="M18 24 L24 30 L30 24"/><path class="h" d="M8 38 H40"/><path class="h" d="M34 32 L40 38 L34 44"/></svg>
@@ -392,9 +397,9 @@ p{margin:0 0 1em}
     </div>
 
     <div class="ult">
-      <div class="u rv" data-n="16" style="--c:var(--acc)"><div class="en">STARBURST STREAM</div><h3>スターバーストストライク</h3>
+      <div class="u" data-n="16" style="--c:var(--acc)"><div class="en">STARBURST STREAM</div><h3>スターバーストストライク</h3>
         <p>二刀流（ヌンチャク接続）のときだけ。一度も被弾せずに16回当てると準備完了、次の斬りで16連撃を叩き込みます。途中で被弾するとカウントはリセット。</p><span class="ready">16 HIT → READY</span></div>
-      <div class="u rv d1" data-n="11" style="--c:#d8b8ff"><div class="en">MOTHER'S ROSARIO</div><h3>マザーズ・ロザリオ</h3>
+      <div class="u" data-n="11" style="--c:#d8b8ff"><div class="en">MOTHER'S ROSARIO</div><h3>マザーズ・ロザリオ</h3>
         <p>ヴォーパルストライクを11回決めると準備完了。次の突きが、十字を描く11連撃に変わります。</p><span class="ready">VORPAL ×11 → READY</span></div>
     </div>
   </div>
@@ -403,10 +408,10 @@ p{margin:0 0 1em}
 <!-- SECRET -->
 <section class="sec secret" style="padding-top:40px">
   <div class="wrap">
-    <div class="sh rv"><b>05</b>SECRET</div>
-    <h2 class="big rv">隠しコマンド</h2>
-    <p class="lead rv">自力で見つけたい人は読まずにどうぞ。カードをクリックすると中身が出ます。一部のモードでのみ使えます。</p>
-    <div class="grid rv">
+    <div class="sh"><b>05</b>SECRET</div>
+    <h2 class="big">隠しコマンド</h2>
+    <p class="lead">自力で見つけたい人は読まずにどうぞ。カードをクリックすると中身が出ます。一部のモードでのみ使えます。</p>
+    <div class="grid">
       <div class="spoil"><div class="body"><div class="en">EXCALIBUR</div><h3>エクスカリバー</h3><p>切っ先を真上に向けて頭上で止める → そのまま振り下ろす。</p></div></div>
       <div class="spoil"><div class="body"><div class="en">ZANTETSUKEN</div><h3>斬鉄剣</h3><p>切っ先を下に向けたまま、素早く上下に揺らす。ボスのHPが30%以下なら一刀両断。</p></div></div>
       <div class="spoil"><div class="body"><div class="en">STRASH</div><h3>ストラッシュ</h3><p>構えて止めていた時間で溜めLv.1〜3 → 右から左へ薙ぐ。</p></div></div>
@@ -430,30 +435,25 @@ p{margin:0 0 1em}
   <div class="cols">
     <div><div class="logo">RADI<i>Q</i>LE</div><small>_PROJECT</small>
       <p style="max-width:360px">顔で狙ってリモコンで斬る、ブラウザ発のAR剣戟アクション。個人で少しずつ作っています。</p></div>
-    <div><h4>SITE</h4><ul><li><a href="../RQ_HP.html">トップ</a></li><li><a href="../hp/quest.html">クエスト：GIANT SLIME RAID</a></li><li><a href="../hp/manual.html">マニュアル</a></li><li><a href="../RQ_HP.html#log">更新履歴</a></li></ul></div>
+    <div><h4>SITE</h4><ul><li><a href="../RQ_HP.html">トップ</a></li><li><a href="../hp/quest.html">クエスト：GIANT SLIME RAID</a></li><li><a href="../hp/manual.html">マニュアル</a></li></ul></div>
     <div><h4>GAME</h4><ul><li><a href="../RQ_index.html">タイトル画面から起動</a></li><li><a href="../sord/sord_demo.html">練習モード（チュートリアル）</a></li><li><a href="../sord/RQ_project_sord_hukan.html">レイドを直接開く</a></li></ul></div>
   </div>
-  <div class="legal"><span>© 2026 RQ project ／ Radiqle_Project</span>
+  <div class="legal"><div class="contact"><span>連絡先：<a href="mailto:rdiqulproject@gmail.com">rdiqulproject@gmail.com</a></span><a class="tw" href="https://x.com/RadiqleProject" target="_blank" rel="noopener"><img src="../hp/img/icon.jpg" alt="RadiqleProject のアイコン" width="34" height="34" loading="lazy"><span>Twitter<b>@RadiqleProject</b></span></a></div>
     <span>※ 一部の技名はさまざまな作品へのオマージュです。各作品・権利者とは関係ありません。<br>※ Wii は任天堂の商標です。本作は任天堂とは関係ありません。</span></div>
 </div></footer>
 <script>
 (function(){
-  const nav = document.querySelector('.nav'), bar = document.querySelector('.hud .bar span'), lv = document.querySelector('.hud .lv');
+  const nav = document.querySelector('.nav'), bar = document.querySelector('.hud .bar span');
   function onScroll(){
     const y = scrollY, max = document.documentElement.scrollHeight - innerHeight;
     nav.classList.toggle('solid', y > 30);
     const k = max > 0 ? Math.min(1, y/max) : 0;
     if (bar) bar.style.setProperty('--p', (k*100).toFixed(1) + '%');
-    if (lv) lv.textContent = 'Lv.' + (1 + Math.floor(k*9.99));   // 読み進めるほどレベルが上がる
   }
   addEventListener('scroll', onScroll, { passive:true }); onScroll();
   const bg = document.querySelector('.burger');
   if (bg) bg.addEventListener('click', () => nav.classList.toggle('open'));
   document.querySelectorAll('.nav ul a').forEach(a => a.addEventListener('click', () => nav.classList.remove('open')));
-
-  // スクロールで要素を出す
-  const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin:'0px 0px -8% 0px' }) : null;
-  document.querySelectorAll('.rv').forEach(el => io ? io.observe(el) : el.classList.add('in'));
 
   // ネタバレ隠し
   document.querySelectorAll('.spoil').forEach(el => el.addEventListener('click', () => el.classList.add('open')));
