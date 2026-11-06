@@ -72,6 +72,7 @@
     <label>グラスの視野角（対角） <b id="glFovV">46</b>°<input type="range" id="glFov" min="25" max="70" step="1" value="46"></label>
     <label>目線の上下 <b id="glPitchV">0</b>°<input type="range" id="glPitch" min="-25" max="15" step="1" value="0"></label>
     <label><input type="checkbox" id="orbOn" checked> ボスの周りを歩いて回れる（周回）</label>
+    <label>俯瞰の視点 <select id="tpView"><option value="room">部屋に固定（回り込むとアバターがボスの後ろへ）</option><option value="chase">いつも自分の後ろ（景色が回る）</option></select></label>
   </details>
   <details id="skMenu"><summary>⚔ ソードスキル（縦→横）</summary>
     <label><input type="checkbox" id="skOn" checked> 有効</label>
@@ -130,6 +131,7 @@ let R = 1.8;   // ボスの半径（ボスの大きさ設定で変わる。高�
 let HOVER = -8.5;   // ボスの待機位置（体キャリブレーション後は設定した距離）
 const glass = { on:false, fov:46, pitch:0 };   // ARグラス表示
 const orb = { on:true };   // 周回モード
+let tpView = 'room';   // 俯瞰の視点: 'room' 部屋に固定 / 'chase' いつも自分の後ろ
 let uiK = 1;   // 画角が狭い表示（AR確認・グラス）で、画面に付く文字を縮める倍率
 let W, H;
 function resize(){ W = innerWidth; H = innerHeight; renderer.setSize(W, H); }
@@ -155,7 +157,7 @@ const gridTex = canvasTex(256, 256, (x, w, h) => { x.strokeStyle = 'rgba(122,231
 gridTex.wrapS = gridTex.wrapT = THREE.RepeatWrapping; gridTex.repeat.set(10, 20);
 const floorMat = new THREE.MeshBasicMaterial({ map:gridTex, transparent:true, opacity:.5, depthWrite:false });
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 40), floorMat);
-floor.rotation.x = -Math.PI/2; floor.position.set(0, 0, -16); scene.add(floor);
+floor.rotation.order = 'YXZ'; floor.rotation.x = -Math.PI/2; floor.position.set(0, 0, -16); scene.add(floor);
 const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
   map:canvasTex(128, 128, (x, w, h) => { const g = x.createRadialGradient(64,64,0,64,64,64); g.addColorStop(0,'rgba(0,0,0,.6)'); g.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0,0,w,h); }),
   transparent:true, depthWrite:false }));
@@ -726,8 +728,9 @@ function bcApply(){
     const dx = bc.bossF.x - p.x, dz = bc.bossF.z - p.z; bc.bossDist = Math.hypot(dx, dz);
     if (bc.bossDist > .3) yaw = Math.atan2(-dx, -dz); else bc.bossF = null;
   }
-  bc.orbYaw = yaw;
+  bc.orbYaw = bc.orbYaw0 = yaw;
   bc.FfromG.makeRotationY(yaw).setPosition(p.x, 0, p.z);
+  bc.G0 = bc.FfromG.clone();   // 最初のゲーム座標（部屋に固定するカメラ・床の基準）
   bc.GfromF.copy(bc.FfromG).invert();
   bc.GfromCam.multiplyMatrices(bc.GfromF, bc.FfromCam);
   return true;
@@ -998,6 +1001,8 @@ function bcOrbit(dt){
   bcSetG(bc.orbYaw + d*(1 - Math.exp(-dt/ORB_TAU)));
   const g = bc.feetF.clone().applyMatrix4(bc.GfromF); bc.feetX = g.x; bc.feetZ = g.z;
 }
+$('tpView').onchange = e => { tpView = e.target.value; try { localStorage.setItem('connectworld_tpview', tpView); } catch (err){} };
+try { const v = localStorage.getItem('connectworld_tpview'); if (v === 'room' || v === 'chase'){ tpView = v; $('tpView').value = v; } } catch (e){}
 $('orbOn').onchange = e => { orb.on = e.target.checked; try { localStorage.setItem('connectworld_orbit', orb.on ? '1' : '0'); } catch (err){} if (!orb.on && bc.state === 'locked' && bcApply()) bcHover(); };
 try { if (localStorage.getItem('connectworld_orbit') === '0'){ orb.on = false; $('orbOn').checked = false; } } catch (e){}
 
@@ -1032,8 +1037,8 @@ function setGlass(v){
   if (v && bc.state !== 'locked') popCam('キャリブレーションすると実寸・実位置になります', '#ffd35a', .5, 3);
 }
 function glassCam(sh){
-  const ey = bcEye(), dx = 0 - P.x, dz = HOVER - P.z;
-  camera.position.set(P.x + sh*.3, ey + sh*.2, P.z);
+  const ey = bcEye(), dx = 0 - D.x, dz = HOVER - D.z;   // 実際の足の位置（D）から
+  camera.position.set(D.x + sh*.3, ey + sh*.2, D.z);
   camera.rotation.set(mouse.ny*.12 + glass.pitch, Math.atan2(-dx, -dz) - mouse.nx*.2, 0);
   aim.position.copy(camera.position); aim.rotation.copy(camera.rotation);   // 盾・斬撃も目の位置から
 }
@@ -1223,6 +1228,7 @@ $('jobBtn').onclick = () => $('jobs').classList.toggle('on');
 // ===== ゲーム状態 =====
 const keys = {}, mouse = { nx:0, ny:0 }, ray = new THREE.Raycaster(), tmp = new THREE.Vector3();
 const PMAX = 250;   // プレイヤー最大HP（旧100）
+const D = { x:0, z:0 };   // 表示用の位置（実際の足の位置。戦闘の判定は P）
 const P = { z:0, armed:false, x:0, hp:PMAX, inv:0, swing:0, swingCd:0, par:0, parAge:0, parCd:0, dir:1, counter:0, cBig:0, guard:false };
 const B = { x:0, z:-16, vz:0, s:'enter', t:1, wt:1, hp:800, max:800, hit:false, weak:0, flash:0, combo:0, stun:false, phase:1, wob:0, time:0, unp:false };
 let state = 'title', hitstop = 0, shake = 0, fovp = 0, flash = 0, vr = false, endAt = 0;
@@ -1465,15 +1471,22 @@ function update(dt){
     if (fa){ const asp = vr ? W/2/H : W/H, hh = Math.tan(camera.fov*Math.PI/360)*3;
       reticle.position.set(mouse.nx*hh*asp, mouse.ny*hh, -3); reticle.scale.setScalar(.4*uiK); } }
   const sh = (Math.random()-.5)*shake;
-  aim.position.set(P.x, EYE, 0); aim.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0);
-  av.position.x = P.x; av.rotation.y = vrm ? avYaw() : -mouse.nx*.3; headM.rotation.y = -mouse.nx*.5;   // 顔の向きにアバターも向く
-  av.position.z = P.z; aim.position.z = P.z;   // 前後位置（体キャリブレーション済みのとき実際に動く）
+  // 表示の位置: 足の位置が取れていれば実際の位置（ボスの横・後ろにも回れる）。取れなければ戦闘の位置 P
+  if (tp && pose.move && bcFeetOK()){ const k = Math.min(1, dt*10); D.x += (bc.feetX - D.x)*k; D.z += (bc.feetZ - D.z)*k; } else { D.x = P.x; D.z = P.z; }
+  const room = tp && bc.state === 'locked' && bc.G0;   // 部屋に固定（カメラ・床）
+  if (room){ const f = new THREE.Vector3(0, 0, -16).applyMatrix4(bc.G0).applyMatrix4(bc.GfromF); floor.position.set(f.x, 0, f.z); floor.rotation.set(-Math.PI/2, bc.orbYaw0 - bc.orbYaw, 0); }
+  else { floor.position.set(0, 0, -16); floor.rotation.set(-Math.PI/2, 0, 0); }
+  aim.position.set(D.x, EYE, D.z); aim.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0);
+  av.position.x = D.x; av.position.z = D.z; av.rotation.y = vrm ? avYaw() : -mouse.nx*.3; headM.rotation.y = -mouse.nx*.5;   // 顔の向きにアバターも向く
   if (tp) poseApply(dt);   // VRMの骨を全身ポーズに合わせる
   av.visible = tp && !glass.on && (!bcARActive() || bc.avAR);   // AR確認表示では「アバターを重ねる」がONの時だけ表示 / グラスでは自分なので出さない
   floor.visible = shadow.visible = sword.visible = !glass.on;   // グラス: 床は現実のもの、剣は手元のリモコンが担当
   if (glass.on && tp) glassCam(sh);   // ARグラス: 自分の目の位置から
   else if (bcARActive()) bcCamApply();   // 実カメラと同じ位置・向きから描く
-  else if (tp){ camera.rotation.set(mouse.ny*.12 - .22, -mouse.nx*.2, 0); const fix = bc.state === 'locked';   // 体キャリブレーション済み: カメラは床に固定（現実の部屋と同じく、動くのは自分だけ）
+  else if (tp && room && tpView === 'room'){   // 部屋に固定: 最初の立ち位置の後ろ上から。回り込むとアバターがボスの横・後ろへ動いて見える
+    const c = new THREE.Vector3(0, EYE + 1.5, 4.2).applyMatrix4(bc.G0).applyMatrix4(bc.GfromF);
+    camera.position.set(c.x + sh, c.y + sh*.6, c.z); camera.rotation.set(mouse.ny*.12 - .22, bc.orbYaw0 - bc.orbYaw - mouse.nx*.2, 0); }
+  else if (tp){ camera.rotation.set(mouse.ny*.12 - .22, -mouse.nx*.2, 0); const fix = bc.state === 'locked';   // いつもプレイヤーの後ろ（ゲーム座標と一緒に回る）
     camera.position.set((fix ? 0 : P.x) + sh, EYE + 1.5 + sh*.6, (fix ? 0 : P.z) + 4.2); }
   else { camera.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + sh*.6, P.z); }
   bossBar.scale.x = Math.max(.0001, B.hp/B.max); pBar.scale.x = Math.max(.0001, P.hp/PMAX);
