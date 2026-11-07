@@ -532,15 +532,13 @@ let prevOn = true; $('prevOnChk').onchange = e => prevOn = e.target.checked;
 const hand = { lm:null, loading:false, trail:[], last:-1, cool:0, pt0:null, px:0, py:0, prog:0, lastOk:-1e9, needRelease:false, palm:null };
 // HOLD = 手のひらを見せ続ける時間(ms) / MOVE = これ以上動いたら数え直し(映像幅比) / GRACE = 認識が途切れても許す時間(ms)
 const PALM = { HOLD:800, MOVE:.08, GRACE:250 };
-async function loadHandModel(){
+async function loadHandModel(){   // メニューの指先カーソル用（全身認識の後に読み込む）
   if (hand.lm || hand.loading) return; hand.loading = true;
-  try {
-    const V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14', mp = await import(V + '/vision_bundle.mjs'), fs = await mp.FilesetResolver.forVisionTasks(V + '/wasm');
-    const o = d => ({ baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate:d }, runningMode:'VIDEO', numHands:1 });
-    try { hand.lm = await mp.HandLandmarker.createFromOptions(fs, o('GPU')); } catch (e){ hand.lm = await mp.HandLandmarker.createFromOptions(fs, o('CPU')); }
-  } catch (e){ console.error(e); }
+  try { hand.lm = await mpCreate('HandLandmarker', d => ({ baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate:d }, runningMode:'VIDEO', numHands:1 })); }
+  catch (e){ console.error(e); }
   hand.loading = false;
 }
+
 function handStep(now){
   const hms = menuOn ? Math.min(Q.handMs, 66) : Q.handMs;   // メニュー中は指カーソルなので速めに
   const v = tp ? vid : face.src; if (!hand.lm || !v || v.readyState < 2 || !v.videoWidth || now - hand.last < hms) return;
@@ -583,23 +581,42 @@ const POSE_CAL = 15, POSE_MOVE_K = 18, POSE_AIM_G = 2.2, POSE_DEAD = .04;
 const poseReady = () => tp && pose.on && pose.seen && pose.cx !== null;
 const poseAimActive = () => poseReady() && pose.cam === 'front';   // 背後からだと顔が映らないので頭での照準は使わない
 function poseRecenter(){ pose.cx = null; pose.cn = pose.sx = pose.sr = pose.sp = 0; }
-async function loadPoseModel(){
-  if (pose.lm || pose.loading) return; pose.loading = true; setBadge('🧍 全身認識モデル読み込み中…');
-  try {
-    const V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14', mp = await import(V + '/vision_bundle.mjs'), fs = await mp.FilesetResolver.forVisionTasks(V + '/wasm');
-    const o = d => ({ baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task', delegate:d }, runningMode:'VIDEO', numPoses:1 });
-    try { pose.lm = await mp.PoseLandmarker.createFromOptions(fs, o('GPU')); } catch (e){ pose.lm = await mp.PoseLandmarker.createFromOptions(fs, o('CPU')); }
-    setBadge('🧍 全身を探しています…');
-  } catch (e){ console.error(e); pose.err = String(e && e.message || e); setBadge('🧍 全身認識を読み込めません: ' + pose.err); }
-  pose.loading = false;
+// ===== MediaPipe の読み込み: ライブラリは1回だけ、モデルは1つずつ順番に作る（同時に作るとGPUの準備で止まることがある）=====
+const MP_V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const MP_POSE = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task';
+let mpBase = null, mpQueue = Promise.resolve();
+function mpLib(){ return mpBase || (mpBase = (async () => { const mp = await import(MP_V + '/vision_bundle.mjs'); return { mp, fs:await mp.FilesetResolver.forVisionTasks(MP_V + '/wasm') }; })().catch(e => { mpBase = null; throw e; })); }
+const mpLimit = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`${what}が${ms/1000}秒で終わりません`)), ms))]);
+function mpCreate(kind, opts){   // kind: 'PoseLandmarker' / 'HandLandmarker'。opts(delegate) → オプション
+  const job = mpQueue.then(async () => {
+    const { mp, fs } = await mpLimit(mpLib(), 40000, 'ライブラリの読み込み');
+    try { return await mpLimit(mp[kind].createFromOptions(fs, opts('GPU')), 25000, 'GPUでの準備'); }
+    catch (e){ console.warn('[MediaPipe] GPU → CPU', e); return await mpLimit(mp[kind].createFromOptions(fs, opts('CPU')), 40000, 'CPUでの準備'); }
+  });
+  mpQueue = job.catch(() => {});
+  return job;
 }
+const poseOpts = d => ({ baseOptions:{ modelAssetPath:MP_POSE, delegate:d }, runningMode:'VIDEO', numPoses:1 });
+async function loadPoseModel(){
+  if (pose.lm || pose.loading) return; pose.loading = true; pose.err = null; pose.loadT = performance.now();
+  setBadge('🧍 全身認識モデル読み込み中…');
+  try { pose.lm = await mpCreate('PoseLandmarker', poseOpts); pose.tries = 0; setBadge('🧍 全身を探しています…'); }
+  catch (e){
+    console.error(e); pose.err = String(e && e.message || e); pose.tries = (pose.tries || 0) + 1;
+    const again = pose.tries < 3; setBadge('🧍 全身認識を読み込めません: ' + pose.err + (again ? '（もう一度試します）' : '（ページを再読み込みしてください）'));
+    if (again) setTimeout(() => { pose.loading = false; loadPoseModel(); }, 3000);
+  }
+  if (pose.lm || !pose.err || pose.tries >= 3) pose.loading = false;
+}
+
 async function enterTP(){
   // 1台で済ませるため、顔用カメラは止める（スマホは前後カメラを同時に開けないことが多い）
   if (face.stream){ face.stream.getTracks().forEach(t => t.stop()); face.stream = null; }
   face.src = null; faceRecenter(); poseRecenter();
-  loadPoseModel(); loadHandModel();
+  loadPoseModel();
   if (!camStream) await openCam(camSel.value || null);
-  if (dual.on && !dual.stream) dualOpen();
+  if (dual.on && !dual.stream) await dualOpen();
+  loadHandModel();
   if (!vrm) restoreVRM();
 }
 function leaveTP(){ pose.seen = false; if (face.on && !face.stream) startFace(); }
@@ -647,7 +664,7 @@ function poseDraw(){
   if (pose.cx !== null){ pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 1.5; pctx.setLineDash([4, 4]); pctx.beginPath(); pctx.moveTo(X(pose.cx), oy); pctx.lineTo(X(pose.cx), oy + dh); pctx.stroke(); pctx.setLineDash([]); }
   pctx.font = 'bold 15px sans-serif'; pctx.textAlign = 'left';
   pctx.fillStyle = !pose.lm ? '#ffd35a' : pose.seen ? '#5ee08a' : '#ff4d5e';
-  pctx.fillText(!pose.lm ? 'モデル読み込み中…' : pose.seen ? (pose.cx === null ? 'まっすぐ立って…' : '● 全身追跡中') : '× 全身が見つかりません', 8, 20);
+  pctx.fillText(!pose.lm ? (pose.err ? '× 全身認識を読み込めません（右上に理由）' : `全身認識を読み込み中… ${Math.round((performance.now() - (pose.loadT || performance.now()))/1000)}秒`) : pose.seen ? (pose.cx === null ? 'まっすぐ立って…' : '● 全身追跡中') : '× 全身が見つかりません', 8, 20);
   bcDrawPrev(X, Y);
 }
 
@@ -840,15 +857,16 @@ function autoSideId(){
 }
 const sideId = () => $('d2Sel').value || autoSideId();
 async function dualLoadModel(){
-  if (dual.lm || dual.loading) return; dual.loading = true; dualSay('2台目のカメラ用の全身認識モデルを読み込み中…');
-  try {
-    const V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14', mp = await import(V + '/vision_bundle.mjs'), fs = await mp.FilesetResolver.forVisionTasks(V + '/wasm');
-    const o = d => ({ baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task', delegate:d }, runningMode:'VIDEO', numPoses:1 });
-    try { dual.lm = await mp.PoseLandmarker.createFromOptions(fs, o('GPU')); } catch (e){ dual.lm = await mp.PoseLandmarker.createFromOptions(fs, o('CPU')); }
-    if (dual.state === 'off') dualSay('2台目のカメラの準備OK。体キャリブレーションの後に「位置合わせ開始」を押してください');
-  } catch (e){ console.error(e); dual.err = String(e && e.message || e); dualSay('2台目のカメラ用の全身認識を読み込めません: ' + dual.err); }
-  dual.loading = false;
+  if (dual.lm || dual.loading) return; dual.loading = true; dual.err = null; dual.loadT = performance.now(); dualSay('2台目の全身認識モデルを読み込み中…');
+  try { dual.lm = await mpCreate('PoseLandmarker', poseOpts); dual.tries = 0; if (dual.state !== 'locked') dualSay('2台目のカメラの準備OK'); }
+  catch (e){
+    console.error(e); dual.err = String(e && e.message || e); dual.tries = (dual.tries || 0) + 1;
+    const again = dual.tries < 3; dualSay('2台目の全身認識を読み込めません: ' + dual.err + (again ? '（もう一度試します）' : ''));
+    if (again) setTimeout(() => { dual.loading = false; dualLoadModel(); }, 3000);
+  }
+  if (dual.lm || !dual.err || dual.tries >= 3) dual.loading = false;
 }
+
 async function dualOpen(){
   dualClose();
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ dualSay('HTTPS か localhost で開いてください'); return false; }
@@ -970,7 +988,7 @@ function dualDraw(){
   }
   if (dual.live){ const q = N2C([dual.live.fx, dual.live.fy]); c.strokeStyle = '#7ae7ff'; c.lineWidth = 2; c.beginPath(); c.arc(q[0], q[1], 6, 0, 7); c.stroke(); }
   c.font = 'bold 14px sans-serif';
-  const st = !dual.lm ? ['モデル読み込み中…', '#ffd35a'] : dual.state === 'locked' ? [`2台目のカメラ ● 位置: ${dual.src || '-'}`, dual.src === '2台合成' ? '#5ee08a' : '#ffd35a'] : [dual.seen ? '2台目のカメラ（未位置合わせ）' : '× 全身が見つかりません', dual.seen ? '#ffd35a' : '#ff4d5e'];
+  const st = !dual.lm ? (dual.err ? ['× 読み込めません: ' + dual.err.slice(0, 30), '#ff4d5e'] : [`読み込み中… ${Math.round((performance.now() - (dual.loadT || performance.now()))/1000)}秒`, '#ffd35a']) : dual.state === 'locked' ? [`2台目のカメラ ● 位置: ${dual.src || '-'}`, dual.src === '2台合成' ? '#5ee08a' : '#ffd35a'] : [dual.seen ? '2台目のカメラ（未位置合わせ）' : '× 全身が見つかりません', dual.seen ? '#ffd35a' : '#ff4d5e'];
   c.fillStyle = st[1]; c.fillText(st[0], 8, 20);
 }
 
@@ -1418,6 +1436,19 @@ function bossAI(dt){
   }
 }
 
+let bossFade = .86;
+const _bf = new THREE.Vector3(), _bv = new THREE.Vector3();
+function bossFadeUpdate(dt){
+  const cp = camera.position, bp = bossG.position;
+  let occ = false;
+  if (tp && !glass.on){
+    _bv.set(av.position.x, 1, av.position.z).sub(cp);   // カメラ → アバターの胸
+    const L2 = _bv.lengthSq(), t = L2 > 1e-6 ? Math.max(0, Math.min(1, _bf.copy(bp).sub(cp).dot(_bv)/L2)) : 0;
+    const dLine = _bf.copy(cp).addScaledVector(_bv, t).distanceTo(bp);
+    occ = (av.visible && t > 0 && t < 1 && dLine < R*1.05) || cp.distanceTo(bp) < R*1.8;
+  }
+  bossFade += ((occ ? .3 : .86) - bossFade)*Math.min(1, dt*6); bMat.opacity = bossFade;
+}
 function bossAnim(dt){
   B.time += dt; B.flash -= dt; B.wob = Math.max(0, B.wob - dt);
   let sy = 1 + .05*Math.sin(B.time*3), zs = 1, hop = 0, k = 0;
@@ -1539,6 +1570,7 @@ function update(dt){
   av.visible = tp && !glass.on && (!bcARActive() || bc.avAR);   // AR確認表示では「アバターを重ねる」がONの時だけ表示 / グラスでは自分なので出さない
   floor.visible = shadow.visible = sword.visible = !glass.on;   // グラス: 床は現実のもの、剣は手元のリモコンが担当
   heldUpdate(dt);   // アバターが剣を持つ（ONなら浮いている大剣は消す）
+  bossFadeUpdate(dt);
   if (glass.on && tp) glassCam(sh);   // ARグラス: 自分の目の位置から
   else if (bcARActive()) bcCamApply();   // 実カメラと同じ位置・向きから描く
   else if (tp && room && tpView === 'room'){   // 部屋に固定: 最初の立ち位置の後ろ上から。回り込むとアバターがボスの横・後ろへ動いて見える
@@ -2017,11 +2049,20 @@ $('qMode').onchange = e => setQuality(e.target.value);
 // ===== このHTMLは俯瞰視点固定（カメラ・ポーズ認識の起動はゲーム開始時の startGame → enterTP で行う）=====
 tp = true; av.visible = true; rig = aim; rig.add(sword, shield, gShield, arc); applyBg(); floorMat.opacity = .8;
 let last = performance.now();
-function loop(now){
-  const dt = Math.min(.033, (now - last)/1000); last = now;
-  mlFrame = false; faceStep(now); poseStep(now); dualStep(now); bcLoadSaved(); dualLoadSaved(); handStep(now); perfTick(now); hcStep(now, dt); palmUI(now); faceDraw(); dualDraw(); update(dt);
-  const _t = performance.now(); render(); perf.rend += performance.now() - _t; requestAnimationFrame(loop);
+function jsErr(e){
+  const el = $('camErr'), t = '⚠ エラー: ' + String(e && (e.message || e.reason && e.reason.message) || e) + '（この表示ごとスクリーンショットを送ってください）';
+  if (el.textContent !== t){ console.error(e); el.textContent = t; el.dataset.who = 'js'; el.hidden = false; }
 }
+addEventListener('error', e => jsErr(e.error || e.message));
+addEventListener('unhandledrejection', e => { const r = e.reason; if (r && /play\(\)|interrupted|AbortError/.test(String(r))) return; jsErr(r); });
+function loop(now){
+  requestAnimationFrame(loop);   // 先に次のフレームを予約（途中でエラーが出ても止まらない）
+  const dt = Math.min(.033, (now - last)/1000); last = now;
+  for (const f of LOOP_STEPS){ try { f(now, dt); } catch (e){ jsErr(e); } }
+  const _t = performance.now(); try { render(); } catch (e){ jsErr(e); } perf.rend += performance.now() - _t;
+}
+const LOOP_STEPS = [() => { mlFrame = false; }, now => faceStep(now), now => poseStep(now), now => dualStep(now), () => { bcLoadSaved(); dualLoadSaved(); }, now => handStep(now), now => perfTick(now),
+  (now, dt) => hcStep(now, dt), now => palmUI(now), () => faceDraw(), () => dualDraw(), (now, dt) => update(dt)];
 requestAnimationFrame(loop);
 // タイトル画面(parytitle.html)から ?start=1 で来たら自動スタート
 if (/[?&]start=1/.test(location.search)) setTimeout(() => dispatchEvent(new MouseEvent('mousedown', { button:0, clientX:innerWidth/2, clientY:innerHeight/2 })), 500);
