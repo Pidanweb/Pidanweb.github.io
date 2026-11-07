@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Pic Viewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --stage: #000000;
+    --hud-bg: rgba(10, 16, 24, 0.66);
+    --hud-line: rgba(142, 201, 255, 0.28);
+    --hud-text: #e8f2fb;
+    --hud-muted: #93a9bd;
+    --ice: #8ec9ff;
+    --amber: #ffc56b;
+    --panel-bg: #101820;
+    --panel-text: #e8f2fb;
+    --panel-muted: #93a9bd;
+    --panel-line: rgba(142, 201, 255, 0.22);
+    --field-bg: #0a1118;
+    color-scheme: dark;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --panel-bg: #f6f9fc;
+      --panel-text: #14202c;
+      --panel-muted: #50657a;
+      --panel-line: rgba(20, 60, 100, 0.18);
+      --field-bg: #ffffff;
+    }
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; background: var(--stage); overflow: hidden;
+    font-family: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+    color: var(--hud-text);
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ステージ */
+  #stage { position: fixed; inset: 0; overflow: hidden; touch-action: none; cursor: grab; }
+  #stage.dragging { cursor: grabbing; }
+  #cam {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+    opacity: 0; pointer-events: none; transition: opacity .3s;
+  }
+  #cam.mirror { transform: scaleX(-1); }
+  body.ar #cam { opacity: 1; }
+  #photo {
+    position: absolute; left: 50%; top: 50%;
+    transform-origin: 50% 50%; will-change: transform;
+    pointer-events: none; max-width: none;
+    image-rendering: auto;
+  }
+  #photo.fade { transition: opacity .25s; opacity: 0; }
+
+  /* 状態表示 */
+  #status {
+    position: fixed; left: 14px; top: calc(14px + env(safe-area-inset-top, 0px));
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px 8px 10px; border-radius: 999px;
+    background: var(--hud-bg); border: 1px solid var(--hud-line);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    font-size: 14px; line-height: 1.4; max-width: calc(100vw - 28px);
+    transition: border-color .3s, opacity .4s;
+  }
+  #status .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--hud-muted); flex: none; }
+  #status.on { border-color: var(--ice); }
+  #status.on .dot { background: var(--ice); box-shadow: 0 0 10px var(--ice); }
+  #status .sub { color: var(--hud-muted); }
+  #counter {
+    position: fixed; right: 14px; top: calc(14px + env(safe-area-inset-top, 0px));
+    padding: 6px 12px; border-radius: 999px; font-size: 13px;
+    background: var(--hud-bg); border: 1px solid var(--hud-line); color: var(--hud-muted);
+    transition: opacity .4s;
+  }
+
+  /* ピース長押しのリング（この画面の主役） */
+  #ring {
+    position: fixed; left: 50%; top: 50%; width: 168px; height: 168px;
+    transform: translate(-50%, -50%) scale(.9); opacity: 0;
+    transition: opacity .18s, transform .18s; pointer-events: none;
+  }
+  #ring.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  #ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  #ring .track { fill: rgba(0,0,0,.45); stroke: rgba(255,255,255,.14); stroke-width: 8; }
+  #ring .bar { fill: none; stroke: var(--amber); stroke-width: 8; stroke-linecap: round; }
+  #ring.to-off .bar { stroke: var(--hud-muted); }
+  #ring .label {
+    position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+    font-size: 15px; line-height: 1.5;
+  }
+  #ring .label b { display: block; font-size: 40px; line-height: 1.1; }
+
+  /* 手のプレビュー */
+  #preview {
+    position: fixed; right: 14px; bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    width: 176px; height: 132px; border-radius: 12px; border: 1px solid var(--hud-line);
+    background: rgba(0,0,0,.5); display: none;
+  }
+  body.show-preview #preview { display: block; }
+
+  /* ツールバー */
+  #toolbar {
+    position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    display: flex; gap: 4px; padding: 6px; border-radius: 16px;
+    background: var(--hud-bg); border: 1px solid var(--hud-line);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    max-width: calc(100vw - 20px); overflow-x: auto;
+    transition: opacity .4s, transform .4s;
+  }
+  #toolbar button, .panel button {
+    font: inherit; color: inherit; background: transparent; border: 0; cursor: pointer;
+  }
+  #toolbar button {
+    flex: none; padding: 8px 12px; border-radius: 10px; font-size: 13px; white-space: nowrap;
+    color: var(--hud-text);
+  }
+  #toolbar button:hover { background: rgba(142, 201, 255, .12); }
+  #toolbar button[aria-pressed="true"] { background: rgba(142, 201, 255, .2); color: var(--ice); }
+  #toolbar button:focus-visible, .panel :focus-visible { outline: 2px solid var(--ice); outline-offset: 2px; }
+  #toolbar .sep { width: 1px; background: var(--hud-line); margin: 4px 2px; flex: none; }
+  body.idle #toolbar { opacity: 0; transform: translate(-50%, 12px); pointer-events: none; }
+  body.clean #toolbar, body.clean #counter, body.clean #preview { display: none; }
+  body.clean #status:not(.on) { opacity: 0; }
+
+  /* 設定パネル */
+  .panel-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none;
+    align-items: center; justify-content: center; padding: 16px;
+  }
+  .panel-backdrop.open { display: flex; }
+  .panel {
+    width: min(520px, 100%); max-height: calc(100% - 20px); overflow-y: auto;
+    background: var(--panel-bg); color: var(--panel-text);
+    border: 1px solid var(--panel-line); border-radius: 18px; padding: 22px 22px 18px;
+    user-select: text; -webkit-user-select: text;
+  }
+  .panel h2 { margin: 0 0 4px; font-size: 20px; }
+  .panel h3 { margin: 22px 0 6px; font-size: 15px; }
+  .panel p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.7; color: var(--panel-muted); }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .panel input[type="text"] {
+    flex: 1; min-width: 0; padding: 9px 11px; border-radius: 10px; font: inherit; font-size: 14px;
+    background: var(--field-bg); color: var(--panel-text); border: 1px solid var(--panel-line);
+  }
+  .panel .btn {
+    padding: 9px 14px; border-radius: 10px; font-size: 14px;
+    border: 1px solid var(--panel-line); background: var(--field-bg);
+  }
+  .panel .btn.primary { background: var(--ice); color: #08131d; border-color: var(--ice); font-weight: 700; }
+  .linkbox {
+    font-size: 12.5px; word-break: break-all; padding: 9px 11px; border-radius: 10px;
+    background: var(--field-bg); border: 1px dashed var(--panel-line); flex: 1; min-width: 0;
+  }
+  #qr { margin-top: 10px; padding: 10px; background: #fff; border-radius: 10px; width: fit-content; }
+  #qr:empty { display: none; }
+  .slider { display: grid; grid-template-columns: 7em 1fr 3.5em; gap: 10px; align-items: center; font-size: 13.5px; margin: 6px 0; }
+  .slider output { text-align: right; color: var(--panel-muted); }
+  .panel .close-row { display: flex; justify-content: flex-end; margin-top: 18px; }
+
+  #toast {
+    position: fixed; left: 50%; top: 22%; transform: translateX(-50%);
+    padding: 10px 18px; border-radius: 12px; font-size: 14px;
+    background: var(--hud-bg); border: 1px solid var(--hud-line);
+    opacity: 0; transition: opacity .25s; pointer-events: none; text-align: center;
+  }
+  #toast.show { opacity: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <video id="cam" playsinline muted></video>
+  <img id="photo" alt="表示中の写真" draggable="false">
+</div>
+
+<div id="status" role="status" aria-live="polite">
+  <span class="dot"></span>
+  <span><span id="statusMain">ジェスチャー オフ</span> <span class="sub" id="statusSub">「カメラ開始」で手の検出を始めます</span></span>
+</div>
+<div id="counter">1 / 1</div>
+
+<div id="ring" aria-hidden="true">
+  <svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="44"/><circle class="bar" id="ringBar" cx="50" cy="50" r="44" stroke-dasharray="276.46" stroke-dashoffset="276.46"/></svg>
+  <div class="label"><div><b>✌️</b><span id="ringText">そのままキープ</span></div></div>
+</div>
+
+<canvas id="preview" width="352" height="264"></canvas>
+
+<div id="toolbar">
+  <button id="btnCam">カメラ開始</button>
+  <button id="btnGesture" aria-pressed="false">ジェスチャー</button>
+  <button id="btnPreview" aria-pressed="false">手を表示</button>
+  <button id="btnAR" aria-pressed="false">AR背景</button>
+  <button id="btnFlip">カメラ切替</button>
+  <span class="sep"></span>
+  <button id="btnPrev" aria-label="前の写真">前へ</button>
+  <button id="btnNext" aria-label="次の写真">次へ</button>
+  <button id="btnReset">等倍に戻す</button>
+  <span class="sep"></span>
+  <button id="btnShare">VDO.Ninja / 設定</button>
+  <button id="btnFull">全画面</button>
+  <button id="btnClean">UIを隠す</button>
+</div>
+
+<div class="panel-backdrop" id="panelWrap">
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="panelTitle">
+    <h2 id="panelTitle">スマホに映す</h2>
+    <p>PCでこのページを開いたまま共有を始め、スマホで視聴リンクを開きます。共有画面の選択では、このタブ（Pic Viewer）を選んでください。</p>
+
+    <h3>ストリームID</h3>
+    <div class="row">
+      <input type="text" id="streamId" spellcheck="false" aria-label="ストリームID">
+      <button class="btn" id="btnNewId">作り直す</button>
+    </div>
+
+    <h3>PC側：共有を開始</h3>
+    <div class="row">
+      <div class="linkbox" id="pushLink"></div>
+      <button class="btn primary" id="btnOpenPush">共有ページを開く</button>
+    </div>
+
+    <h3>スマホ側：視聴リンク</h3>
+    <div class="row">
+      <div class="linkbox" id="viewLink"></div>
+      <button class="btn" id="btnCopyView">コピー</button>
+    </div>
+    <div id="qr"></div>
+
+    <h3>ジェスチャーの調整</h3>
+    <div class="slider">
+      <label for="holdRange">ピース保持</label>
+      <input type="range" id="holdRange" min="0.6" max="4" step="0.1">
+      <output id="holdOut"></output>
+    </div>
+    <div class="slider">
+      <label for="gainRange">移動の感度</label>
+      <input type="range" id="gainRange" min="0.5" max="4" step="0.1">
+      <output id="gainOut"></output>
+    </div>
+    <p>操作中は、手のひらを動かすと写真が動きます。親指と人差し指でつまんで上下に動かすとズーム、グーにすると一時停止（手を戻すときに使えます）。もう一度ピースを保持すると解除します。</p>
+
+    <div class="close-row"><button class="btn" id="btnClosePanel">閉じる</button></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script type="module">
+import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+const WASM_PATH  = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+const MODEL_PATH = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+
+const $ = (id) => document.getElementById(id);
+const stage = $("stage"), photo = $("photo"), cam = $("cam");
+const preview = $("preview"), pctx = preview.getContext("2d");
+
+/* ---------- 保存（このブラウザ内だけ） ---------- */
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("picv:" + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("picv:" + k, JSON.stringify(v)); } catch {} }
+};
+const settings = { hold: store.get("hold", 1.5), gain: store.get("gain", 1.8) };
+
+/* ---------- 写真リスト ---------- */
+// ?img=URL で直接指定も可能。指定がなければ Picture1.jpg, Picture2.jpg ... を順に探す
+const params = new URLSearchParams(location.search);
+let images = params.get("img") ? [params.get("img")] : ["Picture1.jpg"];
+let current = 0;
+
+async function probeMore() {
+  if (params.get("img")) return;
+  for (let i = 2; i <= 50; i++) {
+    const ok = await new Promise((res) => {
+      const im = new Image();
+      im.onload = () => res(true);
+      im.onerror = () => res(false);
+      im.src = `Picture${i}.jpg`;
+    });
+    if (!ok) break;
+    images.push(`Picture${i}.jpg`);
+    updateCounter();
+  }
+}
+
+/* ---------- 表示状態 ---------- */
+const view = { s: 1, x: 0, y: 0, fit: 1 };
+const MIN_S = 0.3, MAX_S = 15;
+
+function apply() {
+  photo.style.transform =
+    `translate(-50%, -50%) translate(${view.x}px, ${view.y}px) scale(${view.fit * view.s})`;
+}
+function computeFit() {
+  if (!photo.naturalWidth) return;
+  const w = stage.clientWidth, h = stage.clientHeight;
+  view.fit = Math.min(w / photo.naturalWidth, h / photo.naturalHeight);
+  photo.style.width = photo.naturalWidth + "px";
+  photo.style.height = photo.naturalHeight + "px";
+  apply();
+}
+function resetView() { view.s = 1; view.x = 0; view.y = 0; apply(); }
+
+// (cx, cy) はステージ中心からの座標
+function zoomAt(factor, cx = 0, cy = 0) {
+  const ns = Math.min(MAX_S, Math.max(MIN_S, view.s * factor));
+  const k = ns / view.s;
+  view.x = cx - (cx - view.x) * k;
+  view.y = cy - (cy - view.y) * k;
+  view.s = ns;
+  apply();
+}
+function toCenter(clientX, clientY) {
+  const r = stage.getBoundingClientRect();
+  return [clientX - r.left - r.width / 2, clientY - r.top - r.height / 2];
+}
+
+function loadImage(i) {
+  current = (i + images.length) % images.length;
+  photo.classList.add("fade");
+  const src = images[current];
+  const tmp = new Image();
+  tmp.onload = () => {
+    photo.src = src;
+    photo.onload = () => { computeFit(); resetView(); photo.classList.remove("fade"); };
+  };
+  tmp.onerror = () => {
+    photo.classList.remove("fade");
+    toast(`${src} を読み込めません。Pic_viewer.html と同じフォルダに置いてください`);
+  };
+  tmp.src = src;
+  updateCounter();
+}
+function updateCounter() { $("counter").textContent = `${current + 1} / ${images.length}`; }
+
+window.addEventListener("resize", computeFit);
+
+/* ---------- タッチ・マウス操作 ---------- */
+const pointers = new Map();
+let pinchStart = null, dragStart = null, lastTap = 0;
+
+stage.addEventListener("pointerdown", (e) => {
+  stage.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  stage.classList.add("dragging");
+  if (pointers.size === 1) {
+    dragStart = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, t: performance.now() };
+    const now = performance.now();
+    if (now - lastTap < 300) { // ダブルタップ
+      const [cx, cy] = toCenter(e.clientX, e.clientY);
+      if (view.s > 1.05) resetView(); else zoomAt(2.5 / view.s, cx, cy);
+      lastTap = 0; dragStart = null;
+    } else lastTap = now;
+  } else if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    pinchStart = {
+      dist: Math.hypot(a.x - b.x, a.y - b.y),
+      mid: toCenter((a.x + b.x) / 2, (a.y + b.y) / 2),
+      s: view.s, x: view.x, y: view.y
+    };
+    dragStart = null;
+  }
+});
+stage.addEventListener("pointermove", (e) => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2 && pinchStart) {
+    const [a, b] = [...pointers.values()];
+    const dist = Math.hypot(a.x - b.x, a.y - b.y);
+    const mid = toCenter((a.x + b.x) / 2, (a.y + b.y) / 2);
+    const ns = Math.min(MAX_S, Math.max(MIN_S, pinchStart.s * dist / pinchStart.dist));
+    const k = ns / pinchStart.s;
+    view.s = ns;
+    view.x = mid[0] - (pinchStart.mid[0] - pinchStart.x) * k;
+    view.y = mid[1] - (pinchStart.mid[1] - pinchStart.y) * k;
+    apply();
+  } else if (pointers.size === 1 && dragStart) {
+    view.x = dragStart.vx + (e.clientX - dragStart.x);
+    view.y = dragStart.vy + (e.clientY - dragStart.y);
+    apply();
+  }
+});
+function endPointer(e) {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.delete(e.pointerId);
+  // 等倍のときは横スワイプで写真切替
+  if (pointers.size === 0 && dragStart && view.s <= 1.02 && images.length > 1) {
+    const dx = e.clientX - dragStart.x, dy = e.clientY - dragStart.y;
+    if (Math.abs(dx) > 80 && Math.abs(dx) > Math.abs(dy) * 1.5) loadImage(current + (dx < 0 ? 1 : -1));
+  }
+  if (pointers.size < 2) pinchStart = null;
+  if (pointers.size === 1) {
+    const p = [...pointers.values()][0];
+    dragStart = { x: p.x, y: p.y, vx: view.x, vy: view.y };
+  }
+  if (pointers.size === 0) { dragStart = null; stage.classList.remove("dragging"); }
+}
+stage.addEventListener("pointerup", endPointer);
+stage.addEventListener("pointercancel", endPointer);
+stage.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const [cx, cy] = toCenter(e.clientX, e.clientY);
+  zoomAt(Math.exp(-e.deltaY * 0.0015), cx, cy);
+}, { passive: false });
+
+/* ---------- ハンドジェスチャー ---------- */
+let landmarker = null, stream = null, facing = store.get("facing", "user");
+let camRunning = false, lastVideoTime = -1;
+let gestureOn = false;
+let peaceStart = null, lastPeaceAt = 0, peaceLatched = false;
+let smooth = null, prev = null, prevMode = null;
+
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+function classify(lm) {
+  const w = lm[0], size = dist(w, lm[9]) || 1e-6;
+  const ext  = (tip, pip) => dist(w, lm[tip]) > dist(w, lm[pip]) * 1.12;
+  const fold = (tip, pip) => dist(w, lm[tip]) < dist(w, lm[pip]) * 1.02;
+  const idx = ext(8, 6), mid = ext(12, 10);
+  const ringF = fold(16, 14), pinkyF = fold(20, 18);
+  const peace = idx && mid && ringF && pinkyF && dist(lm[8], lm[12]) > size * 0.18;
+  const fist = fold(8, 6) && fold(12, 10) && ringF && pinkyF;
+  const pinch = !peace && dist(lm[4], lm[8]) < size * 0.3;
+  return { peace, fist, pinch };
+}
+function palmCenter(lm) {
+  const ids = [0, 5, 9, 13, 17];
+  let x = 0, y = 0;
+  for (const i of ids) { x += lm[i].x; y += lm[i].y; }
+  return { x: x / ids.length, y: y / ids.length };
+}
+
+async function initModel() {
+  setStatus(null, "手の検出モデルを読み込み中…");
+  const vision = await FilesetResolver.forVisionTasks(WASM_PATH);
+  const opts = (delegate) => ({
+    baseOptions: { modelAssetPath: MODEL_PATH, delegate },
+    runningMode: "VIDEO", numHands: 1,
+    minHandDetectionConfidence: 0.6, minTrackingConfidence: 0.5
+  });
+  try { landmarker = await HandLandmarker.createFromOptions(vision, opts("GPU")); }
+  catch { landmarker = await HandLandmarker.createFromOptions(vision, opts("CPU")); }
+}
+
+async function startCamera() {
+  try {
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: facing, width: { ideal: 640 }, height: { ideal: 480 } }, audio: false
+    });
+    cam.srcObject = stream;
+    cam.classList.toggle("mirror", facing === "user");
+    await cam.play();
+    if (!landmarker) await initModel();
+    $("btnCam").textContent = "カメラ停止";
+    if (!camRunning) { camRunning = true; requestAnimationFrame(loop); }
+    refreshStatus();
+  } catch (err) {
+    console.error(err);
+    setStatus(null, location.protocol === "https:" || location.hostname === "localhost"
+      ? "カメラを使えません。ブラウザのカメラ許可を確認してください"
+      : "カメラは https のページでのみ使えます（GitHub Pages ならOK）");
+  }
+}
+function stopCamera() {
+  camRunning = false;
+  if (stream) stream.getTracks().forEach((t) => t.stop());
+  stream = null; cam.srcObject = null;
+  $("btnCam").textContent = "カメラ開始";
+  setGesture(false, true);
+  showRing(false);
+  setStatus(null, "「カメラ開始」で手の検出を始めます");
+}
+
+function setGesture(on, silent) {
+  gestureOn = on;
+  prev = null;
+  $("btnGesture").setAttribute("aria-pressed", String(on));
+  $("status").classList.toggle("on", on);
+  if (!silent) toast(on ? "ジェスチャー操作をオンにしました" : "ジェスチャー操作をオフにしました");
+  refreshStatus();
+}
+function setStatus(main, sub) {
+  if (main !== null) $("statusMain").textContent = main;
+  $("statusSub").textContent = sub;
+}
+let lastHint = "";
+function refreshStatus(hint) {
+  if (hint !== undefined) lastHint = hint;
+  if (!camRunning) return;
+  const sec = settings.hold.toFixed(1);
+  if (gestureOn) setStatus("ジェスチャー オン", lastHint || `手で移動、つまんで上下でズーム、✌️を${sec}秒で解除`);
+  else setStatus("ジェスチャー オフ", lastHint || `✌️を${sec}秒キープで操作開始`);
+}
+
+function showRing(show, progress = 0) {
+  const ring = $("ring");
+  ring.classList.toggle("show", show);
+  ring.classList.toggle("to-off", gestureOn);
+  $("ringBar").style.strokeDashoffset = String(276.46 * (1 - Math.min(1, progress)));
+  $("ringText").textContent = gestureOn ? "そのままで解除" : "そのままで操作開始";
+}
+
+function loop() {
+  if (!camRunning) return;
+  if (cam.readyState >= 2 && cam.currentTime !== lastVideoTime) {
+    lastVideoTime = cam.currentTime;
+    const now = performance.now();
+    const res = landmarker.detectForVideo(cam, now);
+    const lm = res.landmarks && res.landmarks[0];
+    handleHand(lm, now);
+    drawPreview(lm);
+  }
+  requestAnimationFrame(loop);
+}
+
+function handleHand(lm, now) {
+  if (!lm) {
+    smooth = null; prev = null;
+    if (now - lastPeaceAt > 250) { peaceStart = null; showRing(false); }
+    if (now - lastPeaceAt > 400) peaceLatched = false;
+    refreshStatus("手が見えていません");
+    return;
+  }
+  const g = classify(lm);
+
+  // ✌️ 長押しでオン／オフ切替
+  if (g.peace) {
+    lastPeaceAt = now;
+    if (!peaceLatched) {
+      if (peaceStart === null) peaceStart = now;
+      const p = (now - peaceStart) / (settings.hold * 1000);
+      showRing(true, p);
+      if (p >= 1) {
+        peaceLatched = true; peaceStart = null; showRing(false);
+        setGesture(!gestureOn);
+      }
+    }
+    prev = null; // ピース中は写真を動かさない
+    return;
+  }
+  if (now - lastPeaceAt > 250 && peaceStart !== null) { peaceStart = null; showRing(false); }
+  if (now - lastPeaceAt > 400) peaceLatched = false;
+
+  if (!gestureOn) { refreshStatus(""); return; }
+
+  // 手の位置をなめらかにする
+  const c = palmCenter(lm);
+  smooth = smooth ? { x: smooth.x + (c.x - smooth.x) * 0.45, y: smooth.y + (c.y - smooth.y) * 0.45 } : c;
+  const mode = g.fist ? "fist" : g.pinch ? "pinch" : "move";
+  if (mode !== prevMode) { prev = null; prevMode = mode; }
+
+  if (mode === "fist") { prev = null; refreshStatus("一時停止中（手を開くと再開）"); return; }
+
+  if (prev) {
+    let dx = smooth.x - prev.x, dy = smooth.y - prev.y;
+    if (Math.abs(dx) < 0.0015) dx = 0;
+    if (Math.abs(dy) < 0.0015) dy = 0;
+    if (facing === "user") dx = -dx; // 前面カメラは左右反転
+    if (mode === "pinch") {
+      zoomAt(Math.exp(-dy * 5 * settings.gain / 1.8));
+      refreshStatus("ズーム中（上で拡大、下で縮小）");
+    } else {
+      view.x += dx * stage.clientWidth * settings.gain;
+      view.y += dy * stage.clientHeight * settings.gain;
+      apply();
+      refreshStatus("");
+    }
+  }
+  prev = { ...smooth };
+}
+
+const CONNECTIONS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+function drawPreview(lm) {
+  if (!document.body.classList.contains("show-preview")) return;
+  const W = preview.width, H = preview.height;
+  pctx.save();
+  pctx.clearRect(0, 0, W, H);
+  if (facing === "user") { pctx.translate(W, 0); pctx.scale(-1, 1); }
+  pctx.globalAlpha = 0.7;
+  pctx.drawImage(cam, 0, 0, W, H);
+  pctx.globalAlpha = 1;
+  if (lm) {
+    pctx.strokeStyle = gestureOn ? "#8ec9ff" : "#ffc56b";
+    pctx.lineWidth = 3;
+    for (const [a, b] of CONNECTIONS) {
+      pctx.beginPath();
+      pctx.moveTo(lm[a].x * W, lm[a].y * H);
+      pctx.lineTo(lm[b].x * W, lm[b].y * H);
+      pctx.stroke();
+    }
+  }
+  pctx.restore();
+}
+
+/* ---------- ボタン ---------- */
+$("btnCam").onclick = () => (camRunning ? stopCamera() : startCamera());
+$("btnGesture").onclick = () => {
+  if (!camRunning) { toast("先に「カメラ開始」を押してください"); return; }
+  setGesture(!gestureOn);
+};
+$("btnPreview").onclick = (e) => {
+  const on = document.body.classList.toggle("show-preview");
+  e.currentTarget.setAttribute("aria-pressed", String(on));
+};
+$("btnAR").onclick = (e) => {
+  const on = document.body.classList.toggle("ar");
+  e.currentTarget.setAttribute("aria-pressed", String(on));
+  if (on && !camRunning) startCamera();
+};
+$("btnFlip").onclick = () => {
+  facing = facing === "user" ? "environment" : "user";
+  store.set("facing", facing);
+  if (camRunning) startCamera();
+  toast(facing === "user" ? "前面カメラに切り替えました" : "背面カメラに切り替えました");
+};
+$("btnPrev").onclick = () => loadImage(current - 1);
+$("btnNext").onclick = () => loadImage(current + 1);
+$("btnReset").onclick = resetView;
+$("btnFull").onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen?.().catch(() => {});
+};
+$("btnClean").onclick = () => {
+  document.body.classList.add("clean");
+  toast("H キー、または画面の右下を長押しでUIを戻せます");
+};
+
+/* ---------- キーボード ---------- */
+window.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT") return;
+  switch (e.key) {
+    case "ArrowRight": loadImage(current + 1); break;
+    case "ArrowLeft": loadImage(current - 1); break;
+    case "+": case "=": zoomAt(1.25); break;
+    case "-": zoomAt(0.8); break;
+    case "0": resetView(); break;
+    case "g": case "G": $("btnGesture").click(); break;
+    case "h": case "H": document.body.classList.toggle("clean"); break;
+    case "f": case "F": $("btnFull").click(); break;
+    case "Escape": closePanel(); break;
+  }
+});
+
+// UIを隠しているときは右下の長押しで戻す
+let cornerTimer = null;
+window.addEventListener("pointerdown", (e) => {
+  if (!document.body.classList.contains("clean")) return;
+  if (e.clientX > innerWidth - 80 && e.clientY > innerHeight - 80) {
+    cornerTimer = setTimeout(() => document.body.classList.remove("clean"), 700);
+  }
+});
+window.addEventListener("pointerup", () => clearTimeout(cornerTimer));
+
+// 操作がないときはツールバーを薄くする
+let idleTimer = null;
+function wake() {
+  document.body.classList.remove("idle");
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    if (!$("panelWrap").classList.contains("open")) document.body.classList.add("idle");
+  }, 3500);
+}
+["pointermove", "pointerdown", "keydown"].forEach((ev) => window.addEventListener(ev, wake));
+wake();
+
+/* ---------- VDO.Ninja ---------- */
+function randomId() {
+  const c = "abcdefghjkmnpqrstuvwxyz23456789";
+  let s = "picv";
+  for (let i = 0; i < 7; i++) s += c[Math.floor(Math.random() * c.length)];
+  return s;
+}
+let streamId = store.get("streamId", "") || randomId();
+const pushUrl = () => `https://vdo.ninja/?screenshare&push=${encodeURIComponent(streamId)}`;
+const viewUrl = () => `https://vdo.ninja/?view=${encodeURIComponent(streamId)}`;
+
+function renderShare() {
+  $("streamId").value = streamId;
+  $("pushLink").textContent = pushUrl();
+  $("viewLink").textContent = viewUrl();
+  const qr = $("qr");
+  qr.innerHTML = "";
+  if (window.QRCode) new QRCode(qr, { text: viewUrl(), width: 168, height: 168 });
+  store.set("streamId", streamId);
+}
+$("streamId").addEventListener("input", (e) => {
+  streamId = e.target.value.replace(/[^a-zA-Z0-9_]/g, "") || randomId();
+  renderShare();
+});
+$("btnNewId").onclick = () => { streamId = randomId(); renderShare(); };
+$("btnOpenPush").onclick = () => window.open(pushUrl(), "_blank", "noopener");
+$("btnCopyView").onclick = async () => {
+  try { await navigator.clipboard.writeText(viewUrl()); toast("視聴リンクをコピーしました"); }
+  catch { toast("コピーできませんでした。リンクを選択してコピーしてください"); }
+};
+
+function openPanel() { renderShare(); $("panelWrap").classList.add("open"); }
+function closePanel() { $("panelWrap").classList.remove("open"); }
+$("btnShare").onclick = openPanel;
+$("btnClosePanel").onclick = closePanel;
+$("panelWrap").addEventListener("click", (e) => { if (e.target === e.currentTarget) closePanel(); });
+
+// 設定スライダー
+function bindSlider(id, outId, key, fmt) {
+  const r = $(id), o = $(outId);
+  r.value = settings[key]; o.textContent = fmt(settings[key]);
+  r.addEventListener("input", () => {
+    settings[key] = parseFloat(r.value);
+    o.textContent = fmt(settings[key]);
+    store.set(key, settings[key]);
+    refreshStatus();
+  });
+}
+bindSlider("holdRange", "holdOut", "hold", (v) => v.toFixed(1) + "秒");
+bindSlider("gainRange", "gainOut", "gain", (v) => "×" + v.toFixed(1));
+
+/* ---------- トースト ---------- */
+let toastTimer = null;
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+/* ---------- 開始 ---------- */
+loadImage(0);
+probeMore();
+if (params.get("cam") === "1") startCamera();
+</script>
+</body>
+</html>
