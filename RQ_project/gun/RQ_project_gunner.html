@@ -14,6 +14,8 @@
   #camPanel div{margin-top:6px}
   #camStat{font-size:12px;color:#ffd35a;word-break:break-all}
   #v,#fv{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
+  #gzOv{position:fixed;inset:0;z-index:20;display:none} #gzCv{width:100%;height:100%;display:block;cursor:default}
+  #gzSkip{position:absolute;right:16px;bottom:16px;background:#0d2a30;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:8px;padding:10px 14px;font:15px sans-serif;cursor:pointer}
   #facePrev{position:fixed;left:10px;bottom:10px;z-index:5;width:240px;height:180px;border:2px solid #7ae7ff88;border-radius:8px;background:#000;pointer-events:none;display:none}
   #faceBadge{margin-top:6px;font-size:12px;color:#7ae7ff;text-shadow:0 0 4px #000}
   #camPanel input[type=range]{width:100%}
@@ -32,17 +34,20 @@
     <div><button id="camApply">このカメラを使う</button> <button id="camRefresh">一覧を更新</button></div>
     <div id="camStat">USBカメラは接続後「一覧を更新」</div>
     <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
-    <label><input type="checkbox" id="faceOn" checked> 顔の動きで視点・照準を操作</label>
+    <label><input type="checkbox" id="faceOn" checked> 顔・目の動きで照準を操作</label>
+    <label>照準の操作 <select id="aimMode"><option value="gaze">視線（見ている所）</option><option value="face">顔の位置（従来）</option></select></label>
     <label>顔認識に使うカメラ<select id="faceSel"><option value="">自動（インカメラ）</option><option value="user">フロント</option><option value="environment">バック</option></select></label>
     <label>カメラの種類 <select id="faceType"><option value="auto">自動判定</option><option value="front">フロント（鏡像）</option><option value="back">バック（非鏡像）</option></select></label> <button id="faceFlip">🔄 前/後 切替</button>
-    <label>感度 <input type="range" id="faceGain" min="0.5" max="3" step="0.1" value="1.5"></label>
+    <label>照準のブレ補正 <input type="range" id="gzSmooth" min="0.2" max="3" step="0.1" value="1"><br><small style="color:#9fdcea">左ほど安定・右ほど素早い</small></label>
+    <label>感度（キャリブレーション前・顔の位置モード） <input type="range" id="faceGain" min="0.5" max="3" step="0.1" value="1.5"></label>
     <label><input type="checkbox" id="facePrevOn" checked> 認識プレビューを表示</label>
-    <div><button id="faceStart">顔認識を開始/再起動</button> <button id="faceCal">中心リセット (C)</button></div>
+    <div><button id="faceStart">顔認識を開始/再起動</button> <button id="faceCal">ずれ補正 (C)</button></div>
+    <div><button id="gzCalBtn">👁 視線キャリブレーション (K)</button></div>
     <div id="faceStat" style="font-size:12px;color:#ffd35a"></div>
   </div>
   <div id="faceBadge"></div><div id="wiiStat" style="margin-top:4px;font-size:12px;color:#ffd35a;text-shadow:0 0 4px #000"></div></div>
 <div id="menu"><h3 style="margin:0">MENU</h3>
-  <button id="mClose">▶ 再開</button><button id="mView">👁 視点: 一人称</button><button id="mFace">🔄 顔カメラ: フロント</button><button id="mCtrl">🖱 操作: マウス</button>
+  <button id="mClose">▶ 再開</button><button id="mView">👁 視点: 一人称</button><button id="mFace">🔄 顔カメラ: フロント</button><button id="mCtrl">🖱 操作: マウス</button><button id="mGaze">👁 視線キャリブレーション</button>
   <button id="jobBtn">🔁 ジョブチェンジ</button>
   <div id="jobs"><button id="jSword">⚔ 剣士</button><button id="jWiz">🪄 魔法使い</button><button id="jGun">🔫 ガンナー</button></div>
   <label>効果音 <input type="range" id="mVol" min="0" max="1" step=".1" value=".8"></label><label>BGM <input type="range" id="mBgm" min="0" max="1" step=".05" value=".5"></label><label>パリィ振り上げ感度 <input type="range" id="mWiiTh" min="1.2" max="4" step=".1" value="2.2"><br><small style="color:#9fdcea">左ほど敏感</small></label>
@@ -57,12 +62,13 @@
     スナイパー: 伸び縮みする円が金色の円に重なった瞬間に撃つと命中<br>
     サーベル: 前に突く=突き / 縦・横に大きく振る=重撃（B=突き）。MotionPlus付きなら剣士版と同じジャイロ判定<br>
     Wii: B=射撃・攻撃 / A長押し=ガード / 振り上げ=パリィ（ボタンは押しても押さなくてもOK）/ 縦に立てる=リロード（黄色の所でB）<br>
-    1=グレネード / 2=時限地雷 / +=回り込み弾 / −=照準リセット / HOME=メニュー<br>
+    1=グレネード / 2=時限地雷 / +=回り込み弾 / −=視線のずれ補正（タイトル画面では視線キャリブレーション）/ HOME=メニュー<br>
     マウス: ←↑→↓ か 1〜4=武器切替 / サーベルはクリック=突き・ドラッグ縦横=重撃（W/Sでも可）/ G=グレネード F=地雷 Q,E=回り込み<br>
     照準が四角に重なると赤くなり、その時だけ当たります<br>黄色い小さい四角=弱点（回避直後・スタン中だけ開く）</small>
   </details>
   <button id="mRestart">↻ リスタート</button><button id="mTitle">⌂ タイトルへ</button>
   <small style="color:#9fdcea">✋ 人差し指で「1」を描く / M キーで開閉</small></div>
+<div id="gzOv"><canvas id="gzCv"></canvas><button id="gzSkip">スキップ (Esc)</button></div>
 <canvas id="facePrev" width="320" height="240"></canvas>
 <video id="v" autoplay playsinline muted></video>
 <video id="fv" autoplay playsinline muted></video>
@@ -335,7 +341,128 @@ const fv = $('fv');
 const face = { on:true, lm:null, loading:false, stream:null, src:null, seen:false, x:0, y:0, cx:null, cy:null, sx:0, sy:0,
                sumx:0, sumy:0, cn:0, lastT:-1, gain:1.5, badge:'' };
 const FACE_GX = 6, FACE_GY = 9, FACE_CAL = 20, FACE_DEAD = .012;
-const faceActive = () => face.on && !!face.lm && !!face.src && face.cx !== null;
+// ===== 視線で照準（黒目の位置＋顔の向き → 画面上の見ている所）=====
+// 顔の向きは剣士版の「耳の中点から見た鼻の位置」と同じ考え方（ここでは頬の両端の中点から見た鼻先）。
+// それに黒目が目の中のどこにあるかを足して、キャリブレーションで画面座標(-1〜1)に対応させる。
+const GZ_PTS = [[0, 0], [-.75, .7], [.75, .7], [.75, -.7], [-.75, -.7], [0, .7], [.75, 0], [0, -.7], [-.75, 0]];
+const GZ_HX = 5, GZ_EX = 6, GZ_HY = 7, GZ_EY = 8, GZ_OPEN = .12, GZ_KEY = 'rq_gunner_gaze_v1';
+const gaze = { mode:'gaze', f:null, ft:0, c0:null, cs:[], M:null, ofs:[0, 0], cal:null, ex:{}, ey:{}, smooth:1, tx:null, ty:null };
+try { const g = JSON.parse(localStorage.getItem(GZ_KEY) || 'null'); if (g && g.M) gaze.M = g.M; } catch (e){}
+const faceActive = () => face.on && !!face.lm && !!face.src && (gaze.mode === 'gaze' ? !!(gaze.M || gaze.c0) : face.cx !== null);
+function gazeFeat(p, va){
+  const Q = i => ({ x:p[i].x*va, y:p[i].y }), iris = p.length >= 478;
+  const eye = (a, b, ir, up, dn) => {
+    const A = Q(a), B = Q(b), ux = B.x - A.x, uy = B.y - A.y, L2 = ux*ux + uy*uy || 1e-6, L = Math.sqrt(L2), U = Q(up), D = Q(dn);
+    if (!iris) return { u:0, v:0, open:Math.hypot(U.x - D.x, U.y - D.y)/L };
+    const I = Q(ir), rx = I.x - A.x, ry = I.y - A.y;
+    return { u:(rx*ux + ry*uy)/L2 - .5, v:(ux*ry - uy*rx)/L2, open:Math.hypot(U.x - D.x, U.y - D.y)/L };
+  };
+  const l = eye(33, 133, 468, 159, 145), r = eye(362, 263, 473, 386, 374);   // どちらも映像の左→右の向きで測る
+  const a = Q(234), b = Q(454), n = Q(1), fw = Math.hypot(b.x - a.x, b.y - a.y) || 1e-6;
+  const ca = (b.x - a.x)/fw, sa = (b.y - a.y)/fw, dx = n.x - (a.x + b.x)/2, dy = n.y - (a.y + b.y)/2;   // 首をかしげても崩れないよう回転を戻す
+  return { hx:(dx*ca + dy*sa)/fw, hy:(-dx*sa + dy*ca)/fw, ex:(l.u + r.u)/2, ey:(l.v + r.v)/2, open:Math.min(l.open, r.open) };
+}
+function gazeMap(f){
+  if (gaze.M){ const [a, b] = gaze.M; return [a[0]*f.hx + a[1]*f.ex + a[2] + gaze.ofs[0], b[0]*f.hy + b[1]*f.ey + b[2] + gaze.ofs[1]]; }
+  const c = gaze.c0; if (!c) return null;
+  const g = face.gain/1.5, sg = faceMirror() ? -1 : 1;   // フロント(鏡像)は左右反転
+  return [sg*((f.hx - c.hx)*GZ_HX + (f.ex - c.ex)*GZ_EX)*g, -((f.hy - c.hy)*GZ_HY + (f.ey - c.ey)*GZ_EY)*g];
+}
+// One Euro フィルタ：止まっている時はブレを強く抑え、素早く目を動かした時は遅れを少なく
+function euro(st, x, dt, mc, beta = 1.5){
+  const al = c => { const r = 2*Math.PI*c*dt; return r/(r + 1); };
+  if (st.x === undefined || !(dt > 0)){ st.x = x; st.d = 0; return x; }
+  st.d += al(1)*((x - st.x)/dt - st.d); st.x += al(mc + beta*Math.abs(st.d))*(x - st.x); return st.x;
+}
+const median = a => { const b = a.slice().sort((x, y) => x - y), m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m])/2; };
+const featAvg = L => ({ hx:median(L.map(f => f.hx)), hy:median(L.map(f => f.hy)), ex:median(L.map(f => f.ex)), ey:median(L.map(f => f.ey)) });
+// 最小二乗: t = c0*x0 + c1*x1 + c2
+function fit3(X0, X1, T){
+  const m = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], v = [0, 0, 0];
+  for (let i = 0; i < T.length; i++){ const r = [X0[i], X1[i], 1]; for (let j = 0; j < 3; j++){ v[j] += r[j]*T[i]; for (let k = 0; k < 3; k++) m[j][k] += r[j]*r[k]; } }
+  m[0][0] += 1e-6; m[1][1] += 1e-6;
+  const det = M => M[0][0]*(M[1][1]*M[2][2] - M[1][2]*M[2][1]) - M[0][1]*(M[1][0]*M[2][2] - M[1][2]*M[2][0]) + M[0][2]*(M[1][0]*M[2][1] - M[1][1]*M[2][0]);
+  const d = det(m); if (!isFinite(d) || Math.abs(d) < 1e-14) return null;
+  const out = [0, 1, 2].map(c => det(m.map((row, j) => row.map((x, k) => k === c ? v[j] : x)))/d);
+  return out.every(isFinite) ? out : null;
+}
+const gzOv = $('gzOv'), gzCv = $('gzCv'), gzx = gzCv.getContext('2d');
+// kind: 'full' = 9点キャリブレーション / 'quick' = 画面中央を見て ずれだけ補正
+function gazeCalStart(kind, done){
+  if (gaze.cal) return;
+  if (kind === 'full' && (!face.on || !navigator.mediaDevices)){ if (done) done(); return; }
+  toggleMenu(false); mgStop(true);
+  gaze.cal = { kind, pts:kind === 'full' ? GZ_PTS : [[0, 0]], i:0, t:0, s:[], got:[], done, wait:0, lastFt:-1, endT:0 };
+  gzOv.style.display = 'block';
+}
+function gazeCalEnd(ok){
+  const c = gaze.cal; if (!c) return;
+  gaze.cal = null; gzOv.style.display = 'none'; gaze.ex = {}; gaze.ey = {};
+  if (ok) setBadge(c.kind === 'full' ? (gaze.M ? '👁 視線キャリブレーション完了' : '👁 キャリブレーションできず、簡易モードで動きます') : '👁 ずれを補正しました');
+  if (c.done) c.done();
+}
+function gazeCalFinish(c){
+  if (c.kind === 'quick'){
+    const f = c.got[0];
+    if (gaze.M){ const m = gazeMap(f); gaze.ofs[0] -= m[0]; gaze.ofs[1] -= m[1]; }
+    else gaze.c0 = f;
+    return;
+  }
+  gaze.c0 = c.got[0]; gaze.ofs = [0, 0];
+  const G = c.got, P = c.pts.slice(0, G.length);
+  const a = fit3(G.map(f => f.hx), G.map(f => f.ex), P.map(q => q[0])), b = fit3(G.map(f => f.hy), G.map(f => f.ey), P.map(q => q[1]));
+  gaze.M = a && b ? [a, b] : null;
+  try { if (gaze.M) localStorage.setItem(GZ_KEY, JSON.stringify({ M:gaze.M })); } catch (e){}
+}
+function gazeCalStep(dt){
+  const c = gaze.cal; if (!c) return;
+  if (c.endT){ c.endT -= dt; gazeCalDraw(); if (c.endT <= 0) gazeCalEnd(true); return; }
+  const ready = face.lm && face.src && face.seen && gaze.f;
+  if (!ready){ c.wait += dt; if (c.wait > 25){ gazeCalEnd(false); return; } gazeCalDraw(); return; }
+  const SETTLE = c.kind === 'full' ? .6 : .35, COLLECT = c.kind === 'full' ? .8 : .5;
+  c.t += dt;
+  if (c.t > SETTLE && gaze.ft !== c.lastFt){ c.lastFt = gaze.ft; if (gaze.f.open > GZ_OPEN) c.s.push(gaze.f); }   // まばたき中は使わない
+  if (c.t >= SETTLE + COLLECT && c.s.length >= 6){
+    c.got.push(featAvg(c.s)); c.s = []; c.t = 0;
+    if (++c.i >= c.pts.length){ gazeCalFinish(c); c.endT = c.kind === 'full' ? .9 : .4; }
+  }
+  gazeCalDraw();
+}
+function gazeCalDraw(){
+  const c = gaze.cal, dpr = Math.min(2, devicePixelRatio || 1), w = innerWidth, h = innerHeight;
+  if (gzCv.width !== Math.round(w*dpr) || gzCv.height !== Math.round(h*dpr)){ gzCv.width = Math.round(w*dpr); gzCv.height = Math.round(h*dpr); }
+  const x = gzx; x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, w, h);
+  x.fillStyle = 'rgba(0,10,14,.78)'; x.fillRect(0, 0, w, h);
+  x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `bold ${Math.max(16, Math.min(26, w/40))}px ${FONT}`;
+  const halves = vr ? [[0, w/2], [w/2, w/2]] : [[0, w]];
+  const text = (t, col = '#ffd35a') => { for (const [ox, hw] of halves){ x.fillStyle = col; x.fillText(t, ox + hw/2, h*.12); } };
+  if (c.endT){ text(c.kind === 'full' ? (gaze.M ? '✔ キャリブレーション完了' : '✖ うまく測れませんでした（簡易モード）') : '✔ ずれを補正しました', gaze.M || c.kind !== 'full' ? '#5ee08a' : '#ff4d5e'); return; }
+  if (!(face.lm && face.src && face.seen && gaze.f)){
+    text(!face.lm ? '視線認識を準備中…' : !face.src ? 'カメラを準備中…' : 'カメラに顔を映してください', '#ffd35a'); return;
+  }
+  const [tx, ty] = c.pts[c.i], SETTLE = c.kind === 'full' ? .6 : .35, COLLECT = c.kind === 'full' ? .8 : .5;
+  const k = Math.min(1, c.t/(SETTLE + COLLECT));
+  text(c.kind === 'full' ? `● を目で見続けてください（${c.i + 1} / ${c.pts.length}）　頭は自然に動いてOK` : '画面中央の ● を見てください');
+  for (const [ox, hw] of halves){
+    const px = ox + (tx + 1)/2*hw, py = (1 - ty)/2*h, R = 26*(1 - k) + 8;
+    x.strokeStyle = '#ffffff'; x.lineWidth = 3; x.beginPath(); x.arc(px, py, R, 0, 7); x.stroke();
+    x.fillStyle = c.t > SETTLE ? '#ff4d5e' : '#ffd35a'; x.beginPath(); x.arc(px, py, 7, 0, 7); x.fill();
+    x.strokeStyle = '#5ee08a'; x.lineWidth = 4; x.beginPath(); x.arc(px, py, 38, -Math.PI/2, -Math.PI/2 + k*Math.PI*2); x.stroke();
+  }
+}
+// C / − / ずれ補正ボタン：視線モードなら画面中央を見てずれ補正、顔の位置モードなら従来の中心リセット
+function gazeRecenter(){
+  if (gaze.mode !== 'gaze'){ faceRecenter(); return; }
+  if (!face.on) return;
+  if (!face.src && !face.stream) startFace();
+  gazeCalStart(gaze.M || gaze.c0 ? 'quick' : 'full');
+}
+function gazeFullCal(done){
+  if (!face.on){ $('faceOn').checked = face.on = true; }
+  if (!face.src && !face.stream) startFace();
+  gazeCalStart('full', done);
+}
+$('gzSkip').onclick = () => gazeCalEnd(false);
 function setBadge(t){ if (face.badge === t) return; face.badge = t; $('faceBadge').textContent = t; $('faceStat').textContent = t; }
 function faceRecenter(){ face.cx = face.cy = null; face.sumx = face.sumy = face.cn = 0; }
 async function loadFaceModel(){
@@ -355,7 +482,7 @@ async function loadFaceModel(){
 }
 async function openFaceCam(){
   if (face.stream) face.stream.getTracks().forEach(t => t.stop());
-  face.stream = null; face.src = null; faceRecenter();
+  face.stream = null; face.src = null; faceRecenter(); gaze.c0 = null; gaze.cs = [];
   const id = faceSel.value, sz = { width:{ ideal:640 }, height:{ ideal:480 } };
   const tries = (id === 'user' || id === 'environment') ? [{ video:{ facingMode:{ ideal:id }, ...sz }, audio:false }, { video:true, audio:false }] : id ? [{ video:{ deviceId:{ exact:id }, ...sz }, audio:false }]
                    : [{ video:{ facingMode:'user', ...sz }, audio:false }, { video:true, audio:false }];
@@ -384,10 +511,29 @@ function faceStep(now){
     if (++face.cn >= FACE_CAL){ face.cx = face.sumx/face.cn; face.cy = face.sumy/face.cn; }
     else setBadge('👤 顔を画面の中心に構えてください…');
   }
+  if (gaze.mode === 'gaze'){
+    gaze.f = gazeFeat(p, v.videoWidth/v.videoHeight); gaze.ft = now;
+    if (!gaze.M && !gaze.c0 && !gaze.cal){   // キャリブレーション前は、最初に画面中央を見ている所を基準にする
+      if (gaze.f.open > GZ_OPEN) gaze.cs.push(gaze.f);
+      if (gaze.cs.length >= FACE_CAL){ gaze.c0 = featAvg(gaze.cs); gaze.cs = []; }
+      else { setBadge('👁 画面の中央を見てください…'); return; }
+    }
+    setBadge(gaze.M ? '👁 視線照準 OK' : '👁 視線照準（簡易）… K でキャリブレーションすると正確になります');
+    return;
+  }
   if (face.cx !== null) setBadge('👤 顔認識 OK');
 }
 function faceUpdate(dt){
   if (!faceActive()) return;
+  if (gaze.mode === 'gaze'){
+    if (face.seen && gaze.f && gaze.f.open > GZ_OPEN){   // まばたき中は直前の位置のまま
+      const m = gazeMap(gaze.f); if (m){ gaze.tx = Math.max(-1.1, Math.min(1.1, m[0])); gaze.ty = Math.max(-1.1, Math.min(1.1, m[1])); }
+    }
+    if (gaze.tx === null) return;
+    mouse.nx = Math.max(-1, Math.min(1, euro(gaze.ex, gaze.tx, dt, gaze.smooth)));
+    mouse.ny = Math.max(-1, Math.min(1, euro(gaze.ey, gaze.ty, dt, gaze.smooth)));
+    return;
+  }
   if (face.seen){
     const dx = face.x - face.cx, dy = face.y - face.cy, f = d => Math.abs(d) < FACE_DEAD ? 0 : d - Math.sign(d)*FACE_DEAD;
     face.tx = Math.max(-1, Math.min(1, (faceMirror() ? -1 : 1)*f(dx)*FACE_GX*face.gain));   // フロント(鏡像)は左右反転、バックはそのまま
@@ -414,8 +560,9 @@ function faceDraw(){
   if (face.seen && face.pts){
     pctx.fillStyle = '#5ee08a'; for (const q of face.pts) pctx.fillRect(X(q.x) - 1, Y(q.y) - 1, 2, 2);
     pctx.fillStyle = '#ff4d5e'; pctx.beginPath(); pctx.arc(X(face.x), Y(face.y), 5, 0, 7); pctx.fill();   // 鼻先
+    if (gaze.mode === 'gaze' && face.pts.length >= 478){ pctx.strokeStyle = '#7ae7ff'; pctx.lineWidth = 2; for (const i of [468, 473]){ pctx.beginPath(); pctx.arc(X(face.pts[i].x), Y(face.pts[i].y), 4, 0, 7); pctx.stroke(); } }   // 黒目
   }
-  if (face.cx !== null){   // 構えた中心
+  if (face.cx !== null && gaze.mode !== 'gaze'){   // 構えた中心
     pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 1.5; const cx = X(face.cx), cy = Y(face.cy);
     pctx.beginPath(); pctx.moveTo(cx - 12, cy); pctx.lineTo(cx + 12, cy); pctx.moveTo(cx, cy - 12); pctx.lineTo(cx, cy + 12); pctx.stroke();
     if (face.seen){ pctx.strokeStyle = '#ff4d5e'; pctx.beginPath(); pctx.moveTo(cx, cy); pctx.lineTo(X(face.x), Y(face.y)); pctx.stroke(); }
@@ -423,7 +570,7 @@ function faceDraw(){
   if (hand.trail.length > 1){ pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 3; pctx.beginPath(); hand.trail.forEach((q, i) => i ? pctx.lineTo(X(q.x), Y(q.y)) : pctx.moveTo(X(q.x), Y(q.y))); pctx.stroke(); }
   pctx.font = 'bold 16px sans-serif'; pctx.textAlign = 'left';
   pctx.fillStyle = !face.lm ? '#ffd35a' : face.seen ? '#5ee08a' : '#ff4d5e';
-  pctx.fillText(!face.lm ? 'モデル読み込み中…' : face.seen ? (face.cx === null ? '顔を中心に構えて…' : '● 追跡中') : '× 顔が見つかりません', 8, 22);
+  pctx.fillText(!face.lm ? 'モデル読み込み中…' : face.seen ? (gaze.mode === 'gaze' ? (gaze.M ? '👁 視線 追跡中' : gaze.c0 ? '👁 視線 追跡中（簡易）' : '画面の中央を見て…') : face.cx === null ? '顔を中心に構えて…' : '● 追跡中') : '× 顔が見つかりません', 8, 22);
 }
 $('faceOn').onchange = e => {
   face.on = e.target.checked;
@@ -432,7 +579,10 @@ $('faceOn').onchange = e => {
 };
 $('faceGain').oninput = e => face.gain = +e.target.value;
 faceSel.onchange = () => { if (face.on) openFaceCam(); };
-$('faceCal').onclick = faceRecenter;
+$('faceCal').onclick = gazeRecenter;
+$('gzCalBtn').onclick = $('mGaze').onclick = () => gazeFullCal();
+$('aimMode').onchange = e => { gaze.mode = e.target.value; gaze.tx = gaze.ty = null; gaze.ex = {}; gaze.ey = {}; mouse.nx = mouse.ny = 0; faceRecenter(); };
+$('gzSmooth').oninput = e => gaze.smooth = +e.target.value;
 $('faceStart').onclick = () => { if (!face.on){ $('faceOn').checked = face.on = true; } startFace(); };
 let prevOn = true; $('facePrevOn').onchange = e => prevOn = e.target.checked;
 
@@ -587,7 +737,7 @@ function reset(){
 }
 function titleMsg(){
   setMsg([['GIANT SLIME RAID : GUNNER', '#ffd35a', 64],
-          ['顔の動きで照準 → 四角に重なったら B で攻撃', '#fff', 28],
+          ['見ている所に照準 → 四角に重なったら B で攻撃', '#fff', 28],
           ['十字で武器切替 ↑ハンドガン ←P90 →スナイパー ↓ビームサーベル', '#ffd35a', 24],
           ['リモコンを縦に立ててリロード　黄色い所で B → 強化弾', '#9fe870', 24],
           ['回避直後・スタン中は黄色い弱点が開く → 3倍ダメージ', '#ffd35a', 24],
@@ -595,7 +745,7 @@ function titleMsg(){
           ['紫に光る攻撃はパリィ不可 → ガードで防ぐ', '#c06bff', 26],
           ['1 グレネード　2 時限地雷　+ 回り込み弾', '#9fe870', 24],
           ['マウス: 左=攻撃 R=リロード 右=パリィ Space=ガード 矢印=武器 A/D=回避', '#7ae7ff', 22],
-          ['C / −: 照準の中心リセット　V:VR　T:視点　M:メニュー', '#7ae7ff', 22],
+          ['C / −: 視線のずれ補正　K: 視線キャリブレーション　V:VR　T:視点　M:メニュー', '#7ae7ff', 22],
           ['クリック / A・B でスタート（Webカメラを使います）', '#7ae7ff', 30]]);
 }
 titleMsg();
@@ -959,7 +1109,7 @@ function bossAnim(dt){
 // ===== 銃の追従（照準の方向へ銃口を向ける）=====
 function updGun(dt){
   const asp = vr ? W/2/H : W/H, hh = Math.tan((70 - fovp)*Math.PI/360)*3, rx = mouse.nx*hh*asp, ry = mouse.ny*hh;
-  reticle.visible = state === 'play'; reticle.position.set(rx, ry, -3); reticle.scale.setScalar(P.crit ? .54 : P.lock ? .46 : .4);
+  reticle.visible = state === 'play' || (faceActive() && !menuOn && !gaze.cal); reticle.position.set(rx, ry, -3); reticle.scale.setScalar(P.crit ? .54 : P.lock ? .46 : .4);
   const want = P.crit ? RET_C : P.lock ? RET_L : RET_N; if (reticle.material.map !== want){ reticle.material.map = want; reticle.material.needsUpdate = true; }
   // スナイパーの円
   snG.visible = state === 'play' && P.wp === 'sr' && !P.rl && P.ammo > 0;
@@ -1085,8 +1235,9 @@ function update(dt){
   const sh = (Math.random()-.5)*shake;
   aim.position.set(P.x, EYE, 0); aim.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0);
   av.position.x = P.x; av.rotation.y = -mouse.nx*.3; headM.rotation.y = -mouse.nx*.5;
-  if (tp){ camera.rotation.set(mouse.ny*.12 - .22, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + 1.5 + sh*.6, 4.2); }
-  else { camera.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0); camera.position.set(P.x + sh, EYE + sh*.6, 0); }
+  const fixV = gaze.mode === 'gaze' && faceActive(), vx = fixV ? 0 : mouse.nx, vy = fixV ? 0 : mouse.ny;   // 視線照準中は画面を動かさない
+  if (tp){ camera.rotation.set(vy*.12 - .22, -vx*.2, 0); camera.position.set(P.x + sh, EYE + 1.5 + sh*.6, 4.2); }
+  else { camera.rotation.set(vy*.12, -vx*.2, 0); camera.position.set(P.x + sh, EYE + sh*.6, 0); }
   camera.updateMatrixWorld();
   updHitbox(); P.lock = state === 'play' && aimOnBoss(aimHit); P.crit = P.lock && aimOnWeak(aimHit);
   { const wo = weakOpen(); if (wo && !P.weakWas) popCam('弱点露出！ 黄色を狙え', '#ffd35a', .8, 1); P.weakWas = wo; }
@@ -1112,7 +1263,9 @@ function render(){
 addEventListener('keydown', e => {
   const k = e.key.toLowerCase(); keys[k] = true;
   if (state === 'play' && bgm.paused && !menuOn) bgmPlay();
-  if (k === 'v') vr = !vr; if (k === 'c') faceRecenter(); if (k === 'm') toggleMenu(); if (k === 't') setView(!tp); if (k === 'escape' && menuOn) toggleMenu(false);
+  if (gaze.cal){ if (k === 'escape') gazeCalEnd(false); return; }
+  if (k === 'k'){ gazeFullCal(); return; }
+  if (k === 'v') vr = !vr; if (k === 'c') gazeRecenter(); if (k === 'm') toggleMenu(); if (k === 't') setView(!tp); if (k === 'escape' && menuOn) toggleMenu(false);
   if (k === ' ' || k.startsWith('arrow')) e.preventDefault();
   if (e.repeat || state !== 'play' || menuOn) return;
   const wk = { arrowup:'hg', arrowleft:'p90', arrowright:'sr', arrowdown:'sword', '1':'hg', '2':'p90', '3':'sr', '4':'sword' }[k];
@@ -1279,8 +1432,12 @@ function onWii(e){
   const pressStart = (A && !wii.pA) || (Bb && !wii.pB) || (plus && !wii.pPlus), pressHome = home && !wii.pHome, pressMinus = minus && !wii.pMinus;
   wii.pA = A; wii.pB = Bb; wii.pPlus = plus; wii.pHome = home; wii.pMinus = minus; wii.pPad = pad; wii.b = A;   // A長押し=ガード
   if (!Bb) wii.aBlock = false;
+  if (gaze.cal){ wii.a = false; wii.aBlock = true; if (pressHome) gazeCalEnd(false); return; }   // キャリブレーション中は操作しない（HOME=スキップ）
   if (pressHome) toggleMenu();
-  if (pressMinus){ faceRecenter(); if (wii.mp.ok) calStart(); }   // −: 照準の中心リセット＋ジャイロ再調整
+  if (pressMinus){   // −: 視線のずれ補正（タイトルでは9点キャリブレーション）＋ジャイロ再調整
+    if (gaze.mode === 'gaze' && face.on){ if (state === 'play') gazeRecenter(); else gazeFullCal(); } else faceRecenter();
+    if (wii.mp.ok) calStart();
+  }
   if (pressStart && state !== 'play' && !menuOn && !(state !== 'title' && now - endAt < 600)){ startGame(); wii.aBlock = true; }   // スタートに使ったBは離すまで射撃しない
   wii.a = Bb && !wii.aBlock;   // B押しっぱなし = P90の連射
   // 加速度（0g=128, 1g≒26）
@@ -1329,10 +1486,14 @@ function onWii(e){
 
 function startBattle(){ reset(); state = 'play'; setMsg(null); bgmPlay(true); }
 function startGame(){
-  (async () => { if (!camStream) await openCam(camSel.value || null); if (face.on && !face.stream) startFace(); else faceRecenter(); })();
+  if (gaze.cal) return;
+  const needCal = face.on && gaze.mode === 'gaze' && !gaze.M && !!navigator.mediaDevices;
+  (async () => { if (!camStream) await openCam(camSel.value || null); if (face.on && !face.stream) startFace(); else if (gaze.mode !== 'gaze') faceRecenter(); })();
+  if (needCal){ gazeCalStart('full', startBattle); return; }   // 初回だけ：見ている所と照準を合わせてから開始（結果は保存）
   startBattle();
 }
 addEventListener('mousedown', e => {
+  if (gaze.cal) return;
   if (state === 'play' && bgm.paused && !menuOn) bgmPlay();
   if (menuOn) return;
   setMouse(e);
@@ -1359,7 +1520,7 @@ addEventListener('mouseup', e => {
 let last = performance.now();
 function loop(now){
   const dt = Math.min(.033, (now - last)/1000); last = now;
-  faceStep(now); handStep(now); faceDraw(); update(dt); render(); requestAnimationFrame(loop);
+  faceStep(now); handStep(now); faceDraw(); if (gaze.cal) gazeCalStep(dt); else update(dt); render(); requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 // タイトル画面(parytitle.html)から ?start=1 で来たら自動スタート
