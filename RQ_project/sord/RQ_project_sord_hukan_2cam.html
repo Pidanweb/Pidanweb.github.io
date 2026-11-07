@@ -60,6 +60,9 @@
     <small id="vrmStat">未読み込み（読み込むまでは簡易アバター）</small>
     <label><input type="checkbox" id="poseOn" checked> 体の動きをアバターに反映</label>
     <label><input type="checkbox" id="poseMove" checked> 体の移動で回避（実際の足の位置）</label>
+    <label><input type="checkbox" id="heldOn" checked> アバターに剣を持たせる</label>
+    <label>持つ手 <select id="heldHand"><option value="right">右手</option><option value="left">左手</option></select></label>
+    <label>剣の大きさ <b id="heldSzV">1.0</b> 倍<input type="range" id="heldSz" min="0.5" max="2" step="0.1" value="1"></label>
     <h4>キャリブレーション</h4>
     <small id="bcStat">未設定</small>
     <small id="d2Stat"></small>
@@ -1158,6 +1161,52 @@ function poseApply(dt){
   }
   for (const b of ['leftHand', 'rightHand', 'leftFoot', 'rightFoot']) relax(b, k);
 }
+// ===== アバターに剣を持たせる =====
+// 右手（または左手）の骨に剣を付ける。向きは全身認識の手の点（人差し指と小指の付け根）から：
+// 握った手では、柄は小指側から人差し指側へ抜けるので、その向きを剣の向きにする（前腕の向きを少し混ぜて安定させる）。
+const held = { on:true, hand:'right', size:1, q:new THREE.Quaternion(), init:false };
+const heldSword = new THREE.Group(), heldInner = sword.clone();
+heldInner.position.set(0, .1, 0); heldInner.rotation.set(0, 0, 0); heldInner.scale.setScalar(1);   // 柄の真ん中を手の位置に
+heldSword.add(heldInner); heldSword.visible = false; av.add(heldSword);
+const _hd = new THREE.Vector3(), _hq = new THREE.Quaternion(), HELD_UP = new THREE.Vector3(0, 1, 0);
+function heldUpdate(dt){
+  const show = held.on && tp && av.visible;
+  heldSword.visible = show; if (!show) return;
+  sword.visible = false;   // 浮いている大剣の代わりに、アバターが持つ
+  const side = held.hand, k = 1 - Math.exp(-dt*12);
+  let pos, dir;
+  if (vrm){
+    const hb = vrm.bones[side + 'Hand'] || vrm.bones[side + 'LowerArm'];
+    pos = avPos(hb);
+    if (pose.on && pose.seen && pose.w && pose.n){
+      const w = pose.w, s = pose.cam === 'front' ? [-1, -1, 1] : [1, -1, -1];
+      const P_ = i => new THREE.Vector3(w[i].x*s[0], w[i].y*s[1], w[i].z*s[2]), vis = i => (pose.n[i].visibility ?? 1) > .5;
+      const [E, Wr, Pk, Ix] = side === 'right' ? [14, 16, 18, 20] : [13, 15, 17, 19];
+      const f = P_(Wr).sub(P_(E)).normalize();
+      let g = vis(Pk) && vis(Ix) ? P_(Ix).sub(P_(Pk)) : null;
+      if (g && g.lengthSq() > 1e-6) g.normalize().addScaledVector(f, .3);
+      else g = f.clone().multiplyScalar(.5).add(_hd.set(0, .8, 0));   // 手の点が見えない時: 前腕の先で剣を立てる
+      dir = g.normalize();
+      pos.addScaledVector(f, .07*holder.scale.x);   // 手首から握りこぶしの中心へ
+    } else dir = _hd.set(side === 'right' ? .1 : -.1, -.35, -1).normalize();   // 未認識: 下ろした手で剣先を前下に
+  } else {   // 簡易アバター（腕なし）: 体の横で構える
+    pos = new THREE.Vector3(side === 'right' ? .4 : -.4, .95, -.15);
+    dir = _hd.set(side === 'right' ? .15 : -.15, .9, -.4).normalize();
+  }
+  _hq.setFromUnitVectors(HELD_UP, dir);
+  if (!held.init){ held.q.copy(_hq); heldSword.position.copy(pos); held.init = true; }
+  held.q.slerp(_hq, k); heldSword.quaternion.copy(held.q);
+  heldSword.position.lerp(pos, Math.min(1, dt*25));
+  heldSword.scale.setScalar(.32*held.size*(vrm ? holder.scale.x : 1));
+}
+$('heldOn').onchange = e => { held.on = e.target.checked; heldSave(); };
+$('heldHand').onchange = e => { held.hand = e.target.value; held.init = false; heldSave(); };
+$('heldSz').oninput = e => { held.size = +e.target.value; $('heldSzV').textContent = held.size.toFixed(1); heldSave(); };
+function heldSave(){ try { localStorage.setItem('connectworld_held', JSON.stringify({ on:held.on, hand:held.hand, size:held.size })); } catch (e){} }
+try { const d = JSON.parse(localStorage.getItem('connectworld_held') || 'null');
+  if (d){ held.on = d.on !== false; held.hand = d.hand === 'left' ? 'left' : 'right'; held.size = +d.size || 1;
+    $('heldOn').checked = held.on; $('heldHand').value = held.hand; $('heldSz').value = held.size; $('heldSzV').textContent = held.size.toFixed(1); } } catch (e){}
+
 restoreVRM();   // 起動時に前回のVRMを復元
 
 function toggleMenu(f){ menuOn = f === undefined ? !menuOn : f; $('menu').classList.toggle('on', menuOn); }
@@ -1489,6 +1538,7 @@ function update(dt){
   if (tp) poseApply(dt);   // VRMの骨を全身ポーズに合わせる
   av.visible = tp && !glass.on && (!bcARActive() || bc.avAR);   // AR確認表示では「アバターを重ねる」がONの時だけ表示 / グラスでは自分なので出さない
   floor.visible = shadow.visible = sword.visible = !glass.on;   // グラス: 床は現実のもの、剣は手元のリモコンが担当
+  heldUpdate(dt);   // アバターが剣を持つ（ONなら浮いている大剣は消す）
   if (glass.on && tp) glassCam(sh);   // ARグラス: 自分の目の位置から
   else if (bcARActive()) bcCamApply();   // 実カメラと同じ位置・向きから描く
   else if (tp && room && tpView === 'room'){   // 部屋に固定: 最初の立ち位置の後ろ上から。回り込むとアバターがボスの横・後ろへ動いて見える
