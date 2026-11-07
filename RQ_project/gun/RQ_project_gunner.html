@@ -466,9 +466,13 @@ function flipFaceCam(){
   if (face.on) openFaceCam();
 }
 function faceMirror(){ const t = $('faceType').value; return t === 'auto' ? (face.src === vid ? camMirror : face.fm !== false) : t === 'front'; }
-const sPary = new Audio('sounds/pary.mp3'); let vol = .8; sPary.preload = 'auto';
-// 戦闘BGM（ループ）
-const bgm = new Audio('sounds/battle.mp3'); bgm.loop = true; bgm.preload = 'auto'; bgm.volume = .5;
+// 共通素材は RQ_project/sounds（../sounds/）、銃専用は gun/sounds（sounds/）
+const SHARED_SND = '../sounds/', GUN_SND = 'sounds/';
+const sPary = new Audio(SHARED_SND + 'pary.mp3'); let vol = .8; sPary.preload = 'auto';
+// 戦闘BGM（ループ）：ガンナー用 battle_gun.mp3。読めない時は共通の battle.mp3 に切り替え
+const bgm = new Audio(GUN_SND + 'battle_gun.mp3');
+bgm.addEventListener('error', () => { if (!bgm.src.endsWith('/battle.mp3')){ const p = !bgm.paused; bgm.src = SHARED_SND + 'battle.mp3'; if (p) bgm.play().catch(() => {}); } });
+bgm.loop = true; bgm.preload = 'auto'; bgm.volume = .5;
 function bgmPlay(restart){ try { if (restart) bgm.currentTime = 0; bgm.play().catch(() => {}); } catch (e){} }
 function bgmStop(){ try { bgm.pause(); } catch (e){} }
 // ガード音（素材なしのため簡易合成）
@@ -494,11 +498,12 @@ function tone(a, t, type, f0, f1, dur, peak){ const o = a.createOscillator(); o.
 // gun=ハンドガン / machinegun=P90 / biggun=スナイパー、fire=発射 reload=マガジン交換 slide=装填完了・持ち替え、kara=空撃ち、atack=剣の攻撃
 const SND_FILES = ['gun_fire', 'gun_reload', 'gun_slide', 'machinegun_fire', 'machinegun_reload', 'machinegun_slide',
                    'biggun_fire', 'biggun_reload', 'biggun_slide', 'kara', 'atack'];
+const SND_SHARED = new Set(['atack']);   // ../sounds/ にあるもの
 const SND = {}, WSND = { hg:'gun', p90:'machinegun', sr:'biggun' };
 const getCtx = () => (actx = actx || new AudioContext());
 function sndLoad(){
   for (const n of SND_FILES){
-    const o = SND[n] = { buf:null, el:null, bad:false }, url = 'sounds/' + n + '.mp3';
+    const o = SND[n] = { buf:null, el:null, bad:false }, url = (SND_SHARED.has(n) ? SHARED_SND : GUN_SND) + n + '.mp3';
     const html = () => { const a = new Audio(url); a.preload = 'auto'; a.onerror = () => o.bad = true; o.el = a; };
     // Web Audio で読めれば低遅延・重ね鳴らしOK（file:// で開いた時など fetch できない場合は <audio> で再生）
     try { fetch(url).then(r => { if (!r.ok) throw 0; return r.arrayBuffer(); }).then(ab => getCtx().decodeAudioData(ab)).then(b => o.buf = b).catch(html); }
