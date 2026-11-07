@@ -38,7 +38,8 @@
     <label>照準の操作 <select id="aimMode"><option value="gaze">視線（見ている所）</option><option value="face">顔の位置（従来）</option></select></label>
     <label>顔認識に使うカメラ<select id="faceSel"><option value="">自動（インカメラ）</option><option value="user">フロント</option><option value="environment">バック</option></select></label>
     <label>カメラの種類 <select id="faceType"><option value="auto">自動判定</option><option value="front">フロント（鏡像）</option><option value="back">バック（非鏡像）</option></select></label> <button id="faceFlip">🔄 前/後 切替</button>
-    <label>照準のブレ補正 <input type="range" id="gzSmooth" min="0.2" max="3" step="0.1" value="1"><br><small style="color:#9fdcea">左ほど安定・右ほど素早い</small></label>
+    <label>照準のなめらかさ <input type="range" id="gzSmooth" min="0.1" max="2" step="0.1" value="0.7"><br><small style="color:#9fdcea">左ほどゆっくり滑らか・右ほど素早い</small></label>
+    <label>照準の感度 <b id="gzGainV">1.0</b><input type="range" id="gzGain" min="0.5" max="1.5" step="0.05" value="1"><br><small style="color:#9fdcea">左ほど照準の動きが小さい（1.0 = 見ている所ぴったり）</small></label>
     <label>感度（キャリブレーション前・顔の位置モード） <input type="range" id="faceGain" min="0.5" max="3" step="0.1" value="1.5"></label>
     <label><input type="checkbox" id="facePrevOn" checked> 認識プレビューを表示</label>
     <div><button id="faceStart">顔認識を開始/再起動</button> <button id="faceCal">ずれ補正 (C)</button></div>
@@ -54,12 +55,14 @@
   <details id="gnMenu" open><summary>🔫 ガンナー設定</summary>
     <label><input type="checkbox" id="hbOn" checked> 当たり判定（四角）を表示</label>
     <label>当たり判定の濃さ<input type="range" id="hbOp" min="0.05" max="1" step="0.05" value="0.25"></label>
+    <label>スナイパー判定の甘さ <b id="snTolV">0.25</b><input type="range" id="snTol" min="0.1" max="0.5" step="0.05" value="0.25"><br><small style="color:#9fdcea;margin:0">右ほど甘い（金色の帯が太くなる）</small></label>
+    <label>スナイパー円の速さ <b id="snPerV">2.0</b>秒<input type="range" id="snPer" min="1" max="3.5" step="0.1" value="2.0"><br><small style="color:#9fdcea;margin:0">1往復の時間。右ほどゆっくり</small></label>
     <label>剣の振り感度 <input type="range" id="swTh" min="1.2" max="4" step=".1" value="2.2"><br><small style="color:#9fdcea;margin:0">左ほど敏感（振り始めと見なす加速度）</small></label>
     <label>突き 加速度 <b id="skTAV">4.0</b>g<input type="range" id="skTA" min="2.5" max="8" step="0.1" value="4.0"></label>
     <label>縦重撃 ∫縦 <b id="skHVV">650</b>°<input type="range" id="skHV" min="200" max="1500" step="10" value="650"></label>
     <label>横重撃 ∫横 <b id="skHHV">260</b>°<input type="range" id="skHH" min="100" max="500" step="10" value="260"></label>
     <small>十字で武器切替: ↑=ハンドガン(8発) / ←=P90(50発・押しっぱなしで連射) / →=スナイパー(1発ずつ) / ↓=ビームサーベル<br>
-    スナイパー: 伸び縮みする円が金色の円に重なった瞬間に撃つと命中<br>
+    スナイパー: 伸び縮みする白い円が金色の帯の中に入った時（緑に光る間）に撃つと命中<br>
     サーベル: 前に突く=突き / 縦・横に大きく振る=重撃（B=突き）。MotionPlus付きなら剣士版と同じジャイロ判定<br>
     Wii: B=射撃・攻撃 / A長押し=ガード / 振り上げ=パリィ（ボタンは押しても押さなくてもOK）/ 縦に立てる=リロード（黄色の所でB）<br>
     1=グレネード / 2=時限地雷 / +=回り込み弾 / −=視線のずれ補正（タイトル画面では視線キャリブレーション）/ HOME=メニュー<br>
@@ -228,7 +231,9 @@ const snG = new THREE.Group(); snG.visible = false; camera.add(snG);
 const snTgtM = new THREE.MeshBasicMaterial({ color:0xffd35a, transparent:true, opacity:.9, depthTest:false });
 const snPulM = new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:.9, depthTest:false });
 const snTgt = new THREE.Mesh(new THREE.RingGeometry(.9, 1, 64), snTgtM), snPul = new THREE.Mesh(new THREE.RingGeometry(.93, 1, 64), snPulM);
-snTgt.renderOrder = snPul.renderOrder = 36; snG.add(snTgt, snPul);
+const snBandM = new THREE.MeshBasicMaterial({ color:0xffd35a, transparent:true, opacity:.18, depthTest:false });
+let snBand = new THREE.Mesh(new THREE.RingGeometry(.75, 1.25, 64), snBandM);   // 白い円がこの帯に入っていれば成功
+snTgt.renderOrder = snPul.renderOrder = 36; snBand.renderOrder = 35; snG.add(snBand, snTgt, snPul);
 const muzzleWorld = () => muzzle.getWorldPosition(new THREE.Vector3());
 const shield = new THREE.Group(); shield.position.z = -2.3; shield.visible = false; camera.add(shield);
 shield.add(new THREE.Mesh(new THREE.CircleGeometry(.9, 32), new THREE.MeshBasicMaterial({ color:0xffd35a, transparent:true, opacity:.25, blending:THREE.AdditiveBlending, depthTest:false })));
@@ -346,7 +351,8 @@ const FACE_GX = 6, FACE_GY = 9, FACE_CAL = 20, FACE_DEAD = .012;
 // それに黒目が目の中のどこにあるかを足して、キャリブレーションで画面座標(-1〜1)に対応させる。
 const GZ_PTS = [[0, 0], [-.75, .7], [.75, .7], [.75, -.7], [-.75, -.7], [0, .7], [.75, 0], [0, -.7], [-.75, 0]];
 const GZ_HX = 5, GZ_EX = 6, GZ_HY = 7, GZ_EY = 8, GZ_OPEN = .12, GZ_KEY = 'rq_gunner_gaze_v1';
-const gaze = { mode:'gaze', f:null, ft:0, c0:null, cs:[], M:null, ofs:[0, 0], cal:null, ex:{}, ey:{}, smooth:1, tx:null, ty:null };
+const GZ_MED = 5, GZ_DEAD = .035;   // 中央値を取るフレーム数 / これより小さい揺れは無視（画面幅の約2%）
+const gaze = { buf:[], hx:0, hy:0, s1:null, s2:null, gain:1, mode:'gaze', f:null, ft:0, c0:null, cs:[], M:null, ofs:[0, 0], cal:null, ex:{}, ey:{}, smooth:.7, tx:null, ty:null };
 try { const g = JSON.parse(localStorage.getItem(GZ_KEY) || 'null'); if (g && g.M) gaze.M = g.M; } catch (e){}
 const faceActive = () => face.on && !!face.lm && !!face.src && (gaze.mode === 'gaze' ? !!(gaze.M || gaze.c0) : face.cx !== null);
 function gazeFeat(p, va){
@@ -512,7 +518,9 @@ function faceStep(now){
     else setBadge('👤 顔を画面の中心に構えてください…');
   }
   if (gaze.mode === 'gaze'){
-    gaze.f = gazeFeat(p, v.videoWidth/v.videoHeight); gaze.ft = now;
+    const f0 = gazeFeat(p, v.videoWidth/v.videoHeight);
+    if (f0.open > GZ_OPEN){ gaze.buf.push(f0); if (gaze.buf.length > GZ_MED) gaze.buf.shift(); }   // まばたき中の値は入れない
+    gaze.f = gaze.buf.length ? Object.assign(featAvg(gaze.buf), { open:f0.open }) : f0; gaze.ft = now;
     if (!gaze.M && !gaze.c0 && !gaze.cal){   // キャリブレーション前は、最初に画面中央を見ている所を基準にする
       if (gaze.f.open > GZ_OPEN) gaze.cs.push(gaze.f);
       if (gaze.cs.length >= FACE_CAL){ gaze.c0 = featAvg(gaze.cs); gaze.cs = []; }
@@ -530,8 +538,7 @@ function faceUpdate(dt){
       const m = gazeMap(gaze.f); if (m){ gaze.tx = Math.max(-1.1, Math.min(1.1, m[0])); gaze.ty = Math.max(-1.1, Math.min(1.1, m[1])); }
     }
     if (gaze.tx === null) return;
-    mouse.nx = Math.max(-1, Math.min(1, euro(gaze.ex, gaze.tx, dt, gaze.smooth)));
-    mouse.ny = Math.max(-1, Math.min(1, euro(gaze.ey, gaze.ty, dt, gaze.smooth)));
+    aimSmooth(gaze.tx*gaze.gain, gaze.ty*gaze.gain, dt, GZ_DEAD);
     return;
   }
   if (face.seen){
@@ -539,9 +546,18 @@ function faceUpdate(dt){
     face.tx = Math.max(-1, Math.min(1, (faceMirror() ? -1 : 1)*f(dx)*FACE_GX*face.gain));   // フロント(鏡像)は左右反転、バックはそのまま
     face.ty = Math.max(-1, Math.min(1, -f(dy)*FACE_GY*face.gain));
   }
-  const k = 1 - Math.exp(-dt*16);
-  face.sx += ((face.tx || 0) - face.sx)*k; face.sy += ((face.ty || 0) - face.sy)*k;
-  mouse.nx = face.sx; mouse.ny = face.sy;
+  aimSmooth(face.tx || 0, face.ty || 0, dt, .015);
+}
+// 照準のなめらか移動：小さな揺れは不感帯で止め、2段の追従で加速・減速をなめらかにする
+function aimSmooth(tx, ty, dt, dead){
+  const g = gaze;
+  if (g.s1 === null){ g.hx = tx; g.hy = ty; g.s1 = [tx, ty]; g.s2 = [tx, ty]; }
+  const dx = tx - g.hx, dy = ty - g.hy, d = Math.hypot(dx, dy);
+  if (d > dead){ const m = (d - dead)/d; g.hx += dx*m; g.hy += dy*m; }   // 不感帯の外に出た分だけ目標を動かす
+  const k = 1 - Math.exp(-dt*(2.5 + 7*g.smooth));
+  g.s1[0] += (g.hx - g.s1[0])*k; g.s1[1] += (g.hy - g.s1[1])*k;
+  g.s2[0] += (g.s1[0] - g.s2[0])*k; g.s2[1] += (g.s1[1] - g.s2[1])*k;
+  mouse.nx = Math.max(-1, Math.min(1, g.s2[0])); mouse.ny = Math.max(-1, Math.min(1, g.s2[1]));
 }
 const prevC = $('facePrev'), pctx = prevC.getContext('2d');
 function faceDraw(){
@@ -581,8 +597,9 @@ $('faceGain').oninput = e => face.gain = +e.target.value;
 faceSel.onchange = () => { if (face.on) openFaceCam(); };
 $('faceCal').onclick = gazeRecenter;
 $('gzCalBtn').onclick = $('mGaze').onclick = () => gazeFullCal();
-$('aimMode').onchange = e => { gaze.mode = e.target.value; gaze.tx = gaze.ty = null; gaze.ex = {}; gaze.ey = {}; mouse.nx = mouse.ny = 0; faceRecenter(); };
+$('aimMode').onchange = e => { gaze.mode = e.target.value; gaze.tx = gaze.ty = null; gaze.s1 = null; gaze.buf = []; gaze.ex = {}; gaze.ey = {}; mouse.nx = mouse.ny = 0; faceRecenter(); };
 $('gzSmooth').oninput = e => gaze.smooth = +e.target.value;
+$('gzGain').oninput = e => { gaze.gain = +e.target.value; $('gzGainV').textContent = gaze.gain.toFixed(2); };
 $('faceStart').onclick = () => { if (!face.on){ $('faceOn').checked = face.on = true; } startFace(); };
 let prevOn = true; $('facePrevOn').onchange = e => prevOn = e.target.checked;
 
@@ -721,7 +738,8 @@ const WPN = {
 };
 const W_ORDER = ['hg', 'p90', 'sr', 'sword'], W_KEY = { hg:'▲', p90:'◀', sr:'▶', sword:'▼' };
 const SW = { thrust:{ dmg:12, cd:.35 }, heavy:{ dmg:30, cd:.9 } };   // サーベル：突き / 重撃
-const SN_PER = 1.3, SN_TOL = .14;   // スナイパー：円の伸縮周期(秒) / 重なり判定の許容幅
+let SN_PER = 2.0, SN_TOL = .25;   // スナイパー：円の伸縮周期(秒) / 重なり判定の許容幅（旧 1.3秒 / ±0.14）
+const SN_GRACE = 150, SN_R = .55, SN_AIM = .9;   // 押すのが遅れても成功にする猶予(ms) / 円の大きさ(旧0.3) / 当たり判定の広げ幅(m)
 const curW = () => WPN[P.wp], MAG = 8;
 const P = { armed:false, x:0, hp:PMAX, inv:0, par:0, parAge:0, parCd:0, counter:0, cBig:0, guard:false, fireCd:0, cdG:0, cdM:0, cdC:0, recoil:0, lock:false,
             ammo:8, power:0, rl:null, vt:0, crit:false, hintT:0, weakWas:false,
@@ -779,7 +797,11 @@ function updHitbox(){
   wkFillM.opacity = open ? Math.min(.8, hbOp*(.6 + .6*pul)) : hbOp*.15; wkLineM.opacity = Math.min(1, open ? hbOp*3 + .2 : hbOp*.8);
 }
 function aimRay(){ ray.setFromCamera(mv2.set(mouse.nx, mouse.ny), camera); return ray.ray; }
-function aimOnBoss(out){ const r = aimRay(); return bossAlive() && !!r.intersectBox(HB, out) && r.origin.distanceTo(out) < 40; }
+const HB_SR = new THREE.Box3();
+function aimOnBoss(out){
+  const r = aimRay(), box = P.wp === 'sr' ? HB_SR.copy(HB).expandByScalar(SN_AIM) : HB;
+  return bossAlive() && !!r.intersectBox(box, out) && r.origin.distanceTo(out) < 40;
+}
 function aimOnWeak(out){ const r = aimRay(); return weakOpen() && !!r.intersectBox(WB, out) && r.origin.distanceTo(out) < 40; }
 
 function hurtBoss(d, at, big, small){
@@ -822,6 +844,11 @@ function dealHit(d, at, crit, big, small){
 // スナイパーの伸縮円：0〜1の往復で半径が 0.35〜1.85倍。1倍(=的の円)付近なら命中
 const snScale = () => { const u = (P.snT/SN_PER) % 1; return .35 + 1.5*(1 - Math.abs(2*u - 1)); };
 const snOK = () => Math.abs(snScale() - 1) < SN_TOL;
+const snTiming = () => snOK() || performance.now() - (P.snOkT || 0) < SN_GRACE;   // Wiiの遅れ分、少し前まで重なっていればOK
+function snSetTol(t){
+  SN_TOL = t; snG.remove(snBand); snBand.geometry.dispose();
+  snBand = new THREE.Mesh(new THREE.RingGeometry(1 - t, 1 + t, 64), snBandM); snBand.renderOrder = 35; snG.add(snBand);
+}
 // ===== 武器切替 =====
 function showWeapon(){
   gHG.visible = P.wp === 'hg'; gP90.visible = P.wp === 'p90'; gSR.visible = P.wp === 'sr'; gSW.visible = P.wp === 'sword';
@@ -834,7 +861,7 @@ function setWeapon(w){
   if (curW().mag){ P.ammo = P.mags[w]; P.power = P.pows[w]; } else { P.ammo = 0; P.power = 0; }
   mgStop(true); showWeapon(); if (w === 'sword') playSaber(false); else sndSlide(w); wiiPattern([25]);
   popCam(curW().name, w === 'sword' ? '#ff9ae8' : '#7ae7ff', .7, .7);
-  if (w === 'sr'){ popup('円が重なった瞬間に撃て', '#ffd35a', new THREE.Vector3(0, -.6, -3), .55, 1.2, camera); if (ctl.mode === 'mouse' && P.ammo <= 0) startReload(); }
+  if (w === 'sr'){ popup('円が緑に光ったら撃て', '#ffd35a', new THREE.Vector3(0, -.6, -3), .55, 1.2, camera); if (ctl.mode === 'mouse' && P.ammo <= 0) startReload(); }
 }
 function shoot(){
   const wd = curW(); if (!wd.mag) return;
@@ -850,7 +877,7 @@ function shoot(){
   P.fireCd = wd.cd; P.recoil = sr ? 1.6 : p90 ? .5 : 1; mFlash.material.opacity = 1; mFlash.material.rotation = Math.random()*6.28;
   sndFire(P.wp); if (sr) shake = Math.max(shake, .15);
   wiiPattern([sr ? 90 : p90 ? 18 : pw ? 50 : 35]);
-  const timing = !sr || snOK();   // スナイパーは円が重なっている時だけ命中
+  const timing = !sr || snTiming();   // スナイパーは円が重なっている時だけ命中
   const from = muzzleWorld(), crit = timing && aimOnWeak(aimHit), hit = crit || (timing && aimOnBoss(aimHit)), cnt = P.counter > 0;
   aimRay(); const to = hit ? aimHit.clone() : ray.ray.at(30, new THREE.Vector3());
   if (p90){ to.x += (Math.random() - .5)*.25; to.y += (Math.random() - .5)*.25; }
@@ -1114,10 +1141,10 @@ function updGun(dt){
   // スナイパーの円
   snG.visible = state === 'play' && P.wp === 'sr' && !P.rl && P.ammo > 0;
   if (snG.visible){
-    const r0 = .3, f = snScale(), ok = snOK();
+    const r0 = SN_R, f = snScale(), ok = snOK(); if (ok) P.snOkT = performance.now();
     snG.position.set(rx, ry, -3); snTgt.scale.setScalar(r0); snPul.scale.setScalar(r0*f);
     snPulM.color.setHex(ok ? 0x5ee08a : 0xffffff); snTgtM.color.setHex(ok ? 0x5ee08a : 0xffd35a);
-    snTgtM.opacity = snPulM.opacity = P.lock ? .95 : .45;
+    snTgtM.opacity = snPulM.opacity = P.lock ? .95 : .55; snBandM.color.setHex(ok ? 0x5ee08a : 0xffd35a); snBandM.opacity = ok ? .35 : .18;
   }
   const sw = P.wp === 'sword';
   const low = P.guard || P.par > 0 || P.armed, k = Math.min(1, dt*16);
@@ -1410,6 +1437,8 @@ async function toggleCtl(){
   setCtl('wii');
 }
 $('ctrlBtn').onclick = $('mCtrl').onclick = toggleCtl;
+$('snTol').oninput = e => { snSetTol(+e.target.value); $('snTolV').textContent = (+e.target.value).toFixed(2); };
+$('snPer').oninput = e => { SN_PER = +e.target.value; $('snPerV').textContent = SN_PER.toFixed(1); };
 $('mWiiTh').oninput = e => wii.th = +e.target.value; $('swTh').oninput = e => wii.swTh = +e.target.value;
 for (const [k, i, l, f] of [['thrustA', 'skTA', 'skTAV', v => v.toFixed(1)], ['heavyV', 'skHV', 'skHVV', v => v], ['heavyH', 'skHH', 'skHHV', v => v]])
   $(i).oninput = e => { SK[k] = +e.target.value; $(l).textContent = f(SK[k]); };
