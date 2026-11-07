@@ -633,7 +633,7 @@ function poseDraw(){
   if (!camStream || v.readyState < 2 || !v.videoWidth){
     pctx.fillStyle = '#ffd35a'; pctx.font = 'bold 16px sans-serif'; pctx.textAlign = 'center'; pctx.fillText('カメラ待機中…', w/2, h/2); return;
   }
-  const mir = pose.cam === 'front', f = Math.min(w/v.videoWidth, h/v.videoHeight), dw = v.videoWidth*f, dh = v.videoHeight*f, ox = (w - dw)/2, oy = (h - dh)/2;
+  const mir = (bc.state === 'locked' && bc.poseCam ? bc.poseCam : pose.cam) === 'front', f = Math.min(w/v.videoWidth, h/v.videoHeight), dw = v.videoWidth*f, dh = v.videoHeight*f, ox = (w - dw)/2, oy = (h - dh)/2;
   pctx.save(); if (mir){ pctx.translate(w, 0); pctx.scale(-1, 1); } pctx.drawImage(v, ox, oy, dw, dh); pctx.restore();
   const X = x => { const p = ox + x*dw; return mir ? w - p : p; }, Y = y => oy + y*dh;
   if (pose.seen && pose.n){
@@ -1016,8 +1016,12 @@ function poseCamAuto(force){
   const p = force ? bc.origin : (bcFeetOK() && bc.feetF); if (!p) return;
   const cam = new THREE.Vector3().applyMatrix4(bc.FfromCam), fw = new THREE.Vector3(0, 0, -1).transformDirection(bc.FfromG);
   const tx = cam.x - p.x, tz = cam.z - p.z, n = Math.hypot(tx, tz) || 1, dot = (tx*fw.x + tz*fw.z)/n;
-  const want = dot > .2 ? 'front' : dot < -.2 ? 'back' : pose.cam;
-  if (want !== pose.cam){ pose.cam = want; if (want === 'front') poseRecenter(); }
+  const want = dot > .3 ? 'front' : dot < -.3 ? 'back' : pose.cam;
+  if (force){ pose.camHold = 0; if (want !== pose.cam){ pose.cam = want; if (want === 'front') poseRecenter(); } return; }
+  if (!pose.seen || want === pose.cam){ pose.camHold = 0; return; }   // メインに体が見えていない間は変えない（2台目だけの位置で揺れないように）
+  const now = performance.now(); if (!pose.camHold){ pose.camHold = now; return; }
+  if (now - pose.camHold < 800) return;
+  pose.camHold = 0; pose.cam = want; if (want === 'front') poseRecenter();
 }
 // VRMアバターの向き: 骨はカメラから見た向きで付くので、カメラの向き（ゲーム座標）のぶんだけ回す
 function avYaw(){
