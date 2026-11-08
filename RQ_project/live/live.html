@@ -50,6 +50,13 @@
   #modePill.pop{animation:pop .6s ease-out}
   @keyframes pop{from{transform:scale(1.25);background:rgba(255,111,181,.85)}}
   @media (prefers-reduced-motion: reduce){#modePill.pop{animation:none}}
+  /* 仮想カメラの状態表示(録画には映らない) */
+  #vcPill{position:fixed;right:10px;bottom:50px;z-index:5;display:none;background:rgba(0,0,0,.65);padding:7px 14px;border-radius:12px;
+    font-size:13px;border:1px solid rgba(143,255,221,.45);max-width:min(360px,80vw);line-height:1.45}
+  #vcPill.show{display:block}
+  #vcPill .pg{height:5px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden;margin-top:5px}
+  #vcProg{height:100%;width:0;background:#8fd}
+  #vcBtn.act{background:#1d6b5a;border-color:#8fd}
 </style>
 </head>
 <body>
@@ -75,6 +82,8 @@
   <label><input type="checkbox" id="showBones" checked> カメラ映像にボーン</label>
   <label><input type="checkbox" id="showAvBones"> アバターのボーン</label>
   <label><input type="checkbox" id="handTrack" checked> ハンドトラッキング</label>
+  <label title="片手ピースを0.5秒で、指先に仮想カメラが付きます"><input type="checkbox" id="vcGesture" checked> ✌ピースで仮想カメラ</label>
+  <button id="vcBtn" title="Vキーでも切り替え">🎥 仮想カメラ</button>
   <span id="status">VRMを読み込んでください</span>
 </div>
 
@@ -88,6 +97,7 @@
 </div>
 
 <div id="modePill">オート: 全身</div>
+<div id="vcPill" role="status" aria-live="polite"><span id="vcTxt"></span><div class="pg"><div id="vcProg"></div></div></div>
 
 <div id="panel">
   <div id="vwrap"><video id="video" playsinline muted></video><canvas id="overlay"></canvas></div>
@@ -109,6 +119,7 @@
   <div><label><input type="checkbox" id="autoBgm" checked> 変身したら伴奏を最初から再生</label></div>
   <div><label><input type="checkbox" id="autoRec" checked> 変身シーンから自動で録画</label></div>
   <div id="calInfo">体格: 未測定</div>
+  <div class="sec" style="opacity:.85">🎥 仮想カメラ: 片手✌を0.5秒 → 指先がカメラ / ✌をやめる → その場で空中に固定 / もう一度✌ → 持ち直し / 両手✌ or Vキー → 元のカメラ</div>
 </div>
 
 <script type="importmap">
@@ -154,14 +165,15 @@ const U = {
   uVideo: { value: vidTex }, uMask: { value: maskTex }, uPlate: { value: blankTex },
   uCrop: { value: new THREE.Vector2(1, 1) }, uMirror: { value: 1 }, uHasVideo: { value: 0 },
   uHide: { value: 0 }, uGlow: { value: 0 }, uHasPlate: { value: 0 }, uTime: { value: 0 },
-  uLearn: { value: blankTex }, uHasLearn: { value: 0 }, uFace: { value: new THREE.Vector4(0.5, 0.8, 0.1, 0.1) }, uFaceOn: { value: 0 }
+  uLearn: { value: blankTex }, uHasLearn: { value: 0 }, uFace: { value: new THREE.Vector4(0.5, 0.8, 0.1, 0.1) }, uFaceOn: { value: 0 },
+  uBd: { value: 0 }
 };
 const bgMat = new THREE.ShaderMaterial({
   uniforms: U, depthTest: false, depthWrite: false,
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.99, 1.0); }`,
   fragmentShader: `
     uniform sampler2D uVideo, uMask, uPlate, uLearn;
-    uniform vec2 uCrop; uniform float uMirror, uHasVideo, uHide, uGlow, uHasPlate, uTime, uHasLearn, uFaceOn;
+    uniform vec2 uCrop; uniform float uMirror, uHasVideo, uHide, uGlow, uHasPlate, uTime, uHasLearn, uFaceOn, uBd;
     uniform vec4 uFace;
     varying vec2 vUv;
     float maskAt(vec2 uv){ return texture2D(uMask, vec2(uv.x, 1.0 - uv.y)).r; }
@@ -197,11 +209,32 @@ const bgMat = new THREE.ShaderMaterial({
       }
       float sh = 0.5 + 0.5 * sin(uTime * 9.0 + vUv.y * 30.0);
       col += m * uGlow * mix(vec3(1.0, 0.55, 0.85), vec3(1.0, 0.95, 0.8), sh) * 1.2;
-      gl_FragColor = vec4(col, 1.0);
+      float ea = 1.0;
+      if (uBd > 0.5) { vec2 e = smoothstep(vec2(0.0), vec2(0.06), vUv) * smoothstep(vec2(0.0), vec2(0.06), 1.0 - vUv); ea = e.x * e.y; }   // 仮想カメラ用スクリーン: 端をぼかす
+      gl_FragColor = vec4(col, ea);
     }`
 });
 const bgQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), bgMat);
 bgQuad.frustumCulled = false; bgQuad.renderOrder = -1000; scene.add(bgQuad);
+
+// 仮想カメラ用: カメラ映像を「アバターの後ろの3Dスクリーン」として置く。Webカメラ位置から見ると通常画面と同じに見える。
+// (顔も含めて生身は隠す / 端はぼかして、その外は舞台の色)
+const bdMat = new THREE.ShaderMaterial({
+  uniforms: { ...U, uBd: { value: 1 }, uFaceOn: { value: 0 } }, transparent: true, depthWrite: false,
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: bgMat.fragmentShader
+});
+const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), bdMat);
+backdrop.visible = false; backdrop.frustumCulled = false; backdrop.renderOrder = -900; scene.add(backdrop);
+const stageQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+  depthTest: false, depthWrite: false,
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.99, 1.0); }`,
+  fragmentShader: `varying vec2 vUv; void main(){
+    vec3 c = mix(vec3(0.05, 0.03, 0.10), vec3(0.17, 0.08, 0.26), vUv.y);
+    c *= 1.0 - 0.45 * length((vUv - 0.5) * vec2(1.0, 1.3));
+    gl_FragColor = vec4(c, 1.0); }`
+}));
+stageQuad.visible = false; stageQuad.frustumCulled = false; stageQuad.renderOrder = -1000; scene.add(stageQuad);
 
 /* ---------- 演出用: パーティクル / 魔法陣 / フラッシュ / タイトル ---------- */
 function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; }
@@ -1343,6 +1376,136 @@ function onDetect(now) {
   autoMode(now);
 }
 
+/* ---------- 仮想カメラ(✌ピースで指先にカメラ) ---------- */
+// 片手ピース0.5秒 → アバターの指先(人差し指と中指の先の間)にカメラが付き、そこから顔を撮る(手持ち)
+// ピースをやめる → カメラはその場で空中に固定 / 固定中にもう一度ピース → 持ち直し / 両手ピース0.8秒・Vキー → 元のカメラへ
+const VC = { fov: 42, grab: 0.5, regrab: 0.35, release: 0.35, both: 0.8 };
+const vcam = new THREE.PerspectiveCamera(VC.fov, 1, 0.02, 60);
+const vc = {
+  active: false, state: 'off', side: null, holdT: 0, holdSide: null, relT: 0, bothT: 0, flyT: 0, latch: false, D: 3,
+  pos: new THREE.Vector3(), quat: new THREE.Quaternion(), fov: 30,
+  fixPos: new THREE.Vector3(), fixQuat: new THREE.Quaternion(), look: new THREE.Vector3(), lookOK: false
+};
+const QID = new THREE.Quaternion(), _vm = new THREE.Matrix4();
+const _t1 = new THREE.Vector3(), _t2 = new THREE.Vector3(), _t3 = new THREE.Vector3(), _t4 = new THREE.Vector3();
+
+// 指の曲がり具合(付け根〜先の屈曲角の合計)。手の向きに関係なく判定できる
+const curlOf = (W, j) => flexion(W, 0, j, j + 1) + flexion(W, j, j + 1, j + 2) + flexion(W, j + 1, j + 2, j + 3);
+function isPeace(W) {
+  const ext = j => curlOf(W, j) < 1.1, fold = j => curlOf(W, j) > 1.9;
+  return ext(5) && ext(9) && fold(13) && fold(17);   // 人差し指・中指が伸びて、薬指・小指が曲がっている
+}
+function peaceSides() {
+  const out = {};
+  if (!hand || !$('handTrack').checked || !$('vcGesture').checked || !handRes?.worldLandmarks?.length) return out;
+  const a = assignHands();
+  for (const s of ['left', 'right']) if (a[s] && handRes.worldLandmarks[a[s].i]) out[s] = isPeace(handRes.worldLandmarks[a[s].i]);
+  return out;
+}
+// アバターの指先(ピースのVの先)
+function fingerTip(side, out) {
+  const g = n => vrm.humanoid.getNormalizedBoneNode(side + n);
+  const tip = (f, o) => {
+    const d = g(f + 'Distal'), m = g(f + 'Intermediate'); if (!d || !m) return null;
+    d.getWorldPosition(o); m.getWorldPosition(_t4); return o.add(o.clone().sub(_t4).multiplyScalar(0.9));
+  };
+  const a = tip('Index', out), b = tip('Middle', _t3);
+  if (a && b) return out.add(b).multiplyScalar(0.5);
+  if (a) return out;
+  const h = g('Hand'), la = g('LowerArm'); if (!h || !la) return null;   // 指ボーンが無いVRM: 手首の少し先
+  h.getWorldPosition(out); la.getWorldPosition(_t4);
+  return out.add(out.clone().sub(_t4).normalize().multiplyScalar(0.12));
+}
+function faceTarget(out) {
+  const hd = boneW('head', out); return hd ? out.add(_t4.set(0, 0.06, 0)) : null;
+}
+function vcStart() {   // 通常カメラの位置から飛び出す
+  if (vc.active) return;
+  vc.active = true; vc.pos.set(0, 0, 0); vc.quat.identity(); vc.fov = camera.fov;
+  vc.D = Math.max(2.5, -body.cz + 1.4);   // スクリーンはアバターより少し奥
+  const h = 2 * Math.tan(camera.fov * Math.PI / 360) * vc.D;
+  backdrop.scale.set(h * camera.aspect, h, 1); backdrop.position.set(0, 0, -vc.D);
+}
+function vcGrab(side) { vcStart(); vc.state = 'hold'; vc.side = side; vc.relT = 0; vc.flyT = 0; vc.lookOK = false; }
+function vcFix() { vc.state = 'fixed'; vc.fixPos.copy(vc.pos); vc.fixQuat.copy(vc.quat); vc.flyT = 1; }
+function vcExit() { if (vc.state === 'off') return; vc.state = 'off'; vc.flyT = 0; vc.latch = true; }
+function vcPreset() {   // ボタン/Vキー: 顔の正面アップに固定して開始
+  if (!vrm || !body.ok || phase !== 'live') { say('仮想カメラは変身後(ライブ中)に使えます'); return; }
+  const tgt = faceTarget(_t1); if (!tgt) return;
+  vcStart();
+  vc.fixPos.copy(tgt).add(_t2.set(0.08, 0.02, 0.6));
+  vc.fixQuat.setFromRotationMatrix(_vm.lookAt(vc.fixPos, tgt, UP));
+  vc.state = 'fixed'; vc.flyT = 0;
+}
+function vcToggle() { vc.state === 'off' ? vcPreset() : vcExit(); }
+$('vcBtn').onclick = vcToggle;
+addEventListener('keydown', e => {
+  if ((e.key === 'v' || e.key === 'V') && !e.repeat && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName)) vcToggle();
+});
+
+function vcUpdate(dt) {
+  const live = phase === 'live' && vrm?.scene.visible && body.ok;
+  if (phase !== 'live' && vc.state !== 'off') vcExit();
+  const g = live ? peaceSides() : {};
+  const ps = ['left', 'right'].filter(s => g[s]);
+  if (!ps.length) vc.latch = false;   // 一度ピースを解かないと次の操作をしない(誤作動防止)
+  // 両手ピース → 元のカメラへ
+  if (ps.length === 2 && vc.state !== 'off') { vc.bothT += dt; if (vc.bothT > VC.both) vcExit(); } else vc.bothT = 0;
+  // 片手ピース → 持つ(固定中なら持ち直す)
+  if (vc.state !== 'hold') {
+    if (ps.length === 1 && !vc.latch) {
+      if (vc.holdSide !== ps[0]) { vc.holdSide = ps[0]; vc.holdT = 0; }
+      vc.holdT += dt;
+      if (vc.holdT > (vc.state === 'off' ? VC.grab : VC.regrab)) { vcGrab(ps[0]); vc.holdT = 0; }
+    } else vc.holdT = 0;
+  } else {
+    vc.holdT = 0;
+    if (g[vc.side] && live) vc.relT = 0;
+    else if ((vc.relT += dt) > VC.release) vcFix();   // ピースをやめた(or 見失った) → その場で固定
+  }
+
+  // カメラの目標姿勢
+  let want = null;
+  if (vc.state === 'hold') {
+    const tip = fingerTip(vc.side, _t1), tgt = faceTarget(_t2);
+    if (tip && tgt) {
+      if (!vc.lookOK) { vc.look.copy(tgt); vc.lookOK = true; } else vc.look.lerp(tgt, 1 - Math.exp(-dt * 8));
+      const dir = _t3.copy(vc.look).sub(tip); const dist = dir.length(); dir.divideScalar(Math.max(dist, 1e-6));
+      tip.addScaledVector(dir, Math.min(0.03, dist * 0.3));                          // 指より少し前(自分の指が写り込みにくい)
+      if (tip.distanceTo(vc.look) < 0.16) tip.copy(vc.look).addScaledVector(dir, -0.16);   // 顔にめり込まない
+      want = { pos: tip, quat: new THREE.Quaternion().setFromRotationMatrix(_vm.lookAt(tip, vc.look, UP)), fov: VC.fov };
+    }
+  } else if (vc.state === 'fixed') want = { pos: vc.fixPos, quat: vc.fixQuat, fov: VC.fov };
+  else if (vc.active) want = { pos: _t1.set(0, 0, 0), quat: QID, fov: camera.fov };
+
+  if (want) {
+    vc.flyT += dt;
+    const rate = vc.flyT < 0.6 ? 5 : vc.state === 'hold' ? 14 : 9, k = 1 - Math.exp(-dt * rate);
+    vc.pos.lerp(want.pos, k); vc.quat.slerp(want.quat, k); vc.fov += (want.fov - vc.fov) * k;
+    if (vc.state === 'off' && vc.pos.length() < 0.004 && vc.quat.angleTo(QID) < 0.004) vc.active = false;   // 戻りきった
+  }
+  if (vc.active) {
+    vcam.position.copy(vc.pos); vcam.quaternion.copy(vc.quat);
+    vcam.fov = vc.fov; vcam.aspect = camera.aspect; vcam.updateProjectionMatrix(); vcam.updateMatrixWorld();
+  }
+  bgQuad.visible = !vc.active; backdrop.visible = stageQuad.visible = vc.active;
+  vcUI();
+}
+let vcLastUI = '';
+function vcUI() {
+  let t = '', p = 0;
+  if (vc.bothT > 0) { t = '↩ 元のカメラに戻ります…'; p = vc.bothT / VC.both; }
+  else if (vc.state !== 'hold' && vc.holdT > 0) { t = vc.state === 'off' ? '✌ 仮想カメラ起動…' : '✌ カメラを持ち直し…'; p = vc.holdT / (vc.state === 'off' ? VC.grab : VC.regrab); }
+  else if (vc.state === 'hold') { t = '🎥 手持ち: 指先がカメラ。ピースをやめるとその場で固定'; p = 1; }
+  else if (vc.state === 'fixed') { t = '📌 空中に固定中。片手✌で持ち直し / 両手✌・Vキーで戻る'; p = 1; }
+  const key = t + '|' + Math.round(p * 20);
+  if (key === vcLastUI) return; vcLastUI = key;
+  $('vcPill').classList.toggle('show', !!t); $('vcTxt').textContent = t;
+  $('vcProg').style.width = Math.round(Math.min(1, p) * 100) + '%';
+  $('vcBtn').classList.toggle('act', vc.state !== 'off');
+  $('vcBtn').textContent = vc.state !== 'off' ? '🎥 元のカメラに戻す' : '🎥 仮想カメラ';
+}
+
 /* ---------- メインループ ---------- */
 const clock = new THREE.Clock();
 refreshModeUI();
@@ -1380,9 +1543,19 @@ function loop() {
   updatePhase(dt, now);
   updateSinging(dt);
   updateParticles(dt);
+  vcUpdate(dt);
   U.uTime.value = now / 1000;
   renderer.clear();
-  renderer.render(scene, camera);
+  const cam = vc.active ? vcam : camera;
+  pMat.uniforms.uScale.value = renderer.domElement.height / (2 * Math.tan(cam.fov * Math.PI / 360));
+  let headFix = null;
+  if (vc.active && vrm) {   // 仮想カメラから見るときは衣装モードでも頭を出す(本人の顔は映像側にしか無いため)
+    vcam.layers.set(0);
+    if (fpReady) vcam.layers.enable(vrm.firstPerson.thirdPersonOnlyLayer);
+    else if (costumeOn) { headFix = vrm.humanoid.getRawBoneNode('head'); headFix?.scale.setScalar(1); }
+  }
+  renderer.render(scene, cam);
+  headFix?.scale.setScalar(0.001);
   if (flashMat.opacity > 0 || titleMat.opacity > 0) { renderer.clearDepth(); renderer.render(hud, hudCam); }
 }
 loop();
