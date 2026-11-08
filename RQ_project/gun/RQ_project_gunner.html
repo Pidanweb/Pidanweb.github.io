@@ -1339,7 +1339,7 @@ const wii = { dev:null, leds:1, a:false, b:false, aBlock:false, pA:false, pB:fal
               gx:0, gy:0, gz:1, gok:false, vert:false, lastSw:0, lastNeg:-1e9, th:2.2, rt:0, modeT:0,
               p1:false, p2:false, swTh:2.2, sw:{ on:false, t0:0, ax:0, ay:0, az:0, cool:0 },
               mode:0x35, mpOnce:false,
-              ptr:{ tx:0, ty:0, sx:0, sy:0, t:0, deg:20, ix:1, iy:1 },
+              ptr:{ tx:0, ty:0, sx:0, sy:0, t:0, hx:0, th:0, th0:null, th0c:0, sg:0, sgS:0, pPrev:null, deg:20, ix:1, iy:1 },
               mp:{ state:'off', ok:false, calibrated:false, zero:[8192, 8192, 8192], cal:null, up:null, upT:0, lastValid:0, sw:null, ring:[], to:0 } };
 const WVID = 0x057e, WPIDS = [0x0306, 0x0330];
 function wiiMsg(t){ $('wiiStat').textContent = t; }
@@ -1425,7 +1425,7 @@ function wiiGyro(d, ax, ay, az, a, t, held){
   // ほぼ静止している間は ゼロ点を少しずつ合わせ直す（ジャイロのドリフト＝照準が勝手に流れるのを防ぐ）
   if (slow.every(Boolean) && Math.max(...w.map(Math.abs)) < 2.5 && Math.abs(a - 1) < .06) for (let i = 0; i < 3; i++) m.zero[i] += (raw[i] - m.zero[i])*.004;
   const [wv, wh, wp] = gyOrient(w, ax, ay, az, a, t);
-  wiiPtrFeed(wv, wp, t);
+  wiiPtrFeed(wv, wp, t, ax, ay, az, a);
   gySwing({ t, a, wv, wh }, held);
 }
 function gyInteg(o, s){
@@ -1458,18 +1458,31 @@ function gyFinish(o){
 // ===== Wiiジャイロ・ポインター：リモコンを向けた方向の変化を積み上げて照準を動かす =====
 // 左右 = 鉛直軸まわりの回転（リモコンを傾けて持っても左右は左右のまま）、上下 = 右軸まわりの回転
 // 画面の端に当たったらそこで止まる（マウスを持ち上げて戻すのと同じ要領で、ずれたら端で合わせられる）
-function wiiPtrFeed(wv, wp, t){
+function wiiPtrFeed(wv, wp, t, ax, ay, az, am){
   const q = wii.ptr, dt = q.t ? Math.min(.05, Math.max(0, (t - q.t)/1000)) : 0; q.t = t;
   if (!dt || gaze.mode !== 'wii') return;
   const dz = v => Math.abs(v) < 1.2 ? 0 : v - Math.sign(v)*1.2;   // 手の微振動は無視
-  q.tx = Math.max(-1, Math.min(1, q.tx - q.ix*dz(wv)*dt/q.deg));
-  q.ty = Math.max(-1, Math.min(1, q.ty - q.iy*dz(wp)*dt/(q.deg*.75)));   // 上下：実機で逆だったので符号を反転済み
+  // 左右：ジャイロを積み上げる。端で止めずに少し先(±1.5)まで覚えておくので、行き過ぎて戻ってもずれない
+  q.hx = Math.max(-1.5, Math.min(1.5, q.hx - q.ix*dz(wv)*dt/q.deg));
+  q.tx = Math.max(-1, Math.min(1, q.hx));
+  // 上下：リモコンの傾き(角度)そのもので決める。ジャイロだけだと、パリィやリロードで大きく振り上げて戻した時に
+  // 積み上げの誤差で照準が下にずれていくので、重力で測った傾きに少しずつ寄せて「元の角度に戻せば元の高さ」にする
+  const g = -dz(wp);   // 上に向けた時に＋になる向き（実機確認済み）
+  q.th += g*dt;
+  const pAcc = Math.asin(Math.max(-1, Math.min(1, ay/(am || 1))))*180/Math.PI, still = Math.abs(am - 1) < .1;
+  if (still && q.pPrev !== null){   // 重力の傾きの向き(符号)を、ジャイロの上下と見比べて自動で決める
+    const r = (pAcc - q.pPrev)/dt;
+    if (Math.abs(g) > 8) { q.sgS = q.sgS*.98 + Math.sign(g*r); if (Math.abs(q.sgS) > 8) q.sg = Math.sign(q.sgS); }
+  }
+  q.pPrev = still ? pAcc : null;
+  if (q.sg && still){ const tgt = q.sg*pAcc; if (q.th0 === null) q.th0 = tgt - (q.th - q.th0c); q.th += (tgt - q.th)*Math.min(1, dt*2.5); }
+  q.ty = Math.max(-1, Math.min(1, q.iy*(q.th - (q.th0 ?? q.th0c))/(q.deg*.75)));
 }
 function wiiAimUpdate(dt){
   const q = wii.ptr, k = 1 - Math.exp(-dt*28);
   q.sx += (q.tx - q.sx)*k; q.sy += (q.ty - q.sy)*k; mouse.nx = q.sx; mouse.ny = q.sy;
 }
-function wiiPtrCenter(){ const q = wii.ptr; q.tx = q.ty = q.sx = q.sy = 0; mouse.nx = mouse.ny = 0; }
+function wiiPtrCenter(){ const q = wii.ptr; q.tx = q.ty = q.sx = q.sy = q.hx = 0; q.th0c = q.th; q.th0 = q.sg ? q.th : null; mouse.nx = mouse.ny = 0; }   // 今の向き＝画面中央
 $('wpDeg').oninput = e => { wii.ptr.deg = +e.target.value; $('wpDegV').textContent = wii.ptr.deg; };
 $('wpInvX').onchange = e => wii.ptr.ix = e.target.checked ? -1 : 1;
 $('wpInvY').onchange = e => wii.ptr.iy = e.target.checked ? -1 : 1;
