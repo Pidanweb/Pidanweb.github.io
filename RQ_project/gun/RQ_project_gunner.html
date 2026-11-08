@@ -35,7 +35,7 @@
     <div id="camStat">USBカメラは接続後「一覧を更新」</div>
     <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
     <label><input type="checkbox" id="faceOn" checked> 顔・目の動きで照準を操作</label>
-    <label>照準の操作 <select id="aimMode"><option value="gaze">視線（見ている所）</option><option value="face">顔の位置（従来）</option></select></label>
+    <label>照準の操作 <select id="aimMode"><option value="wii" selected>Wiiリモコンのジャイロ（向けた方向）</option><option value="gaze">視線（見ている所）</option><option value="face">顔の位置（従来）</option></select></label>
     <label>顔認識に使うカメラ<select id="faceSel"><option value="">自動（インカメラ）</option><option value="user">フロント</option><option value="environment">バック</option></select></label>
     <label>カメラの種類 <select id="faceType"><option value="auto">自動判定</option><option value="front">フロント（鏡像）</option><option value="back">バック（非鏡像）</option></select></label> <button id="faceFlip">🔄 前/後 切替</button>
     <label>照準のなめらかさ <input type="range" id="gzSmooth" min="0.1" max="2" step="0.1" value="0.7"><br><small style="color:#9fdcea">左ほどゆっくり滑らか・右ほど素早い</small></label>
@@ -51,7 +51,7 @@
   <button id="mClose">▶ 再開</button><button id="mView">👁 視点: 一人称</button><button id="mFace">🔄 顔カメラ: フロント</button><button id="mCtrl">🖱 操作: マウス</button><button id="mGaze">👁 視線キャリブレーション</button>
   <button id="jobBtn">🔁 ジョブチェンジ</button>
   <div id="jobs"><button id="jSword">⚔ 剣士</button><button id="jWiz">🪄 魔法使い</button><button id="jGun">🔫 ガンナー</button></div>
-  <label>効果音 <input type="range" id="mVol" min="0" max="1" step=".1" value=".8"></label><label>BGM <input type="range" id="mBgm" min="0" max="1" step=".05" value=".5"></label><label>パリィ振り上げ感度 <input type="range" id="mWiiTh" min="1.2" max="4" step=".1" value="2.2"><br><small style="color:#9fdcea">左ほど敏感</small></label>
+  <label>効果音 <input type="range" id="mVol" min="0" max="1" step=".1" value=".8"></label><label>BGM <input type="range" id="mBgm" min="0" max="1" step=".05" value=".5"></label><label>パリィ振り上げ感度 <input type="range" id="mWiiTh" min="1.2" max="4" step=".1" value="2.2"><br><small style="color:#9fdcea">左ほど敏感</small></label><label>Wii照準の感度 <b id="wpDegV">20</b>°<input type="range" id="wpDeg" min="8" max="45" step="1" value="20"><br><small style="color:#9fdcea">中央→画面の端まで動かすのに必要なリモコンの角度（小さいほど敏感）</small></label><label><input type="checkbox" id="wpInvX"> Wii照準 左右反転</label><label><input type="checkbox" id="wpInvY"> Wii照準 上下反転</label>
   <details id="gnMenu" open><summary>🔫 ガンナー設定</summary>
     <label><input type="checkbox" id="hbOn" checked> 当たり判定（四角）を表示</label>
     <label>当たり判定の濃さ<input type="range" id="hbOp" min="0.05" max="1" step="0.05" value="0.25"></label>
@@ -65,13 +65,14 @@
     スナイパー: 伸び縮みする白い円が金色の帯の中に入った時（緑に光る間）に撃つと命中<br>
     サーベル: 前に突く=突き / 縦・横に大きく振る=重撃（B=突き）。MotionPlus付きなら剣士版と同じジャイロ判定<br>
     Wii: B=射撃・攻撃 / A長押し=ガード / 振り上げ=パリィ（ボタンは押しても押さなくてもOK）/ 縦に立てる=リロード（黄色の所でB）<br>
-    1=グレネード / 2=時限地雷 / +=回り込み弾 / −=視線のずれ補正（タイトル画面では視線キャリブレーション）/ HOME=メニュー<br>
+    1=グレネード / 2=時限地雷 / +=回り込み弾 / −=照準を中央に（画面中央に向けて押す）/ HOME=メニュー<br>
     マウス: ←↑→↓ か 1〜4=武器切替 / サーベルはクリック=突き・ドラッグ縦横=重撃（W/Sでも可）/ G=グレネード F=地雷 Q,E=回り込み<br>
     照準が四角に重なると赤くなり、その時だけ当たります<br>黄色い小さい四角=弱点（回避直後・スタン中だけ開く）</small>
   </details>
   <button id="mRestart">↻ リスタート</button><button id="mTitle">⌂ タイトルへ</button>
   <small style="color:#9fdcea">✋ 人差し指で「1」を描く / M キーで開閉</small></div>
 <div id="gzOv"><canvas id="gzCv"></canvas><button id="gzSkip">スキップ (Esc)</button></div>
+<div id="sndHint" style="position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:30;display:none;background:#2a0d12ee;color:#ffd35a;border:1px solid #ff4d5e;border-radius:10px;padding:10px 16px;font:bold 16px sans-serif;cursor:pointer">🔇 音を出すには、画面を一度クリック（またはキーを押す）してください</div>
 <canvas id="facePrev" width="320" height="240"></canvas>
 <video id="v" autoplay playsinline muted></video>
 <video id="fv" autoplay playsinline muted></video>
@@ -352,9 +353,12 @@ const FACE_GX = 6, FACE_GY = 9, FACE_CAL = 20, FACE_DEAD = .012;
 const GZ_PTS = [[0, 0], [-.75, .7], [.75, .7], [.75, -.7], [-.75, -.7], [0, .7], [.75, 0], [0, -.7], [-.75, 0]];
 const GZ_HX = 5, GZ_EX = 6, GZ_HY = 7, GZ_EY = 8, GZ_OPEN = .12, GZ_KEY = 'rq_gunner_gaze_v1';
 const GZ_MED = 5, GZ_DEAD = .035;   // 中央値を取るフレーム数 / これより小さい揺れは無視（画面幅の約2%）
-const gaze = { buf:[], hx:0, hy:0, s1:null, s2:null, gain:1, mode:'gaze', f:null, ft:0, c0:null, cs:[], M:null, ofs:[0, 0], cal:null, ex:{}, ey:{}, smooth:.7, tx:null, ty:null };
+const gaze = { buf:[], hx:0, hy:0, s1:null, s2:null, gain:1, mode:'wii', f:null, ft:0, c0:null, cs:[], M:null, ofs:[0, 0], cal:null, ex:{}, ey:{}, smooth:.7, tx:null, ty:null };
 try { const g = JSON.parse(localStorage.getItem(GZ_KEY) || 'null'); if (g && g.M) gaze.M = g.M; } catch (e){}
-const faceActive = () => face.on && !!face.lm && !!face.src && (gaze.mode === 'gaze' ? !!(gaze.M || gaze.c0) : face.cx !== null);
+const faceActive = () => face.on && !!face.lm && !!face.src && (gaze.mode === 'gaze' ? !!(gaze.M || gaze.c0) : gaze.mode === 'face' && face.cx !== null);
+// Wiiジャイロで照準中か（MotionPlus が有効で調整済みの時だけ。無ければマウス照準に戻る）
+const wiiAim = () => gaze.mode === 'wii' && ctl.mode === 'wii' && wii.mp.ok && wii.mp.calibrated;
+const aimExt = () => faceActive() || wiiAim();
 function gazeFeat(p, va){
   const Q = i => ({ x:p[i].x*va, y:p[i].y }), iris = p.length >= 478;
   const eye = (a, b, ir, up, dn) => {
@@ -597,7 +601,7 @@ $('faceGain').oninput = e => face.gain = +e.target.value;
 faceSel.onchange = () => { if (face.on) openFaceCam(); };
 $('faceCal').onclick = gazeRecenter;
 $('gzCalBtn').onclick = $('mGaze').onclick = () => gazeFullCal();
-$('aimMode').onchange = e => { gaze.mode = e.target.value; gaze.tx = gaze.ty = null; gaze.s1 = null; gaze.buf = []; gaze.ex = {}; gaze.ey = {}; mouse.nx = mouse.ny = 0; faceRecenter(); };
+$('aimMode').onchange = e => { gaze.mode = e.target.value; wiiPtrCenter(); gaze.tx = gaze.ty = null; gaze.s1 = null; gaze.buf = []; gaze.ex = {}; gaze.ey = {}; mouse.nx = mouse.ny = 0; faceRecenter(); };
 $('gzSmooth').oninput = e => gaze.smooth = +e.target.value;
 $('gzGain').oninput = e => { gaze.gain = +e.target.value; $('gzGainV').textContent = gaze.gain.toFixed(2); };
 $('faceStart').onclick = () => { if (!face.on){ $('faceOn').checked = face.on = true; } startFace(); };
@@ -634,13 +638,31 @@ function flipFaceCam(){
 }
 function faceMirror(){ const t = $('faceType').value; return t === 'auto' ? (face.src === vid ? camMirror : face.fm !== false) : t === 'front'; }
 // 共通素材は RQ_project/sounds（../sounds/）、銃専用は gun/sounds（sounds/）
-const SHARED_SND = '../sounds/', GUN_SND = 'sounds/';
-const sPary = new Audio(SHARED_SND + 'pary.mp3'); let vol = .8; sPary.preload = 'auto';
+// 置き場所（リポジトリ）: RQ_project/gun/sounds/ と RQ_project/sounds/
+// HTMLを別の場所に置いた・ローカルで開いた時でも鳴るよう、相対パスで読めなければ公開サイトのURLから読む
+const SHARED_SND = '../sounds/', GUN_SND = 'sounds/', SITE = 'https://pidanweb.github.io/RQ_project/';
+const sndAbs = rel => rel.startsWith('../sounds/') ? SITE + rel.slice(3) : SITE + 'gun/' + rel;
+function audioWithFallback(...rels){   // <audio> 用：候補を順に試す（各ファイル 相対 → 公開URL）
+  const list = rels.flatMap(r => [r, sndAbs(r)]), a = new Audio(list[0]); let i = 0;
+  a.addEventListener('error', () => { if (++i >= list.length) return; const p = !a.paused; a.src = list[i]; if (p) a.play().catch(() => {}); });
+  return a;
+}
+const sPary = audioWithFallback(SHARED_SND + 'pary.mp3'); let vol = .8; sPary.preload = 'auto';
 // 戦闘BGM（ループ）：ガンナー用 battle_gun.mp3。読めない時は共通の battle.mp3 に切り替え
-const bgm = new Audio(GUN_SND + 'battle_gun.mp3');
-bgm.addEventListener('error', () => { if (!bgm.src.endsWith('/battle.mp3')){ const p = !bgm.paused; bgm.src = SHARED_SND + 'battle.mp3'; if (p) bgm.play().catch(() => {}); } });
+const bgm = audioWithFallback(GUN_SND + 'battle_gun.mp3', SHARED_SND + 'battle.mp3');
 bgm.loop = true; bgm.preload = 'auto'; bgm.volume = .5;
-function bgmPlay(restart){ try { if (restart) bgm.currentTime = 0; bgm.play().catch(() => {}); } catch (e){} }
+function bgmPlay(restart){ try { if (restart) bgm.currentTime = 0; bgm.play().catch(() => { bgm.wantPlay = true; }); } catch (e){} }
+// ===== 音のロック解除 =====
+// ブラウザは「マウスクリック・キー・タッチ」をするまで音を出させない。Wiiリモコンのボタンはこの操作に数えられないので、
+// Wiiだけで遊ぶと無音になる。最初に1回クリック等があったら音を有効にし、まだなら画面上部に案内を出す。
+function audioUnlock(){
+  try { const a = getCtx(); if (a.state !== 'running') a.resume(); } catch (e){}
+  if (bgm.wantPlay && state === 'play'){ bgm.wantPlay = false; bgmPlay(); }
+  $('sndHint').style.display = 'none';
+}
+for (const ev of ['pointerdown', 'keydown', 'touchstart']) addEventListener(ev, audioUnlock, { capture:true });
+const audioLocked = () => (navigator.userActivation ? !navigator.userActivation.hasBeenActive : false) || (actx && actx.state === 'suspended');
+setInterval(() => { $('sndHint').style.display = audioLocked() && vol > 0 ? 'block' : 'none'; }, 500);
 function bgmStop(){ try { bgm.pause(); } catch (e){} }
 // ガード音（素材なしのため簡易合成）
 let actx = null;
@@ -671,9 +693,11 @@ const getCtx = () => (actx = actx || new AudioContext());
 function sndLoad(){
   for (const n of SND_FILES){
     const o = SND[n] = { buf:null, el:null, bad:false }, url = (SND_SHARED.has(n) ? SHARED_SND : GUN_SND) + n + '.mp3';
-    const html = () => { const a = new Audio(url); a.preload = 'auto'; a.onerror = () => o.bad = true; o.el = a; };
-    // Web Audio で読めれば低遅延・重ね鳴らしOK（file:// で開いた時など fetch できない場合は <audio> で再生）
-    try { fetch(url).then(r => { if (!r.ok) throw 0; return r.arrayBuffer(); }).then(ab => getCtx().decodeAudioData(ab)).then(b => o.buf = b).catch(html); }
+    const abs = sndAbs(url);
+    const html = () => { const a = new Audio(url); a.preload = 'auto'; let s2 = false; a.onerror = () => { if (!s2){ s2 = true; a.src = abs; } else o.bad = true; }; o.el = a; };
+    // Web Audio で読めれば低遅延・重ね鳴らしOK（相対 → 公開URL の順に試し、だめなら <audio> で再生）
+    const get = u => fetch(u).then(r => { if (!r.ok) throw 0; return r.arrayBuffer(); });
+    try { get(url).catch(() => get(abs)).then(ab => getCtx().decodeAudioData(ab)).then(b => o.buf = b).catch(html); }
     catch (e){ html(); }
   }
 }
@@ -755,7 +779,7 @@ function reset(){
 }
 function titleMsg(){
   setMsg([['GIANT SLIME RAID : GUNNER', '#ffd35a', 64],
-          ['見ている所に照準 → 四角に重なったら B で攻撃', '#fff', 28],
+          ['Wiiリモコンを向けた所に照準 → 四角に重なったら B で攻撃', '#fff', 28],
           ['十字で武器切替 ↑ハンドガン ←P90 →スナイパー ↓ビームサーベル', '#ffd35a', 24],
           ['リモコンを縦に立ててリロード　黄色い所で B → 強化弾', '#9fe870', 24],
           ['回避直後・スタン中は黄色い弱点が開く → 3倍ダメージ', '#ffd35a', 24],
@@ -763,7 +787,7 @@ function titleMsg(){
           ['紫に光る攻撃はパリィ不可 → ガードで防ぐ', '#c06bff', 26],
           ['1 グレネード　2 時限地雷　+ 回り込み弾', '#9fe870', 24],
           ['マウス: 左=攻撃 R=リロード 右=パリィ Space=ガード 矢印=武器 A/D=回避', '#7ae7ff', 22],
-          ['C / −: 視線のずれ補正　K: 視線キャリブレーション　V:VR　T:視点　M:メニュー', '#7ae7ff', 22],
+          ['− / C: 照準を中央に（画面中央に向けて押す）　V:VR　T:視点　M:メニュー', '#7ae7ff', 22],
           ['クリック / A・B でスタート（Webカメラを使います）', '#7ae7ff', 30]]);
 }
 titleMsg();
@@ -1136,7 +1160,7 @@ function bossAnim(dt){
 // ===== 銃の追従（照準の方向へ銃口を向ける）=====
 function updGun(dt){
   const asp = vr ? W/2/H : W/H, hh = Math.tan((70 - fovp)*Math.PI/360)*3, rx = mouse.nx*hh*asp, ry = mouse.ny*hh;
-  reticle.visible = state === 'play' || (faceActive() && !menuOn && !gaze.cal); reticle.position.set(rx, ry, -3); reticle.scale.setScalar(P.crit ? .54 : P.lock ? .46 : .4);
+  reticle.visible = state === 'play' || (aimExt() && !menuOn && !gaze.cal); reticle.position.set(rx, ry, -3); reticle.scale.setScalar(P.crit ? .54 : P.lock ? .46 : .4);
   const want = P.crit ? RET_C : P.lock ? RET_L : RET_N; if (reticle.material.map !== want){ reticle.material.map = want; reticle.material.needsUpdate = true; }
   // スナイパーの円
   snG.visible = state === 'play' && P.wp === 'sr' && !P.rl && P.ammo > 0;
@@ -1257,12 +1281,12 @@ function update(dt){
   } else if (state === 'title'){ B.z += (HOVER - B.z)*Math.min(1, dt*2); B.s = 'enter'; }
   if (!playing){ P.guard = false; mgStop(true); }
   P.recoil = Math.max(0, P.recoil - dt*7); mFlash.material.opacity = Math.max(0, mFlash.material.opacity - dt*14);
-  faceUpdate(dt);
+  if (wiiAim()) wiiAimUpdate(dt); else faceUpdate(dt);
   bossAnim(dt);
   const sh = (Math.random()-.5)*shake;
   aim.position.set(P.x, EYE, 0); aim.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0);
   av.position.x = P.x; av.rotation.y = -mouse.nx*.3; headM.rotation.y = -mouse.nx*.5;
-  const fixV = gaze.mode === 'gaze' && faceActive(), vx = fixV ? 0 : mouse.nx, vy = fixV ? 0 : mouse.ny;   // 視線照準中は画面を動かさない
+  const fixV = (gaze.mode === 'gaze' && faceActive()) || wiiAim(), vx = fixV ? 0 : mouse.nx, vy = fixV ? 0 : mouse.ny;   // 視線照準中は画面を動かさない
   if (tp){ camera.rotation.set(vy*.12 - .22, -vx*.2, 0); camera.position.set(P.x + sh, EYE + 1.5 + sh*.6, 4.2); }
   else { camera.rotation.set(vy*.12, -vx*.2, 0); camera.position.set(P.x + sh, EYE + sh*.6, 0); }
   camera.updateMatrixWorld();
@@ -1292,7 +1316,7 @@ addEventListener('keydown', e => {
   if (state === 'play' && bgm.paused && !menuOn) bgmPlay();
   if (gaze.cal){ if (k === 'escape') gazeCalEnd(false); return; }
   if (k === 'k'){ gazeFullCal(); return; }
-  if (k === 'v') vr = !vr; if (k === 'c') gazeRecenter(); if (k === 'm') toggleMenu(); if (k === 't') setView(!tp); if (k === 'escape' && menuOn) toggleMenu(false);
+  if (k === 'v') vr = !vr; if (k === 'c'){ if (gaze.mode === 'wii') wiiPtrCenter(); else gazeRecenter(); } if (k === 'm') toggleMenu(); if (k === 't') setView(!tp); if (k === 'escape' && menuOn) toggleMenu(false);
   if (k === ' ' || k.startsWith('arrow')) e.preventDefault();
   if (e.repeat || state !== 'play' || menuOn) return;
   const wk = { arrowup:'hg', arrowleft:'p90', arrowright:'sr', arrowdown:'sword', '1':'hg', '2':'p90', '3':'sr', '4':'sword' }[k];
@@ -1304,7 +1328,7 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 function setMouse(e){
-  if (faceActive()) return;   // 顔操作中はマウスで視点を動かさない
+  if (aimExt()) return;   // 顔・Wiiで照準中はマウスで動かさない
   const w = vr ? W/2 : W; mouse.nx = ((e.clientX % w)/w)*2 - 1; mouse.ny = -((e.clientY/H)*2 - 1);
 }
 addEventListener('mousemove', setMouse);
@@ -1315,6 +1339,7 @@ const wii = { dev:null, leds:1, a:false, b:false, aBlock:false, pA:false, pB:fal
               gx:0, gy:0, gz:1, gok:false, vert:false, lastSw:0, lastNeg:-1e9, th:2.2, rt:0, modeT:0,
               p1:false, p2:false, swTh:2.2, sw:{ on:false, t0:0, ax:0, ay:0, az:0, cool:0 },
               mode:0x35, mpOnce:false,
+              ptr:{ tx:0, ty:0, sx:0, sy:0, t:0, deg:20, ix:1, iy:1 },
               mp:{ state:'off', ok:false, calibrated:false, zero:[8192, 8192, 8192], cal:null, up:null, upT:0, lastValid:0, sw:null, ring:[], to:0 } };
 const WVID = 0x057e, WPIDS = [0x0306, 0x0330];
 function wiiMsg(t){ $('wiiStat').textContent = t; }
@@ -1358,7 +1383,7 @@ async function wiiEnableMP(){
     wiiMsg('🎮 Wii: ジャイロなし（サーベルは加速度で簡易判定）');
   }, 3000);
 }
-function calStart(){ const m = wii.mp; m.cal = { n:0, sum:[0,0,0], sq:[0,0,0], t0:null }; m.calibrated = false; m.state = 'cal'; m.sw = null; m.ring.length = 0; wiiMsg('🎮 Wii: ジャイロ調整中…リモコンを静止してください'); }
+function calStart(){ const m = wii.mp; m.cal = { n:0, sum:[0,0,0], sq:[0,0,0], t0:null }; m.calibrated = false; m.state = 'cal'; m.sw = null; m.ring.length = 0; wiiMsg('🎮 Wii: ジャイロ調整中…リモコンを画面中央に向けて静止してください'); }
 function calFeed(raw, slow, t){
   const m = wii.mp, c = m.cal; if (!c) return;
   const restart = () => { c.n = 0; c.sum = [0,0,0]; c.sq = [0,0,0]; c.t0 = null; };
@@ -1369,7 +1394,8 @@ function calFeed(raw, slow, t){
   const mean = c.sum.map(v => v/c.n), std = c.sq.map((v, i) => Math.sqrt(Math.max(0, v/c.n - mean[i]*mean[i])));
   if (Math.max(...std) > GY.CAL_STD){ restart(); return; }
   m.zero = mean; m.calibrated = true; m.cal = null; m.state = 'ready'; m.up = null;
-  wiiMsg('🎮 Wii: ジャイロ有効（サーベル: 突き / 縦・横の重撃）');
+  wii.ptr.t = 0; if (gaze.mode === 'wii') wiiPtrCenter();
+  wiiMsg(gaze.mode === 'wii' ? '🎮 Wii: ジャイロ照準 有効（ずれたら画面中央に向けて −）' : '🎮 Wii: ジャイロ有効（サーベル: 突き / 縦・横の重撃）');
 }
 // 上向きベクトルをジャイロで追い、角速度を「鉛直軸まわり(横振り)」と「水平軸まわり(縦振り)」に分ける
 function gyOrient(wyrp, ax, ay, az, a, t){
@@ -1382,7 +1408,9 @@ function gyOrient(wyrp, ax, ay, az, a, t){
   if (Math.abs(a - 1) < GY.UP_TOL){ n = [n[0] + GY.UP_GAIN*(ax/a - n[0]), n[1] + GY.UP_GAIN*(ay/a - n[1]), n[2] + GY.UP_GAIN*(az/a - n[2])]; l = Math.hypot(n[0], n[1], n[2]) || 1; n = n.map(v => v/l); }
   m.up = n;
   const wv = w[0]*n[0] + w[1]*n[1] + w[2]*n[2];
-  return [wv, Math.hypot(w[0] - wv*n[0], w[1] - wv*n[1], w[2] - wv*n[2])];
+  // 照準用：リモコンの長手(先端)方向 f=[0,1,0] と上向き n から「右」軸 = f×n を作り、その軸まわり=上下の向き変化
+  const rl = Math.hypot(n[2], n[0]) || 1, wp = (w[0]*n[2] - w[2]*n[0])/rl;
+  return [wv, Math.hypot(w[0] - wv*n[0], w[1] - wv*n[1], w[2] - wv*n[2]), wp];
 }
 function wiiGyro(d, ax, ay, az, a, t, held){
   const m = wii.mp, e = []; for (let i = 0; i < 6; i++) e.push(d.getUint8(5 + i));
@@ -1394,7 +1422,10 @@ function wiiGyro(d, ax, ay, az, a, t, held){
   if (m.cal){ calFeed(raw, slow, t); return; }
   if (!m.calibrated) return;
   const w = raw.map((v, i) => (v - m.zero[i])*GY.SLOW*(slow[i] ? 1 : GY.FAST));
-  const [wv, wh] = gyOrient(w, ax, ay, az, a, t);
+  // ほぼ静止している間は ゼロ点を少しずつ合わせ直す（ジャイロのドリフト＝照準が勝手に流れるのを防ぐ）
+  if (slow.every(Boolean) && Math.max(...w.map(Math.abs)) < 2.5 && Math.abs(a - 1) < .06) for (let i = 0; i < 3; i++) m.zero[i] += (raw[i] - m.zero[i])*.004;
+  const [wv, wh, wp] = gyOrient(w, ax, ay, az, a, t);
+  wiiPtrFeed(wv, wp, t);
   gySwing({ t, a, wv, wh }, held);
 }
 function gyInteg(o, s){
@@ -1424,6 +1455,24 @@ function gyFinish(o){
   else if (ratio >= SK.rB){ if (Math.abs(o.iv) >= SK.heavyH) swordAct('h'); }
   else if (o.ih >= SK.heavyV) swordAct('v');
 }
+// ===== Wiiジャイロ・ポインター：リモコンを向けた方向の変化を積み上げて照準を動かす =====
+// 左右 = 鉛直軸まわりの回転（リモコンを傾けて持っても左右は左右のまま）、上下 = 右軸まわりの回転
+// 画面の端に当たったらそこで止まる（マウスを持ち上げて戻すのと同じ要領で、ずれたら端で合わせられる）
+function wiiPtrFeed(wv, wp, t){
+  const q = wii.ptr, dt = q.t ? Math.min(.05, Math.max(0, (t - q.t)/1000)) : 0; q.t = t;
+  if (!dt || gaze.mode !== 'wii') return;
+  const dz = v => Math.abs(v) < 1.2 ? 0 : v - Math.sign(v)*1.2;   // 手の微振動は無視
+  q.tx = Math.max(-1, Math.min(1, q.tx - q.ix*dz(wv)*dt/q.deg));
+  q.ty = Math.max(-1, Math.min(1, q.ty + q.iy*dz(wp)*dt/(q.deg*.75)));
+}
+function wiiAimUpdate(dt){
+  const q = wii.ptr, k = 1 - Math.exp(-dt*28);
+  q.sx += (q.tx - q.sx)*k; q.sy += (q.ty - q.sy)*k; mouse.nx = q.sx; mouse.ny = q.sy;
+}
+function wiiPtrCenter(){ const q = wii.ptr; q.tx = q.ty = q.sx = q.sy = 0; mouse.nx = mouse.ny = 0; }
+$('wpDeg').oninput = e => { wii.ptr.deg = +e.target.value; $('wpDegV').textContent = wii.ptr.deg; };
+$('wpInvX').onchange = e => wii.ptr.ix = e.target.checked ? -1 : 1;
+$('wpInvY').onchange = e => wii.ptr.iy = e.target.checked ? -1 : 1;
 async function connectWii(){
   if (!('hid' in navigator)){ wiiMsg('🎮 WebHID非対応です（Chrome / Edge を使用）'); return false; }
   try {
@@ -1464,8 +1513,9 @@ function onWii(e){
   if (gaze.cal){ wii.a = false; wii.aBlock = true; if (pressHome) gazeCalEnd(false); return; }   // キャリブレーション中は操作しない（HOME=スキップ）
   if (pressHome) toggleMenu();
   if (pressMinus){   // −: 視線のずれ補正（タイトルでは9点キャリブレーション）＋ジャイロ再調整
-    if (gaze.mode === 'gaze' && face.on){ if (state === 'play') gazeRecenter(); else gazeFullCal(); } else faceRecenter();
-    if (wii.mp.ok) calStart();
+    if (gaze.mode === 'wii') wiiPtrCenter();   // Wiiジャイロ照準：画面中央に向けて − で照準を中央へ
+    else if (gaze.mode === 'gaze' && face.on){ if (state === 'play') gazeRecenter(); else gazeFullCal(); } else faceRecenter();
+    if (wii.mp.ok && (gaze.mode !== 'wii' || state !== 'play')) calStart();   // 戦闘中は止まらないよう中央合わせだけ
   }
   if (pressStart && state !== 'play' && !menuOn && !(state !== 'title' && now - endAt < 600)){ startGame(); wii.aBlock = true; }   // スタートに使ったBは離すまで射撃しない
   wii.a = Bb && !wii.aBlock;   // B押しっぱなし = P90の連射
