@@ -57,6 +57,14 @@
   #vcPill .pg{height:5px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden;margin-top:5px}
   #vcProg{height:100%;width:0;background:#8fd}
   #vcBtn.act{background:#1d6b5a;border-color:#8fd}
+  #vcSnap{display:none;gap:10px;align-items:center;margin-bottom:6px}
+  #vcPill.snap #vcSnap{display:flex}
+  #vcGrid{display:grid;grid-template-columns:repeat(3,14px);gap:3px}
+  #vcGrid i{width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,.14)}
+  #vcGrid i.on{background:#8fd;box-shadow:0 0 6px #8fd}
+  #vcZoom{display:flex;flex-direction:column;gap:2px;font-size:11px}
+  #vcZoom b{font-weight:400;opacity:.45;padding:0 6px;border-radius:4px}
+  #vcZoom b.on{opacity:1;background:rgba(143,255,221,.25)}
 </style>
 </head>
 <body>
@@ -84,6 +92,7 @@
   <label><input type="checkbox" id="handTrack" checked> ハンドトラッキング</label>
   <label title="片手ピースを0.5秒で、指先に仮想カメラが付きます"><input type="checkbox" id="vcGesture" checked> ✌ピースで仮想カメラ</label>
   <button id="vcBtn" title="Vキーでも切り替え">🎥 仮想カメラ</button>
+  <label title="手の位置で 縦・横・斜め の9方向 × 腕の伸ばし具合で3段階の距離 に切り替えます。オフにすると指先に自由に付きます"><input type="checkbox" id="vcSnapOn" checked> 位置を9方向に絞る</label>
   <label title="仮想カメラの映像を、鏡ではなく実際に正面から撮ったときの向きにします"><input type="checkbox" id="vcReal" checked> 仮想カメラは実際の向き</label>
   <span id="status">VRMを読み込んでください</span>
 </div>
@@ -98,7 +107,7 @@
 </div>
 
 <div id="modePill">オート: 全身</div>
-<div id="vcPill" role="status" aria-live="polite"><span id="vcTxt"></span><div class="pg"><div id="vcProg"></div></div></div>
+<div id="vcPill" role="status" aria-live="polite"><div id="vcSnap"><div id="vcGrid"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div id="vcZoom"><b>アップ</b><b>バスト</b><b>全身</b></div></div><span id="vcTxt"></span><div class="pg"><div id="vcProg"></div></div></div>
 
 <div id="panel">
   <div id="vwrap"><video id="video" playsinline muted></video><canvas id="overlay"></canvas></div>
@@ -802,7 +811,9 @@ async function refreshCams(camKeep, micKeep) {
 async function startVideo(deviceId) {
   if (camStream) camStream.getTracks().forEach(t => t.stop());   // 先に止める(同時に開けないカメラ対策)
   clearPlate(); resetLearn();   // 別のカメラ/画角では覚えた背景が合わない
-  const v = { width: 640, height: 480, frameRate: { ideal: 30, max: 30 } };
+  // 離れていても顔を細かく見られるよう、できればHD(1280x720)で取得。軽量モードはVGA
+  const low = $('perfSel').value === 'low';
+  const v = { width: { ideal: low ? 640 : 1280 }, height: { ideal: low ? 480 : 720 }, frameRate: { ideal: 30, max: 30 } };
   if (deviceId) v.deviceId = { exact: deviceId }; else v.facingMode = 'user';
   const vs = await navigator.mediaDevices.getUserMedia({ video: v, audio: false });
   camStream = vs; video.srcObject = vs; await video.play(); lastT = -1;
@@ -1144,6 +1155,7 @@ function faceFrame() {
     const best = Object.entries(fx.emo).sort((a, b) => b[1] - a[1])[0];
     $('faceInfo').textContent = `表情: 目 L${pct(rawL)} R${pct(rawR)} (基準${pct((fx.baseL + fx.baseR) / 2)}) → 閉${pct(Math.max(tl, tr))}%`
       + (best && best[1] > 0.15 ? ` / ${({ happy: '笑顔', surprised: '驚き', angry: '怒り', sad: '悲しみ' })[best[0]]}` : '')
+      + (fc.zoom > 1.05 ? ` [顔ズーム×${fc.zoom.toFixed(1)}]` : '') + ` ${video.videoWidth}×${video.videoHeight}`
       + (has('blinkLeft') ? '' : ' ※左右別まばたき無しのモデル');
   }
 }
@@ -1487,7 +1499,32 @@ function vcStart() {   // 通常カメラの位置から飛び出す
   const h = 2 * Math.tan(camera.fov * Math.PI / 360) * vc.D;
   backdrop.scale.set(h * camera.aspect, h, 1); backdrop.position.set(0, 0, -vc.D);
 }
-function vcGrab(side) { vcStart(); vc.state = 'hold'; vc.side = side; vc.relT = 0; vc.flyT = 0; vc.lookOK = false; }
+function vcGrab(side) { vcStart(); vc.state = 'hold'; vc.side = side; vc.relT = 0; vc.flyT = 0; vc.lookOK = false; vc.cell = null; }
+
+// 9方向×3距離モード: 顔に対する手の位置(上下左右)で方向、腕の伸ばし具合で距離を決める。境目ではしばらく今の位置を保つ(ヒステリシス)
+const SNAP = { yaw: 35, pitch: 22, dist: [0.5, 1.05, 2.6] };
+const q3 = (v, cur, a, b, m) => v < (cur === -1 ? a + m : a - m) ? -1 : v > (cur === 1 ? b - m : b + m) ? 1 : 0;
+function vcSnapWant(dt) {
+  const tip = fingerTip(vc.side, _t1), head = faceTarget(_t2); if (!tip || !head) return null;
+  const g = n => boneW(vc.side + n, new THREE.Vector3());
+  const ua = g('UpperArm'), la = g('LowerArm'), hd = g('Hand');
+  const reach = ua && la && hd ? ua.distanceTo(hd) / Math.max(1e-3, ua.distanceTo(la) + la.distanceTo(hd)) : 0.7;
+  const c = vc.cell || { col: 0, row: 0, z: 0 };
+  const dx = tip.x - head.x, dy = tip.y - head.y;
+  vc.cell = {
+    col: q3(dx, c.col, -0.14, 0.14, 0.04),          // 左 / 中央 / 右
+    row: q3(dy, c.row, -0.16, 0.06, 0.04),          // 下 / 中央 / 上
+    z: q3(reach, c.z, 0.55, 0.82, 0.05)             // 曲げる=アップ / 中間=バスト / 伸ばす=全身
+  };
+  const { col, row, z } = vc.cell;
+  // 撮る中心: アップ=顔 / バスト=胸の上 / 全身=体の中央
+  const tgt = z < 0 ? head.clone() : z === 0 ? head.clone().add(_t3.set(0, -0.2, 0))
+    : _t3.set(body.cx, (body.y0 + body.y1) / 2, body.cz).clone();
+  const yaw = col * SNAP.yaw * Math.PI / 180, pitch = row * SNAP.pitch * Math.PI / 180, d = SNAP.dist[z + 1];
+  const pos = tgt.clone().add(_t4.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)).multiplyScalar(d));
+  if (!vc.lookOK) { vc.look.copy(tgt); vc.lookOK = true; } else vc.look.lerp(tgt, 1 - Math.exp(-dt * 5));
+  return { pos, quat: new THREE.Quaternion().setFromRotationMatrix(_vm.lookAt(pos, vc.look, UP)), fov: VC.fov };
+}
 function vcFix() { vc.state = 'fixed'; vc.fixPos.copy(vc.pos); vc.fixQuat.copy(vc.quat); vc.flyT = 1; }
 function vcExit() { if (vc.state === 'off') return; vc.state = 'off'; vc.flyT = 0; vc.latch = true; }
 function vcPreset() {   // ボタン/Vキー: 顔の正面アップに固定して開始
@@ -1527,7 +1564,9 @@ function vcUpdate(dt) {
 
   // カメラの目標姿勢
   let want = null;
-  if (vc.state === 'hold') {
+  const snapOn = $('vcSnapOn').checked;
+  if (vc.state === 'hold' && snapOn) want = vcSnapWant(dt);
+  else if (vc.state === 'hold') {
     const tip = fingerTip(vc.side, _t1), tgt = faceTarget(_t2);
     if (tip && tgt) {
       if (!vc.lookOK) { vc.look.copy(tgt); vc.lookOK = true; } else vc.look.lerp(tgt, 1 - Math.exp(-dt * 8));
@@ -1541,7 +1580,7 @@ function vcUpdate(dt) {
 
   if (want) {
     vc.flyT += dt;
-    const rate = vc.flyT < 0.6 ? 5 : vc.state === 'hold' ? 14 : 9, k = 1 - Math.exp(-dt * rate);
+    const rate = vc.flyT < 0.6 ? 5 : vc.state === 'hold' ? (snapOn ? 5 : 14) : 9, k = 1 - Math.exp(-dt * rate);
     vc.pos.lerp(want.pos, k); vc.quat.slerp(want.quat, k); vc.fov += (want.fov - vc.fov) * k;
     if (vc.state === 'off' && vc.pos.length() < 0.004 && vc.quat.angleTo(QID) < 0.004) vc.active = false;   // 戻りきった
   }
@@ -1587,14 +1626,54 @@ function vcUI() {
   let t = '', p = 0;
   if (vc.bothT > 0) { t = '↩ 元のカメラに戻ります…'; p = vc.bothT / VC.both; }
   else if (vc.state !== 'hold' && vc.holdT > 0) { t = vc.state === 'off' ? '✌ 仮想カメラ起動…' : '✌ カメラを持ち直し…'; p = vc.holdT / (vc.state === 'off' ? VC.grab : VC.regrab); }
+  else if (vc.state === 'hold' && vc.cell && $('vcSnapOn').checked) { t = '🎥 手の位置で方向、腕の伸ばし具合で距離。ピースをやめると固定'; p = 1; }
   else if (vc.state === 'hold') { t = '🎥 手持ち: 指先がカメラ。ピースをやめるとその場で固定'; p = 1; }
   else if (vc.state === 'fixed') { t = '📌 空中に固定中。片手✌で持ち直し / 両手✌・Vキーで戻る'; p = 1; }
-  const key = t + '|' + Math.round(p * 20);
+  const showSnap = vc.state !== 'off' && !!vc.cell && $('vcSnapOn').checked;
+  const cl = vc.cell || { col: 0, row: 0, z: 0 };
+  const key = t + '|' + Math.round(p * 20) + '|' + showSnap + cl.col + cl.row + cl.z;
   if (key === vcLastUI) return; vcLastUI = key;
+  $('vcPill').classList.toggle('snap', showSnap);
+  if (showSnap) {
+    [...$('vcGrid').children].forEach((el, i) => el.classList.toggle('on', i === (1 - cl.row) * 3 + (cl.col + 1)));
+    [...$('vcZoom').children].forEach((el, i) => el.classList.toggle('on', i === cl.z + 1));
+  }
   $('vcPill').classList.toggle('show', !!t); $('vcTxt').textContent = t;
   $('vcProg').style.width = Math.round(Math.min(1, p) * 100) + '%';
   $('vcBtn').classList.toggle('act', vc.state !== 'off');
   $('vcBtn').textContent = vc.state !== 'off' ? '🎥 元のカメラに戻す' : '🎥 仮想カメラ';
+}
+
+/* ---------- 顔ズーム: 1.5〜2m離れると顔が小さすぎて表情が取れないので、ポーズの頭の位置で切り出して拡大する ---------- */
+const FC_N = 320;
+const fcCan = document.createElement('canvas'); fcCan.width = fcCan.height = FC_N;
+const fcCtx = fcCan.getContext('2d');
+const fc = { x: 0, y: 0, s: 0, ok: false, seen: -1e9, fail: 0, zoom: 1 };
+function faceSource(now) {
+  const L2 = poseRes?.landmarks?.[0], vw = video.videoWidth, vh = video.videoHeight;
+  if (L2 && vw) {
+    const vis = i => (L2[i].visibility ?? 0) > 0.5, px = i => new THREE.Vector2(L2[i].x * vw, L2[i].y * vh);
+    let w = 0;   // 切り出す正方形の一辺(顔の約2.5倍)
+    if (vis(7) && vis(8)) w = px(7).distanceTo(px(8)) * 2.5;
+    else if (vis(2) && vis(5)) w = px(2).distanceTo(px(5)) * 6;
+    else if (vis(11) && vis(12)) w = px(11).distanceTo(px(12)) * 1.1;
+    if (w > 0 && vis(0)) {
+      const n = px(0), cy = n.y - w * 0.06;
+      if (!fc.ok || now - fc.seen > 600) { fc.x = n.x; fc.y = cy; fc.s = w; fc.ok = true; }
+      else { const k = 0.5; fc.x += (n.x - fc.x) * k; fc.y += (cy - fc.y) * k; fc.s += (w - fc.s) * k * 0.6; }
+      fc.seen = now;
+    }
+  }
+  // 近い(顔が十分大きい)/頭の位置が分からない/切り出しで3回続けて見失った → 映像全体で探す
+  if (!fc.ok || now - fc.seen > 600 || fc.s > Math.min(vw, vh) * 0.7 || fc.fail >= 3) {
+    if (fc.fail >= 3) fc.fail = 0;
+    fc.zoom = 1; return video;
+  }
+  const s = Math.max(fc.s, 96);
+  fcCtx.fillStyle = '#000'; fcCtx.fillRect(0, 0, FC_N, FC_N);
+  fcCtx.drawImage(video, fc.x - s / 2, fc.y - s / 2, s, s, 0, 0, FC_N, FC_N);
+  fc.zoom = Math.min(vw, vh) / s;
+  return fcCan;
 }
 
 /* ---------- メインループ ---------- */
@@ -1618,7 +1697,11 @@ function loop() {
         // 標準/軽量: 顔と手を交互に検出して1フレームあたりの負荷を抑える
         // 手が映っていないときは手の検出を4回に1回にして、顔(まばたき)を多めに検出する
         const handTurn = useHand && P.alt && (handRes?.landmarks?.length ? (turn & 1) === 1 : turn % 4 === 1);
-        if (!P.alt || !useHand || !handTurn) faceRes = face.detectForVideo(video, ts);
+        if (!P.alt || !useHand || !handTurn) {
+          const src = faceSource(now);   // 離れているときは顔のまわりだけ切り出して拡大して渡す
+          faceRes = face.detectForVideo(src, ts);
+          if (src !== video) fc.fail = faceRes.faceBlendshapes?.length ? 0 : fc.fail + 1;
+        }
         if (useHand) { if (!P.alt || handTurn) handRes = hand.detectForVideo(video, ts); } else handRes = null;
         drawOverlay();
         onDetect(now);
