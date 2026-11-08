@@ -1463,7 +1463,7 @@ function wiiPtrFeed(wv, wp, t){
   if (!dt || gaze.mode !== 'wii') return;
   const dz = v => Math.abs(v) < 1.2 ? 0 : v - Math.sign(v)*1.2;   // 手の微振動は無視
   q.tx = Math.max(-1, Math.min(1, q.tx - q.ix*dz(wv)*dt/q.deg));
-  q.ty = Math.max(-1, Math.min(1, q.ty + q.iy*dz(wp)*dt/(q.deg*.75)));
+  q.ty = Math.max(-1, Math.min(1, q.ty - q.iy*dz(wp)*dt/(q.deg*.75)));   // 上下：実機で逆だったので符号を反転済み
 }
 function wiiAimUpdate(dt){
   const q = wii.ptr, k = 1 - Math.exp(-dt*28);
