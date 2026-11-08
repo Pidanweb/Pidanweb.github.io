@@ -35,7 +35,7 @@
     <div id="camStat">USBカメラは接続後「一覧を更新」</div>
     <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
     <label><input type="checkbox" id="faceOn" checked> 顔・目の動きで照準を操作</label>
-    <label>照準の操作 <select id="aimMode"><option value="wii" selected>Wiiリモコンのジャイロ（向けた方向）</option><option value="gaze">視線（見ている所）</option><option value="face">顔の位置（従来）</option></select></label>
+    <label>照準の操作 <select id="aimMode"><option value="auto" selected>自動照準（ボスを自動で狙う）</option><option value="wii">Wiiリモコンのジャイロ（向けた方向）</option><option value="gaze">視線（見ている所）</option><option value="face">顔の位置（従来）</option></select></label>
     <label>顔認識に使うカメラ<select id="faceSel"><option value="">自動（インカメラ）</option><option value="user">フロント</option><option value="environment">バック</option></select></label>
     <label>カメラの種類 <select id="faceType"><option value="auto">自動判定</option><option value="front">フロント（鏡像）</option><option value="back">バック（非鏡像）</option></select></label> <button id="faceFlip">🔄 前/後 切替</button>
     <label>照準のなめらかさ <input type="range" id="gzSmooth" min="0.1" max="2" step="0.1" value="0.7"><br><small style="color:#9fdcea">左ほどゆっくり滑らか・右ほど素早い</small></label>
@@ -353,12 +353,13 @@ const FACE_GX = 6, FACE_GY = 9, FACE_CAL = 20, FACE_DEAD = .012;
 const GZ_PTS = [[0, 0], [-.75, .7], [.75, .7], [.75, -.7], [-.75, -.7], [0, .7], [.75, 0], [0, -.7], [-.75, 0]];
 const GZ_HX = 5, GZ_EX = 6, GZ_HY = 7, GZ_EY = 8, GZ_OPEN = .12, GZ_KEY = 'rq_gunner_gaze_v1';
 const GZ_MED = 5, GZ_DEAD = .035;   // 中央値を取るフレーム数 / これより小さい揺れは無視（画面幅の約2%）
-const gaze = { buf:[], hx:0, hy:0, s1:null, s2:null, gain:1, mode:'wii', f:null, ft:0, c0:null, cs:[], M:null, ofs:[0, 0], cal:null, ex:{}, ey:{}, smooth:.7, tx:null, ty:null };
+const gaze = { buf:[], hx:0, hy:0, s1:null, s2:null, gain:1, mode:'auto', f:null, ft:0, c0:null, cs:[], M:null, ofs:[0, 0], cal:null, ex:{}, ey:{}, smooth:.7, tx:null, ty:null };
 try { const g = JSON.parse(localStorage.getItem(GZ_KEY) || 'null'); if (g && g.M) gaze.M = g.M; } catch (e){}
 const faceActive = () => face.on && !!face.lm && !!face.src && (gaze.mode === 'gaze' ? !!(gaze.M || gaze.c0) : gaze.mode === 'face' && face.cx !== null);
 // Wiiジャイロで照準中か（MotionPlus が有効で調整済みの時だけ。無ければマウス照準に戻る）
 const wiiAim = () => gaze.mode === 'wii' && ctl.mode === 'wii' && wii.mp.ok && wii.mp.calibrated;
-const aimExt = () => faceActive() || wiiAim();
+const autoAim = () => gaze.mode === 'auto';
+const aimExt = () => autoAim() || faceActive() || wiiAim();
 function gazeFeat(p, va){
   const Q = i => ({ x:p[i].x*va, y:p[i].y }), iris = p.length >= 478;
   const eye = (a, b, ir, up, dn) => {
@@ -779,7 +780,7 @@ function reset(){
 }
 function titleMsg(){
   setMsg([['GIANT SLIME RAID : GUNNER', '#ffd35a', 64],
-          ['Wiiリモコンを向けた所に照準 → 四角に重なったら B で攻撃', '#fff', 28],
+          ['照準は自動でボスを狙う → B で撃ちまくれ！', '#fff', 28],
           ['十字で武器切替 ↑ハンドガン ←P90 →スナイパー ↓ビームサーベル', '#ffd35a', 24],
           ['リモコンを縦に立ててリロード　黄色い所で B → 強化弾', '#9fe870', 24],
           ['回避直後・スタン中は黄色い弱点が開く → 3倍ダメージ', '#ffd35a', 24],
@@ -787,7 +788,7 @@ function titleMsg(){
           ['紫に光る攻撃はパリィ不可 → ガードで防ぐ', '#c06bff', 26],
           ['1 グレネード　2 時限地雷　+ 回り込み弾', '#9fe870', 24],
           ['マウス: 左=攻撃 R=リロード 右=パリィ Space=ガード 矢印=武器 A/D=回避', '#7ae7ff', 22],
-          ['− / C: 照準を中央に（画面中央に向けて押す）　V:VR　T:視点　M:メニュー', '#7ae7ff', 22],
+          ['照準の方式（自動 / Wiiジャイロ / 視線）は 📷カメラ設定で変更　V:VR　T:視点　M:メニュー', '#7ae7ff', 22],
           ['クリック / A・B でスタート（Webカメラを使います）', '#7ae7ff', 30]]);
 }
 titleMsg();
@@ -1281,12 +1282,12 @@ function update(dt){
   } else if (state === 'title'){ B.z += (HOVER - B.z)*Math.min(1, dt*2); B.s = 'enter'; }
   if (!playing){ P.guard = false; mgStop(true); }
   P.recoil = Math.max(0, P.recoil - dt*7); mFlash.material.opacity = Math.max(0, mFlash.material.opacity - dt*14);
-  if (wiiAim()) wiiAimUpdate(dt); else faceUpdate(dt);
+  if (autoAim()) autoAimUpdate(dt); else if (wiiAim()) wiiAimUpdate(dt); else faceUpdate(dt);
   bossAnim(dt);
   const sh = (Math.random()-.5)*shake;
   aim.position.set(P.x, EYE, 0); aim.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0);
   av.position.x = P.x; av.rotation.y = -mouse.nx*.3; headM.rotation.y = -mouse.nx*.5;
-  const fixV = (gaze.mode === 'gaze' && faceActive()) || wiiAim(), vx = fixV ? 0 : mouse.nx, vy = fixV ? 0 : mouse.ny;   // 視線照準中は画面を動かさない
+  const fixV = autoAim() || (gaze.mode === 'gaze' && faceActive()) || wiiAim(), vx = fixV ? 0 : mouse.nx, vy = fixV ? 0 : mouse.ny;   // 視線照準中は画面を動かさない
   if (tp){ camera.rotation.set(vy*.12 - .22, -vx*.2, 0); camera.position.set(P.x + sh, EYE + 1.5 + sh*.6, 4.2); }
   else { camera.rotation.set(vy*.12, -vx*.2, 0); camera.position.set(P.x + sh, EYE + sh*.6, 0); }
   camera.updateMatrixWorld();
@@ -1477,6 +1478,17 @@ function wiiPtrFeed(wv, wp, t, ax, ay, az, am){
   q.pPrev = still ? pAcc : null;
   if (q.sg && still){ const tgt = q.sg*pAcc; if (q.th0 === null) q.th0 = tgt - (q.th - q.th0c); q.th += (tgt - q.th)*Math.min(1, dt*2.5); }
   q.ty = Math.max(-1, Math.min(1, q.iy*(q.th - (q.th0 ?? q.th0c))/(q.deg*.75)));
+}
+// ===== 自動照準：弱点が開いていれば弱点、そうでなければボスの体の中心へ、照準がスッと吸い付く =====
+const AA_V = new THREE.Vector3();
+function autoAimUpdate(dt){
+  let tx = 0, ty = 0;
+  if (state === 'play' && bossAlive()){
+    updHitbox(); (weakOpen() ? WB : HB).getCenter(AA_V); AA_V.project(camera);
+    if (AA_V.z < 1){ tx = Math.max(-1, Math.min(1, AA_V.x)); ty = Math.max(-1, Math.min(1, AA_V.y)); }
+  }
+  const k = 1 - Math.exp(-dt*14);
+  mouse.nx += (tx - mouse.nx)*k; mouse.ny += (ty - mouse.ny)*k;
 }
 function wiiAimUpdate(dt){
   const q = wii.ptr, k = 1 - Math.exp(-dt*28);
