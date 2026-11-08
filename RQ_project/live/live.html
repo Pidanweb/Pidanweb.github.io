@@ -84,6 +84,7 @@
   <label><input type="checkbox" id="handTrack" checked> ハンドトラッキング</label>
   <label title="片手ピースを0.5秒で、指先に仮想カメラが付きます"><input type="checkbox" id="vcGesture" checked> ✌ピースで仮想カメラ</label>
   <button id="vcBtn" title="Vキーでも切り替え">🎥 仮想カメラ</button>
+  <label title="仮想カメラの映像を、鏡ではなく実際に正面から撮ったときの向きにします"><input type="checkbox" id="vcReal" checked> 仮想カメラは実際の向き</label>
   <span id="status">VRMを読み込んでください</span>
 </div>
 
@@ -119,6 +120,8 @@
   <div><label><input type="checkbox" id="autoBgm" checked> 変身したら伴奏を最初から再生</label></div>
   <div><label><input type="checkbox" id="autoRec" checked> 変身シーンから自動で録画</label></div>
   <div id="calInfo">体格: 未測定</div>
+  <div id="faceInfo" style="font-variant-numeric:tabular-nums">表情: —</div>
+  <div><label title="目を閉じた量のしきい値。反応しにくいときは上げる"><input type="range" id="blinkSens" min="0" max="1" step="0.05" value="0.5"> まばたき感度</label></div>
   <div class="sec" style="opacity:.85">🎥 仮想カメラ: 片手✌を0.5秒 → 指先がカメラ / ✌をやめる → その場で空中に固定 / もう一度✌ → 持ち直し / 両手✌ or Vキー → 元のカメラ</div>
 </div>
 
@@ -874,7 +877,7 @@ function stopCamera() {
   $('guide').classList.remove('show'); $('recal').disabled = true;
   if (vrm) vrm.scene.visible = true;
   const em = vrm?.expressionManager;
-  if (em) for (const n of ['blinkLeft', 'blinkRight', 'aa', 'oh', 'ou', 'ee', 'happy']) if (em.getExpression(n)) em.setValue(n, 0);
+  if (em) for (const n of EXPR_ALL) if (em.getExpression(n)) em.setValue(n, 0);
 }
 $('camBtn').onclick = async () => {
   if (tracking) {
@@ -1075,16 +1078,74 @@ function applyFace() {
   setRot('head', new THREE.Quaternion().identity().slerp(hq, 0.65), 0.5);
 
   for (const c of faceRes.faceBlendshapes[0].categories) bsMap[c.categoryName] = c.score;
+  faceFrame();
+}
+// 表情: MediaPipeの52個のブレンドシェイプ → VRMの表情
+// まばたきは人や照明で数値の出方が大きく違うので、目を開けているときの値(基準)を自動で覚えて、そこからの差で判定する
+const EXPR_ALL = ['blink', 'blinkLeft', 'blinkRight', 'aa', 'ih', 'oh', 'ou', 'ee', 'happy', 'angry', 'sad', 'surprised', 'relaxed'];
+const nz = (x, lo, hi) => THREE.MathUtils.clamp((x - lo) / (hi - lo), 0, 1);
+const fx = { baseL: 0.1, baseR: 0.1, hold: 0, bl: 0, br: 0, t: 0, emo: {}, infoT: 0 };
+function faceFrame() {
   const g = k => bsMap[k] || 0, em = vrm.expressionManager; if (!em) return;
-  const set = (n, v) => { if (em.getExpression(n)) em.setValue(n, THREE.MathUtils.clamp(v, 0, 1)); };
-  const bl = g(mirror ? 'eyeBlinkRight' : 'eyeBlinkLeft'), br = g(mirror ? 'eyeBlinkLeft' : 'eyeBlinkRight');
-  const bh = x => x > 0.5 ? 1 : x * 1.2;
-  set('blinkLeft', bh(bl)); set('blinkRight', bh(br));
+  const has = n => !!em.getExpression(n);
+  const set = (n, v) => { if (has(n)) em.setValue(n, THREE.MathUtils.clamp(v, 0, 1)); };
+  const now = performance.now() / 1000, dt = Math.min(0.2, now - (fx.t || now)); fx.t = now;
+  // 鏡のときは左右を入れ替える
+  const rawL = g(mirror ? 'eyeBlinkRight' : 'eyeBlinkLeft'), rawR = g(mirror ? 'eyeBlinkLeft' : 'eyeBlinkRight');
+  // 開いているときの基準値: 低い値にはゆっくり追従、高い値(まばたき中)には追従しない
+  const adapt = (b, x) => x < b + 0.12 ? b + (x - b) * (1 - Math.exp(-dt * (x < b ? 2 : 0.4))) : b;
+  fx.baseL = adapt(fx.baseL, rawL); fx.baseR = adapt(fx.baseR, rawR);
+  const sens = +$('blinkSens').value;              // 0=鈍い 1=敏感
+  const th = 0.34 - sens * 0.22;                   // 基準から何だけ上がったら「閉じた」とみなすか
+  let tl = nz(rawL, fx.baseL + th * 0.35, fx.baseL + th), tr = nz(rawR, fx.baseR + th * 0.35, fx.baseR + th);
+  // 片目だけ数値が出にくいことが多いので、両目がそこそこ閉じていたら両方閉じる(はっきりしたウインクは残す)
+  const mx = Math.max(tl, tr), mn = Math.min(tl, tr);
+  if (mn > mx * 0.3) tl = tr = mx;
+  // 一瞬のまばたきでも見えるように、閉じたら最低0.1秒は閉じたままにする
+  if (mx > 0.7) { fx.hold = 0.1; fx.bl = tl; fx.br = tr; } else fx.hold -= dt;
+  if (fx.hold > 0) { tl = Math.max(tl, fx.bl); tr = Math.max(tr, fx.br); }
+  // 感情(しきい値より下は0。普段の顔で表情が入りっぱなしになり、まばたきを止めてしまうのを防ぐ)
+  const avg = (a, b) => (g(a) + g(b)) / 2, blinkAmt = Math.max(tl, tr);
+  const emo = {
+    happy: nz(avg('mouthSmileLeft', 'mouthSmileRight'), 0.3, 0.75),
+    surprised: nz(avg('browOuterUpLeft', 'browOuterUpRight') * 0.6 + avg('eyeWideLeft', 'eyeWideRight') * 0.4, 0.25, 0.6),
+    angry: nz(avg('browDownLeft', 'browDownRight'), 0.35, 0.75) * (1 - blinkAmt),   // 目を閉じると眉も下がるので抑える
+    sad: nz(avg('mouthFrownLeft', 'mouthFrownRight') * 0.6 + g('browInnerUp') * 0.4, 0.25, 0.6)
+  };
+  const top = Math.max(...Object.values(emo));
+  for (const k in emo) {                              // 一番強い表情を優先(混ざって崩れないように)
+    const v = emo[k] < top ? emo[k] * 0.3 : emo[k];
+    fx.emo[k] = (fx.emo[k] || 0) + (v - (fx.emo[k] || 0)) * (1 - Math.exp(-dt * 10));
+    set(k, fx.emo[k]);
+  }
+  // まばたき(左右別が無いモデルは両目まとめて)
+  if (has('blinkLeft') && has('blinkRight')) { set('blinkLeft', tl); set('blinkRight', tr); }
+  else set('blink', Math.max(tl, tr));
+  // 口
   const jaw = g('jawOpen');
   set('aa', jaw * 1.4 * (1 - g('mouthFunnel')));
   set('oh', g('mouthFunnel') * 1.2); set('ou', g('mouthPucker') * 1.2);
   set('ee', g('mouthStretchLeft') * .6 + g('mouthStretchRight') * .6);
-  set('happy', (g('mouthSmileLeft') + g('mouthSmileRight')) * 0.7);
+  set('ih', nz(avg('mouthSmileLeft', 'mouthSmileRight'), 0.1, 0.5) * nz(jaw, 0.05, 0.3) * 0.6);
+  // 視線(VRMの視線ボーン/表情を動かす)
+  const la = vrm.lookAt;
+  if (la) {
+    const sg = mirror ? -1 : 1;
+    const yaw = ((g('eyeLookOutLeft') + g('eyeLookInRight')) - (g('eyeLookInLeft') + g('eyeLookOutRight'))) / 2;
+    const pitch = (g('eyeLookUpLeft') + g('eyeLookUpRight') - g('eyeLookDownLeft') - g('eyeLookDownRight')) / 2;
+    const k = 1 - Math.exp(-dt * 12);
+    la.yaw += (THREE.MathUtils.clamp(yaw * 45 * sg, -25, 25) - la.yaw) * k;
+    la.pitch += (THREE.MathUtils.clamp(-pitch * 30, -15, 15) - la.pitch) * k;   // three-vrmは下向きが正
+  }
+  // 認識状況の表示(5回/秒)
+  if ((fx.infoT -= dt) < 0) {
+    fx.infoT = 0.2;
+    const pct = v => String(Math.round(v * 100)).padStart(3);
+    const best = Object.entries(fx.emo).sort((a, b) => b[1] - a[1])[0];
+    $('faceInfo').textContent = `表情: 目 L${pct(rawL)} R${pct(rawR)} (基準${pct((fx.baseL + fx.baseR) / 2)}) → 閉${pct(Math.max(tl, tr))}%`
+      + (best && best[1] > 0.15 ? ` / ${({ happy: '笑顔', surprised: '驚き', angry: '怒り', sad: '悲しみ' })[best[0]]}` : '')
+      + (has('blinkLeft') ? '' : ' ※左右別まばたき無しのモデル');
+  }
 }
 
 /* ---------- 録画 ---------- */
@@ -1491,6 +1552,36 @@ function vcUpdate(dt) {
   bgQuad.visible = !vc.active; backdrop.visible = stageQuad.visible = vc.active;
   vcUI();
 }
+// 仮想カメラの映像を「実際の向き」(鏡でない)にする: 描いた画面をコピーして左右反転で描き直す(切替はカードを裏返す動き)
+const fbPos = new THREE.Vector2(), fbSize = new THREE.Vector2();
+let fbTex = null; vc.flipS = 1;
+const flipMat = new THREE.ShaderMaterial({
+  uniforms: { uTex: { value: null }, uS: { value: 1 } }, depthTest: false, depthWrite: false,
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+  fragmentShader: `uniform sampler2D uTex; uniform float uS; varying vec2 vUv;
+    void main(){ float x = 0.5 + (vUv.x - 0.5) / uS;
+      if (x < 0.0 || x > 1.0) { gl_FragColor = vec4(0.05, 0.03, 0.1, 1.0); return; }
+      gl_FragColor = vec4(texture2D(uTex, vec2(x, vUv.y)).rgb * (0.55 + 0.45 * abs(uS)), 1.0); }`
+});
+const flipScene = new THREE.Scene(); flipScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), flipMat));
+flipScene.children[0].frustumCulled = false;
+function vcFlipStep(dt) {
+  const want = vc.active && vc.state !== 'off' && mirror && $('vcReal').checked ? -1 : 1;
+  const sp = matchMedia('(prefers-reduced-motion: reduce)').matches ? 99 : 1 / 0.18;
+  vc.flipS += THREE.MathUtils.clamp(want - vc.flipS, -dt * sp, dt * sp);
+  if (Math.abs(vc.flipS) < 0.02) vc.flipS = want < 0 ? -0.02 : 0.02;   // 0除算を避ける(真横を向いた瞬間)
+}
+function vcFlipDraw() {
+  if (vc.flipS > 0.999) return;
+  renderer.getDrawingBufferSize(fbSize);
+  if (!fbTex || fbTex.image.width !== fbSize.x || fbTex.image.height !== fbSize.y) {
+    fbTex?.dispose(); fbTex = new THREE.FramebufferTexture(fbSize.x, fbSize.y);
+    fbTex.minFilter = fbTex.magFilter = THREE.LinearFilter;
+  }
+  renderer.copyFramebufferToTexture(fbPos, fbTex);
+  flipMat.uniforms.uTex.value = fbTex; flipMat.uniforms.uS.value = vc.flipS;
+  renderer.render(flipScene, hudCam);
+}
 let vcLastUI = '';
 function vcUI() {
   let t = '', p = 0;
@@ -1525,8 +1616,10 @@ function loop() {
         // 体の動きが一番目立つので、ポーズは毎回検出する
         poseRes = pose.detectForVideo(video, ts); LM = poseRes.worldLandmarks?.[0] || null;
         // 標準/軽量: 顔と手を交互に検出して1フレームあたりの負荷を抑える
-        if (!P.alt || !useHand || (turn & 1) === 0) faceRes = face.detectForVideo(video, ts);
-        if (useHand) { if (!P.alt || (turn & 1) === 1) handRes = hand.detectForVideo(video, ts); } else handRes = null;
+        // 手が映っていないときは手の検出を4回に1回にして、顔(まばたき)を多めに検出する
+        const handTurn = useHand && P.alt && (handRes?.landmarks?.length ? (turn & 1) === 1 : turn % 4 === 1);
+        if (!P.alt || !useHand || !handTurn) faceRes = face.detectForVideo(video, ts);
+        if (useHand) { if (!P.alt || handTurn) handRes = hand.detectForVideo(video, ts); } else handRes = null;
         drawOverlay();
         onDetect(now);
       } catch (e) { console.warn(e); }
@@ -1556,6 +1649,7 @@ function loop() {
   }
   renderer.render(scene, cam);
   headFix?.scale.setScalar(0.001);
+  vcFlipStep(dt); vcFlipDraw();
   if (flashMat.opacity > 0 || titleMat.opacity > 0) { renderer.clearDepth(); renderer.render(hud, hudCam); }
 }
 loop();
