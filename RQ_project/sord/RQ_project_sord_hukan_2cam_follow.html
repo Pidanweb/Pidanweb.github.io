@@ -455,6 +455,76 @@ lane.position.set(0, 0, 0); zoneG.add(lane);
 const fan = new THREE.Mesh(new THREE.RingGeometry(.55, 1, 40, 1, -Math.PI/2 - 1.35, 2.7),
   new THREE.MeshBasicMaterial({ color:0xff3a4a, transparent:true, opacity:.3, depthWrite:false, side:THREE.DoubleSide }));
 fan.rotation.x = -Math.PI/2; fan.visible = false; zoneG.add(fan);
+// ===== 敵のオーラ（オーバーレイ）=====
+// キャラの材質は一切いじらず、各メッシュに「光の殻」を子として重ねる。どの敵でも makeAura(敵のルート) で使える。
+//   const au = makeAura(root, { skip:o => ... });   // skip: オーラを付けないメッシュ
+//   毎フレーム: au.set(0xff3a4a, 強さ0〜1)  /  消す: au.set(null)  →  au.update(dt)
+// 2層: rim = 体のふちが光る（正面側・薄く） / halo = 体の外にはみ出す揺らめく光（裏面の殻・厚め）。SkinnedMesh（VRMなど）にも対応
+const AURA_VS = `
+#include <common>
+#include <skinning_pars_vertex>
+uniform float thick; uniform float time;
+varying float vRim;
+void main(){
+  #include <beginnormal_vertex>
+  #include <skinbase_vertex>
+  #include <skinnormal_vertex>
+  #include <begin_vertex>
+  #include <skinning_vertex>
+  vec4 mv = modelViewMatrix*vec4(transformed, 1.0);
+  vec3 n = normalize(normalMatrix*objectNormal);
+  float wob = 1.0 + 0.35*sin(time*9.0 + mv.y*7.0) + 0.2*sin(time*5.3 - mv.x*9.0);   // 炎のような揺らぎ（ビュー空間の位置で揺らすので体の大きさに依らない）
+  mv.xyz += n*thick*wob;
+  vRim = 1.0 - abs(dot(n, normalize(-mv.xyz)));
+  gl_Position = projectionMatrix*mv;
+}`;
+const AURA_FS = `
+uniform vec3 col; uniform float amt; uniform float pw; uniform float inv;
+varying float vRim;
+void main(){
+  float r = mix(vRim, 1.0 - vRim, inv);
+  float a = pow(clamp(r, 0.0, 1.0), pw)*amt;
+  gl_FragColor = vec4(col*a, a);
+}`;
+const AURA_ALL = new Set();
+function makeAura(root, opt = {}){
+  const U = { col:{ value:new THREE.Color() }, amt:{ value:0 }, time:{ value:0 } };
+  const LAYERS = [   // thick: 殻の厚み(m) / pw: ふちへの集まり方 / inv: 1=内側ほど明るい(外へ消える) / k: 明るさ
+    { side:THREE.FrontSide, thick:opt.rim ?? .006, pw:2.0, inv:0, k:1.5, ro:6 },
+    { side:THREE.BackSide,  thick:opt.halo ?? .12, pw:1.0, inv:1, k:1.3, ro:5 } ];
+  const mats = {};   // [skinned][layer]
+  const mat = (skinned, i) => (mats[skinned + '_' + i] ||= (() => { const L = LAYERS[i];
+    return new THREE.ShaderMaterial({ vertexShader:AURA_VS, fragmentShader:AURA_FS, skinning:skinned,
+      uniforms:{ col:U.col, amt:{ get value(){ return U.amt.value*L.k; } }, time:U.time, thick:{ value:L.thick }, pw:{ value:L.pw }, inv:{ value:L.inv } },
+      side:L.side, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending }); })());
+  const shells = [], src = [];
+  root.traverse(o => { if (o.isMesh && !o.userData.isAura && !(opt.skip && opt.skip(o))) src.push(o); });
+  for (const o of src){
+    const thin = o.geometry.type === 'PlaneGeometry' || o.geometry.type === 'PlaneBufferGeometry';   // 布など厚みのない板は外側の殻を付けない
+    for (let i = 0; i < LAYERS.length; i++){
+      if (thin && i === 1) continue;
+      let m;
+      if (o.isSkinnedMesh){ m = new THREE.SkinnedMesh(o.geometry, mat(true, i)); m.bind(o.skeleton, o.bindMatrix); }
+      else m = new THREE.Mesh(o.geometry, mat(false, i));
+      m.userData.isAura = true; m.renderOrder = LAYERS[i].ro; m.frustumCulled = o.frustumCulled; m.visible = false; m.raycast = () => {};
+      o.add(m); shells.push(m);
+    }
+  }
+  const tgtCol = new THREE.Color(), st = { tgt:0, on:false };
+  const au = {
+    set(hex, k = 1){ if (hex == null){ st.tgt = 0; return; } tgtCol.setHex(hex); st.tgt = Math.max(0, Math.min(1.5, k)); if (U.amt.value < .02) U.col.value.copy(tgtCol); },
+    update(dt){
+      U.time.value += dt;
+      U.amt.value += (st.tgt - U.amt.value)*(1 - Math.exp(-dt*(st.tgt > U.amt.value ? 14 : 8)));   // 付くのは速く、消えるのは少しゆっくり
+      U.col.value.lerp(tgtCol, 1 - Math.exp(-dt*12));
+      const on = U.amt.value > .01; if (on !== st.on){ st.on = on; for (const m of shells) m.visible = on; }
+    },
+    dispose(){ for (const m of shells) m.parent && m.parent.remove(m); for (const k in mats) mats[k].dispose(); AURA_ALL.delete(au); }
+  };
+  AURA_ALL.add(au); return au;
+}
+// ボスのオーラ（目の上の気絶の星は除く）
+const bossAura = makeAura(bossBody, { skip:o => { for (let p = o; p; p = p.parent) if (p === stars) return true; return false; } });
 // --- 剣の軌跡（振り抜いた跡に残る光の帯）---
 const TRN = 40, trPos = new Float32Array(TRN*2*3), trCol = new Float32Array(TRN*2*3), trGeo = new THREE.BufferGeometry();
 { const idx = []; for (let i = 0; i < TRN - 1; i++){ const a = i*2; idx.push(a, a+1, a+2, a+1, a+3, a+2); } trGeo.setIndex(idx); }
@@ -1591,14 +1661,9 @@ function hcClick(){
   t.click();
 }
 function faceMirror(){ return face.src === vid ? camMirror : face.fm !== false; }
-// ===== 効果音（sounds/ フォルダ）。拡張子は mp3 → wav → ogg → m4a の順に見つかったものを使う =====
+// ===== 効果音（sounds/ フォルダの mp3）=====
 let vol = .8;
-const SND_EXT = ['mp3', 'wav', 'ogg', 'm4a'];
-function sndLoad(name){
-  const a = new Audio(); a.preload = 'auto'; let i = 0;
-  a.onerror = () => { if (++i < SND_EXT.length) a.src = `sounds/${name}.${SND_EXT[i]}`; else console.warn('[音] 見つかりません: sounds/' + name); };
-  a.src = `sounds/${name}.${SND_EXT[0]}`; return a;
-}
+function sndLoad(name){ const a = new Audio(`sounds/${name}.mp3`); a.preload = 'auto'; return a; }
 const SND = { swing:sndLoad('swing'), tiki:sndLoad('tiki'), Pswing:sndLoad('Pswing'), mawasi:sndLoad('mawasi'), pary:sndLoad('pary') };
 function playS(k, v = 1){ try { const a = SND[k].cloneNode(); a.volume = Math.min(1, vol*v); a.play().catch(() => {}); } catch (e){} }   // 重ねて鳴らせるよう毎回コピー
 function playAtk(){ playS('swing'); }   // 通常の斬り
@@ -1915,6 +1980,9 @@ function bossAnim(dt){
     if (tele && es !== 'approach'){ mEdge.emissive.setRGB(tr*tk, tg*tk, tb*tk); mIron.emissive.setRGB(tr*tk*.35, tg*tk*.3, tb*tk*.35); }
   }
   if (tele && es !== 'approach') mEye.color.setRGB(tr, tg + .1, tb); else mEye.color.setHex(B.phase === 3 ? 0xff3a1a : 0xffa020);
+  // オーラ: 赤 = パリィ可 / 紫 = パリィ不可。主観視点で剣が見えにくくても体全体の光で分かる（接近中は弱く、振りかぶりで強くなる）
+  bossAura.set(tele && B.s !== 'dead' ? (B.unp ? 0xa040ff : 0xff2a3a) : null, es === 'approach' ? .35 : tk);
+  bossAura.update(dt);
   stars.visible = es === 'knock' && B.stun; stars.rotation.y += dt*5;
   // 影・攻撃範囲
   shadow.position.set(B.x, .02, B.z); shadow.scale.setScalar(2.3*(1 - Math.min(.5, (B.y || 0)*.25)));
