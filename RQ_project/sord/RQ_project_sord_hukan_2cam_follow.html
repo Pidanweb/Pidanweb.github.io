@@ -112,7 +112,7 @@
 <script>
 // ===== 灰牙の獣王ヴォルグラム RAID（元: GIANT SLIME RAID）=====
 // G: ARグラス表示 / 2台モード: 体の前(後ろ)に左右2台
-// 左クリック: 斬る(長押しでガード) / 右クリック: パリィ / 紫の攻撃はパリィ不可→ガード / Wii: 振る=斬る, B+振り上げ=パリィ, A長押し=ガード / A,D: 左右に回避 / V: VR(左右分割)モード切替 / 視点・照準: 顔の動き(マウスでも可) / C: 顔の中心リセット
+// 左クリック: 斬る(長押しでガード) / 右クリック: パリィ / 黄色の攻撃はパリィ不可→ガード / Wii: 振る=斬る, B+振り上げ=パリィ, A長押し=ガード / A,D: 左右に回避 / V: VR(左右分割)モード切替 / 視点・照準: 顔の動き(マウスでも可) / C: 顔の中心リセット
 const FONT = '"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif';
 const vid = document.getElementById('v');
 const renderer = new THREE.WebGLRenderer({ antialias:true });
@@ -1722,7 +1722,7 @@ $('calPage').onclick = () => { if (camStream) camStream.getTracks().forEach(t =>
 function titleMsg(){
   setMsg([['灰牙の獣王 ヴォルグラム', '#ffd35a', 66], ['左クリック: 斬る / 長押し: ガード　右クリック: パリィ', '#fff', 30],
           ['縦斬り（細い帯）は A / D で横へ回避　横薙ぎ（扇）はパリィかガード', '#ffb35a', 26],
-          ['紫に光る攻撃（跳躍斬りなど）はパリィ不可 → ガードで防ぐ', '#c06bff', 26],
+          ['黄色に光る攻撃（跳躍斬りなど）はパリィ不可 → ガードで防ぐ', '#ffd21a', 26],
           ['剣が赤く光っている間に右クリック → 弾き返してスタン → 大ダメージ', '#fff', 26],
           ['Wii: 振る=斬る / B+振り上げ=パリィ / A長押し=ガード', '#ffd35a', 26],
           ['Wii: 縦→横=バーチカル / 突き / 縦横縦横 / 一回転 など（−:ジャイロ再調整）', '#ffd35a', 22],
@@ -1795,8 +1795,8 @@ function hurtPlayer(mult = 1){
 }
 
 // ===== ボスの行動 =====
-// 待機 → (歩いて間合いへ) → 振りかぶり[wind: 赤/紫に光る・ここでパリィ予約可] → 振り抜き[swing: 剣が当たる瞬間に判定] → 硬直[rec: 弱点] → 待機位置へ戻る
-// 縦斬り(oh): 細い帯。左右に避けられる / 横薙ぎ(sw): 扇。避けにくいのでパリィ・ガード / 跳躍斬り(leap): 遠くから飛び込む。必ずパリィ不可(紫)
+// 待機 → (歩いて間合いへ) → 振りかぶり[wind: 赤/黄に光る・ここでパリィ予約可] → 振り抜き[swing: 剣が当たる瞬間に判定] → 硬直[rec: 弱点] → 待機位置へ戻る
+// 縦斬り(oh): 細い帯。左右に避けられる / 横薙ぎ(sw): 扇。避けにくいのでパリィ・ガード / 跳躍斬り(leap): 遠くから飛び込む。必ずパリィ不可(黄)
 const REACH = 2.5;    // 斬りかかるときのプレイヤーとの距離(m)。剣先がちょうどプレイヤーを通る
 const ATK = {
   oh:   { wp:'ohWind', hp:'ohHit', wind:[1.05, .9, .75], sw:.3,  hitK:.66, rec:.8,  mult:1.2, zone:'lane', w:.75, off:-.2 },
@@ -1821,10 +1821,10 @@ function bossPick(ph){
 }
 function bossStartWind(a, quick){
   const ph = B.phase; B.atk = a; B.s = 'wind'; P.armed = false;
-  B.t = B.wt = ATK[a].wind[ph-1]*(quick ? .65 : 1);
-  B.unp = a === 'leap' ? true : Math.random() < [.2, .28, .35][ph-1];   // パリィ不可攻撃（紫）
-  popup(B.unp ? '!!' : '!', B.unp ? '#c06bff' : '#ff4d5e', new THREE.Vector3(B.x, BOSS_H + .6, B.z), 1.2, B.wt);
-  if (B.unp) popCam(a === 'leap' ? '跳躍斬り！ ガード！' : 'パリィ不可！ ガード！', '#c06bff', .8, 1);
+  B.t = B.wt = quick ? Math.max(.75, ATK[a].wind[ph-1]*.85) : ATK[a].wind[ph-1];   // 連撃の2撃目も見てから反応できる長さ（最低0.75秒）
+  if (!quick) B.unp = a === 'leap' ? true : Math.random() < [.2, .28, .35][ph-1];   // パリィ不可攻撃（黄）。連撃の2撃目は1撃目と同じ色のまま（途中で色が変わらない）
+  popup(B.unp ? '!!' : '!', B.unp ? '#ffd21a' : '#ff4d5e', new THREE.Vector3(B.x, BOSS_H + .6, B.z), 1.2, B.wt);
+  if (B.unp) popCam(a === 'leap' ? '跳躍斬り！ ガード！' : 'パリィ不可！ ガード！', '#ffd21a', .8, 1);
 }
 // 剣が振り抜かれた瞬間の判定（範囲は「ボスの向き」に対する前後・左右で見る）
 function bossStrike(a){
@@ -1833,13 +1833,13 @@ function bossStrike(a){
   const inZone = fwd > -.3 && fwd < REACH + 1.1 && lat < a.w + .35;
   if (a.zone === 'lane'){   // 床に叩きつける
     const o = a.off || 0, gp = new THREE.Vector3(B.x + fx*REACH*.95 + fz*o, .05, B.z + fz*REACH*.95 - fx*o), big = a === ATK.leap;
-    groundRing(gp, big ? 6 : 3.5, B.unp ? 0xc06bff : 0xffb35a, .55); groundRing(gp, big ? 3 : 2, 0xffffff, .3);
+    groundRing(gp, big ? 6 : 3.5, B.unp ? 0xffd21a : 0xff6a4a, .55); groundRing(gp, big ? 3 : 2, 0xffffff, .3);
     burst(gp, 0xb8a888, big ? 70 : 40, big ? 7 : 5); shake = Math.max(shake, big ? .55 : .35); playThud(big ? .9 : .7);
   }
   B.combo++;
   if (!inZone){ if (P.inv <= 0) popCam('回避!', '#7ae7ff', .9, .8); return; }
   if (P.inv > 0) return;
-  if (B.unp){ if (P.guard) guarded(); else { if (P.par > 0) popCam('パリィ不可!', '#c06bff', .9, .8); hurtPlayer(a.mult); } }
+  if (B.unp){ if (P.guard) guarded(); else { if (P.par > 0) popCam('パリィ不可!', '#ffd21a', .9, .8); hurtPlayer(a.mult); } }
   else if (P.par > 0 || P.armed) parried();
   else if (P.guard) guarded();
   else hurtPlayer(a.mult);
@@ -1969,10 +1969,10 @@ function bossAnim(dt){
   bpTo(tgt, rate, dt); bpApply();
   // 胴の中心（攻撃の当たり判定・エフェクト位置）
   bossG.updateMatrixWorld(true); J.spine.localToWorld(bossCtr.set(0, .42, .05));
-  // 光り方: 予兆は剣の刃と目が赤(パリィ可)/紫(パリィ不可)に光る。被弾で白く光る
+  // 光り方: 予兆は剣の刃と目が赤(パリィ可)/黄(パリィ不可)に光る。被弾で白く光る
   const tele = es === 'wind' || es === 'swing' || es === 'jump' || es === 'approach';
   const tk = es === 'wind' ? Math.min(1, (1 - B.t/B.wt)*1.6)*(.55 + .45*blink) : es === 'approach' ? .25 : 1;
-  const tr = B.unp ? .75 : 1, tg = B.unp ? .25 : .22, tb = B.unp ? 1 : .15;
+  const tr = 1, tg = B.unp ? .82 : .22, tb = B.unp ? .1 : .15;   // 赤(パリィ可) / 黄(パリィ不可)
   const fl = B.flash > 0, rage = B.phase === 3 ? .06 + .05*Math.sin(B.time*6) : 0;
   for (const o of BM){ if (fl) o.m.emissive.copy(FLASH_E); else o.m.emissive.copy(o.e); }
   if (!fl){
@@ -1980,8 +1980,8 @@ function bossAnim(dt){
     if (tele && es !== 'approach'){ mEdge.emissive.setRGB(tr*tk, tg*tk, tb*tk); mIron.emissive.setRGB(tr*tk*.35, tg*tk*.3, tb*tk*.35); }
   }
   if (tele && es !== 'approach') mEye.color.setRGB(tr, tg + .1, tb); else mEye.color.setHex(B.phase === 3 ? 0xff3a1a : 0xffa020);
-  // オーラ: 赤 = パリィ可 / 紫 = パリィ不可。主観視点で剣が見えにくくても体全体の光で分かる（接近中は弱く、振りかぶりで強くなる）
-  bossAura.set(tele && B.s !== 'dead' ? (B.unp ? 0xa040ff : 0xff2a3a) : null, es === 'approach' ? .35 : tk);
+  // オーラ: 赤 = パリィ可 / 黄 = パリィ不可。主観視点で剣が見えにくくても体全体の光で分かる（接近中は弱く、振りかぶりで強くなる）
+  bossAura.set(tele && B.s !== 'dead' ? (B.unp ? 0xffd21a : 0xff2a3a) : null, es === 'approach' ? .35 : tk);
   bossAura.update(dt);
   stars.visible = es === 'knock' && B.stun; stars.rotation.y += dt*5;
   // 影・攻撃範囲
@@ -1989,7 +1989,7 @@ function bossAnim(dt){
   const zon = (es === 'wind' || es === 'jump') && state === 'play';
   zoneG.visible = zon && B.s !== 'dead'; lane.visible = zon && A.zone === 'lane'; fan.visible = zon && A.zone === 'fan';
   if (zon){
-    const kz = es === 'wind' ? 1 - B.t/B.wt : 1, col = B.unp ? 0xb04dff : 0xff3a4a, op = .2 + .28*blink*kz;
+    const kz = es === 'wind' ? 1 - B.t/B.wt : 1, col = B.unp ? 0xffd21a : 0xff3a4a, op = .2 + .28*blink*kz;
     if (B.atk === 'leap'){   // 着地点まで伸ばす
       const T = bossTgt(), L = Math.max(1, Math.hypot(T.x - B.x, T.z - B.z) + 1); zoneG.position.set(B.x, .03, B.z); zoneG.rotation.y = B.yaw;
       lane.scale.set(A.w*2, L, 1); lane.position.set(0, 0, L/2);
@@ -1999,7 +1999,7 @@ function bossAnim(dt){
     }
     lane.material.color.setHex(col); lane.material.opacity = op; fan.material.color.setHex(col); fan.material.opacity = op*.8;
   }
-  trailUpd(dt, es === 'swing' || (es === 'rec' && B.t > B.rt - .06), B.unp ? 0xc06bff : B.atk === 'sw' ? 0xffd35a : 0xff7a4a);
+  trailUpd(dt, es === 'swing' || (es === 'rec' && B.t > B.rt - .06), B.unp ? 0xffd21a : B.atk === 'sw' ? 0xff5040 : 0xff7a4a);
 }
 
 sword.rotation.order = 'YXZ';   // 一回転(メテオブレイク)用にY軸回転を最後に適用
