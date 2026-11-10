@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RQ GUNNER : PC中継</title>
+<style>
+  body{margin:0;background:#0a1110;color:#e8fbff;font:15px sans-serif}
+  main{max-width:760px;margin:0 auto;padding:16px}
+  h1{font-size:20px;color:#7ae7ff;margin:4px 0 12px}
+  section{border:1px solid #7ae7ff44;border-radius:10px;padding:12px 14px;margin-bottom:12px;background:#061418}
+  h2{font-size:15px;color:#ffd35a;margin:0 0 8px}
+  button{background:#0d2a30;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer}
+  #code{font:bold 56px monospace;letter-spacing:8px;color:#5fe07a;text-align:center;margin:4px 0}
+  .st{font-size:13px;color:#ffd35a;margin-top:6px} .ok{color:#5fe07a} .ng{color:#ff4d5e}
+  small{color:#9fdcea;line-height:1.6;display:block}
+  label{display:inline-block;margin:6px 12px 0 0}
+  canvas{width:100%;max-width:480px;aspect-ratio:4/3;background:#000;border:1px solid #7ae7ff55;border-radius:8px;display:block;margin-top:8px}
+  #posV{font:bold 22px monospace;color:#7ae7ff}
+  input[type=number]{width:5em;font:inherit}
+</style>
+</head>
+<body>
+<main>
+  <h1>🎮 RQ GUNNER — PC中継（Wiiリモコン・立ち位置 → スマホ）</h1>
+
+  <section>
+    <h2>① スマホに入力するコード</h2>
+    <div id="code">------</div>
+    <div class="st" id="peerSt">接続準備中…</div>
+    <div class="st" id="phoneSt">スマホ: 未接続</div>
+    <small>スマホで RQ_project_gunner_goggle.html を開き「🥽 ゴーグル」→ このコードを入力して接続。<br>
+    ⚠ このページは<b>画面に表示したまま</b>にしてください（裏に回すとカメラ認識が止まります）。</small>
+  </section>
+
+  <section>
+    <h2>② Wiiリモコン</h2>
+    <button id="wiiBtn">Wiiリモコンを接続</button> <span class="st" id="wiiSt">未接続</span>
+    <div class="st" id="rateSt"></div>
+    <small>Chrome / Edge で開いてください（WebHID）。ゲーム本体のタブは閉じておくと確実です。</small>
+  </section>
+
+  <section>
+    <h2>③ カメラで立ち位置（左右）</h2>
+    <label><input type="checkbox" id="poseOn"> 立ち位置を送る</label>
+    <label>カメラ <select id="camSel"><option value="">自動</option></select></label>
+    <label><input type="checkbox" id="inv"> 左右反転</label>
+    <label>肩幅 <input type="number" id="shw" value="38" min="25" max="60">cm</label>
+    <div style="margin-top:8px"><button id="ctrBtn">ここを中央にする</button> 　横位置 <span id="posV">—</span></div>
+    <canvas id="cv" width="640" height="480"></canvas>
+    <div class="st" id="poseSt"></div>
+    <small>カメラは体の正面に置き、全身（少なくとも肩〜腰）が映るように。肩幅を基準に m に換算します。<br>
+    Wii の <b>−</b> を押すと「ここを中央」も同時に行います（スマホ側の正面合わせと一緒）。</small>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script type="module">
+const $ = id => document.getElementById(id);
+const WVID = 0x057e, WPIDS = [0x0306, 0x0330];
+const st = (id, t, cls) => { const e = $(id); e.textContent = t; e.className = 'st' + (cls ? ' ' + cls : ''); };
+
+// ===== PeerJS（コード = 6桁、毎回同じになるよう保存）=====
+let peer = null, conn = null, code = null;
+function newCode(){ return String(Math.floor(100000 + Math.random()*900000)); }
+function startPeer(){
+  try { code = localStorage.getItem('rqgun_hub_code'); } catch (e){}
+  if (!code) code = newCode();
+  if (peer) try { peer.destroy(); } catch (e){}
+  peer = new Peer('rqgun-' + code);
+  peer.on('open', () => { $('code').textContent = code; st('peerSt', '待機中（スマホからの接続を待っています）', 'ok'); try { localStorage.setItem('rqgun_hub_code', code); } catch (e){} });
+  peer.on('error', e => {
+    if (e.type === 'unavailable-id'){ code = newCode(); try { localStorage.setItem('rqgun_hub_code', code); } catch (er){} setTimeout(startPeer, 300); return; }
+    st('peerSt', 'エラー: ' + (e.type || e.message), 'ng');
+  });
+  peer.on('disconnected', () => { st('peerSt', '再接続中…', 'ng'); setTimeout(() => { try { peer.reconnect(); } catch (e){} }, 1000); });
+  peer.on('connection', c => {
+    if (conn) try { conn.close(); } catch (e){}
+    conn = c;
+    c.on('open', () => { st('phoneSt', 'スマホ: 接続中 ✅', 'ok'); sendWiiState(); });
+    c.on('data', onPhone);
+    c.on('close', () => { if (conn === c){ conn = null; st('phoneSt', 'スマホ: 切断されました', 'ng'); } });
+  });
+}
+const send = m => { if (conn && conn.open) conn.send(m); };
+const sendWiiState = () => send({ t:'wii', on:!!dev });
+
+// ===== Wiiリモコン（WebHID）：受信レポートはそのままスマホへ、スマホからの送信はそのままリモコンへ =====
+let dev = null, nRep = 0, pMinus = false;
+async function openWii(d){
+  dev = d; if (!d.opened) await d.open();
+  d.oninputreport = e => {
+    nRep++;
+    const u = new Uint8Array(e.data.buffer, e.data.byteOffset, e.data.byteLength);
+    send({ t:'in', id:e.reportId, ts:e.timeStamp || performance.now(), d:Array.from(u) });
+    if (e.reportId >= 0x30 && u.length >= 2){ const m = !!(u[1] & 0x10); if (m && !pMinus) poseCenter(); pMinus = m; }   // −: 立ち位置の中央合わせ
+  };
+  if (!conn) try { await d.sendReport(0x11, new Uint8Array([0x10])); } catch (e){}   // LED1 点灯（つながった目印）
+  st('wiiSt', '接続中 ✅ ' + (d.productName || ''), 'ok'); sendWiiState();
+}
+$('wiiBtn').onclick = async () => {
+  if (!('hid' in navigator)){ st('wiiSt', 'WebHID非対応のブラウザです（Chrome / Edge を使用）', 'ng'); return; }
+  try { const [d] = await navigator.hid.requestDevice({ filters: WPIDS.map(p => ({ vendorId:WVID, productId:p })) }); if (d) await openWii(d); }
+  catch (e){ st('wiiSt', '接続できません: ' + e.message, 'ng'); }
+};
+if ('hid' in navigator){
+  navigator.hid.getDevices().then(l => { const d = l.find(x => x.vendorId === WVID && WPIDS.includes(x.productId)); if (d) openWii(d).catch(() => {}); });
+  navigator.hid.addEventListener('disconnect', e => { if (e.device === dev){ dev = null; st('wiiSt', '切断されました', 'ng'); sendWiiState(); } });
+}
+function onPhone(m){
+  if (!m) return;
+  if (m.t === 'out' && dev) dev.sendReport(m.id, new Uint8Array(m.d)).catch(() => {});
+  else if (m.t === 'hi') sendWiiState();
+}
+setInterval(() => { st('rateSt', dev ? `受信 ${nRep} 回/秒` + (conn ? ' → スマホへ転送中' : '（スマホ未接続）') : ''); nRep = 0; }, 1000);
+
+// ===== 立ち位置（MediaPipe Pose Landmarker）=====
+const vid = document.createElement('video'); vid.muted = true; vid.playsInline = true;
+const cv = $('cv'), cx = cv.getContext('2d');
+const pose = { lm:null, stream:null, on:false, x0:null, sw0:null, cal:[], mid:null, sw:null, x:null, lastT:-1, noneT:0 };
+async function listCams(){
+  try {
+    const ds = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'), cur = $('camSel').value;
+    $('camSel').innerHTML = '<option value="">自動</option>';
+    ds.forEach((d, i) => { const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || ('カメラ ' + (i+1)); $('camSel').appendChild(o); });
+    if (cur) $('camSel').value = cur;
+  } catch (e){}
+}
+async function startPose(){
+  st('poseSt', 'カメラ起動中…');
+  try {
+    if (pose.stream) pose.stream.getTracks().forEach(t => t.stop());
+    const id = $('camSel').value;
+    pose.stream = await navigator.mediaDevices.getUserMedia({ video: id ? { deviceId:{ exact:id }, width:640, height:480 } : { width:640, height:480 }, audio:false });
+    vid.srcObject = pose.stream; await vid.play(); listCams();
+  } catch (e){ st('poseSt', 'カメラを起動できません: ' + e.name, 'ng'); $('poseOn').checked = pose.on = false; return; }
+  if (!pose.lm){
+    st('poseSt', '認識モデルを読み込み中…');
+    try {
+      const V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+      const mp = await import(V + '/vision_bundle.mjs'), fs = await mp.FilesetResolver.forVisionTasks(V + '/wasm');
+      const o = d => ({ baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task', delegate:d }, runningMode:'VIDEO', numPoses:1 });
+      try { pose.lm = await mp.PoseLandmarker.createFromOptions(fs, o('GPU')); } catch (e){ pose.lm = await mp.PoseLandmarker.createFromOptions(fs, o('CPU')); }
+    } catch (e){ st('poseSt', 'モデルを読み込めません: ' + e.message, 'ng'); return; }
+  }
+  pose.on = true; st('poseSt', '認識中（最初に見えた位置を中央にします）', 'ok');
+}
+function stopPose(){
+  pose.on = false; if (pose.stream) pose.stream.getTracks().forEach(t => t.stop()); pose.stream = null;
+  send({ t:'pos', ok:false }); $('posV').textContent = '—'; st('poseSt', '停止中');
+}
+function poseCenter(){ if (pose.mid === null) return; pose.x0 = pose.mid; pose.sw0 = pose.sw; pose.cal = []; st('poseSt', '中央を設定しました', 'ok'); }
+$('poseOn').onchange = e => e.target.checked ? startPose() : stopPose();
+$('camSel').onchange = () => { if (pose.on) startPose(); };
+$('ctrBtn').onclick = poseCenter;
+listCams();
+
+const vis = p => p && (p.visibility ?? 1) > .5;
+function poseStep(){
+  requestAnimationFrame(poseStep);
+  if (!pose.on || !pose.lm || vid.readyState < 2 || vid.currentTime === pose.lastT) return;
+  pose.lastT = vid.currentTime;
+  const r = pose.lm.detectForVideo(vid, performance.now()), L = r.landmarks && r.landmarks[0];
+  cx.save(); cx.translate(cv.width, 0); cx.scale(-1, 1); cx.drawImage(vid, 0, 0, cv.width, cv.height); cx.restore();   // 鏡像で表示
+  const X = v => (1 - v)*cv.width, Y = v => v*cv.height;
+  let ok = false;
+  if (L && vis(L[11]) && vis(L[12])){
+    const sw = Math.abs(L[11].x - L[12].x), hips = vis(L[23]) && vis(L[24]);
+    const mid = hips ? (L[23].x + L[24].x)/2 : (L[11].x + L[12].x)/2;   // 腰が映っていれば腰、無ければ肩の中心
+    if (sw > .02){
+      ok = true; pose.mid = mid; pose.sw = sw;
+      if (pose.x0 === null){ pose.cal.push([mid, sw]); if (pose.cal.length >= 20){ pose.x0 = pose.cal.reduce((a, c) => a + c[0], 0)/20; pose.sw0 = pose.cal.reduce((a, c) => a + c[1], 0)/20; pose.cal = []; st('poseSt', '中央を自動設定しました（ボタンか Wii の − で再設定）', 'ok'); } }
+      if (pose.x0 !== null){
+        // カメラは体の正面 → 本人が右へ動くと映像では左へ動く（x が減る）ので符号を反転
+        const raw = -(mid - pose.x0)/pose.sw0*(+$('shw').value/100), x = $('inv').checked ? -raw : raw;
+        pose.x = pose.x === null ? x : pose.x + (x - pose.x)*.5;
+        send({ t:'pos', ok:true, x:pose.x });
+        $('posV').textContent = (pose.x >= 0 ? '右 ' : '左 ') + Math.abs(pose.x).toFixed(2) + ' m';
+      }
+      cx.fillStyle = '#7ae7ff'; for (const i of [11, 12, 23, 24]) if (vis(L[i])){ cx.beginPath(); cx.arc(X(L[i].x), Y(L[i].y), 6, 0, 7); cx.fill(); }
+      cx.strokeStyle = '#ffd35a'; cx.lineWidth = 3; cx.beginPath(); cx.moveTo(X(mid), 0); cx.lineTo(X(mid), cv.height); cx.stroke();
+      if (pose.x0 !== null){ cx.strokeStyle = '#5fe07a88'; cx.setLineDash([8, 8]); cx.beginPath(); cx.moveTo(X(pose.x0), 0); cx.lineTo(X(pose.x0), cv.height); cx.stroke(); cx.setLineDash([]); }
+    }
+  }
+  if (!ok){ const n = performance.now(); if (n - pose.noneT > 200){ pose.noneT = n; send({ t:'pos', ok:false }); } $('posV').textContent = '見えません'; }
+}
+requestAnimationFrame(poseStep);
+startPeer();
+</script>
+</body>
+</html>
