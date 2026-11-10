@@ -92,6 +92,12 @@
   #cursor[data-mode="zoom"] .i-zoom { display: block; }
   #cursor[data-mode^="zoom"] .anchor, #cursor[data-mode="idle"] .idle { display: block; }
 
+  /* ゴーグル表示（左右2画面） */
+  #vr { position: fixed; inset: 0; width: 100%; height: 100%; display: none; pointer-events: none; background: #000; }
+  body.vr #vr { display: block; }
+  body.vr #photo, body.vr #cursor, body.vr #ring, body.vr #status,
+  body.vr #counter, body.vr #toast, body.vr #preview { visibility: hidden; }
+
   /* 状態表示 */
   #status {
     position: fixed; left: 14px; top: calc(14px + env(safe-area-inset-top, 0px));
@@ -244,6 +250,7 @@
   <div class="label"><div><b>✌️</b><span id="ringText">そのままキープ</span></div></div>
 </div>
 
+<canvas id="vr" aria-hidden="true"></canvas>
 <canvas id="preview" width="352" height="264"></canvas>
 
 <div id="toolbar">
@@ -258,6 +265,7 @@
   <button id="btnReset">等倍に戻す</button>
   <span class="sep"></span>
   <button id="btnShare">VDO.Ninja / 設定</button>
+  <button id="btnVR" aria-pressed="false">ゴーグル</button>
   <button id="btnFull">全画面</button>
   <button id="btnClean">UIを隠す</button>
 </div>
@@ -299,6 +307,19 @@
     </div>
     <p>操作中は、手のひらを動かすと写真が動きます。親指と人差し指でつまむと、その位置を中心に上下の動きでズーム（上で拡大、下で縮小）、グーにすると一時停止（手を戻すときに使えます）。もう一度ピースを保持すると解除します。</p>
 
+    <h3>ゴーグル表示</h3>
+    <div class="slider">
+      <label for="distRange">画面の距離</label>
+      <input type="range" id="distRange" min="1" max="3" step="0.05">
+      <output id="distOut"></output>
+    </div>
+    <div class="slider">
+      <label for="sepRange">左右の間隔</label>
+      <input type="range" id="sepRange" min="-0.15" max="0.15" step="0.005">
+      <output id="sepOut"></output>
+    </div>
+    <p>距離を上げると画面が小さく、奥に見えるようになります。左右の絵が二重に見えるときは「左右の間隔」で、ゴーグルのレンズ位置に合わせてください。</p>
+
     <div class="close-row"><button class="btn" id="btnClosePanel">閉じる</button></div>
   </div>
 </div>
@@ -321,7 +342,10 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem("picv:" + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("picv:" + k, JSON.stringify(v)); } catch {} }
 };
-const settings = { hold: store.get("hold", 1.5), gain: store.get("gain", 1.8) };
+const settings = {
+  hold: store.get("hold", 1.5), gain: store.get("gain", 1.8),
+  dist: store.get("dist", 1.6), sep: store.get("sep", 0)
+};
 
 /* ---------- 写真リスト ---------- */
 // ?img=URL で直接指定も可能。指定がなければ Picture1.jpg, Picture2.jpg ... を順に探す
@@ -554,7 +578,9 @@ function refreshStatus(hint) {
   else setStatus("ジェスチャー オフ", lastHint || `✌️を${sec}秒キープで操作開始`);
 }
 
+let ringState = { show: false, progress: 0 };
 function showRing(show, progress = 0) {
+  ringState = { show, progress: Math.min(1, progress) };
   const ring = $("ring");
   ring.classList.toggle("show", show);
   ring.classList.toggle("to-off", gestureOn);
@@ -578,7 +604,10 @@ function loop() {
 /* ---------- ポインター ---------- */
 const cursorEl = $("cursor");
 let zoomAnchor = null, zoomDir = null;
+let cursorMode = "hidden", cursorPos = { x: 0, y: 0 };
 function setCursor(mode, pos) {
+  cursorMode = mode;
+  if (pos) cursorPos = { x: pos.x, y: pos.y };
   cursorEl.dataset.mode = mode;
   if (pos) cursorEl.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
 }
@@ -740,6 +769,7 @@ window.addEventListener("keydown", (e) => {
     case "g": case "G": $("btnGesture").click(); break;
     case "h": case "H": document.body.classList.toggle("clean"); break;
     case "f": case "F": $("btnFull").click(); break;
+    case "v": case "V": $("btnVR").click(); break;
     case "Escape": closePanel(); break;
   }
 });
@@ -816,10 +846,172 @@ function bindSlider(id, outId, key, fmt) {
 }
 bindSlider("holdRange", "holdOut", "hold", (v) => v.toFixed(1) + "秒");
 bindSlider("gainRange", "gainOut", "gain", (v) => "×" + v.toFixed(1));
+bindSlider("distRange", "distOut", "dist", (v) => v.toFixed(1));
+bindSlider("sepRange", "sepOut", "sep", (v) => (v > 0 ? "+" : "") + Math.round(v * 100));
+
+/* ---------- ゴーグル表示（サイドバイサイド） ---------- */
+let toastMsg = "", toastUntil = 0;
+const vrCanvas = $("vr"), vctx = vrCanvas.getContext("2d");
+let vrOn = false;
+
+// ポインターのアイコンを色付きの画像にしておく
+const iconImgs = {};
+(function buildIcons() {
+  const map = {
+    move: [".i-move", "#8ec9ff"], fist: [".i-fist", "#93a9bd"],
+    "zoom-in": [".i-zin", "#ffc56b"], "zoom-out": [".i-zout", "#ffc56b"], zoom: [".i-zoom", "#ffc56b"]
+  };
+  for (const [key, [sel, color]] of Object.entries(map)) {
+    const svg = cursorEl.querySelector(sel).cloneNode(true);
+    svg.removeAttribute("class");
+    svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    svg.setAttribute("width", "96"); svg.setAttribute("height", "96");
+    svg.setAttribute("fill", "none"); svg.setAttribute("stroke", color);
+    svg.setAttribute("stroke-width", "2"); svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    const img = new Image();
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg.outerHTML);
+    iconImgs[key] = img;
+  }
+})();
+
+function resizeVR() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  vrCanvas.width = Math.round(innerWidth * dpr);
+  vrCanvas.height = Math.round(innerHeight * dpr);
+  vctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", () => { if (vrOn) resizeVR(); });
+
+function setVR(on) {
+  vrOn = on;
+  document.body.classList.toggle("vr", on);
+  $("btnVR").setAttribute("aria-pressed", String(on));
+  if (on) { resizeVR(); requestAnimationFrame(renderVR); }
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+  else ctx.rect(x, y, w, h);
+}
+
+// 片目ぶんの絵を描く。cx は仮想スクリーンの中心
+function drawEye(ex, ew, eh, cx) {
+  const Ws = stage.clientWidth, Hs = stage.clientHeight;
+  const d = settings.dist;
+  // 遠いほど小さく
+  let pw = ew * 0.94 / d, ph = pw * Hs / Ws;
+  if (ph > eh * 0.9 / d) { ph = eh * 0.9 / d; pw = ph * Ws / Hs; }
+  const k = pw / Ws;
+  const cy = eh / 2;
+  const left = cx - pw / 2, top = cy - ph / 2;
+
+  vctx.save();
+  vctx.beginPath(); vctx.rect(ex, 0, ew, eh); vctx.clip();
+
+  // 仮想スクリーンの枠
+  vctx.fillStyle = "#06090d";
+  roundRect(vctx, left, top, pw, ph, 8);
+  vctx.fill();
+
+  // 写真
+  vctx.save();
+  roundRect(vctx, left, top, pw, ph, 8); vctx.clip();
+  if (photo.complete && photo.naturalWidth) {
+    const sc = view.fit * view.s * k;
+    const dw = photo.naturalWidth * sc, dh = photo.naturalHeight * sc;
+    vctx.drawImage(photo, cx + view.x * k - dw / 2, cy + view.y * k - dh / 2, dw, dh);
+  }
+  vctx.restore();
+
+  vctx.strokeStyle = "rgba(142, 201, 255, 0.28)";
+  vctx.lineWidth = 1.5;
+  roundRect(vctx, left, top, pw, ph, 8); vctx.stroke();
+
+  // 文字の大きさはスクリーンに合わせる
+  const fs = Math.max(10, pw * 0.028);
+
+  // 状態表示（スクリーンの上）
+  if (camRunning) {
+    vctx.font = `${fs}px "Zen Kaku Gothic New", "Hiragino Sans", "Meiryo", sans-serif`;
+    vctx.textAlign = "center"; vctx.textBaseline = "bottom";
+    vctx.fillStyle = gestureOn ? "#8ec9ff" : "#93a9bd";
+    vctx.fillText(`${$("statusMain").textContent}  ${$("statusSub").textContent}`, cx, top - fs * 0.6, pw);
+  }
+
+  // ポインター
+  const px = left + cursorPos.x * k, py = top + cursorPos.y * k;
+  const is = Math.max(22, 60 * k);
+  vctx.shadowColor = "rgba(0,0,0,.8)"; vctx.shadowBlur = 6;
+  if (cursorMode === "idle") {
+    vctx.strokeStyle = "#93a9bd"; vctx.lineWidth = 2;
+    vctx.beginPath(); vctx.arc(px, py, is * 0.17, 0, Math.PI * 2); vctx.stroke();
+  } else if (cursorMode === "move" || cursorMode === "fist") {
+    const img = iconImgs[cursorMode];
+    if (img.complete) vctx.drawImage(img, px - is / 2, py - is / 2, is, is);
+  } else if (cursorMode.startsWith("zoom")) {
+    vctx.strokeStyle = "#ffc56b"; vctx.fillStyle = "#ffc56b"; vctx.lineWidth = 2;
+    vctx.beginPath(); vctx.arc(px, py, is * 0.24, 0, Math.PI * 2); vctx.stroke();
+    vctx.beginPath(); vctx.arc(px, py, Math.max(2, is * 0.06), 0, Math.PI * 2); vctx.fill();
+    const img = iconImgs[cursorMode];
+    if (img.complete) vctx.drawImage(img, px + is * 0.15, py + is * 0.15, is * 0.9, is * 0.9);
+  }
+  vctx.shadowBlur = 0;
+
+  // ピース長押しのリング
+  if (ringState.show) {
+    const r = Math.min(pw, ph) * 0.16;
+    vctx.fillStyle = "rgba(0,0,0,.5)";
+    vctx.beginPath(); vctx.arc(cx, cy, r, 0, Math.PI * 2); vctx.fill();
+    vctx.strokeStyle = "rgba(255,255,255,.15)"; vctx.lineWidth = r * 0.12;
+    vctx.stroke();
+    vctx.strokeStyle = gestureOn ? "#93a9bd" : "#ffc56b";
+    vctx.lineCap = "round";
+    vctx.beginPath();
+    vctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ringState.progress);
+    vctx.stroke();
+    vctx.lineCap = "butt";
+    vctx.font = `${r * 0.6}px sans-serif`;
+    vctx.textAlign = "center"; vctx.textBaseline = "middle";
+    vctx.fillStyle = "#fff";
+    vctx.fillText("✌️", cx, cy);
+  }
+
+  // お知らせ
+  if (performance.now() < toastUntil) {
+    vctx.font = `${fs}px "Zen Kaku Gothic New", "Hiragino Sans", "Meiryo", sans-serif`;
+    vctx.textAlign = "center"; vctx.textBaseline = "top";
+    vctx.fillStyle = "#e8f2fb";
+    vctx.fillText(toastMsg, cx, top + ph + fs * 0.6, pw);
+  }
+  vctx.restore();
+}
+
+function renderVR() {
+  if (!vrOn) return;
+  const W = innerWidth, H = innerHeight, ew = W / 2;
+  vctx.fillStyle = "#000";
+  vctx.fillRect(0, 0, W, H);
+  const d = settings.dist;
+  // 奥に置くほど、左目の絵は左へ・右目の絵は右へずらす
+  const disparity = ew * 0.05 * (1 - 1 / d);
+  const sep = ew * settings.sep;
+  drawEye(0,  ew, H, ew / 2 - sep - disparity);
+  drawEye(ew, ew, H, ew + ew / 2 + sep + disparity);
+  // 中央の仕切り線
+  vctx.fillStyle = "rgba(255,255,255,.12)";
+  vctx.fillRect(ew - 0.5, 0, 1, H);
+  requestAnimationFrame(renderVR);
+}
+
+$("btnVR").onclick = () => setVR(!vrOn);
+if (params.get("vr") === "1") setVR(true);
 
 /* ---------- トースト ---------- */
 let toastTimer = null;
 function toast(msg) {
+  toastMsg = msg; toastUntil = performance.now() + 2200;
   const t = $("toast");
   t.textContent = msg; t.classList.add("show");
   clearTimeout(toastTimer);
