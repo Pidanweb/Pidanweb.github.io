@@ -45,7 +45,7 @@
     <label>スマホカメラの画角（映像の長い辺）<b id="xrCamFovV">66</b>°<input type="range" id="xrCamFov" min="40" max="100" step=".5" value="66"></label>
     <small style="margin-top:0">床のグリッドが実際の床にピタッと重なるように合わせる（目地・壁の際が目安）</small>
     <label>床の高さの補正 <b id="xrEyeV">0</b>cm<input type="range" id="xrEye" min="-30" max="30" step="1" value="0"></label>
-    <label>− で合わせる方向 <select id="xrAlign"><option value="cam" selected>PCのメインカメラの方を向いて −</option><option value="boss">ボスの方を向いて −</option></select></label>
+    <label>− で合わせる方向 <select id="xrAlign"><option value="cam" selected>PCのメインカメラの真下の床（三脚の足元）を照準で指して −（向き＋床の高さ）</option><option value="boss">ボスの方を向いて −</option></select></label>
     <label>ボスの大きさ（高さ）<b id="xrSizeV">3.6</b>m<input type="range" id="xrSize" min=".4" max="1.8" step=".05" value="1.8"></label>
     <small style="margin-top:0">開始後、床を照準で指して「📍 ボスを置く」でその場所に立たせます（位置は保存）。<button id="bossReset" style="margin-top:4px;padding:4px 8px">キャリブレーションの位置に戻す</button></small>
     <label><input type="checkbox" id="xrGrid" checked> 床のグリッドとPCカメラの位置を表示</label>
@@ -1678,11 +1678,25 @@ function headRecenter(){
     psi = Math.atan2(-dx, -dz); what = toCam ? 'PCのメインカメラ' : 'ボス';
   }
   H_YAW.setFromAxisAngle(H_Y, psi - H_E.y); head.need0 = false;
-  popCam(what + 'の方向に合わせました', '#7ae7ff', .7, .9);
+  // PCカメラの真下の床を照準で指している時は、見下ろす角度とPCが測った距離から「目の高さ」も決める
+  //   目の高さ = 足からカメラ真下までの水平距離 × tan(見下ろす角度)
+  const f0 = roomFeet();
+  if (room.on && $('xrAlign').value === 'cam' && f0 && head.ok && !head.auto){
+    const dist = Math.hypot(f0.x, f0.z), down = -H_E.x;   // YXZ の x = 上下の角度（下向きが負）
+    if (dist > .8 && down > 12*Math.PI/180){
+      const h = dist*Math.tan(down);
+      if (h > .8 && h < 2.2){
+        room.eye0 = h; $('xrEye').value = 0; $('xrEyeV').textContent = 0; room.eye = h;
+        try { localStorage.setItem('rqgun_eye_meas', JSON.stringify({ h, Ox:room.calO ? room.calO.x : 0, Oz:room.calO ? room.calO.z : 0 })); } catch (e){}
+        popCam(`向きと床を合わせました（目の高さ ${h.toFixed(2)}m）`, '#5fe07a', .7, 1.6); return;
+      }
+    }
+  }
+  popCam(what + 'の方向に合わせました' + (room.on && $('xrAlign').value === 'cam' ? '（床も合わせるには三脚の足元を照準で指して）' : ''), '#7ae7ff', .7, 1.4);
 }
 const H_ORB = new THREE.Quaternion();
 function headApply(sh){
-  if (head.need0) headRecenter();
+  if (head.need0){ head.auto = true; headRecenter(); head.auto = false; }
   headQuat(head.q); camera.quaternion.copy(H_YAW).multiply(head.q);   // 床座標での向き
   if (room.on){
     camera.quaternion.premultiply(H_ORB.setFromAxisAngle(H_Y, -room.yaw));   // 床座標 → ゲーム座標
@@ -1778,14 +1792,19 @@ const roomFeet = () => room.feetF && performance.now() - room.feetT < 500 ? room
 function roomSetG(yaw){ room.yaw = yaw; room.Ox = room.C.x + room.D*Math.sin(yaw); room.Oz = room.C.z + room.D*Math.cos(yaw); }
 function toG(p){ const c = Math.cos(room.yaw), s = Math.sin(room.yaw), dx = p.x - room.Ox, dz = p.z - room.Oz; return { x:c*dx - s*dz, z:s*dx + c*dz }; }
 function roomCal(m){
-  if (m.ok && !m.local){ room.calC = m.C; room.calO = m.O; const sv = bossSaved(m); if (sv) m = Object.assign({}, m, { C:sv }); }   // PCから届いた時だけ
+  if (m.ok && !m.local){
+    // PC(Hub)でボスの位置を決め直したら、スマホで置いた位置より優先する
+    try { if (m.cid && localStorage.getItem('rqgun_hub_cid') !== String(m.cid)){ localStorage.setItem('rqgun_hub_cid', String(m.cid)); localStorage.removeItem(BOSS_KEY); } } catch (e){}
+    room.calC = m.C; room.calO = m.O; const sv = bossSaved(m); if (sv) m = Object.assign({}, m, { C:sv }); }   // PCから届いた時だけ
   if (!m.ok){ room.on = false; HOVER = -8.5; floorReset(); $('roomStat').textContent = '部屋モード: OFF（' + (m.msg || 'PC側でキャリブレーションが未設定') + '）'; return; }
   const O = m.O, dx = m.C.x - O.x, dz = m.C.z - O.z, d = Math.hypot(dx, dz) || 1;
   room.D = Math.max(R + 1, d);   // 近すぎると体当たりがすぐ当たるので、最低でも半径＋1m
   room.C = { x:m.C.x, z:m.C.z }; room.O = O;   // ボスは指定した位置のまま（近い時はゲーム上の待機距離だけ広げる） room.eye0 = m.eye || 1.58;
+  if (!m.local) try { const e = JSON.parse(localStorage.getItem('rqgun_eye_meas') || 'null'); if (e && Math.hypot(e.Ox - m.O.x, e.Oz - m.O.z) < .05) room.eye0 = e.h; } catch (er){}
   room.eye = room.eye0 + (+$('xrEye').value)/100;
   HOVER = -room.D; roomSetG(Math.atan2(-dx, -dz));
-  room.on = true; if (!m.local) head.need0 = true;   // スマホでボスを置き直した時は向きを合わせ直さない
+  if (!m.local && !room.on) head.need0 = true;   // 最初の1回だけ（途中でボスの位置が変わっても向きは合わせ直さない）
+  room.on = true;   // スマホでボスを置き直した時は向きを合わせ直さない
   gridTex.repeat.set(20, 40);   // 1マス = 1m
   $('roomStat').textContent = `部屋モード: ON ✅ ボスは立ち位置から ${room.D.toFixed(1)}m 先・目の高さ ${room.eye0.toFixed(2)}m`;
 }

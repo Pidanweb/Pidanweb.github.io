@@ -53,6 +53,12 @@
       <div><b>床の地図（上から）</b> <span id="feetV">—</span><br><canvas id="map" width="320" height="320"></canvas>
         <small>■黄=カメラ ●緑=立ち位置 ●赤=ボス ●水色=今の足（合成方法: <span id="srcV">-</span>）</small></div>
     </div>
+    <div style="margin-top:8px;border-top:1px solid #7ae7ff33;padding-top:8px">
+      <b style="color:#ffd35a">📍 ボスの位置</b> <span class="st" id="bossSt" style="display:inline"></span><br>
+      <small><b>カメラの映像</b>（メイン・2台目）か<b>床の地図</b>をクリックすると、その床の場所にボスが立ちます。赤い輪がボスの足元です。スマホで置いた位置より優先されます。</small>
+      <label>立ち位置からの距離 <input type="number" id="bossDist" min="1" max="15" step=".1" style="width:5em">m</label> <button id="bossDistGo">この距離にする</button>
+      <button id="bossReset">キャリブレーションの位置に戻す</button>
+    </div>
     <small>先に calibrate_2cam.html で測定を済ませてください（このページを同じフォルダに置くと、保存された結果をそのまま読みます）。<br>
     キャリブレーションのページはカメラを使うので、このページで開始する前に閉じてください。</small>
   </section>
@@ -158,7 +164,9 @@ function loadCal(){
     let yaw = d.poseCam === 'back' ? 0 : Math.PI; if (typeof d.faceYaw === 'number') yaw = d.faceYaw;
     const dist = d.boss || 8.5; bossF = new THREE.Vector3(p.x - Math.sin(yaw)*dist, 0, p.z - Math.cos(yaw)*dist);
   }
-  bc.bossC = bossF; bc.ok = true;
+  bc.bossCal = bossF.clone(); bc.cid = 0;
+  try { const sv = JSON.parse(localStorage.getItem(HUB_BOSS_KEY) || 'null'); if (sv && Math.hypot(sv.Ox - p.x, sv.Oz - p.z) < .05){ bossF = new THREE.Vector3(sv.x, 0, sv.z); bc.cid = sv.cid; } } catch (e){}
+  bc.bossC = bossF; bc.ok = true; bc.camF = bc.FfromCam.clone().invert(); bossUI();
   if (d2 && d2.res && d2.al){
     dual.hfov = d2.hfov || 65; dual.al = d2.al; dual.h = d2.res.h;
     dual.FfromCam.copy(camMat(d2.res.th, d2.res.ph, d2.res.h)).invert();
@@ -170,9 +178,65 @@ function loadCal(){
 }
 function sendCal(){
   if (!bc.ok){ send({ t:'cal', ok:false, msg:'PC側でキャリブレーションが未設定' }); return; }
-  send({ t:'cal', ok:true, O:{ x:bc.origin.x, z:bc.origin.z }, C:{ x:bc.bossC.x, z:bc.bossC.z }, eye:bc.height*.93 });
+  send({ t:'cal', ok:true, O:{ x:bc.origin.x, z:bc.origin.z }, C:{ x:bc.bossC.x, z:bc.bossC.z }, eye:bc.height*.93, cid:bc.cid });
 }
 $('reloadCal').onclick = loadCal;
+// ===== ボスの位置を決める（床座標で保存。スマホへは cid が変わったら上書きの合図）=====
+const HUB_BOSS_KEY = 'rqgun_hub_boss_v1';
+function setBoss(p, keepCal){
+  if (!bc.ok || !p) return;
+  bc.bossC = new THREE.Vector3(p.x, 0, p.z); bc.cid = Date.now();
+  try { if (keepCal) localStorage.removeItem(HUB_BOSS_KEY); else localStorage.setItem(HUB_BOSS_KEY, JSON.stringify({ x:p.x, z:p.z, Ox:bc.origin.x, Oz:bc.origin.z, cid:bc.cid })); } catch (e){}
+  bossUI(); sendCal();
+}
+function bossUI(){
+  if (!bc.ok) return;
+  const d = Math.hypot(bc.bossC.x - bc.origin.x, bc.bossC.z - bc.origin.z);
+  $('bossSt').textContent = `立ち位置から ${d.toFixed(2)}m（床座標 x ${bc.bossC.x.toFixed(2)} / z ${bc.bossC.z.toFixed(2)}）`; $('bossDist').value = d.toFixed(1);
+}
+$('bossReset').onclick = () => setBoss(bc.bossCal, true);
+$('bossDistGo').onclick = () => {   // 今の方向のまま距離だけ変える
+  const d = +$('bossDist').value, o = bc.origin; if (!(d > .5)) return;
+  let dx = bc.bossC.x - o.x, dz = bc.bossC.z - o.z, L = Math.hypot(dx, dz) || 1;
+  setBoss({ x:o.x + dx/L*d, z:o.z + dz/L*d });
+};
+// カメラ映像のクリック → 床との交点
+function clickCam(k, e){
+  const c = cams[k], v = c.vid; if (!bc.ok || !v.videoWidth) return;
+  const r = e.target.getBoundingClientRect(), u = (e.clientX - r.left)/r.width, w = (e.clientY - r.top)/r.height;
+  const hf = k === 'm' ? bc.hfov : dual.hfov, f = (v.videoWidth/2)/Math.tan(hf*Math.PI/360);
+  const o = { fx:(u - .5)*v.videoWidth/f, fy:(w - .5)*v.videoHeight/f };
+  let p = rayM(o, k === 'm' ? bc.FfromCam : dual.FfromCam); if (!p){ st('bossSt', '床ではない所です（地平線より下をクリック）', 'ng'); return; }
+  if (k === 's') p = p.applyMatrix4(dual.FfromS);
+  setBoss(p);
+}
+$('mCv').addEventListener('click', e => clickCam('m', e)); $('sCv').addEventListener('click', e => clickCam('s', e));
+$('mCv').style.cursor = $('sCv').style.cursor = $('map').style.cursor = 'crosshair';
+$('map').addEventListener('click', e => {
+  const M = drawMap.M; if (!M) return;
+  const r = e.target.getBoundingClientRect(), x = (e.clientX - r.left)/r.width*$('map').width, y = (e.clientY - r.top)/r.height*$('map').height;
+  setBoss({ x:M.cx0 + (x - M.w/2)/M.s, z:M.cz0 + (y - M.h/2)/M.s });
+});
+// 床の点 → カメラ映像の位置（0〜1）
+function projF(k, p){
+  const v = cams[k].vid; if (!v.videoWidth) return null;
+  let q = p.clone();
+  if (k === 's'){ if (!dual.ok) return null; q.applyMatrix4(dual.FfromS.clone().invert()).applyMatrix4(dual.FfromCam.clone().invert()); }
+  else q.applyMatrix4(bc.camF);
+  if (q.z > -.1) return null;
+  const hf = k === 'm' ? bc.hfov : dual.hfov, f = (v.videoWidth/2)/Math.tan(hf*Math.PI/360);
+  return [.5 + f*q.x/-q.z/v.videoWidth, .5 - f*q.y/-q.z/v.videoHeight];
+}
+function drawBossRing(k, x, w, h){
+  if (!bc.ok) return;
+  x.strokeStyle = '#ff4d5e'; x.lineWidth = 3; x.beginPath(); let prev = null;
+  for (let i = 0; i <= 48; i++){
+    const a = i/48*Math.PI*2, q = projF(k, new THREE.Vector3(bc.bossC.x + Math.cos(a)*.9, 0, bc.bossC.z + Math.sin(a)*.9));
+    if (q && prev) x.lineTo(q[0]*w, q[1]*h); else if (q) x.moveTo(q[0]*w, q[1]*h); prev = q;
+  }
+  x.stroke();
+  const c = projF(k, bc.bossC); if (c){ x.fillStyle = '#ff4d5e'; x.beginPath(); x.arc(c[0]*w, c[1]*h, 5, 0, 7); x.fill(); x.font = 'bold 14px sans-serif'; x.fillText('ボス', c[0]*w + 8, c[1]*h - 6); }
+}
 
 // ================= カメラ2台 + 全身認識 → 足の床座標 =================
 const MP_V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
@@ -278,6 +342,7 @@ function camStep(k){
   if (n){ x.strokeStyle = '#5ee08a'; x.lineWidth = 3; x.beginPath(); for (const [a, b] of LINKS){ x.moveTo(n[a].x*w, n[a].y*h); x.lineTo(n[b].x*w, n[b].y*h); } x.stroke(); }
   if (c.obs){ x.strokeStyle = '#7ae7ff'; x.lineWidth = 3; x.beginPath(); x.arc(c.obs.u*w, c.obs.v*h, 8, 0, 7); x.stroke(); }
   else { x.fillStyle = '#ff4d5e'; x.font = 'bold 16px sans-serif'; x.fillText(n ? 'かかとが見えません' : '全身が見つかりません', 8, 22); }
+  drawBossRing(k, x, w, h);
 }
 function drawMap(){
   const cv = $('map'), x = cv.getContext('2d'), w = cv.width, h = cv.height;
@@ -287,6 +352,7 @@ function drawMap(){
   const cx0 = pts.reduce((a, p) => a + p.x, 0)/pts.length, cz0 = pts.reduce((a, p) => a + p.z, 0)/pts.length;
   const span = Math.max(4, ...pts.map(p => Math.max(Math.abs(p.x - cx0), Math.abs(p.z - cz0))*2 + 2)), s = w/span;
   const X = p => w/2 + (p.x - cx0)*s, Y = p => h/2 + (p.z - cz0)*s;   // 上 = メインカメラの向く方(-Z)
+  drawMap.M = { cx0, cz0, s, w, h };
   x.strokeStyle = '#7ae7ff22'; x.lineWidth = 1; x.beginPath();
   for (let i = Math.floor(cx0 - span/2); i <= cx0 + span/2; i++){ x.moveTo(X({ x:i, z:0 }), 0); x.lineTo(X({ x:i, z:0 }), h); }
   for (let i = Math.floor(cz0 - span/2); i <= cz0 + span/2; i++){ x.moveTo(0, Y({ x:0, z:i })); x.lineTo(w, Y({ x:0, z:i })); }
