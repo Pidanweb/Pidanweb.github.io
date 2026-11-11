@@ -34,7 +34,7 @@
 </style>
 </head>
 <body>
-<div id="gogBar" style="position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:30;display:none;gap:8px"><button id="gogAlign" class="gb">🧭 向き合わせ</button><button id="gogExit" class="gb">✕ 終了</button></div>
+<div id="gogBar" style="position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:30;display:none;gap:8px"><button id="gogAlign" class="gb">🧭 向き合わせ</button><button id="gogPlace" class="gb">📍 ボスを置く</button><button id="gogExit" class="gb">✕ 終了</button></div>
 <div id="ui"><button id="camBtn">📷 カメラ設定</button> <button id="viewBtn">👁 一人称</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰</button> <button id="xrBtn">🥽 ゴーグル</button>
   <div id="xrPanel" hidden>
     <b style="color:#ffd35a">📡 PC中継（Wiiリモコン・立ち位置）</b>
@@ -46,6 +46,8 @@
     <small style="margin-top:0">床のグリッドが実際の床にピタッと重なるように合わせる（目地・壁の際が目安）</small>
     <label>床の高さの補正 <b id="xrEyeV">0</b>cm<input type="range" id="xrEye" min="-30" max="30" step="1" value="0"></label>
     <label>− で合わせる方向 <select id="xrAlign"><option value="cam" selected>PCのメインカメラの方を向いて −</option><option value="boss">ボスの方を向いて −</option></select></label>
+    <label>ボスの大きさ（高さ）<b id="xrSizeV">3.6</b>m<input type="range" id="xrSize" min=".4" max="1.8" step=".05" value="1.8"></label>
+    <small style="margin-top:0">開始後、床を照準で指して「📍 ボスを置く」でその場所に立たせます（位置は保存）。<button id="bossReset" style="margin-top:4px;padding:4px 8px">キャリブレーションの位置に戻す</button></small>
     <label><input type="checkbox" id="xrGrid" checked> 床のグリッドとPCカメラの位置を表示</label>
     <label><input type="checkbox" id="xrOrb" checked> 周回モード（回り込むと戦う向きが付いてくる）</label>
     <label>表示の視野角 <b id="xrFovV">60</b>°<input type="range" id="xrFov" min="35" max="100" step="1" value="60"></label>
@@ -117,7 +119,7 @@ renderer.setScissorTest(true);
 document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(70, 1, .05, 100);
 camera.rotation.order = 'YXZ'; scene.add(camera);
-const EYE = 1.6, R = 1.8; let HOVER = -8.5;   // HOVER: 部屋モードではキャリブレーションのボスの距離
+const EYE = 1.6; let R = 1.8, HOVER = -8.5;   // R: ボスの半径（部屋モードでは大きさを変えられる）   // HOVER: 部屋モードではキャリブレーションのボスの距離
 let W, H;
 function resize(){ W = innerWidth; H = innerHeight; renderer.setSize(W, H); }
 resize(); addEventListener('resize', resize);
@@ -1684,7 +1686,7 @@ function headApply(sh){
   headQuat(head.q); camera.quaternion.copy(H_YAW).multiply(head.q);   // 床座標での向き
   if (room.on){
     camera.quaternion.premultiply(H_ORB.setFromAxisAngle(H_Y, -room.yaw));   // 床座標 → ゲーム座標
-    camera.position.set(P.x + sh*.3, room.eye + sh*.2, P.z || 0);
+    camera.position.set((room.gx ?? P.x) + sh*.3, room.eye + sh*.2, room.gz ?? (P.z || 0));
   } else camera.position.set(P.x + sh, EYE + sh*.6, P.z || 0);
 }
 const BG0 = scene.background;
@@ -1776,13 +1778,14 @@ const roomFeet = () => room.feetF && performance.now() - room.feetT < 500 ? room
 function roomSetG(yaw){ room.yaw = yaw; room.Ox = room.C.x + room.D*Math.sin(yaw); room.Oz = room.C.z + room.D*Math.cos(yaw); }
 function toG(p){ const c = Math.cos(room.yaw), s = Math.sin(room.yaw), dx = p.x - room.Ox, dz = p.z - room.Oz; return { x:c*dx - s*dz, z:s*dx + c*dz }; }
 function roomCal(m){
+  if (m.ok && !m.local){ room.calC = m.C; room.calO = m.O; const sv = bossSaved(m); if (sv) m = Object.assign({}, m, { C:sv }); }   // PCから届いた時だけ
   if (!m.ok){ room.on = false; HOVER = -8.5; floorReset(); $('roomStat').textContent = '部屋モード: OFF（' + (m.msg || 'PC側でキャリブレーションが未設定') + '）'; return; }
   const O = m.O, dx = m.C.x - O.x, dz = m.C.z - O.z, d = Math.hypot(dx, dz) || 1;
-  room.D = Math.max(R + 1.5, d);   // 近すぎると体当たりがすぐ当たるので、最低でも半径＋1.5m
-  room.C = { x:O.x + dx/d*room.D, z:O.z + dz/d*room.D }; room.O = O; room.eye0 = m.eye || 1.58;
+  room.D = Math.max(R + 1, d);   // 近すぎると体当たりがすぐ当たるので、最低でも半径＋1m
+  room.C = { x:m.C.x, z:m.C.z }; room.O = O;   // ボスは指定した位置のまま（近い時はゲーム上の待機距離だけ広げる） room.eye0 = m.eye || 1.58;
   room.eye = room.eye0 + (+$('xrEye').value)/100;
   HOVER = -room.D; roomSetG(Math.atan2(-dx, -dz));
-  room.on = true; head.need0 = true;
+  room.on = true; if (!m.local) head.need0 = true;   // スマホでボスを置き直した時は向きを合わせ直さない
   gridTex.repeat.set(20, 40);   // 1マス = 1m
   $('roomStat').textContent = `部屋モード: ON ✅ ボスは立ち位置から ${room.D.toFixed(1)}m 先・目の高さ ${room.eye0.toFixed(2)}m`;
 }
@@ -1807,9 +1810,11 @@ function roomStep(dt){
   const f = roomFeet();
   if (f){
     const g = toG(f), k = Math.min(1, dt*15);
-    P.x += (Math.max(-6, Math.min(6, g.x)) - P.x)*k;
-    P.z = (P.z || 0) + (Math.max(HOVER + R + 1.5, Math.min(4, g.z)) - (P.z || 0))*k;   // ボスにめり込まないよう手前に制限
-  }
+    if (room.gx === undefined){ room.gx = g.x; room.gz = g.z; }
+    room.gx += (g.x - room.gx)*k; room.gz += (g.z - room.gz)*k;   // 目の位置（制限しない＝近づけばそのまま大きく見える）
+    P.x = Math.max(-6, Math.min(6, room.gx));
+    P.z = Math.max(HOVER + R + .6, Math.min(4, room.gz));   // ゲームの判定用だけ、ボスの体の外に制限
+  } else if (room.gx === undefined){ room.gx = P.x; room.gz = P.z || 0; }
   // 床グリッドとPCカメラの印は「部屋に固定」（ゲーム座標が回っても動かない）
   const gc = toG(room.C), gp = toG({ x:0, z:0 });
   floor.position.set(gc.x, 0, gc.z); floor.rotation.set(-Math.PI/2, -room.yaw, 0);
@@ -1834,6 +1839,29 @@ $('xrCamFov').oninput = e => { head.camHfov = +e.target.value; $('xrCamFovV').te
 $('xrEye').oninput = e => { $('xrEyeV').textContent = e.target.value; room.eye = room.eye0 + (+e.target.value)/100; try { localStorage.setItem('rqgun_eyeadj', e.target.value); } catch (er){} };
 try { const v = +localStorage.getItem('rqgun_camfov'); if (v >= 40 && v <= 100){ head.camHfov = v; $('xrCamFov').value = v; $('xrCamFovV').textContent = v; } } catch (e){}
 try { const v = localStorage.getItem('rqgun_eyeadj'); if (v !== null){ $('xrEye').value = v; $('xrEyeV').textContent = v; } } catch (e){}
+
+// ===== ボスを床に置く：画面の中央（照準）が指している床の点にボスを立たせる。位置は床座標で保存 =====
+const BOSS_KEY = 'rqgun_bossF_v1';
+function bossSaved(m){ try { const d = JSON.parse(localStorage.getItem(BOSS_KEY) || 'null'); return d && Math.hypot(d.Ox - m.O.x, d.Oz - m.O.z) < .05 ? { x:d.x, z:d.z } : null; } catch (e){ return null; } }
+function placeBoss(){
+  if (!room.on){ popCam('先にPCとつないで部屋モードに', '#ff4d5e', .6, 1.5); return; }
+  const d = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion), o = camera.position;
+  if (d.y > -.05){ popCam('床を見下ろして押してください', '#ff4d5e', .6, 1.5); return; }
+  const t = -o.y/d.y, gx = o.x + d.x*t, gz = o.z + d.z*t;
+  if (t > 15){ popCam('遠すぎます（15m以内の床に）', '#ff4d5e', .6, 1.5); return; }
+  const c = Math.cos(room.yaw), s = Math.sin(room.yaw), C = { x:room.Ox + c*gx + s*gz, z:room.Oz - s*gx + c*gz };   // ゲーム座標 → 床座標
+  try { localStorage.setItem(BOSS_KEY, JSON.stringify({ x:C.x, z:C.z, Ox:room.calO.x, Oz:room.calO.z })); } catch (e){}
+  const f = roomFeet(), O = f ? { x:f.x, z:f.z } : room.calO;   // 今立っている所を「戦う立ち位置」に
+  roomCal({ ok:true, O, C, eye:room.eye0, local:true });
+  // 周回の向きを今の立ち位置に合わせる
+  roomSetG(Math.atan2(O.x - room.C.x, O.z - room.C.z)); B.x = 0; B.z = HOVER;
+  popCam('ボスをここに置きました', '#5fe07a', .7, 1.2);
+}
+function bossReset(){ try { localStorage.removeItem(BOSS_KEY); } catch (e){} if (room.on && room.calC) roomCal({ ok:true, O:room.calO, C:room.calC, eye:room.eye0, local:true }); popCam('ボスの位置をキャリブレーションに戻しました', '#7ae7ff', .6, 1.5); }
+$('gogPlace').onclick = placeBoss;
+$('bossReset').onclick = bossReset;
+$('xrSize').oninput = e => { R = +e.target.value; $('xrSizeV').textContent = (R*2).toFixed(1); try { localStorage.setItem('rqgun_bossR', R); } catch (er){} if (room.on){ room.D = Math.max(R + 1, room.D); HOVER = -room.D; } };
+try { const v = +localStorage.getItem('rqgun_bossR'); if (v >= .4 && v <= 1.8){ R = v; $('xrSize').value = v; $('xrSizeV').textContent = (v*2).toFixed(1); } } catch (e){}
 
 let last = performance.now();
 function loop(now){
