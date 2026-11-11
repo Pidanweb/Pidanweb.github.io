@@ -24,7 +24,8 @@
   #wiiDbg{position:fixed;left:10px;top:10px;z-index:6;margin:0;padding:6px 8px;max-width:46vw;font:11px/1.35 monospace;color:#9fffb0;background:#000a;border:1px solid #7ae7ff44;border-radius:6px;pointer-events:none;white-space:pre-wrap}
   #gnMenu{border:1px solid #7ae7ff44;border-radius:8px;padding:6px 8px;font-size:13px;text-align:left} #gnMenu summary{cursor:pointer;color:#ffd35a;font-weight:bold} #gnMenu label{display:block;margin-top:6px} #gnMenu input[type=range]{width:100%} #gnMenu small{color:#9fdcea}
   #gnMenu small{display:block;margin-top:6px;line-height:1.5}
-  #xrPanel{margin-top:6px;padding:10px;background:#000c;border:1px solid #7ae7ff55;border-radius:8px;width:280px;text-align:left;font-size:13px}
+  #ui{z-index:8!important}
+  #xrPanel{max-height:calc(100vh - 70px);overflow-y:auto;box-sizing:border-box;max-width:calc(100vw - 20px);margin-top:6px;padding:10px;background:#000c;border:1px solid #7ae7ff55;border-radius:8px;width:280px;text-align:left;font-size:13px}
   #xrPanel label{display:block;margin-top:8px} #xrPanel input[type=range]{width:100%} #xrPanel small{display:block;color:#9fdcea;line-height:1.5;margin-top:6px}
   #xrPanel input[type=text]{width:7em;font:18px monospace;padding:4px;letter-spacing:2px}
   #xrStat{margin-top:6px;font-size:12px;color:#ffd35a;word-break:break-all}
@@ -594,7 +595,7 @@ function aimSmooth(tx, ty, dt, dead){
 }
 const prevC = $('facePrev'), pctx = prevC.getContext('2d');
 function faceDraw(){
-  const show = prevOn && face.on && !vr && state !== undefined;
+  const show = prevOn && face.on && !vr && !head.on && $('xrPanel').hidden && state !== undefined;   // ゴーグル設定中・ゴーグル中は顔のプレビューを出さない
   prevC.style.display = show ? 'block' : 'none'; if (!show) return;
   const w = prevC.width, h = prevC.height, v = face.src;
   pctx.fillStyle = '#000'; pctx.fillRect(0, 0, w, h);
