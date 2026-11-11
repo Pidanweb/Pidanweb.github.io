@@ -29,11 +29,11 @@
   #xrPanel input[type=text]{width:7em;font:18px monospace;padding:4px;letter-spacing:2px}
   #xrStat{margin-top:6px;font-size:12px;color:#ffd35a;word-break:break-all}
   #gogGo{width:100%;margin-top:10px;padding:10px!important;font-size:16px!important;color:#5fe07a!important;border-color:#5fe07a88!important}
-  #gogExit{position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:30;display:none;background:#000a;color:#7ae7ff;border:1px solid #7ae7ff66;border-radius:16px;padding:6px 14px;font:13px sans-serif}
+  #gogBar .gb{background:#000a;color:#7ae7ff;border:1px solid #7ae7ff66;border-radius:16px;padding:6px 14px;font:13px sans-serif}
 </style>
 </head>
 <body>
-<button id="gogExit">✕ ゴーグル終了</button>
+<div id="gogBar" style="position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:30;display:none;gap:8px"><button id="gogAlign" class="gb">🧭 向き合わせ</button><button id="gogExit" class="gb">✕ 終了</button></div>
 <div id="ui"><button id="camBtn">📷 カメラ設定</button> <button id="viewBtn">👁 一人称</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰</button> <button id="xrBtn">🥽 ゴーグル</button>
   <div id="xrPanel" hidden>
     <b style="color:#ffd35a">📡 PC中継（Wiiリモコン・立ち位置）</b>
@@ -41,7 +41,7 @@
     <div id="xrStat">PCで RQ_gunner_hub.html を開き、表示されたコードを入力</div>
     <label><input type="checkbox" id="xrPass" checked> 背景にカメラ映像（ビデオシースルー）</label>
     <div id="roomStat" style="margin-top:6px;font-size:12px;color:#9fdcea">部屋モード: キャリブレーション待ち</div>
-    <label>スマホカメラの横の画角 <b id="xrCamFovV">66</b>°<input type="range" id="xrCamFov" min="40" max="100" step=".5" value="66"></label>
+    <label>スマホカメラの画角（映像の長い辺）<b id="xrCamFovV">66</b>°<input type="range" id="xrCamFov" min="40" max="100" step=".5" value="66"></label>
     <small style="margin-top:0">床のグリッドが実際の床にピタッと重なるように合わせる（目地・壁の際が目安）</small>
     <label>床の高さの補正 <b id="xrEyeV">0</b>cm<input type="range" id="xrEye" min="-30" max="30" step="1" value="0"></label>
     <label>− で合わせる方向 <select id="xrAlign"><option value="cam" selected>PCのメインカメラの方を向いて −</option><option value="boss">ボスの方を向いて −</option></select></label>
@@ -50,7 +50,8 @@
     <label>表示の視野角 <b id="xrFovV">60</b>°<input type="range" id="xrFov" min="35" max="100" step="1" value="60"></label>
     <label>目の間隔 <b id="xrIpdV">64</b>mm<input type="range" id="xrIpd" min="50" max="75" step="1" value="64"></label>
     <label>立ち位置の移動倍率 <b id="xrGainV">1.0</b>×<input type="range" id="xrGain" min="1" max="3" step=".1" value="1"></label>
-    <button id="gogGo">🥽 ゴーグルで開始</button>
+    <label><input type="checkbox" id="xrSbs" checked> 2画面（ゴーグルに入れる）　※外すと手持ちの1画面で、床合わせの確認用</label>
+    <button id="gogGo">🥽 開始（頭の向きで見回す）</button>
     <small>横向きでゴーグルに入れ、<b>PCのメインカメラの方を向いて Wii の −</b> で向きを合わせる。B でスタート。<br>PC側で calibrate_2cam.html のキャリブレーションが済んでいれば「部屋モード」になり、ボスが床の決まった位置に立って周りを歩けます。</small>
   </div>
   <div id="camPanel" hidden>
@@ -1326,13 +1327,13 @@ function update(dt){
   updGun(dt); if (playing) updProj(dt); updFX2(dt); updFX(dt);
   bossBar.scale.x = Math.max(.0001, B.hp/B.max); pBar.scale.x = Math.max(.0001, P.hp/PMAX);
   parBar.scale.x = Math.max(.0001, P.parCd > 0 ? 1 - P.parCd/.7 : 1);
-  hud.visible = state === 'play'; hudSkills(); hudAmmo(); $('ui').style.display = vr ? 'none' : '';
+  hud.visible = state === 'play'; hudSkills(); hudAmmo(); $('ui').style.display = vr || head.on ? 'none' : '';
   const asp = vr ? W/2/H : W/H, mw = Math.min(7, 5.3*asp); msg.scale.set(mw, mw/2, 1);
 }
 
 function view(x, y, w, h){ renderer.setViewport(x, y, w, h); renderer.setScissor(x, y, w, h); }
 function render(){
-  camera.fov = (vr && head.on ? head.fov : 70) - fovp; const bx = camera.position.x;
+  camera.fov = (head.on ? head.fov : 70) - fovp; const bx = camera.position.x;
   if (!vr){ view(0, 0, W, H); camera.aspect = W/H; camera.updateProjectionMatrix(); cover(W/H); renderer.render(scene, camera); }
   else {
     const w = W/2; camera.aspect = w/H; camera.updateProjectionMatrix(); cover(w/H);
@@ -1691,25 +1692,29 @@ async function goggleStart(){
   try { if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission){   // iPhone は許可が必要
     if (await DeviceOrientationEvent.requestPermission() !== 'granted'){ xrStat('❌ 向きセンサーが許可されませんでした'); return; } } } catch (e){}
   addEventListener('deviceorientation', onOri);
-  try { await document.documentElement.requestFullscreen({ navigationUI:'hide' }); } catch (e){}
-  try { await screen.orientation.lock('landscape'); } catch (e){}
-  try { head.wl = await navigator.wakeLock.request('screen'); } catch (e){}
-  audioUnlock(); setView(false); head.on = true; head.need0 = true; vr = true;
-  $('xrPanel').hidden = true; $('gogExit').style.display = 'block';
+  try { await Promise.race([document.documentElement.requestFullscreen({ navigationUI:'hide' }), new Promise(r => setTimeout(r, 800))]); } catch (e){}
+  const sbs = $('xrSbs').checked;
+  if (sbs) try { await screen.orientation.lock('landscape'); } catch (e){}
+  if (face.on){ $('faceOn').checked = false; $('faceOn').dispatchEvent(new Event('change')); }
+  try { navigator.wakeLock.request('screen').then(w => head.wl = w, () => {}); } catch (e){}   // 待たない（返事が来ない端末でも止まらないように）
+  audioUnlock(); setView(false); head.on = true; head.need0 = true; vr = sbs;
+  $('xrPanel').hidden = true; $('gogBar').style.display = 'flex';
   if ($('xrPass').checked && !camStream){ camMirror = false; await openCam(null); camMirror = false; $('mir').checked = false; }
   applyPass();
   setTimeout(() => { if (!head.ok) popCam('向きセンサーが取れません（HTTPSで開いていますか？）', '#ff4d5e', .6, 3); }, 1500);
 }
 function goggleStop(){
-  head.on = false; vr = false; $('gogExit').style.display = 'none'; removeEventListener('deviceorientation', onOri);
+  head.on = false; vr = false; $('gogBar').style.display = 'none'; removeEventListener('deviceorientation', onOri);
   try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e){}
+  try { screen.orientation.unlock(); } catch (e){}
   try { head.wl && head.wl.release(); } catch (e){} head.wl = null; applyPass();
 }
 document.addEventListener('visibilitychange', async () => { if (head.on && document.visibilityState === 'visible') try { head.wl = await navigator.wakeLock.request('screen'); } catch (e){} });
 $('xrBtn').onclick = () => { const p = $('xrPanel'); p.hidden = !p.hidden; };
 $('gogGo').onclick = goggleStart;
 $('gogExit').onclick = goggleStop;
-for (const ev of ['mousedown', 'pointerdown', 'touchstart']) $('gogExit').addEventListener(ev, e => e.stopPropagation());
+for (const ev of ['mousedown', 'pointerdown', 'touchstart']) $('gogBar').addEventListener(ev, e => e.stopPropagation());
+$('gogAlign').onclick = () => headRecenter();
 $('xrPass').onchange = () => { if ($('xrPass').checked && !camStream) openCam(null).then(applyPass); else applyPass(); };
 $('xrFov').oninput = e => { head.fov = +e.target.value; $('xrFovV').textContent = head.fov; };
 $('xrIpd').oninput = e => { head.ipd = +e.target.value/2000; $('xrIpdV').textContent = e.target.value; };
@@ -1808,7 +1813,10 @@ function roomStep(dt){
   const gc = toG(room.C), gp = toG({ x:0, z:0 });
   floor.position.set(gc.x, 0, gc.z); floor.rotation.set(-Math.PI/2, -room.yaw, 0);
   pcMark.position.set(gp.x, 0, gp.z);
-  floor.visible = pcMark.visible = $('xrGrid').checked;
+  floor.visible = $('xrGrid').checked || !head.on; pcMark.visible = $('xrGrid').checked && head.on;
+  const now = performance.now();
+  if (head.on && !f && now - (room.warnT || 0) > 4000){ room.warnT = now; popCam('PC: 足が見えていません（立って両方のカメラに全身を）', '#ff4d5e', .5, 2); }
+  $('roomStat').dataset.feet = f ? '1' : '0';
 }
 // カメラ映像は「スマホカメラの画角どおりの大きさの板」として視線の先に貼る → 表示の視野角に関係なく現実と3Dの縮尺がそろう
 const vplane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ depthTest:false, depthWrite:false }));
@@ -1818,8 +1826,8 @@ function vplaneUpdate(){
   const on = head.on && $('xrPass').checked && !!camTex && vid.videoWidth > 0;
   vplane.visible = on; if (!on) return;
   if (vplane.material.map !== camTex){ vplane.material.map = camTex; vplane.material.needsUpdate = true; }
-  const a = vid.videoWidth/vid.videoHeight, d = 60, w = 2*d*Math.tan(head.camHfov*Math.PI/360);
-  vplane.scale.set(w, w/a, 1); vplane.position.set(0, 0, -d);
+  const a = vid.videoWidth/vid.videoHeight, d = 60, L = 2*d*Math.tan(head.camHfov*Math.PI/360);
+  if (a >= 1) vplane.scale.set(L, L/a, 1); else vplane.scale.set(L*a, L, 1); vplane.position.set(0, 0, -d);
 }
 $('xrCamFov').oninput = e => { head.camHfov = +e.target.value; $('xrCamFovV').textContent = head.camHfov; try { localStorage.setItem('rqgun_camfov', head.camHfov); } catch (er){} };
 $('xrEye').oninput = e => { $('xrEyeV').textContent = e.target.value; room.eye = room.eye0 + (+e.target.value)/100; try { localStorage.setItem('rqgun_eyeadj', e.target.value); } catch (er){} };
