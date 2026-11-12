@@ -44,6 +44,8 @@
   #xrPanel input[type=text]{width:7em;font:18px monospace;padding:4px;letter-spacing:2px}
   #xrStat{margin-top:6px;font-size:12px;color:#ffd35a;word-break:break-all}
   #gogGo{width:100%;margin-top:10px;padding:10px!important;font-size:16px!important;color:#5fe07a!important;border-color:#5fe07a88!important}
+  #gogBar{flex-wrap:wrap;justify-content:center;max-width:96vw}
+  #gogBar .adj{background:#0d2a30;color:#7ae7ff;border:1px solid #7ae7ff66;border-radius:10px;min-width:30px;padding:2px 8px;margin:0 4px;font:15px sans-serif}
   #gogBar .gb{background:#000a;color:#7ae7ff;border:1px solid #7ae7ff66;border-radius:16px;padding:6px 14px;font:13px sans-serif}
   #ui{z-index:8!important}
   .gogStat{position:fixed;bottom:6px;transform:translateX(-50%);z-index:30;display:none;max-width:46vw;padding:3px 8px;background:#000a;border-radius:6px;font:11px/1.35 sans-serif;color:#9fffb0;text-align:center;pointer-events:none;white-space:pre-line}
@@ -51,8 +53,8 @@
 </head>
 <body>
 <div class="gogStat" style="left:25%"></div><div class="gogStat" style="left:75%"></div>
-<div id="gogBar" style="position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:30;display:none;gap:8px"><button id="gogAlign" class="gb">🧭 向き合わせ</button><button id="gogPlace" class="gb">📍 ボスを置く</button><button id="gogFs" class="gb">⛶ 全画面</button><button id="gogExit" class="gb">✕ 終了</button></div>
-<div id="ui"><button id="glBtn" class="off">🕶 グラス OFF</button> <button id="aimBtn">🎯 視点操作 ON</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰ メニュー</button> <button id="xrBtn">🥽 ゴーグル</button> <button id="fsBtn">⛶ 全画面</button>
+<div id="gogBar" style="position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:30;display:none;gap:8px"><button id="gogAlign" class="gb">🧭 向き合わせ</button><button id="gogPlace" class="gb">📍 ボスを置く</button><span class="gb">間隔 <button id="sepM" class="adj">−</button><b id="sepV">50</b>%<button id="sepP" class="adj">＋</button></span><span class="gb">大きさ <button id="ekM" class="adj">−</button><b id="ekV">100</b>%<button id="ekP" class="adj">＋</button></span><button id="gogExit" class="gb">✕ 終了</button></div>
+<div id="ui"><button id="glBtn" class="off">🕶 グラス OFF</button> <button id="aimBtn">🎯 視点操作 ON</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰ メニュー</button> <button id="xrBtn">🥽 ゴーグル</button>
   <div id="xrPanel" hidden>
     <b style="color:#ffd35a">📡 PC中継（Wiiリモコン・足の位置）</b>
     <div style="margin-top:6px">コード <input type="text" id="rlCode" inputmode="numeric" maxlength="6" placeholder="000000"> <button id="rlGo">接続</button></div>
@@ -2696,8 +2698,14 @@ function fsHelp(){
   alert(isIOS ? 'iPhone の Safari は全画面表示に対応していません。\n\n共有ボタン（□↑）→「ホーム画面に追加」→ ホーム画面のアイコンから開くと、タブやアドレスバーなしの全画面で起動します。\n（ホーム画面から開いた時は、中継のコードをもう一度入力してください）'
                : 'このブラウザは全画面表示に対応していません。メニューの「ホーム画面に追加」から開くと全画面になります。');
 }
-$('fsBtn').onclick = toggleFs; $('gogFs').onclick = toggleFs;
-for (const ev of ['mousedown', 'pointerdown', 'touchstart']) $('fsBtn').addEventListener(ev, e => e.stopPropagation());
+// 開始後に画面上部のボタンで、左右の映像の間隔・大きさを調整（パネルのスライダーと連動・保存）
+function eyeAdj(id, d){
+  const el = $(id), v = Math.max(+el.min, Math.min(+el.max, +el.value + d)); el.value = v; el.dispatchEvent(new Event('input')); eyeBarUI();
+}
+function eyeBarUI(){ $('sepV').textContent = $('xrSep').value; $('ekV').textContent = $('xrEyeK').value; }
+$('sepM').onclick = () => eyeAdj('xrSep', -.5); $('sepP').onclick = () => eyeAdj('xrSep', .5);
+$('ekM').onclick = () => eyeAdj('xrEyeK', -5); $('ekP').onclick = () => eyeAdj('xrEyeK', 5);
+setTimeout(eyeBarUI, 0);
 // iPhone: 見えない（透明・極小の）動画は省電力で止められて、背景が真っ黒になることがある → 再生を保つ
 function keepVid(){
   if (!head.on || !vid.srcObject) return;
