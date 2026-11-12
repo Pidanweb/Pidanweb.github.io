@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RQ 中継（Wii・足の位置）</title>
+<style>
+  body{margin:0;background:#0a1110;color:#e8fbff;font:15px sans-serif}
+  main{max-width:1000px;margin:0 auto;padding:16px}
+  h1{font-size:20px;color:#7ae7ff;margin:4px 0 12px}
+  section{border:1px solid #7ae7ff44;border-radius:10px;padding:12px 14px;margin-bottom:12px;background:#061418}
+  h2{font-size:15px;color:#ffd35a;margin:0 0 8px}
+  button,select{background:#0d2a30;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer}
+  a{color:#7ae7ff}
+  #code{font:bold 56px monospace;letter-spacing:8px;color:#5fe07a;text-align:center;margin:4px 0}
+  .st{font-size:13px;color:#ffd35a;margin-top:6px} .ok{color:#5fe07a} .ng{color:#ff4d5e}
+  small{color:#9fdcea;line-height:1.6;display:block}
+  label{display:inline-block;margin:6px 12px 0 0}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start}
+  .cam{flex:1 1 300px} .cam canvas{width:100%;aspect-ratio:16/9;background:#000;border:1px solid #7ae7ff55;border-radius:8px;display:block;margin-top:6px}
+  #map{width:320px;height:320px;background:#000;border:1px solid #7ae7ff55;border-radius:8px}
+  #feetV{font:bold 20px monospace;color:#7ae7ff}
+  .top{display:grid;grid-template-columns:1fr 1fr;gap:12px} @media (max-width:760px){ .top{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<main>
+  <h1>🎮 RQ 中継 — Wiiリモコン・足の位置 → スマホ（ガンナー / 剣 共通）</h1>
+  <div class="top">
+    <section>
+      <h2>① スマホに入力するコード</h2>
+      <div id="code">------</div>
+      <div class="st" id="peerSt">接続準備中…</div>
+      <div class="st" id="phoneSt">スマホ: 未接続</div>
+      <small>スマホでゴーグル版（ガンナー / 剣）を開き「🥽 ゴーグル」→ このコードで接続。<br>
+      ⚠ このページは<b>画面に表示したまま</b>に（裏に回すとカメラ認識が止まります）。</small>
+    </section>
+    <section>
+      <h2>② Wiiリモコン</h2>
+      <button id="wiiBtn">Wiiリモコンを接続</button> <span class="st" id="wiiSt">未接続</span>
+      <div class="st" id="rateSt"></div>
+      <small>Chrome / Edge で開いてください（WebHID）。ゲーム本体のタブは閉じておくと確実です。</small>
+    </section>
+  </div>
+
+  <section>
+    <h2>③ 足の位置（剣版のキャリブレーション結果を使用）</h2>
+    <div class="st" id="calSt">キャリブレーションを確認中…</div>
+    <div style="margin-top:8px"><button id="startBtn">▶ カメラと認識を開始</button> <button id="reloadCal">🔄 キャリブレーションを読み直す</button> <a href="calibrate_2cam.html" target="_blank">📐 キャリブレーションのページを開く</a></div>
+    <div class="row" style="margin-top:8px">
+      <div class="cam"><b>メインカメラ</b> <span class="st" id="mSt"></span><canvas id="mCv" width="480" height="270"></canvas></div>
+      <div class="cam"><b>2台目</b> <span class="st" id="sSt"></span><canvas id="sCv" width="480" height="270"></canvas></div>
+      <div><b>床の地図（上から）</b> <span id="feetV">—</span><br><canvas id="map" width="320" height="320"></canvas>
+        <small>■黄=カメラ ●緑=立ち位置 ●赤=ボス ●水色=今の足（合成方法: <span id="srcV">-</span>）</small></div>
+    </div>
+    <div style="margin-top:8px;border-top:1px solid #7ae7ff33;padding-top:8px">
+      <b style="color:#ffd35a">📍 ボスの位置</b> <span class="st" id="bossSt" style="display:inline"></span><br>
+      <small><b>カメラの映像</b>（メイン・2台目）か<b>床の地図</b>をクリックすると、その床の場所にボスが立ちます。赤い輪がボスの足元です。スマホで置いた位置より優先されます。</small>
+      <label>立ち位置からの距離 <input type="number" id="bossDist" min="1" max="15" step=".1" style="width:5em">m</label> <button id="bossDistGo">この距離にする</button>
+      <button id="bossReset">キャリブレーションの位置に戻す</button>
+    </div>
+    <small>先に calibrate_2cam.html で測定を済ませてください（このページを同じフォルダに置くと、保存された結果をそのまま読みます）。<br>
+    キャリブレーションのページはカメラを使うので、このページで開始する前に閉じてください。</small>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script type="module">
+const $ = id => document.getElementById(id);
+const st = (id, t, cls) => { const e = $(id); e.textContent = t; e.className = 'st' + (cls ? ' ' + cls : ''); };
+
+// ================= PeerJS =================
+let peer = null, conn = null, code = null;
+const newCode = () => String(Math.floor(100000 + Math.random()*900000));
+function startPeer(){
+  try { code = localStorage.getItem('rqgun_hub_code'); } catch (e){}
+  if (!code) code = newCode();
+  if (peer) try { peer.destroy(); } catch (e){}
+  peer = new Peer('rqgun-' + code);
+  peer.on('open', () => { $('code').textContent = code; st('peerSt', '待機中（スマホからの接続を待っています）', 'ok'); try { localStorage.setItem('rqgun_hub_code', code); } catch (e){} });
+  peer.on('error', e => {
+    if (e.type === 'unavailable-id'){ code = newCode(); try { localStorage.setItem('rqgun_hub_code', code); } catch (er){} setTimeout(startPeer, 300); return; }
+    st('peerSt', 'エラー: ' + (e.type || e.message), 'ng');
+  });
+  peer.on('disconnected', () => { st('peerSt', '再接続中…', 'ng'); setTimeout(() => { try { peer.reconnect(); } catch (e){} }, 1000); });
+  peer.on('connection', c => {
+    if (conn) try { conn.close(); } catch (e){}
+    conn = c;
+    c.on('open', () => { st('phoneSt', 'スマホ: 接続中 ✅', 'ok'); sendWiiState(); sendCal(); });
+    c.on('data', onPhone);
+    c.on('close', () => { if (conn === c){ conn = null; st('phoneSt', 'スマホ: 切断されました', 'ng'); } });
+  });
+}
+const send = m => { if (conn && conn.open) conn.send(m); };
+const sendWiiState = () => send({ t:'wii', on:!!dev });
+
+// ================= Wiiリモコン（生のレポートをそのまま中継）=================
+const WVID = 0x057e, WPIDS = [0x0306, 0x0330];
+let dev = null, nRep = 0;
+async function openWii(d){
+  dev = d; if (!d.opened) await d.open();
+  d.oninputreport = e => {
+    nRep++;
+    const u = new Uint8Array(e.data.buffer, e.data.byteOffset, e.data.byteLength);
+    send({ t:'in', id:e.reportId, ts:e.timeStamp || performance.now(), d:Array.from(u) });
+  };
+  if (!conn) try { await d.sendReport(0x11, new Uint8Array([0x10])); } catch (e){}
+  st('wiiSt', '接続中 ✅ ' + (d.productName || ''), 'ok'); sendWiiState();
+}
+$('wiiBtn').onclick = async () => {
+  if (!('hid' in navigator)){ st('wiiSt', 'WebHID非対応のブラウザです（Chrome / Edge を使用）', 'ng'); return; }
+  try { const [d] = await navigator.hid.requestDevice({ filters: WPIDS.map(p => ({ vendorId:WVID, productId:p })) }); if (d) await openWii(d); }
+  catch (e){ st('wiiSt', '接続できません: ' + e.message, 'ng'); }
+};
+if ('hid' in navigator){
+  navigator.hid.getDevices().then(l => { const d = l.find(x => x.vendorId === WVID && WPIDS.includes(x.productId)); if (d) openWii(d).catch(() => {}); });
+  navigator.hid.addEventListener('disconnect', e => { if (e.device === dev){ dev = null; st('wiiSt', '切断されました', 'ng'); sendWiiState(); } });
+}
+function onPhone(m){
+  if (!m) return;
+  if (m.t === 'out' && dev) dev.sendReport(m.id, new Uint8Array(m.d)).catch(() => {});
+  else if (m.t === 'hi'){ sendWiiState(); sendCal(); }
+}
+setInterval(() => { st('rateSt', dev ? `受信 ${nRep} 回/秒` + (conn ? ' → スマホへ転送中' : '（スマホ未接続）') : ''); nRep = 0; }, 1000);
+
+// ================= キャリブレーション（剣版 RQ_project_sord_hukan_2cam_follow.html と同じ計算）=================
+// F = メインカメラの床座標（カメラ真下の床が原点, +Yが上, -Zがカメラの向く水平方向, m）
+const BC_KEY = 'connectworld_bodycal_v1', DUAL_KEY = 'connectworld_dualcal_v1', CAMS_KEY = 'connectworld_cams_v1', BC_LIFT = .03, R_BOSS = 1.8;
+const bc = { ok:false, FfromCam:new THREE.Matrix4(), hfov:65, vw:0, vh:0, height:1.7, origin:null, bossC:null };
+const dual = { ok:false, FfromCam:new THREE.Matrix4(), FfromS:new THREE.Matrix4(), hfov:65, al:null, h:1.5 };
+let calData = null, camsSaved = null;
+function bcUp(th, ph){ return [Math.sin(ph), -Math.cos(ph)*Math.cos(th), -Math.cos(ph)*Math.sin(th)]; }
+function camMat(th, ph, h){   // 床座標 → カメラ座標
+  const Uc = bcUp(th, ph), U = new THREE.Vector3(Uc[0], -Uc[1], -Uc[2]).normalize();
+  const back = new THREE.Vector3(0, 0, 1); back.addScaledVector(U, -back.dot(U)).normalize();
+  const X = new THREE.Vector3().crossVectors(U, back), O = U.clone().multiplyScalar(-h);
+  return new THREE.Matrix4().makeBasis(X, U, back).setPosition(O);
+}
+function rayM(o, FfromCam){   // 正規化画像座標 → 床との交点
+  if (!o) return null;
+  const c = new THREE.Vector3().applyMatrix4(FfromCam), d = new THREE.Vector3(o.fx, -o.fy, -1).transformDirection(FfromCam);
+  if (d.y > -1e-4) return null;
+  const t = (BC_LIFT - c.y)/d.y; if (t <= 0 || t > 40) return null;
+  const p = c.addScaledVector(d, t); p.y = 0; return p;
+}
+function loadCal(){
+  bc.ok = dual.ok = false;
+  let d = null, d2 = null;
+  try { d = JSON.parse(localStorage.getItem(BC_KEY) || 'null'); d2 = JSON.parse(localStorage.getItem(DUAL_KEY) || 'null'); camsSaved = JSON.parse(localStorage.getItem(CAMS_KEY) || 'null'); } catch (e){}
+  calData = d;
+  if (!d || !d.res || !d.originUV || !d.vw){ st('calSt', '❌ キャリブレーションが見つかりません。calibrate_2cam.html で測定してください（このページと同じフォルダ・同じサイトで）', 'ng'); sendCal(); return false; }
+  const t = d.tune || { floor:0, th:0, ph:0 }, r = d.res;
+  bc.hfov = d.hfov || 65; bc.vw = d.vw; bc.vh = d.vh; bc.height = d.height || 1.7;
+  bc.FfromCam.copy(camMat(r.th + t.th*Math.PI/180, r.ph + t.ph*Math.PI/180, Math.max(.2, r.h - t.floor))).invert();
+  const f = (bc.vw/2)/Math.tan(bc.hfov*Math.PI/360), uv = q => ({ fx:(q[0] - .5)*bc.vw/f, fy:(q[1] - .5)*bc.vh/f });
+  const p = rayM(uv(d.originUV), bc.FfromCam);
+  if (!p){ st('calSt', '❌ 保存された立ち位置を床に投影できません。測り直してください', 'ng'); sendCal(); return false; }
+  bc.origin = p;
+  // ボスの位置：指定があればそこ、無ければ「前」の向きに d.boss m 先（剣版の bcApply / bcHover と同じ）
+  let bossF = d.bossUV ? rayM(uv(d.bossUV), bc.FfromCam) : d.bossXZ ? new THREE.Vector3(d.bossXZ.x, 0, d.bossXZ.z) : null;
+  if (bossF && Math.hypot(bossF.x - p.x, bossF.z - p.z) < .3) bossF = null;
+  if (!bossF){
+    let yaw = d.poseCam === 'back' ? 0 : Math.PI; if (typeof d.faceYaw === 'number') yaw = d.faceYaw;
+    const dist = d.boss || 8.5; bossF = new THREE.Vector3(p.x - Math.sin(yaw)*dist, 0, p.z - Math.cos(yaw)*dist);
+  }
+  bc.bossCal = bossF.clone(); bc.cid = 0;
+  try { const sv = JSON.parse(localStorage.getItem(HUB_BOSS_KEY) || 'null'); if (sv && Math.hypot(sv.Ox - p.x, sv.Oz - p.z) < .05){ bossF = new THREE.Vector3(sv.x, 0, sv.z); bc.cid = sv.cid; } } catch (e){}
+  bc.bossC = bossF; bc.ok = true; bc.camF = bc.FfromCam.clone().invert(); bossUI();
+  if (d2 && d2.res && d2.al){
+    dual.hfov = d2.hfov || 65; dual.al = d2.al; dual.h = d2.res.h;
+    dual.FfromCam.copy(camMat(d2.res.th, d2.res.ph, d2.res.h)).invert();
+    dual.FfromS.makeRotationY(d2.al.yaw).setPosition(d2.al.tx, 0, d2.al.tz); dual.ok = true;
+  }
+  const bd = Math.hypot(bossF.x - p.x, bossF.z - p.z);
+  st('calSt', `✅ 読み込み済み: メインの高さ ${(+r.h).toFixed(2)}m・画角 ${bc.hfov.toFixed(1)}°・身長 ${bc.height.toFixed(2)}m・ボス ${bd.toFixed(1)}m 先` + (dual.ok ? `・2台目 あり（メインの${d2.al.tx > 0 ? '右' : '左'} ${Math.hypot(d2.al.tx, d2.al.tz).toFixed(2)}m）` : '・2台目 なし（1台で計算）'), 'ok');
+  sendCal(); return true;
+}
+function sendCal(){
+  // 剣版のゴーグル用：キャリブレーション結果そのもの（スマホ側で剣版の仕組みのまま読み込む）
+  try { send({ t:'calraw', body:localStorage.getItem(BC_KEY), dual:localStorage.getItem(DUAL_KEY) }); } catch (e){}
+  if (!bc.ok){ send({ t:'cal', ok:false, msg:'PC側でキャリブレーションが未設定' }); return; }
+  send({ t:'cal', ok:true, O:{ x:bc.origin.x, z:bc.origin.z }, C:{ x:bc.bossC.x, z:bc.bossC.z }, eye:bc.height*.93, cid:bc.cid });
+}
+$('reloadCal').onclick = loadCal;
+// ===== ボスの位置を決める（床座標で保存。スマホへは cid が変わったら上書きの合図）=====
+const HUB_BOSS_KEY = 'rqgun_hub_boss_v1';
+function setBoss(p, keepCal){
+  if (!bc.ok || !p) return;
+  bc.bossC = new THREE.Vector3(p.x, 0, p.z); bc.cid = Date.now();
+  try { if (keepCal) localStorage.removeItem(HUB_BOSS_KEY); else localStorage.setItem(HUB_BOSS_KEY, JSON.stringify({ x:p.x, z:p.z, Ox:bc.origin.x, Oz:bc.origin.z, cid:bc.cid })); } catch (e){}
+  bossUI(); sendCal();
+}
+function bossUI(){
+  if (!bc.ok) return;
+  const d = Math.hypot(bc.bossC.x - bc.origin.x, bc.bossC.z - bc.origin.z);
+  $('bossSt').textContent = `立ち位置から ${d.toFixed(2)}m（床座標 x ${bc.bossC.x.toFixed(2)} / z ${bc.bossC.z.toFixed(2)}）`; $('bossDist').value = d.toFixed(1);
+}
+$('bossReset').onclick = () => setBoss(bc.bossCal, true);
+$('bossDistGo').onclick = () => {   // 今の方向のまま距離だけ変える
+  const d = +$('bossDist').value, o = bc.origin; if (!(d > .5)) return;
+  let dx = bc.bossC.x - o.x, dz = bc.bossC.z - o.z, L = Math.hypot(dx, dz) || 1;
+  setBoss({ x:o.x + dx/L*d, z:o.z + dz/L*d });
+};
+// カメラ映像のクリック → 床との交点
+function clickCam(k, e){
+  const c = cams[k], v = c.vid; if (!bc.ok || !v.videoWidth) return;
+  const r = e.target.getBoundingClientRect(), u = (e.clientX - r.left)/r.width, w = (e.clientY - r.top)/r.height;
+  const hf = k === 'm' ? bc.hfov : dual.hfov, f = (v.videoWidth/2)/Math.tan(hf*Math.PI/360);
+  const o = { fx:(u - .5)*v.videoWidth/f, fy:(w - .5)*v.videoHeight/f };
+  let p = rayM(o, k === 'm' ? bc.FfromCam : dual.FfromCam); if (!p){ st('bossSt', '床ではない所です（地平線より下をクリック）', 'ng'); return; }
+  if (k === 's') p = p.applyMatrix4(dual.FfromS);
+  setBoss(p);
+}
+$('mCv').addEventListener('click', e => clickCam('m', e)); $('sCv').addEventListener('click', e => clickCam('s', e));
+$('mCv').style.cursor = $('sCv').style.cursor = $('map').style.cursor = 'crosshair';
+$('map').addEventListener('click', e => {
+  const M = drawMap.M; if (!M) return;
+  const r = e.target.getBoundingClientRect(), x = (e.clientX - r.left)/r.width*$('map').width, y = (e.clientY - r.top)/r.height*$('map').height;
+  setBoss({ x:M.cx0 + (x - M.w/2)/M.s, z:M.cz0 + (y - M.h/2)/M.s });
+});
+// 床の点 → カメラ映像の位置（0〜1）
+function projF(k, p){
+  const v = cams[k].vid; if (!v.videoWidth) return null;
+  let q = p.clone();
+  if (k === 's'){ if (!dual.ok) return null; q.applyMatrix4(dual.FfromS.clone().invert()).applyMatrix4(dual.FfromCam.clone().invert()); }
+  else q.applyMatrix4(bc.camF);
+  if (q.z > -.1) return null;
+  const hf = k === 'm' ? bc.hfov : dual.hfov, f = (v.videoWidth/2)/Math.tan(hf*Math.PI/360);
+  return [.5 + f*q.x/-q.z/v.videoWidth, .5 - f*q.y/-q.z/v.videoHeight];
+}
+function drawBossRing(k, x, w, h){
+  if (!bc.ok) return;
+  x.strokeStyle = '#ff4d5e'; x.lineWidth = 3; x.beginPath(); let prev = null;
+  for (let i = 0; i <= 48; i++){
+    const a = i/48*Math.PI*2, q = projF(k, new THREE.Vector3(bc.bossC.x + Math.cos(a)*.9, 0, bc.bossC.z + Math.sin(a)*.9));
+    if (q && prev) x.lineTo(q[0]*w, q[1]*h); else if (q) x.moveTo(q[0]*w, q[1]*h); prev = q;
+  }
+  x.stroke();
+  const c = projF(k, bc.bossC); if (c){ x.fillStyle = '#ff4d5e'; x.beginPath(); x.arc(c[0]*w, c[1]*h, 5, 0, 7); x.fill(); x.font = 'bold 14px sans-serif'; x.fillText('ボス', c[0]*w + 8, c[1]*h - 6); }
+}
+
+// ================= カメラ2台 + 全身認識 → 足の床座標 =================
+const MP_V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const MP_POSE = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task';
+let mpLib = null;
+async function makeLm(){
+  if (!mpLib){ const mp = await import(MP_V + '/vision_bundle.mjs'); mpLib = { mp, fs:await mp.FilesetResolver.forVisionTasks(MP_V + '/wasm') }; }
+  const o = d => ({ baseOptions:{ modelAssetPath:MP_POSE, delegate:d }, runningMode:'VIDEO', numPoses:1 });
+  try { return await mpLib.mp.PoseLandmarker.createFromOptions(mpLib.fs, o('GPU')); } catch (e){ return await mpLib.mp.PoseLandmarker.createFromOptions(mpLib.fs, o('CPU')); }
+}
+const mkVid = () => { const v = document.createElement('video'); v.muted = true; v.playsInline = true; return v; };
+const cams = {
+  m:{ name:'メイン', vid:mkVid(), cv:$('mCv'), stat:'mSt', lm:null, stream:null, last:-1, n:null, obs:null, p:null, t:-1e9, loose:false },
+  s:{ name:'2台目', vid:mkVid(), cv:$('sCv'), stat:'sSt', lm:null, stream:null, last:-1, n:null, obs:null, p:null, t:-1e9, loose:true }
+};
+async function findCam(c){   // キャリブレーションのページで選んだカメラ（ID → 名前の順で探す）
+  if (!c) return null;
+  const L = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+  const d = L.find(x => x.deviceId === c.id) || L.find(x => c.label && x.label === c.label); return d ? d.deviceId : null;
+}
+async function openCam(k, id){
+  const c = cams[k]; if (c.stream) c.stream.getTracks().forEach(t => t.stop()); c.stream = null;
+  const sz = bc.vw ? { width:{ ideal:bc.vw }, height:{ ideal:bc.vh } } : {};   // キャリブレーションと同じ解像度（画角の計算が合うように）
+  for (const v of [{ deviceId:{ exact:id }, ...sz }, { deviceId:{ exact:id } }]){
+    try { c.stream = await navigator.mediaDevices.getUserMedia({ video:v, audio:false }); break; } catch (e){ console.warn(e); }
+  }
+  if (!c.stream){ st(c.stat, '開けません（他のタブ・アプリが使用中？）', 'ng'); return false; }
+  c.vid.srcObject = c.stream; try { await c.vid.play(); } catch (e){}
+  const s = c.stream.getVideoTracks()[0].getSettings();
+  st(c.stat, `${c.stream.getVideoTracks()[0].label || ''} ${s.width}×${s.height}`, 'ok');
+  if (k === 'm' && bc.vw && s.width && Math.abs(s.width/s.height - bc.vw/bc.vh) > .02) st(c.stat, `⚠ 映像の縦横比がキャリブレーション時（${bc.vw}×${bc.vh}）と違います`, 'ng');
+  return true;
+}
+$('startBtn').onclick = async () => {
+  if (!bc.ok && !loadCal()) return;
+  $('startBtn').disabled = true;
+  try { const s = await navigator.mediaDevices.getUserMedia({ video:true }); s.getTracks().forEach(t => t.stop()); } catch (e){}   // 一度許可を取るとカメラ名が読める
+  const mId = await findCam(camsSaved && camsSaved.main), sId = dual.ok ? await findCam(camsSaved && camsSaved.side) : null;
+  if (!mId){ st('mSt', 'キャリブレーションで使ったメインカメラが見つかりません', 'ng'); $('startBtn').disabled = false; return; }
+  await openCam('m', mId);
+  if (dual.ok){ if (sId && sId !== mId) await openCam('s', sId); else st('sSt', '2台目のカメラが見つかりません（1台で計算します）', 'ng'); }
+  else st('sSt', '2台目のキャリブレーションなし（1台で計算）');
+  for (const k of ['m', 's']){
+    const c = cams[k]; if (!c.stream) continue;
+    st(c.stat, '認識モデルを読み込み中…');
+    try { c.lm = await makeLm(); st(c.stat, '認識中', 'ok'); } catch (e){ st(c.stat, 'モデルを読み込めません: ' + e.message, 'ng'); }
+  }
+  $('startBtn').disabled = false; $('startBtn').textContent = '▶ カメラを開き直す';
+};
+
+// ランドマーク → かかとの正規化画像座標（剣版の bcObsFrom と同じ）
+function obsFrom(n, el, hf, loose){
+  const W_ = el.videoWidth, H_ = el.videoHeight; if (!W_) return null;
+  const vis = i => n[i].visibility === undefined ? 1 : n[i].visibility, v29 = vis(29), v30 = vis(30);
+  if ((loose ? Math.max(v29, v30) : Math.min(v29, v30)) < .5) return null;
+  const hi = loose && Math.min(v29, v30) < .5 ? [v29 >= v30 ? 29 : 30] : [29, 30];
+  const f = (W_/2)/Math.tan(hf*Math.PI/360), hm = k => hi.reduce((a, i) => a + n[i][k], 0)/hi.length;
+  return { fx:(hm('x')*W_ - W_/2)/f, fy:(hm('y')*H_ - H_/2)/f, u:hm('x'), v:hm('y') };
+}
+// 2台の合成：各カメラの推定に「向きに強く・奥行きに弱い」誤差の楕円を付けて重み付き平均（剣版の dualFuse と同じ）
+function cov(c, p, h){
+  const dx = p.x - c.x, dz = p.z - c.z, d = Math.max(.3, Math.hypot(dx, dz)), ux = dx/d, uz = dz/d;
+  const sb = .02 + .012*d, sr = .04 + .03*d*d/Math.max(.6, h || 1.5), r2 = sr*sr, b2 = sb*sb;
+  return [r2*ux*ux + b2*uz*uz, (r2 - b2)*ux*uz, r2*uz*uz + b2*ux*ux];
+}
+const inv2 = m => { const det = m[0]*m[2] - m[1]*m[1] || 1e-12; return [m[2]/det, -m[1]/det, m[0]/det]; };
+const mahal = (dx, dz, m) => { const i = inv2(m); return dx*dx*i[0] + 2*dx*dz*i[1] + dz*dz*i[2]; };
+const feet = { p:null, t:-1e9, src:'-', sent:0, none:0 };
+function fuse(){
+  const now = performance.now(), FR = 200;
+  const m = cams.m.p && now - cams.m.t < FR ? cams.m.p : null, s = cams.s.p && now - cams.s.t < FR ? cams.s.p : null;
+  if (!m && !s) return;
+  let out, src;
+  if (!s){ out = m; src = 'メインのみ'; }
+  else if (!m){ out = s; src = '2台目のみ'; }
+  else {
+    const Cm = cov({ x:0, z:0 }, m, calData.res.h), Cs = cov({ x:dual.al.tx, z:dual.al.tz }, s, dual.h);
+    if (mahal(m.x - s.x, m.z - s.z, [Cm[0] + Cs[0], Cm[1] + Cs[1], Cm[2] + Cs[2]]) > 50){ out = m; src = 'メイン(不一致)'; }
+    else {
+      const Im = inv2(Cm), Is = inv2(Cs), C = inv2([Im[0] + Is[0], Im[1] + Is[1], Im[2] + Is[2]]);
+      const bx = Im[0]*m.x + Im[1]*m.z + Is[0]*s.x + Is[1]*s.z, bz = Im[1]*m.x + Im[2]*m.z + Is[1]*s.x + Is[2]*s.z;
+      out = new THREE.Vector3(C[0]*bx + C[1]*bz, 0, C[1]*bx + C[2]*bz); src = '2台合成';
+    }
+  }
+  feet.p = out; feet.t = now; feet.src = src;
+  if (now - feet.sent > 20){ feet.sent = now; send({ t:'feet', ok:true, x:out.x, z:out.z, src }); }
+}
+const LINKS = [[11, 12], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [27, 29], [24, 26], [26, 28], [28, 30], [11, 13], [13, 15], [12, 14], [14, 16]];
+function camStep(k){
+  const c = cams[k], v = c.vid;
+  if (!c.lm || v.readyState < 2 || !v.videoWidth || v.currentTime === c.last) return;
+  c.last = v.currentTime;
+  let r; try { r = c.lm.detectForVideo(v, performance.now()); } catch (e){ return; }
+  const n = r.landmarks && r.landmarks[0]; c.n = n || null;
+  c.obs = n ? obsFrom(n, v, k === 'm' ? bc.hfov : dual.hfov, c.loose) : null;
+  if (c.obs){
+    const p = rayM(c.obs, k === 'm' ? bc.FfromCam : dual.FfromCam);
+    if (p){ c.p = k === 'm' ? p : p.applyMatrix4(dual.FfromS); c.t = performance.now(); fuse(); }
+  }
+  // プレビュー
+  const cv = c.cv, x = cv.getContext('2d'), w = cv.width, h = cv.height;
+  x.drawImage(v, 0, 0, w, h);
+  if (n){ x.strokeStyle = '#5ee08a'; x.lineWidth = 3; x.beginPath(); for (const [a, b] of LINKS){ x.moveTo(n[a].x*w, n[a].y*h); x.lineTo(n[b].x*w, n[b].y*h); } x.stroke(); }
+  if (c.obs){ x.strokeStyle = '#7ae7ff'; x.lineWidth = 3; x.beginPath(); x.arc(c.obs.u*w, c.obs.v*h, 8, 0, 7); x.stroke(); }
+  else { x.fillStyle = '#ff4d5e'; x.font = 'bold 16px sans-serif'; x.fillText(n ? 'かかとが見えません' : '全身が見つかりません', 8, 22); }
+  drawBossRing(k, x, w, h);
+}
+function drawMap(){
+  const cv = $('map'), x = cv.getContext('2d'), w = cv.width, h = cv.height;
+  x.fillStyle = '#000'; x.fillRect(0, 0, w, h);
+  if (!bc.ok) return;
+  const pts = [{ x:0, z:0 }, bc.origin, bc.bossC]; if (dual.ok) pts.push({ x:dual.al.tx, z:dual.al.tz });
+  const cx0 = pts.reduce((a, p) => a + p.x, 0)/pts.length, cz0 = pts.reduce((a, p) => a + p.z, 0)/pts.length;
+  const span = Math.max(4, ...pts.map(p => Math.max(Math.abs(p.x - cx0), Math.abs(p.z - cz0))*2 + 2)), s = w/span;
+  const X = p => w/2 + (p.x - cx0)*s, Y = p => h/2 + (p.z - cz0)*s;   // 上 = メインカメラの向く方(-Z)
+  drawMap.M = { cx0, cz0, s, w, h };
+  x.strokeStyle = '#7ae7ff22'; x.lineWidth = 1; x.beginPath();
+  for (let i = Math.floor(cx0 - span/2); i <= cx0 + span/2; i++){ x.moveTo(X({ x:i, z:0 }), 0); x.lineTo(X({ x:i, z:0 }), h); }
+  for (let i = Math.floor(cz0 - span/2); i <= cz0 + span/2; i++){ x.moveTo(0, Y({ x:0, z:i })); x.lineTo(w, Y({ x:0, z:i })); }
+  x.stroke();
+  const dot = (p, col, r) => { x.fillStyle = col; x.beginPath(); x.arc(X(p), Y(p), r, 0, 7); x.fill(); };
+  x.fillStyle = '#ffd35a'; x.fillRect(X({ x:0, z:0 }) - 6, Y({ x:0, z:0 }) - 6, 12, 12);
+  if (dual.ok){ const q = { x:dual.al.tx, z:dual.al.tz }; x.fillRect(X(q) - 5, Y(q) - 5, 10, 10); }
+  dot(bc.origin, '#5fe07a', 6);
+  x.strokeStyle = '#ff4d5e88'; x.beginPath(); x.arc(X(bc.bossC), Y(bc.bossC), R_BOSS*s, 0, 7); x.stroke(); dot(bc.bossC, '#ff4d5e', 6);
+  if (feet.p && performance.now() - feet.t < 500) dot(feet.p, '#7ae7ff', 7);
+}
+function loop(){
+  requestAnimationFrame(loop);
+  camStep('m'); camStep('s'); drawMap();
+  const ok = feet.p && performance.now() - feet.t < 500;
+  $('feetV').textContent = ok ? `x ${feet.p.x.toFixed(2)}  z ${feet.p.z.toFixed(2)} m` : '—'; $('srcV').textContent = ok ? feet.src : '-';
+  if (!ok && performance.now() - feet.none > 300){ feet.none = performance.now(); send({ t:'feet', ok:false }); }
+}
+requestAnimationFrame(loop);
+window._hub = { bc, dual, rayM, obsFrom, camMat, fuse, cams, feet, loadCal };   // デバッグ用
+loadCal();
+startPeer();
+</script>
+</body>
+</html>
