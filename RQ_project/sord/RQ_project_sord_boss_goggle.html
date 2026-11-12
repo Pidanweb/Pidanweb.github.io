@@ -2,7 +2,10 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>灰牙の獣王ヴォルグラム RAID（俯瞰）</title>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#0a1110}
@@ -43,11 +46,13 @@
   #gogGo{width:100%;margin-top:10px;padding:10px!important;font-size:16px!important;color:#5fe07a!important;border-color:#5fe07a88!important}
   #gogBar .gb{background:#000a;color:#7ae7ff;border:1px solid #7ae7ff66;border-radius:16px;padding:6px 14px;font:13px sans-serif}
   #ui{z-index:8!important}
+  .gogStat{position:fixed;bottom:6px;transform:translateX(-50%);z-index:30;display:none;max-width:46vw;padding:3px 8px;background:#000a;border-radius:6px;font:11px/1.35 sans-serif;color:#9fffb0;text-align:center;pointer-events:none;white-space:pre-line}
 </style>
 </head>
 <body>
-<div id="gogBar" style="position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:30;display:none;gap:8px"><button id="gogAlign" class="gb">🧭 向き合わせ</button><button id="gogPlace" class="gb">📍 ボスを置く</button><button id="gogExit" class="gb">✕ 終了</button></div>
-<div id="ui"><button id="glBtn" class="off">🕶 グラス OFF</button> <button id="aimBtn">🎯 視点操作 ON</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰ メニュー</button> <button id="xrBtn">🥽 ゴーグル</button>
+<div class="gogStat" style="left:25%"></div><div class="gogStat" style="left:75%"></div>
+<div id="gogBar" style="position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:30;display:none;gap:8px"><button id="gogAlign" class="gb">🧭 向き合わせ</button><button id="gogPlace" class="gb">📍 ボスを置く</button><button id="gogFs" class="gb">⛶ 全画面</button><button id="gogExit" class="gb">✕ 終了</button></div>
+<div id="ui"><button id="glBtn" class="off">🕶 グラス OFF</button> <button id="aimBtn">🎯 視点操作 ON</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰ メニュー</button> <button id="xrBtn">🥽 ゴーグル</button> <button id="fsBtn">⛶ 全画面</button>
   <div id="xrPanel" hidden>
     <b style="color:#ffd35a">📡 PC中継（Wiiリモコン・足の位置）</b>
     <div style="margin-top:6px">コード <input type="text" id="rlCode" inputmode="numeric" maxlength="6" placeholder="000000"> <button id="rlGo">接続</button></div>
@@ -703,8 +708,8 @@ let camTex = null, camMirror = true, camStream = null;
 const $ = id => document.getElementById(id), camSel = $('camSel'), camStat = $('camStat'), faceSel = { value:'' };   // 顔用カメラはこのHTMLでは使わない
 // ===== カメラ一覧と自動割り当て（内蔵=フロント/顔、USB=バック/背景）=====
 let camList = [];
-const isBuiltin = l => /integrated|built-?in|内蔵|facetime|user[- ]?facing|front|フロント/i.test(l || '');
-const isExt = l => /usb|logi|c9\d\d|c270|brio|external|rear|back|environment|world[- ]?facing|バック/i.test(l || '');
+const isBuiltin = l => /integrated|built-?in|内蔵|facetime|user[- ]?facing|front|フロント|前面/i.test(l || '');
+const isExt = l => /usb|logi|c9\d\d|c270|brio|external|rear|back|environment|world[- ]?facing|バック|背面/i.test(l || '');
 const camName = id => { const d = camList.find(d => d.deviceId === id); return d ? (d.label || 'カメラ') : '自動'; };
 function autoIds(){
   const L = camList.filter(d => d.deviceId); if (!L.length) return {};
@@ -1699,11 +1704,11 @@ function hcClick(){
 function faceMirror(){ return face.src === vid ? camMirror : face.fm !== false; }
 // ===== 効果音（sounds/ フォルダの mp3）=====
 let vol = .8;
-// sord フォルダに置く版：効果音は RQ_project/sounds（../sounds/）。読めなければ公開サイトのURLから読む
+// sord フォルダに置く版：効果音は RQ_project/sord/sounds（相対 sounds/）。読めなければ公開サイトのURLから読む
 const SITE = 'https://pidanweb.github.io/RQ_project/';
 function sndLoad(name){
-  const a = new Audio(`../sounds/${name}.mp3`); a.preload = 'auto';
-  a.addEventListener('error', () => { if (!a.dataset.fb){ a.dataset.fb = '1'; a.src = SITE + `sounds/${name}.mp3`; a.load(); } });
+  const a = new Audio(`sounds/${name}.mp3`); a.preload = 'auto';
+  a.addEventListener('error', () => { if (!a.dataset.fb){ a.dataset.fb = '1'; a.src = SITE + `sord/sounds/${name}.mp3`; a.load(); } });
   return a;
 }
 const SND = { swing:sndLoad('swing'), tuki:sndLoad('tuki'), Pswing:sndLoad('Pswing'), mawasi:sndLoad('mawasi'), pary:sndLoad('pary') };
@@ -2251,7 +2256,7 @@ function onWii(e){
   const pressStart = (A && !wii.pA) || (plus && !wii.pPlus), pressHome = home && !wii.pHome;
   wii.pA = A; wii.pPlus = plus; wii.pHome = home; wii.a = A; wii.b = Bb;
   if (pressHome) toggleMenu();
-  if (minus && !wii.pMinus){ wiiRecal(); if (head.on) headRecenter(); }
+  if (minus && !wii.pMinus){ if (head.on){ headRecenter(); if (!wii.mp.calibrated) wiiRecal(); } else wiiRecal(); }   // ゴーグル中: −は向き合わせ（ジャイロ調整は未調整の時だけ）
   wii.pMinus = minus;
   if (pressStart && state !== 'play' && !menuOn && !(state !== 'title' && now - endAt < 600)) startGame();
   if (pressA && menuOn) hcClick();   // 指先カーソルで指している項目を決定
@@ -2666,14 +2671,41 @@ try { const v = +localStorage.getItem('rqsord_eye_meas'); if (v > .8 && v < 2.2)
 // カメラ映像は「スマホカメラの画角どおりの板」として視線の先に貼る
 const vplane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ depthTest:false, depthWrite:false }));
 vplane.renderOrder = -100; vplane.frustumCulled = false; vplane.visible = false; camera.add(vplane);
+// ===== 全画面：Android等は Fullscreen API。iPhone は非対応なので「ホーム画面に追加」から開くと全画面になる =====
+const isIOS = /iP(hone|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1 && !document.documentElement.requestFullscreen);
+const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+function toggleFs(){
+  const el = document.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (document.fullscreenElement || document.webkitFullscreenElement){ (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+  if (req){ try { const r = req.call(el, { navigationUI:'hide' }); if (r && r.catch) r.catch(() => fsHelp()); } catch (e){ fsHelp(); } }
+  else fsHelp();
+}
+function fsHelp(){
+  if (standalone()) return;
+  alert(isIOS ? 'iPhone の Safari は全画面表示に対応していません。\n\n共有ボタン（□↑）→「ホーム画面に追加」→ ホーム画面のアイコンから開くと、タブやアドレスバーなしの全画面で起動します。\n（ホーム画面から開いた時は、中継のコードをもう一度入力してください）'
+               : 'このブラウザは全画面表示に対応していません。メニューの「ホーム画面に追加」から開くと全画面になります。');
+}
+$('fsBtn').onclick = toggleFs; $('gogFs').onclick = toggleFs;
+for (const ev of ['mousedown', 'pointerdown', 'touchstart']) $('fsBtn').addEventListener(ev, e => e.stopPropagation());
+// iPhone: 見えない（透明・極小の）動画は省電力で止められて、背景が真っ黒になることがある → 再生を保つ
+function keepVid(){
+  if (!head.on || !vid.srcObject) return;
+  if (vid.paused) vid.play().catch(() => {});
+  if (camTex && vid.readyState >= 2) camTex.needsUpdate = true;
+}
+
 function vplaneUpdate(){
+  keepVid();
+  if (head.on && $('xrPass').checked && camStream && vid.paused) vid.play().catch(() => {});   // iPhone: 止められていたら再生し直す
   const on = head.on && $('xrPass').checked && !!camTex && vid.videoWidth > 0;
   vplane.visible = on; if (!on) return;
   if (vplane.material.map !== camTex){ vplane.material.map = camTex; vplane.material.needsUpdate = true; }
   const a = vid.videoWidth/vid.videoHeight, d = 60, L = 2*d*Math.tan(head.camHfov*Math.PI/360);
   if (a >= 1) vplane.scale.set(L, L/a, 1); else vplane.scale.set(L*a, L, 1);
+  vplane.position.set(0, 0, -d);
 }
 async function goggleStart(){
+  vid.style.cssText = 'position:fixed;left:0;top:0;width:4px;height:4px;opacity:.01;pointer-events:none;z-index:40';
   try { if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission){
     if (await DeviceOrientationEvent.requestPermission() !== 'granted'){ xrStat('❌ 向きセンサーが許可されませんでした'); return; } } } catch (e){}
   addEventListener('deviceorientation', onOri);
@@ -2686,7 +2718,12 @@ async function goggleStart(){
   head.on = true; head.need0 = true; vr = sbs;
   setView(true); setGlass(true);
   $('xrPanel').hidden = true; $('gogBar').style.display = 'flex';
-  if ($('xrPass').checked && !camStream){ await openCam(null); }
+  if ($('xrPass').checked && !camStream){ await openCam(camSel.value || null); }
+  if ($('xrPass').checked && camStream && camStream.getVideoTracks()[0].getSettings().facingMode === 'user'){   // 前面カメラが開いてしまった
+    try { const s2 = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ exact:'environment' } }, audio:false }); camStream.getTracks().forEach(t => t.stop()); camStream = s2; vid.srcObject = s2; await vid.play(); } catch (e){}
+  }
+  vid.style.cssText = 'position:fixed;left:0;top:0;width:32px;height:24px;opacity:1;z-index:-1;pointer-events:none';   // iPhone対策（キャンバスの裏なので見えない）
+  try { await vid.play(); } catch (e){}
   camMirror = false; applyBg();
   setTimeout(() => { if (!head.ok) popCam('向きセンサーが取れません（HTTPSで開いていますか？）', '#ff4d5e', .6, 3); }, 1500);
 }
@@ -2764,7 +2801,13 @@ function relayData(m){
   } else if (m.t === 'cal'){ if (m.ok) relay.boss = { x:m.C.x, z:m.C.z, cid:m.cid || 0 }; }
   else if (m.t === 'feet'){ if (m.ok && bc.state === 'locked'){ bcSetFeet(new THREE.Vector3(m.x, 0, m.z)); relay.feetT = performance.now(); } }
 }
+function gogStatUpdate(){
+  const els = document.querySelectorAll('.gogStat'), m = wii.mp;
+  const t = !head.on ? '' : (wii.dev ? skHead() : 'Wii未接続（PC中継でつないで）') + (m.state === 'cal' ? '\n⚠ リモコンを机に置いて静止' : '') + (dbgLines.length ? '\n' + dbgLines[dbgLines.length - 1].replace(/^[\d.]+ /, '') : '');
+  for (const el of els){ el.style.display = t ? 'block' : 'none'; if (el.textContent !== t) el.textContent = t; }
+}
 function relayStep(){
+  gogStatUpdate();
   if (!relay.raw) return;
   const on = bc.state === 'locked';
   $('roomStat').textContent = on ? `部屋モード: ON ✅ ボス ${(-HOVER).toFixed(1)}m 先・足 ${bcFeetOK() ? 'OK' : '見えていない'}` : '部屋モード: 読み込み中…（ゴーグルを開始すると読み込みます）';
