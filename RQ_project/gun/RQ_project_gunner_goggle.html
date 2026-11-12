@@ -55,6 +55,9 @@
     <label><input type="checkbox" id="xrOrb" checked> 周回モード（回り込むと戦う向きが付いてくる）</label>
     <label>表示の視野角 <b id="xrFovV">60</b>°<input type="range" id="xrFov" min="35" max="100" step="1" value="60"></label>
     <label>目の間隔 <b id="xrIpdV">64</b>mm<input type="range" id="xrIpd" min="50" max="75" step="1" value="64"></label>
+    <label>片目の映像の大きさ <b id="xrEyeKV">100</b>%<input type="range" id="xrEyeK" min="40" max="100" step="1" value="100"></label>
+    <label>左右の映像の中心の間隔 <b id="xrSepV">50</b>%（画面の横幅に対して）<input type="range" id="xrSep" min="25" max="50" step=".5" value="50"></label>
+    <small style="margin-top:0">目安：ゴーグルのレンズの中心間隔（多くは約6.3cm）÷ スマホを横にした時の画面の横幅。例: 画面幅15cm → 42%。映像が近すぎる・二重に見える時は小さく。</small>
     <label>立ち位置の移動倍率 <b id="xrGainV">1.0</b>×<input type="range" id="xrGain" min="1" max="3" step=".1" value="1"></label>
     <label><input type="checkbox" id="xrSbs" checked> 2画面（ゴーグルに入れる）　※外すと手持ちの1画面で、床合わせの確認用</label>
     <button id="gogGo">🥽 開始（頭の向きで見回す）</button>
@@ -1342,8 +1345,16 @@ function render(){
   camera.fov = (head.on ? head.fov : 70) - fovp; const bx = camera.position.x;
   if (!vr){ view(0, 0, W, H); camera.aspect = W/H; camera.updateProjectionMatrix(); cover(W/H); renderer.render(scene, camera); }
   else {
-    const w = W/2; camera.aspect = w/H; camera.updateProjectionMatrix(); cover(w/H);
-    for (const e of [-1, 1]){ camera.position.x = bx + e*head.ipd; view(e < 0 ? 0 : w, 0, w, H); renderer.render(scene, camera); }
+    // ゴーグル: 片目の映像をレンズの真下に置く（大きさ・左右の間隔を調整できる。余白は黒）
+    const k = head.on ? head.eyeK : 1, sep = Math.min(head.on ? head.sepK*W : W/2, W - W/2*k), vw = W/2*k, vh = H*k;
+    if (k < 1 || sep !== W/2){ view(0, 0, W, H); renderer.setClearColor(0x000000, 1); renderer.clear(); }
+    camera.aspect = vw/vh; camera.updateProjectionMatrix(); cover(vw/vh);
+    const p0 = camera.position.clone(), rgt = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);   // 目の間隔は頭の向きの「右」方向に
+    for (const e of [-1, 1]){
+      camera.position.copy(p0).addScaledVector(rgt, e*head.ipd); camera.updateMatrixWorld();
+      view(Math.round(W/2 + e*sep/2 - vw/2), Math.round((H - vh)/2), Math.round(vw), Math.round(vh)); renderer.render(scene, camera);
+    }
+    camera.position.copy(p0); camera.updateMatrixWorld();
     camera.position.x = bx;
   }
 }
@@ -1873,6 +1884,12 @@ function keepVid(){
   if (vid.paused) vid.play().catch(() => {});
   if (camTex && vid.readyState >= 2) camTex.needsUpdate = true;
 }
+
+head.eyeK = 1; head.sepK = .5;
+$('xrEyeK').oninput = e => { head.eyeK = +e.target.value/100; $('xrEyeKV').textContent = e.target.value; try { localStorage.setItem('rq_goggle_eyeK', e.target.value); } catch (er){} };
+$('xrSep').oninput = e => { head.sepK = +e.target.value/100; $('xrSepV').textContent = e.target.value; try { localStorage.setItem('rq_goggle_sep', e.target.value); } catch (er){} };
+try { const a = localStorage.getItem('rq_goggle_eyeK'), b = localStorage.getItem('rq_goggle_sep');
+  if (a){ head.eyeK = +a/100; $('xrEyeK').value = a; $('xrEyeKV').textContent = a; } if (b){ head.sepK = +b/100; $('xrSep').value = b; $('xrSepV').textContent = b; } } catch (e){}
 
 function vplaneUpdate(){
   keepVid();
