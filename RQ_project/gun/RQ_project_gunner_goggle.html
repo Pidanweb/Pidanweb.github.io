@@ -2,7 +2,10 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>GIANT SLIME RAID : GUNNER</title>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#0a1110}
@@ -34,12 +37,12 @@
 </style>
 </head>
 <body>
-<div id="gogBar" style="position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:30;display:none;gap:8px"><button id="gogAlign" class="gb">🧭 向き合わせ</button><button id="gogPlace" class="gb">📍 ボスを置く</button><button id="gogExit" class="gb">✕ 終了</button></div>
-<div id="ui"><button id="camBtn">📷 カメラ設定</button> <button id="viewBtn">👁 一人称</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰</button> <button id="xrBtn">🥽 ゴーグル</button>
+<div id="gogBar" style="position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:30;display:none;gap:8px"><button id="gogAlign" class="gb">🧭 向き合わせ</button><button id="gogPlace" class="gb">📍 ボスを置く</button><button id="gogFs" class="gb">⛶ 全画面</button><button id="gogExit" class="gb">✕ 終了</button></div>
+<div id="ui"><button id="camBtn">📷 カメラ設定</button> <button id="viewBtn">👁 一人称</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰</button> <button id="xrBtn">🥽 ゴーグル</button> <button id="fsBtn">⛶ 全画面</button>
   <div id="xrPanel" hidden>
     <b style="color:#ffd35a">📡 PC中継（Wiiリモコン・立ち位置）</b>
     <div style="margin-top:6px">コード <input type="text" id="rlCode" inputmode="numeric" maxlength="6" placeholder="000000"> <button id="rlGo">接続</button></div>
-    <div id="xrStat">PCで RQ_gunner_hub.html を開き、表示されたコードを入力</div>
+    <div id="xrStat">PCで RQ_hub.html を開き、表示されたコードを入力</div>
     <label><input type="checkbox" id="xrPass" checked> 背景にカメラ映像（ビデオシースルー）</label>
     <div id="roomStat" style="margin-top:6px;font-size:12px;color:#9fdcea">部屋モード: キャリブレーション待ち</div>
     <label>スマホカメラの画角（映像の長い辺）<b id="xrCamFovV">66</b>°<input type="range" id="xrCamFov" min="40" max="100" step=".5" value="66"></label>
@@ -1706,6 +1709,7 @@ function headApply(sh){
 const BG0 = scene.background;
 function applyPass(){ scene.background = head.on ? new THREE.Color(0) : (camTex || BG0); }   // ゴーグル中は映像の板の外側を黒に
 async function goggleStart(){
+  vid.style.cssText = 'position:fixed;left:0;top:0;width:4px;height:4px;opacity:.01;pointer-events:none;z-index:40';
   try { if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission){   // iPhone は許可が必要
     if (await DeviceOrientationEvent.requestPermission() !== 'granted'){ xrStat('❌ 向きセンサーが許可されませんでした'); return; } } } catch (e){}
   addEventListener('deviceorientation', onOri);
@@ -1847,7 +1851,31 @@ function roomStep(dt){
 const vplane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ depthTest:false, depthWrite:false }));
 vplane.renderOrder = -100; vplane.frustumCulled = false; vplane.visible = false; camera.add(vplane);
 head.camHfov = 66;
+// ===== 全画面：Android等は Fullscreen API。iPhone は非対応なので「ホーム画面に追加」から開くと全画面になる =====
+const isIOS = /iP(hone|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1 && !document.documentElement.requestFullscreen);
+const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+function toggleFs(){
+  const el = document.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (document.fullscreenElement || document.webkitFullscreenElement){ (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+  if (req){ try { const r = req.call(el, { navigationUI:'hide' }); if (r && r.catch) r.catch(() => fsHelp()); } catch (e){ fsHelp(); } }
+  else fsHelp();
+}
+function fsHelp(){
+  if (standalone()) return;
+  alert(isIOS ? 'iPhone の Safari は全画面表示に対応していません。\n\n共有ボタン（□↑）→「ホーム画面に追加」→ ホーム画面のアイコンから開くと、タブやアドレスバーなしの全画面で起動します。\n（ホーム画面から開いた時は、中継のコードをもう一度入力してください）'
+               : 'このブラウザは全画面表示に対応していません。メニューの「ホーム画面に追加」から開くと全画面になります。');
+}
+$('fsBtn').onclick = toggleFs; $('gogFs').onclick = toggleFs;
+for (const ev of ['mousedown', 'pointerdown', 'touchstart']) $('fsBtn').addEventListener(ev, e => e.stopPropagation());
+// iPhone: 見えない（透明・極小の）動画は省電力で止められて、背景が真っ黒になることがある → 再生を保つ
+function keepVid(){
+  if (!head.on || !vid.srcObject) return;
+  if (vid.paused) vid.play().catch(() => {});
+  if (camTex && vid.readyState >= 2) camTex.needsUpdate = true;
+}
+
 function vplaneUpdate(){
+  keepVid();
   const on = head.on && $('xrPass').checked && !!camTex && vid.videoWidth > 0;
   vplane.visible = on; if (!on) return;
   if (vplane.material.map !== camTex){ vplane.material.map = camTex; vplane.material.needsUpdate = true; }
