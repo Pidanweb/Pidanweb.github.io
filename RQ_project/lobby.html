@@ -305,6 +305,7 @@ if ('hid' in navigator){
   navigator.hid.addEventListener('disconnect', e => { if (e.device === wii.dev){ wii.dev = null; chip('cWii', 'ng', '切断'); $('bWii').textContent = '🎮 Wiiリモコン接続'; } });
 } else chip('cWii', 'ng', 'WebHID非対応');
 
+if (location.hash === '#raid' && views.length > 1) stack.push('raid');
 render();
 </script>
 </body>
