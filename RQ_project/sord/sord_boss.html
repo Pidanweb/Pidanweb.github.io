@@ -1795,7 +1795,7 @@ function savedCal(){
   $('bcStat').textContent = sc.b ? '保存した結果があります' + savedAt(sc.b) : '未設定：下のボタンからキャリブレーションのページへ';
   if (sc.d) $('d2Stat').textContent = '2台目の位置合わせもあります'; }
 $('camMenu').addEventListener('toggle', () => { if ($('camMenu').open) listCams(); });
-$('calPage').onclick = () => { if (camStream) camStream.getTracks().forEach(t => t.stop()); dualClose(); location.href = RQ.url('calibrate', { return: RQ.url('raid', { start:1 }, 'sword', 'goggle') }); };
+$('calPage').onclick = () => { if (camStream) camStream.getTracks().forEach(t => t.stop()); dualClose(); location.href = RQ.url('calibrate', { return: RQ.url('raid', { start:1 }, 'sword', 'volgram') }); };
 function titleMsg(){
   setMsg([['灰牙の獣王 ヴォルグラム', '#ffd35a', 66], ['左クリック: 斬る / 長押し: ガード　右クリック: パリィ', '#fff', 30],
           ['縦斬り（細い帯）は A / D で横へ回避　横薙ぎ（扇）はパリィかガード', '#ffb35a', 26],
