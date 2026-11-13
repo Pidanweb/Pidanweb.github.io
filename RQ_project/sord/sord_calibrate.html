@@ -114,8 +114,8 @@
   <div class="btns"><button id="check">距離チェック</button><button id="save">保存する</button></div>
   </fieldset>
   <div class="note" id="saveNote">保存すると、同じ場所に置いたゲームを開いたときに自動で読み込まれます。</div>
-  <label>ゲームのファイル名<small>このページからの相対パス（大文字・小文字も区別）</small><input type="text" id="gameUrl" value="RQ_project_sord_hukan_2cam.html" spellcheck="false"></label>
-  <div class="btns"><a id="toGame" class="btnlink" href="RQ_project_sord_hukan_2cam.html">ゲームを開く</a></div>
+  <label>ゲームのファイル名<small>このページからの相対パス（大文字・小文字も区別）</small><input type="text" id="gameUrl" value="sord_boss.html" spellcheck="false"></label>
+  <div class="btns"><a id="toGame" class="btnlink" href="sord_boss.html">ゲームを開く</a></div>
   <div class="note" id="gameNote"></div>
 </aside>
 <main>
@@ -712,7 +712,9 @@ $('save').onclick = () => {
   } catch (e){ $('saveNote').textContent = '保存できませんでした: ' + e.message; }
 };
 // ゲームへ: ファイルがあるか確かめてから、カメラを閉じて移動
-const gameUrl = () => ($('gameUrl').value || '').trim() || 'RQ_project_sord_hukan_2cam.html';
+// ゲームから ?return=○○ で来たら、終わった後はそのゲームへ戻る（保存してある入力欄より優先）
+const RET = new URLSearchParams(location.search).get('return');
+const gameUrl = () => ($('gameUrl').value || '').trim() || RET || 'sord_boss.html';
 $('gameUrl').addEventListener('input', () => { $('toGame').href = gameUrl(); uiSave(); });
 $('toGame').onclick = async e => {
   e.preventDefault();
@@ -866,7 +868,7 @@ function floorLoad(){
   else for (const k of ['M', 'S']){ const h = num(k === 'M' ? 'camHM' : 'camHS', 0); if (h) flo[k].h = h/100; flo[k].hfov = num('fov0', 65); }
   for (const k of ['M', 'S']) cams[k].hfov = flo[k].hfov;
 }
-uiLoad(); $('toGame').href = gameUrl(); listCams(); floorLoad(); sessLoad(); afterUI(); requestAnimationFrame(loop);
+uiLoad(); if (RET) $('gameUrl').value = RET; $('toGame').href = gameUrl(); listCams(); floorLoad(); sessLoad(); afterUI(); requestAnimationFrame(loop);
 </script>
 </body>
 </html>

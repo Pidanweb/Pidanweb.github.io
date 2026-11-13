@@ -50,6 +50,7 @@
   #ui{z-index:8!important}
   .gogStat{position:fixed;bottom:6px;transform:translateX(-50%);z-index:30;display:none;max-width:46vw;padding:3px 8px;background:#000a;border-radius:6px;font:11px/1.35 sans-serif;color:#9fffb0;text-align:center;pointer-events:none;white-space:pre-line}
 </style>
+<script src="../common/routes.js"></script>
 </head>
 <body>
 <div class="gogStat" style="left:25%"></div><div class="gogStat" style="left:75%"></div>
@@ -58,7 +59,7 @@
   <div id="xrPanel" hidden>
     <b style="color:#ffd35a">📡 PC中継（Wiiリモコン・足の位置）</b>
     <div style="margin-top:6px">コード <input type="text" id="rlCode" inputmode="numeric" maxlength="6" placeholder="000000"> <button id="rlGo">接続</button></div>
-    <div id="xrStat">PCで RQ_hub.html（中継ページ）を開き、表示されたコードを入力</div>
+    <div id="xrStat">PCで sord_hub.html（中継ページ）を開き、表示されたコードを入力</div>
     <div id="roomStat" style="margin-top:6px;font-size:12px;color:#9fdcea">部屋モード: キャリブレーション待ち</div>
     <label><input type="checkbox" id="xrPass" checked> 背景にカメラ映像（ビデオシースルー）</label>
     <label>スマホカメラの画角（映像の長い辺）<b id="xrCamFovV">66</b>°<input type="range" id="xrCamFov" min="40" max="100" step=".5" value="66"></label>
@@ -1760,11 +1761,11 @@ $('aimBtn').onclick = $('mAim').onclick = () => setViewCtl(!viewCtl); $('menuBtn
 $('mClose').onclick = () => toggleMenu(false);
 $('mVol').oninput = e => vol = +e.target.value; $('mBgm').oninput = e => bgm.volume = +e.target.value;
 $('mRestart').onclick = () => { toggleMenu(false); startBattle(); };
-$('mTitle').onclick = () => location.href = SITE + 'parytitle.html';
+$('mTitle').onclick = () => RQ.go('lobby');
 const JOB = 'sword';   // このHTMLの職業
-for (const [k, id, url] of [['sword', 'jSword', SITE + 'pary_game.html'], ['wiz', 'jWiz', SITE + 'Connectworld_Wizard.html']]){
+for (const [k, id, url] of [['sword', 'jSword', ''], ['wiz', 'jWiz', RQ.url('raid', { start:1 }, 'wiz')]]){
   const b = $(id); if (k === JOB){ b.textContent = '✔ ' + b.textContent; b.style.borderColor = '#ffd35a'; b.onclick = () => toggleMenu(false); }
-  else b.onclick = () => location.href = url + '?start=1';   // 別HTMLへ移動して自動スタート
+  else b.onclick = () => location.href = url;   // 別HTMLへ移動して自動スタート（url は routes.js が ?start=1 付きで作る）
 }
 $('jobBtn').onclick = () => $('jobs').classList.toggle('on');
 
@@ -1794,7 +1795,7 @@ function savedCal(){
   $('bcStat').textContent = sc.b ? '保存した結果があります' + savedAt(sc.b) : '未設定：下のボタンからキャリブレーションのページへ';
   if (sc.d) $('d2Stat').textContent = '2台目の位置合わせもあります'; }
 $('camMenu').addEventListener('toggle', () => { if ($('camMenu').open) listCams(); });
-$('calPage').onclick = () => { if (camStream) camStream.getTracks().forEach(t => t.stop()); dualClose(); location.href = 'calibrate_2cam.html'; };
+$('calPage').onclick = () => { if (camStream) camStream.getTracks().forEach(t => t.stop()); dualClose(); location.href = RQ.url('calibrate', { return: RQ.url('raid', { start:1 }, 'sword', 'goggle') }); };
 function titleMsg(){
   setMsg([['灰牙の獣王 ヴォルグラム', '#ffd35a', 66], ['左クリック: 斬る / 長押し: ガード　右クリック: パリィ', '#fff', 30],
           ['縦斬り（細い帯）は A / D で横へ回避　横薙ぎ（扇）はパリィかガード', '#ffb35a', 26],

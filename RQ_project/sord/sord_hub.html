@@ -46,7 +46,7 @@
   <section>
     <h2>③ 足の位置（剣版のキャリブレーション結果を使用）</h2>
     <div class="st" id="calSt">キャリブレーションを確認中…</div>
-    <div style="margin-top:8px"><button id="startBtn">▶ カメラと認識を開始</button> <button id="reloadCal">🔄 キャリブレーションを読み直す</button> <a href="calibrate_2cam.html" target="_blank">📐 キャリブレーションのページを開く</a></div>
+    <div style="margin-top:8px"><button id="startBtn">▶ カメラと認識を開始</button> <button id="reloadCal">🔄 キャリブレーションを読み直す</button> <a href="sord_calibrate.html" target="_blank">📐 キャリブレーションのページを開く</a></div>
     <div class="row" style="margin-top:8px">
       <div class="cam"><b>メインカメラ</b> <span class="st" id="mSt"></span><canvas id="mCv" width="480" height="270"></canvas></div>
       <div class="cam"><b>2台目</b> <span class="st" id="sSt"></span><canvas id="sCv" width="480" height="270"></canvas></div>
@@ -59,7 +59,7 @@
       <label>立ち位置からの距離 <input type="number" id="bossDist" min="1" max="15" step=".1" style="width:5em">m</label> <button id="bossDistGo">この距離にする</button>
       <button id="bossReset">キャリブレーションの位置に戻す</button>
     </div>
-    <small>先に calibrate_2cam.html で測定を済ませてください（このページを同じフォルダに置くと、保存された結果をそのまま読みます）。<br>
+    <small>先に sord_calibrate.html で測定を済ませてください（このページを同じフォルダに置くと、保存された結果をそのまま読みます）。<br>
     キャリブレーションのページはカメラを使うので、このページで開始する前に閉じてください。</small>
   </section>
 </main>
@@ -149,7 +149,7 @@ function loadCal(){
   let d = null, d2 = null;
   try { d = JSON.parse(localStorage.getItem(BC_KEY) || 'null'); d2 = JSON.parse(localStorage.getItem(DUAL_KEY) || 'null'); camsSaved = JSON.parse(localStorage.getItem(CAMS_KEY) || 'null'); } catch (e){}
   calData = d;
-  if (!d || !d.res || !d.originUV || !d.vw){ st('calSt', '❌ キャリブレーションが見つかりません。calibrate_2cam.html で測定してください（このページと同じフォルダ・同じサイトで）', 'ng'); sendCal(); return false; }
+  if (!d || !d.res || !d.originUV || !d.vw){ st('calSt', '❌ キャリブレーションが見つかりません。sord_calibrate.html で測定してください（このページと同じフォルダ・同じサイトで）', 'ng'); sendCal(); return false; }
   const t = d.tune || { floor:0, th:0, ph:0 }, r = d.res;
   bc.hfov = d.hfov || 65; bc.vw = d.vw; bc.vh = d.vh; bc.height = d.height || 1.7;
   bc.FfromCam.copy(camMat(r.th + t.th*Math.PI/180, r.ph + t.ph*Math.PI/180, Math.max(.2, r.h - t.floor))).invert();

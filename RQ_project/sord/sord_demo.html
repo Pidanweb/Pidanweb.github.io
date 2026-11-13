@@ -31,6 +31,7 @@
   #hCur.on{display:block} #hCur.down{background:#ffd35acc;border-color:#fff}
   #menu .hHover{outline:2px solid #ffd35a;outline-offset:2px;box-shadow:0 0 12px #ffd35a88}
 </style>
+<script src="../common/routes.js"></script>
 </head>
 <body>
 <div id="ui"><button id="camBtn">📷 カメラ設定</button> <button id="viewBtn">👁 一人称</button> <button id="aimBtn">🎯 視点操作 ON</button> <button id="ctrlBtn">🎮 Wii接続</button> <button id="menuBtn">☰</button>
@@ -886,8 +887,8 @@ $('mVol').oninput = e => vol = +e.target.value; $('mBgm').oninput = e => bgm.vol
 $('mRestart').onclick = () => { toggleMenu(false); prGo(PR.i); };
 $('mFirst').onclick = () => { toggleMenu(false); prGo(0); };
 $('mFree').onclick = () => { toggleMenu(false); prFree(); };
-$('mMain').onclick = () => location.href = 'Connectworld_sord.html?start=1';   // 本番（ファイル名が違う場合はここを変更）
-$('mTitle').onclick = () => location.href = 'parytitle.html';
+$('mMain').onclick = () => location.href = RQ.url('lobby') + '#raid';   // 本番：ロビーの「レイドに出撃」を開いた状態へ
+$('mTitle').onclick = () => RQ.go('lobby');
 
 // ===== ゲーム状態 =====
 const keys = {}, mouse = { nx:0, ny:0 }, ray = new THREE.Raycaster(), tmp = new THREE.Vector3();
