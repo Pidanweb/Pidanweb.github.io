@@ -28,10 +28,12 @@
 
   // ---------------- ジョブごとの行き先 ----------------
   // ok:false にするとロビーで「準備中」表示になります
+  // bgm を書くと、そのジョブのロビーで曲が流れます
   // raid は視点ごと。1つしかないジョブは1つだけ書けばOK
   const JOBS = {
     sword: {
       jp:'剣士', en:'SWORDSMAN', ok:true,
+      bgm: 'sord/sounds/battle.mp3',            // ロビーで流す曲（なしなら消す）
       practice: 'sord/sord_demo.html',
       raid: {
         first:  { jp:'ジャイアントスライム', note:'一人称・スマホの画面で遊ぶ',        url:'sord/sord_slime.html' },

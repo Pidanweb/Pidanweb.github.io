@@ -133,6 +133,7 @@ body{overflow:hidden}
     <div class="chip" id="cWii"><span class="dot"></span>CONTROLLER <small id="cWiiT">未接続</small></div>
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn" id="bBgm" hidden>♪ BGM オン</button>
     <button class="btn" id="bWii">🎮 Wiiリモコン接続</button>
     <button class="btn" id="bTitle">タイトルへ</button>
   </div>
@@ -205,7 +206,7 @@ if (calDone){ $('meCal').classList.add('ok'); $('meCalT').textContent = 'カメ�
 // 項目: { t:見出し, d:説明, r:右の小さい文字, off:選べない理由, run:決定したとき }
 function goTo(href){
   if (!href) return toast('このページはまだありません');
-  tone(1200, .12, 'sine', .08); wiiRumble(150);
+  tone(1200, .12, 'sine', .08); wiiRumble(150); bgmFade();
   $('fade').classList.add('on'); setTimeout(() => location.href = href, still ? 0 : 550);
 }
 const views = Object.entries(J.raid);
@@ -272,7 +273,34 @@ addEventListener('keydown', e => {
 });
 $('bTitle').onclick = () => goTo(RQ.url('title'));
 // ブラウザの「戻る」で白いまま残らないように
-addEventListener('pageshow', () => $('fade').classList.remove('on'));
+addEventListener('pageshow', e => { $('fade').classList.remove('on'); if (e.persisted) bgmStart(); });
+
+// ===== BGM（ジョブごと。routes.js の bgm に書いた曲）=====
+// ブラウザは「ページを開いただけ」では音を鳴らせないことがあるので、
+// 自動再生がだめなときは最初のクリック・タップ・キー入力で流し始める
+const BGM_VOL = .45;
+const bgm = J.bgm ? new Audio(RQ.abs(J.bgm)) : null;
+let bgmOn = RQ.ls.get('rq_lobby_bgm') !== 'off';
+function bgmLabel(){ $('bBgm').textContent = bgmOn ? '♪ BGM オン' : '♪ BGM オフ'; }
+function bgmStart(){
+  if (!bgm || !bgmOn || !bgm.paused) return;
+  bgm.volume = BGM_VOL; bgm.play().catch(() => {});
+}
+function bgmFade(){
+  if (!bgm || bgm.paused) return;
+  const t0 = performance.now(), v0 = bgm.volume;
+  (function f(now){ const k = Math.min(1, (now - t0)/500); bgm.volume = v0*(1 - k); if (k < 1) requestAnimationFrame(f); else bgm.pause(); })(t0);
+}
+if (bgm){
+  bgm.loop = true; bgm.preload = 'auto';
+  $('bBgm').hidden = false; bgmLabel();
+  $('bBgm').onclick = e => {
+    e.stopPropagation(); bgmOn = !bgmOn; RQ.ls.set('rq_lobby_bgm', bgmOn ? 'on' : 'off'); bgmLabel();
+    if (bgmOn){ bgm.currentTime = 0; bgmStart(); } else bgm.pause();
+  };
+  bgmStart();   // 自動再生できればここで流れる
+  for (const ev of ['pointerdown', 'keydown', 'touchstart']) addEventListener(ev, bgmStart, { capture:true });
+}
 
 // ===== Wiiリモコン（WebHID）RQ_index と同じ方式 =====
 const WVID = 0x057e, WPIDS = [0x0306, 0x0330];
