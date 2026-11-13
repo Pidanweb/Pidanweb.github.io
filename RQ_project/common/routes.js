@@ -8,7 +8,7 @@
 //    <script src="common/routes.js"></script>      ← RQ_project 直下から
 //    location.href = RQ.url('lobby');               // ロビーへ
 //    RQ.go('lobby');                                // ↑と同じ
-//    RQ.go('raid', { start: 1 }, 'sword', 'goggle');// 剣士・ゴーグルのレイドを自動スタート
+//    RQ.go('raid', { start: 1 }, 'sword', 'volgram');// 剣士・ヴォルグラム戦を自動スタート
 // =====================================================================
 (function(){
   // このファイル自身の場所から RQ_project のフォルダを割り出す
@@ -22,36 +22,52 @@
     lobby:     'lobby.html',
     hp:        'RQ_HP_site/RQ_HP.html',
     // 準備（PC側で開くもの・カメラ）
-    hub:       'sord/RQ_hub.html',              // 剣・ガンナー共通の中継
-    calibrate: 'sord/calibrate_2cam.html',      // setup/ に移したらここを 'setup/calibrate_2cam.html' に
+    hub:       'sord/sord_hub.html',            // 剣・ガンナー共通の中継
+    calibrate: 'sord/sord_calibrate.html',      // setup/ に移したらここを変える
   };
 
   // ---------------- ジョブごとの行き先 ----------------
   // ok:false にするとロビーで「準備中」表示になります
-  // raid は視点ごと。1つしかないジョブは1つだけ書けばOK
+  // bgm を書くと、そのジョブのロビーで曲が流れます
+  // quests はクエスト選択画面に並ぶ順。1件書き足すだけで画面に増えます
+  //   rank: 難しさ（★の数 1〜5）  needsCal: カメラ調整が要るクエスト
+  //   locked:true にすると「準備中」の枠として表示（url はなくてよい）
+  const SLIME = {
+    boss:'ジャイアントスライム', bossEn:'GIANT SLIME', hp:800, rank:1,
+    desc:'攻撃は突進だけ。体が赤く光ったらはじき、紫に光ったらガードで受け止める。',
+  };
   const JOBS = {
     sword: {
       jp:'剣士', en:'SWORDSMAN', ok:true,
+      bgm: 'sord/sounds/battle.mp3',            // ロビーで流す曲（なしなら消す）
       practice: 'sord/sord_demo.html',
-      raid: {
-        first:  { jp:'一人称',       note:'スマホの画面で遊ぶ',          url:'sord/RQ_project_sord_ichinin.html' },
-        goggle: { jp:'ゴーグル（俯瞰）', note:'ゴーグルとカメラ2台で遊ぶ',     url:'sord/RQ_project_sord_boss_goggle.html', needsCal:true },
-      },
+      quests: [
+        { id:'slime', jp:'巨大スライム討伐', ...SLIME,
+          view:'一人称', device:'スマホ ＋ Wiiリモコン', url:'sord/sord_slime.html' },
+        { id:'volgram', jp:'灰牙の獣王 討伐', boss:'灰牙の獣王 ヴォルグラム', bossEn:'VOLGRAM', hp:1000, rank:3,
+          view:'俯瞰', device:'ゴーグル ＋ カメラ2台', needsCal:true,
+          desc:'縦斬りは横へ回避、横薙ぎははじくかガード。黄色く光る攻撃ははじけない。',
+          url:'sord/sord_boss.html' },
+        { id:'next', locked:true },
+      ],
     },
     wiz: {
       jp:'魔法使い', en:'WIZARD', ok:false,
       practice: null,
-      raid: {
-        first:  { jp:'一人称', note:'スマホの画面で遊ぶ', url:'wiz/RQ_project_wizard.html' },
-      },
+      quests: [
+        { id:'slime', jp:'巨大スライム討伐', ...SLIME,
+          view:'一人称', device:'スマホ ＋ Wiiリモコン', url:'wiz/RQ_project_wizard.html' },
+      ],
     },
     gun: {
       jp:'ガンナー', en:'GUNNER', ok:false,
       practice: null,
-      raid: {
-        first:  { jp:'一人称',       note:'スマホの画面で遊ぶ',  url:'gun/RQ_project_gunner.html' },
-        goggle: { jp:'ゴーグル',     note:'ゴーグルで遊ぶ',      url:'gun/RQ_project_gunner_goggle.html' },
-      },
+      quests: [
+        { id:'slime', jp:'巨大スライム討伐', ...SLIME,
+          view:'一人称', device:'スマホ ＋ Wiiリモコン', url:'gun/RQ_project_gunner.html' },
+        { id:'slime-goggle', jp:'巨大スライム討伐（ゴーグル）', ...SLIME,
+          view:'ゴーグル', device:'ゴーグル ＋ Wiiリモコン', url:'gun/RQ_project_gunner_goggle.html' },
+      ],
     },
   };
 
@@ -76,7 +92,8 @@
     if (!p){
       const j = JOBS[jobId || job()];
       if (name === 'practice') p = j && j.practice;
-      if (name === 'raid' && j){ const v = j.raid[view] || Object.values(j.raid)[0]; p = v && v.url; }
+      if (name === 'raid' && j){   // view にはクエストの id を渡す（省略すると最初のクエスト）
+        const qs = j.quests.filter(q => q.url), q = qs.find(q => q.id === view) || qs[0]; p = q && q.url; }
     }
     if (!p) return null;
     const u = new URL(abs(p));
