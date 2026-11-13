@@ -24,17 +24,20 @@
   #menu.on{display:flex} #menu{overflow-y:auto;gap:8px} #menu>:first-child{margin-top:auto} #menu>:last-child{margin-bottom:auto} #jobs{display:none;flex-direction:column;gap:6px} #jobs.on{display:flex} #menu button:disabled{opacity:.45;cursor:not-allowed} #menu button{background:#0d2a30;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:8px;padding:10px;font:inherit;cursor:pointer}
   #wiiDbg{position:fixed;left:10px;top:10px;z-index:6;margin:0;padding:6px 8px;max-width:46vw;font:11px/1.35 monospace;color:#9fffb0;background:#000a;border:1px solid #7ae7ff44;border-radius:6px;pointer-events:none;white-space:pre-wrap}
   #skMenu{border:1px solid #7ae7ff44;border-radius:8px;padding:6px 8px;font-size:13px;text-align:left} #skMenu summary{cursor:pointer;color:#ffd35a;font-weight:bold} #skMenu label{display:block;margin-top:6px} #skMenu input[type=range]{width:100%} #skMenu small{color:#9fdcea}
+  #ui #wiiStat:empty{display:none}
+  #wiiStat{display:inline-block;margin-top:6px;padding:4px 10px;border-radius:6px;background:#000a;transition:opacity .4s}
+  #mLog.on{color:#5fe07a;border-color:#5fe07a88}
   #hCur{position:fixed;left:0;top:0;z-index:20;width:22px;height:22px;margin:-11px 0 0 -11px;border:3px solid #ffd35a;border-radius:50%;background:#ffd35a33;box-shadow:0 0 10px #ffd35a;pointer-events:none;display:none}
   #palmRing{position:fixed;left:50%;top:50%;z-index:19;width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:50%;display:none;place-items:center;font-size:40px;pointer-events:none;
     background:radial-gradient(#061418dd 58%,transparent 60%),conic-gradient(#ffd35a var(--p,0deg),#7ae7ff33 0);box-shadow:0 0 16px #ffd35a66}
   #palmRing.on{display:grid}
   #hCur.on{display:block} #hCur.down{background:#ffd35acc;border-color:#fff}
-  #menu .hHover{outline:2px solid #ffd35a;outline-offset:2px;box-shadow:0 0 12px #ffd35a88}
+  #menu .hHover{outline:2px solid #ffd35a;outline-offset:2px;box-shadow:0 0 12px #ffd35a88;border-radius:6px}
 </style>
 <script src="../common/routes.js"></script>
 </head>
 <body>
-<div id="ui"><button id="camBtn">📷 カメラ設定</button> <button id="viewBtn">👁 一人称</button> <button id="aimBtn">🎯 視点操作 ON</button> <button id="ctrlBtn">🎮 Wii接続</button> <button id="menuBtn">☰</button>
+<div id="ui"><button id="camBtn" hidden>📷 カメラ設定</button><button id="viewBtn" hidden>👁 一人称</button><button id="aimBtn" hidden>🎯 視点操作 ON</button><button id="ctrlBtn">🎮 Wii接続</button> <button id="menuBtn">☰</button>
   <div id="camPanel" hidden>
     <label>⚙ 負荷モード <select id="qMode"><option value="high">高画質（重い）</option><option value="std">標準</option><option value="light" selected>軽量（ノートPC推奨）</option></select></label>
     <small>軽量: 描画解像度を下げ、顔認識20回/秒・手認識5回/秒に間引き、背景カメラを640×360で取得</small>
@@ -57,10 +60,10 @@
     <div id="bgStat" style="font-size:12px;color:#ffd35a"></div>
     <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
     <b style="color:#ffd35a">👤 顔認識</b>
-    <label><input type="checkbox" id="faceOn" checked> 顔の動きで視点・照準を操作</label>
+    <label><input type="checkbox" id="faceOn"> 顔の動きで視点・照準を操作</label>
     <label>カメラの種類 <select id="faceType"><option value="auto">自動判定</option><option value="front">フロント（鏡像）</option><option value="back">バック（非鏡像）</option></select></label>
     <label>感度 <input type="range" id="faceGain" min="0.5" max="3" step="0.1" value="1.5"></label>
-    <label><input type="checkbox" id="facePrevOn" checked> 認識プレビューを表示</label>
+    <label><input type="checkbox" id="facePrevOn"> 認識プレビューを表示</label>
     <div><button id="faceStart">顔認識を開始/再起動</button> <button id="faceCal">中心リセット (C)</button></div>
     <div id="faceStat" style="font-size:12px;color:#ffd35a"></div>
     <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
@@ -72,9 +75,9 @@
     <label><input type="checkbox" id="poseMove" checked> 体の左右移動で回避</label>
     <small>俯瞰モードでは「バック」のカメラ1台（既定はバックカメラ）だけで全身を認識します。顔用カメラは止めます。全身が映る位置に置いてください。</small>
   </div>
-  <div id="faceBadge"></div><div id="perfStat" style="margin-top:4px;font:12px monospace;color:#9fffb0;text-shadow:0 0 4px #000"></div><div id="wiiStat" style="margin-top:4px;font-size:12px;color:#ffd35a;text-shadow:0 0 4px #000"></div></div>
+  <div id="faceBadge" hidden></div><div id="perfStat" hidden></div><div><span id="wiiStat" style="font-size:12px;color:#ffd35a"></span></div></div>
 <div id="menu"><h3 style="margin:0">MENU</h3>
-  <button id="mClose">▶ 再開</button><button id="mView">👁 視点: 一人称</button><button id="mAim">🎯 視点操作: ON</button><button id="mFace">⇄ カメラ入れ替え</button><button id="mCtrl">🎮 Wiiリモコン接続</button>
+  <button id="mClose">▶ 再開</button><button id="mView" hidden>👁 視点: 一人称</button><button id="mAim" hidden>🎯 視点操作: ON</button><button id="mFace" hidden>⇄ カメラ入れ替え</button><button id="mCtrl">🎮 Wiiリモコン接続</button><button id="mLog">📋 リモコンログ: 表示しない</button>
     <label>効果音 <input type="range" id="mVol" min="0" max="1" step=".1" value=".8"></label><label>BGM <input type="range" id="mBgm" min="0" max="1" step=".05" value=".5"></label><label>Wii振り感度 <input type="range" id="mWiiTh" min="1.2" max="4" step=".1" value="2.2"><br><small style="color:#9fdcea">左ほど敏感</small></label>
   <details id="skMenu"><summary>⚔ ソードスキル（縦→横）</summary>
     <label><input type="checkbox" id="skOn" checked> 有効</label>
@@ -92,7 +95,7 @@
     <label>突きの最大速度 <b id="skTPV">800</b>°/s<input type="range" id="skTP" min="300" max="1500" step="50" value="800"></label>
     <small style="display:block;margin-top:6px;color:#ffd35a">▼ 反応しない時: その動きを1回だけ行い、直後に押す（キー1〜4）。直近の斬りを基準にしきい値を自動設定</small>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px"><button id="skL1">①縦重撃を登録</button><button id="skL2">②突きを登録</button><button id="skL3">③横重撃を登録</button><button id="skL4">④一回転を登録</button></div>
-    <label><input type="checkbox" id="skDbg" checked> 判定ログを表示</label>
+    <label><input type="checkbox" id="skDbg"> 判定ログを表示（メニューの「📋 リモコンログ」と同じ）</label>
     <b style="display:block;margin-top:8px;color:#ffd35a">🗡🗡 二刀流（ヌンチャク）</b>
     <label><input type="checkbox" id="skDual" checked> 二刀流を使う（ヌンチャクを振る=左の剣）</label>
     <label>ヌンチャク振り感度 <b id="skNtV">1.8</b>g<input type="range" id="skNt" min="1.2" max="3" step="0.1" value="1.8"><small>判定ログの「左 a=」の最大値を参考に。小さいほど敏感</small></label>
@@ -100,11 +103,21 @@
     <label><input type="checkbox" id="skPass" checked> ヌンチャク併用モード（MotionPlusパススルー）</label><small>ジャイロが不安定になる時はOFF（ヌンチャクは使えなくなる）</small>
     <label><input type="checkbox" id="skLR"> 横斬りの左右を反転<small>→に振ったのに「←」と判定される時はON</small></label>
     <small style="display:block;margin-top:6px">バーチカル:縦→横 / ヴォーパル:突き / ソニックリープ:縦重 / ロータス:横重 / スクエア:縦横縦横 / メテオ:一回転</small>
+    <details id="hidMenu" style="margin-top:8px"><summary>🔒 隠しコマンド（フリー練習のみ）</summary>
+      <label><input type="checkbox" id="skHid" checked> 隠しコマンド有効</label>
+      <label>エクスカリバー: 静止 <b id="skExV">1.0</b>秒<input type="range" id="skEx" min="0.4" max="3" step="0.1" value="1.0"><small>切っ先を上に向けて頭上で静止 → 振り下ろす</small></label>
+      <label>ストラッシュ: 溜め開始 <b id="skChV">0.8</b>秒<input type="range" id="skCh" min="0.3" max="2.5" step="0.1" value="0.8"><small>構えて静止した時間で Lv1〜3（0.8秒ごとに上昇）→ 右から左へ横重撃</small></label>
+      <label>斬鉄剣: 揺れの強さ <b id="skZaV">1.3</b>g<input type="range" id="skZa" min="0.6" max="3" step="0.1" value="1.3"></label>
+      <label>斬鉄剣: 上下の回数 <b id="skZnV">4</b><input type="range" id="skZn" min="2" max="8" step="1" value="4"><small>切っ先を下に向けて素早く上下（1往復=2回）</small></label>
+      <label><input type="checkbox" id="skTip" checked> 切っ先の上下を反転</label><small>判定ログの「姿勢」が上下逆に出る時</small>
+      <button id="skL5" style="width:100%;margin-top:4px">⑤ストラッシュ(右→左)を登録</button>
+      <small style="display:block;margin-top:4px">マザーズ・ロザリオ: ヴォーパルストライク11回成功 → READY → 突く</small>
+    </details>
     <button id="skCal" style="margin-top:6px;width:100%">ジャイロ再キャリブ（−ボタンでも可）</button>
   </details>
   <button id="mFree">🎯 フリー練習（自由に試す）</button><button id="mRestart">↻ この練習をやり直す</button><button id="mFirst">⏮ 最初の練習から</button><button id="mMain">⚔ 本番へ</button><button id="mTitle">⌂ タイトルへ</button>
   <small style="color:#9fdcea">🖱 Wiiなしで試す: スペース=Ⓐ / P=＋ / 画面をドラッグ=斬る（クリック=突き・円を描く=回転）/ N=疑似ヌンチャク L=左の剣 K=両手同時</small>
-  <small style="color:#9fdcea">✌ ピースを約1秒キープで開く / 指先でカーソル → Aで決定（スライダーはAを押したまま左右）/ M キーで開閉</small></div>
+  <small style="color:#9fdcea">🎮 HOME で開閉 / 十字キー↑↓で選ぶ → Ⓐで決定 / スライダーは←→ / M キーでも開閉</small></div>
 <div id="hCur"></div><div id="palmRing">✌</div>
 <pre id="wiiDbg"></pre>
 <canvas id="facePrev" width="320" height="240"></canvas>
@@ -292,7 +305,7 @@ function setView(v){
   if (tp) enterTP(); else leaveTP();
 }
 // ===== 視点操作（顔 / 俯瞰では頭の向き）で画面を動かすかどうか =====
-let viewCtl = true;
+let viewCtl = false;   // 視点操作はいったんなし（画面は正面固定）
 function setViewCtl(v){
   viewCtl = v; const t = v ? 'ON' : 'OFF';
   $('aimBtn').textContent = '🎯 視点操作 ' + t; $('mAim').textContent = '🎯 視点操作: ' + t;
@@ -473,7 +486,7 @@ function cover(a){
 // ===== 顔トラッキング（MediaPipe Face Landmarker）=====
 // 鼻先の位置を「構えた中心」からの差分にして、マウス座標(-1〜1)の代わりに使う
 const fv = $('fv');
-const face = { on:true, lm:null, loading:false, stream:null, src:null, seen:false, x:0, y:0, cx:null, cy:null, sx:0, sy:0,
+const face = { on:false, lm:null, loading:false, stream:null, src:null, seen:false, x:0, y:0, cx:null, cy:null, sx:0, sy:0,
                sumx:0, sumy:0, cn:0, lastT:-1, gain:1.5, badge:'' };
 const FACE_GX = 6, FACE_GY = 9, FACE_CAL = 20, FACE_DEAD = .012;
 const faceActive = () => face.on && !!face.lm && !!face.src && face.cx !== null;
@@ -546,7 +559,7 @@ function faceUpdate(dt){
 const prevC = $('facePrev'), pctx = prevC.getContext('2d');
 let prevLast = 0;
 function faceDraw(){
-  const show = prevOn && (tp || face.on) && !vr && state !== undefined;
+  const show = false;   // 認識プレビューは使わない（顔認識なし・一人称固定）
   prevC.style.display = show ? 'block' : 'none'; if (!show) return;
   const now = performance.now(); if (now - prevLast < Q.prevMs) return; prevLast = now;
   if (tp){ poseDraw(); return; }
@@ -583,7 +596,7 @@ $('faceGain').oninput = e => face.gain = +e.target.value;
 faceSel.onchange = () => { listCams(); if (face.on && !tp) openFaceCam(); };
 $('faceCal').onclick = () => { faceRecenter(); poseRecenter(); };
 $('faceStart').onclick = () => { if (!face.on){ $('faceOn').checked = face.on = true; } startFace(); };
-let prevOn = true; $('facePrevOn').onchange = e => prevOn = e.target.checked;
+let prevOn = false; $('facePrevOn').onchange = e => prevOn = e.target.checked;
 
 // ===== ピース(✌)を約0.8秒キープするとメニューを開く =====
 const hand = { lm:null, loading:false, trail:[], last:-1, cool:0, pt0:null, px:0, py:0, prog:0, lastOk:-1e9, needRelease:false, palm:null };
@@ -815,7 +828,27 @@ function poseApply(dt){
 }
 restoreVRM();   // 起動時に前回のVRMを復元
 
-function toggleMenu(f){ menuOn = f === undefined ? !menuOn : f; $('menu').classList.toggle('on', menuOn); }
+function toggleMenu(f){ menuOn = f === undefined ? !menuOn : f; $('menu').classList.toggle('on', menuOn); mnSet(menuOn && wii.dev ? mnItems()[0] : null); }
+// ===== メニューを Wiiリモコンで操作: 十字キー↑↓ で選ぶ / Ⓐ で決定 / ←→ でスライダー =====
+const mn = { el:null, hl:null };
+function mnItems(){ return [...$('menu').querySelectorAll('button, summary, input')].filter(el => !el.disabled && el.type !== 'file' && el.offsetParent !== null); }
+function mnSet(el){
+  if (mn.hl) mn.hl.classList.remove('hHover');
+  mn.el = el; mn.hl = el ? (el.tagName === 'INPUT' && el.closest('label')) || el : null;
+  if (mn.hl){ mn.hl.classList.add('hHover'); mn.hl.scrollIntoView({ block:'nearest' }); }
+}
+function mnMove(d){ const L = mnItems(); if (!L.length) return; const i = L.indexOf(mn.el); mnSet(L[i < 0 ? 0 : (i + d + L.length) % L.length]); }
+function mnSlide(d){
+  const el = mn.el; if (!el || el.type !== 'range') return;
+  const st = +el.step || 1, v = Math.max(+el.min, Math.min(+el.max, Math.round((+el.value + d*st)/st)*st));
+  el.value = v; el.dispatchEvent(new Event('input', { bubbles:true }));
+}
+function mnPress(){
+  const el = mn.el; if (!menuOn || !el) { if (menuOn) mnMove(0); return; }
+  if (el.type === 'range') return;   // スライダーは ←→
+  el.click();
+  if (menuOn && el.offsetParent === null) mnSet(mnItems()[0] || null);
+}
 
 // ===== 指先カーソル（メニュー表示中のみ）: 人差し指の先で指して、Wiiリモコンの A で決定 =====
 // HC.X0/Y0 = カメラ映像の端からこの割合は使わない（指を画面端まで伸ばさなくても届くように）
@@ -903,7 +936,7 @@ function reset(){
 }
 
 function hurtBoss(d, at, big){   // 練習用：サンドバッグは倒れない（数字だけ出す）
-  if (!sb.active) sbHit();
+  if (!sb.active && !mr.active) sbHit();
   B.flash = .12; B.wob = .25;
   burst(at, big ? 0xffd35a : 0xffffff, big ? 40 : 22, 6);
   popup(String(Math.round(d)), big ? '#ffd35a' : '#ffffff', tmp.copy(at).add(new THREE.Vector3(0, .6, 0)).clone(), big ? 1.1 : .8);
@@ -911,7 +944,7 @@ function hurtBoss(d, at, big){   // 練習用：サンドバッグは倒れな�
 }
 const SW_T = .32;   // 斬りモーションの長さ（旧.22。長く・大きくして見やすく）
 function attack(){
-  if (P.swingCd > 0 || P.par > 0 || P.armed || P.guard || sb.active) return;
+  if (P.swingCd > 0 || P.par > 0 || P.armed || P.guard || sb.active || mr.active) return;
   if (sb.ready){ startStarburst(); return; }
   playAtk();
   P.swingCd = .4; P.swing = SW_T; P.dir *= -1;
@@ -922,7 +955,7 @@ function attack(){
 // 二刀流: ヌンチャクを振ると左手の剣で斬る（右手とは別のクールダウン）
 const PL = { swing:0, cd:0, dir:1 };
 function attackL(){
-  if (PL.cd > 0 || P.par > 0 || P.armed || P.guard || sb.active || anim) return;
+  if (PL.cd > 0 || P.par > 0 || P.armed || P.guard || sb.active || mr.active || anim) return;
   if (sb.ready){ startStarburst(); return; }
   playAtk(); PL.cd = .3; PL.swing = SW_T; PL.dir *= -1;
   prCount('left');
@@ -1073,6 +1106,14 @@ function skPose(seg, k){
     case 'thrustOut': return { tx:.2, ty:-.7, tz:-.8 - 3.0*e, rx:-1.5, rz:0, ry:0 };                                  // 突き出す
     case 'thrustBack':return { tx:.2, ty:-.7, tz:-3.8 + 1.9*e, rx:-1.5 + .55*e, rz:0, ry:0 };                         // 戻す
     case 'spin':      return { tx:0, ty:-.9, tz:-1.6, rx:0, rz:1.57, ry:Math.PI*2*(seg.k0 + (seg.k1 - seg.k0)*k) };    // 一回転
+    case 'rosThrust': { const o = Math.sin(Math.PI*k); return { tx:.2 + seg.x*.35, ty:-.7 + seg.y*.3, tz:-.8 - 3.0*o, rx:-1.5, rz:0, ry:0 }; }   // 突いて戻す
+    case 'exRaise':   return { tx:.9 - .9*e, ty:-1.1 + 1.7*e, tz:-1.9 - .3*e, rx:-.95 + 1.3*e, rz:.3 - .3*e, ry:0 };         // 聖剣を頭上へ
+    case 'exDown':    return { tx:0, ty:.6 - 1.8*e, tz:-2.2 + .3*e, rx:.35 - 2.5*e, rz:0, ry:0 };                         // 振り下ろす
+    case 'exEnd':     return { tx:0, ty:-1.2, tz:-1.9, rx:-2.15, rz:0, ry:0 };
+    case 'zanLow':    return { tx:.9 - .2*e, ty:-1.1 - .3*e, tz:-1.8, rx:-.95 - 1.5*e, rz:.3 - .1*e, ry:0 };           // 下段に構える
+    case 'zanCut':    return { tx:.7 - 1.9*e, ty:-1.4 + 1.7*e, tz:-1.8, rx:-2.45 + 2.0*e, rz:.2 + 1.4*e, ry:0 };         // 右下→左上へ一閃
+    case 'zanHold':   return { tx:-1.2, ty:.3, tz:-1.8, rx:-.45, rz:1.6, ry:0 };                                        // 残心
+    case 'strWind':   return { tx:.9 + .8*e, ty:-1.0, tz:-1.9 + .2*e, rx:-1.1, rz:.3 - 2.2*e, ry:0 };                    // 右へ引いて溜める
     case 'crossWind': return { tx:.9 + .2*e, ty:-1.1 + 1.3*e, tz:-1.9, rx:-.95 + 1.0*e, rz:.3 - .6*e, ry:0 };            // 両手を振りかぶる
     case 'cross':     return { tx:1.1 - 2.0*e, ty:.2 - 1.3*e, tz:-1.9, rx:.05 - 1.5*e, rz:-.3 + 1.6*e, ry:0 };           // 交差して斬る
     case 'flurry':    return { tx:seg.x0 + (seg.x1 - seg.x0)*e, ty:-1.0 + seg.dy, tz:-1.9, rx:-1.0 + seg.rv, rz:seg.a0 + (seg.a1 - seg.a0)*e, ry:0 };
@@ -1080,7 +1121,7 @@ function skPose(seg, k){
   return P0;
 }
 function updSword(dt){
-  steel.emissive.setHex(sb.ready ? 0xffd35a : P.counter > 0 ? 0xff9a20 : 0x2a6f88);
+  if (sb.ready || mr.ready || P.counter > 0) steel.emissive.setHex(sb.ready ? 0xffd35a : mr.ready ? 0xb890ff : 0xff9a20); else steel.emissive.copy(hidGlow());
   let tx = .9 + mouse.nx*.3, ty = -1.1 + mouse.ny*.2, tz = -1.9, rx = -.95, rz = .3, ry = 0, rate = 14, sc = 1;
   const an = stepAnim(dt);
   if (an){
@@ -1091,7 +1132,9 @@ function updSword(dt){
     rz = P.dir*(2.1 - 4.2*a); rx = -1.0 + .5*Math.sin(t*Math.PI); tx = .2 + P.dir*(-1.5 + 3.0*a); ty = -1.0; rate = 60; sc = 1.3;   // 旧: 回転±1.5rad・位置固定 → 大きく横に払う
     const kk = P.swing/SW_T, base = P.dir > 0 ? .2 : Math.PI + .2;
     arc.material.opacity = kk*.9; arc.rotation.z = base - P.dir*(1 - kk)*.9; arc.scale.setScalar(1.5);
-  } else { arc.material.opacity = 0; if (P.par > 0 || P.armed || P.guard){ tx = .1; ty = -.8; tz = -1.7; rx = -.2; rz = .1; rate = 40; } }
+  } else { arc.material.opacity = 0; if (P.par > 0 || P.armed || P.guard){ tx = .1; ty = -.8; tz = -1.7; rx = -.2; rz = .1; rate = 40; }
+    else if (hidOK() && wii.poseNow === 'up'){ tx = .3; ty = .4; tz = -2.1; rx = .35; rz = .1; rate = 10; }        // 隠し: 頭上の構え（エクスカリバー）
+    else if (hidOK() && wii.poseNow === 'down'){ tx = .6; ty = -1.4; tz = -1.8; rx = -2.45; rz = .2; rate = 10; } }   // 隠し: 下段の構え（斬鉄剣）
   const k = Math.min(1, dt*rate);
   sword.position.x += (tx - sword.position.x)*k; sword.position.y += (ty - sword.position.y)*k; sword.position.z += (tz - sword.position.z)*k;
   sword.rotation.x += (rx - sword.rotation.x)*k; sword.rotation.z += (rz - sword.rotation.z)*k;
@@ -1169,7 +1212,7 @@ function render(){
 }
 
 // ===== 入力 =====
-addEventListener('keydown', e => { const k = e.key.toLowerCase(); keys[k] = true; if (state === 'play' && bgm.paused && !menuOn) bgmPlay(); if (k === 'v') vr = !vr; if (k === 'c'){ faceRecenter(); poseRecenter(); } if (k === 'f') setViewCtl(!viewCtl); if (k === 'm') toggleMenu(); if (k === 't') setView(!tp); if (k === 'escape' && menuOn) toggleMenu(false); if (k === 'enter' && menuOn && hc.hover){ e.preventDefault(); hcClick(); } });
+addEventListener('keydown', e => { const k = e.key.toLowerCase(); keys[k] = true; if (state === 'play' && bgm.paused && !menuOn) bgmPlay(); if (k === 'v') vr = !vr; if (k === 'm') toggleMenu(); if (k === 'escape' && menuOn) toggleMenu(false);  });
 addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 function setMouse(e){
   if (!viewCtl || (tp ? poseAimActive() : faceActive())) return;   // 顔/頭で操作中・視点操作OFF中はマウスで視点を動かさない
@@ -1181,12 +1224,15 @@ const ctl = { mode:'wii' }, mdn = { on:false, t:0 };
 const WVID = 0x057e, WPIDS = [0x0306, 0x0330];
 const wii = { dev:null, leds:1, a:false, b:false, aT:0, pA:false, pPlus:false, pHome:false,
               gx:0, gy:0, gz:1, gok:false, lastSw:0, lastNeg:-1e9, th:2.2, rt:0,
-              mode:0x35, modeT:0, pMinus:false, passOn:false, mpOnce:false, rSwT:-1e9, dualCd:0, am:1, apk:1, lastDual:null,
+              mode:0x35, modeT:0, pMinus:false, passOn:false, mpOnce:false, rSwT:-1e9, dualCd:0, am:1, apk:1, lastDual:null, tip:0, poseNow:'flat',
+              still:{ on:false, t0:0, t1:0, dur:0, pose:'flat', px:0, py:0, pz:0, last:null, fired:false },   // 静止（溜め・聖剣チャージ）
+              zan:{ sg:0, n:0, t0:0, last:0, cd:0 },                                                            // 斬鉄剣の上下揺れ
+              pU:false, pD:false, pL:false, pR:false,
               cal:{ z:[128, 128, 128], g:[26, 26, 26], ok:false },
               nun:{ seen:-1e9, ext:false, extT:-1e9, reT:-1e9, retry:0, c:false, z:false, a:1, pk:1, g1:51, prev:0, swT:-1e9, pend:0, gv:null, fake:false, n:0 },
               hist:{ R:[], N:[] },
-              mp:{ state:'off', ok:false, calibrated:false, zero:[8192, 8192, 8192], cal:null, calPct:0, up:null, upT:0, lastValid:0, sw:null, ring:[], to:0 } };
-function wiiMsg(t){ $('wiiStat').textContent = t; }
+              mp:{ state:'off', ok:false, calibrated:false, zero:[8192, 8192, 8192], cal:null, calPct:0, up:null, upT:0, lastValid:0, sw:null, ring:[], to:0, wmag:0, wT:0 } };
+function wiiMsg(t){ const el = $('wiiStat'); el.textContent = t; clearTimeout(wiiMsg.to); if (t) wiiMsg.to = setTimeout(() => el.textContent = '', 4000); }   // 画面のお知らせは4秒で消す（詳しくはメニューのリモコンログ）
 function setCtl(){   // 練習モードは Wiiリモコン専用
   ctl.mode = 'wii'; wii.a = wii.b = false;
   const t = wii.dev ? '🎮 Wii 接続済み' : '🎮 Wii接続';
@@ -1271,7 +1317,9 @@ function onWii(e){
   if (minus && !wii.pMinus) wiiRecal();
   wii.pMinus = minus;
   if (!menuOn) prInput(pressA, pressPlus);   // 説明画面: A=スタート / +=スキップ・説明に戻る
-  if (pressA && menuOn) hcClick();   // 指先カーソルで指している項目を決定
+  { const U = !!(b0 & 0x08), Dn = !!(b0 & 0x04), Lf = !!(b0 & 0x01), Rt = !!(b0 & 0x02);   // 十字キー（リモコン縦持ち）
+    if (menuOn){ if (U && !wii.pU) mnMove(-1); if (Dn && !wii.pD) mnMove(1); if (Lf && !wii.pL) mnSlide(-1); if (Rt && !wii.pR) mnSlide(1); if (pressA) mnPress(); }
+    wii.pU = U; wii.pD = Dn; wii.pL = Lf; wii.pR = Rt; }
   // 加速度（0g=128, 1g≒26）
   const C = wii.cal, x = (d.getUint8(2) - C.z[0])/C.g[0], y = (d.getUint8(3) - C.z[1])/C.g[1], z = (d.getUint8(4) - C.z[2])/C.g[2], m = Math.hypot(x, y, z);
   if (Math.abs(m - 1) < .12){   // ほぼ静止している時だけ重力方向を更新
@@ -1279,6 +1327,7 @@ function onWii(e){
     else { wii.gx += (x - wii.gx)*.2; wii.gy += (y - wii.gy)*.2; wii.gz += (z - wii.gz)*.2; }
   }
   if (id === 0x35 && d.byteLength >= 11) wiiGyro(d, x, y, z, m, ts, A || bHold);   // ジャイロ(縦横判定)。通常攻撃/パリィの加速度判定とは独立
+  wiiPose(); stillUpd(x, y, z, m, ts);   // 隠しコマンド用: 切っ先の向きと静止
   wii.am = m; wii.apk = Math.max(m, wii.apk*.985);   // 数値表示用（右手の|a|と最近の最大値）
   { const gl0 = Math.hypot(wii.gx, wii.gy, wii.gz) || 1; histPush(wii.hist.R, { t:now, m, v:(x*wii.gx + y*wii.gy + z*wii.gz)/gl0 - gl0 }); }   // 両手の動き比較用
   if (ctl.mode !== 'wii' || state !== 'play' || menuOn) return;
@@ -1287,12 +1336,15 @@ function onWii(e){
   const up = ((x - wii.gx)*wii.gx + (y - wii.gy)*wii.gy + (z - wii.gz)*wii.gz)/gl;
   const upTh = wii.th*.65;
   if (up < -upTh*.7) wii.lastNeg = now;   // 直前に下向きの勢いがあった = 振り下ろしの減速なので除外
+  if (hidOK() && !wii.a && !wii.b) zanDetect(x, y, z, up, now);
   if (now - wii.lastSw < 450) return;
   if (wii.b){   // B押しながら振り上げ → パリィ
     if (up > upTh && now - wii.lastNeg > 220){ wii.lastSw = now + 200; parry(); }
   } else if (!wii.a && !bHold && m > wii.th){   // 振り → 通常攻撃
     wii.lastSw = now;
-    if (!dualPair('R', now)) attack();   // 直前に左手も振っていたら「同じ動きか」を判定（同じ=ダブルサーキュラー / 違う=つられ動きとして無視）
+    const pc = !wii.mp.ok && hidOK() ? preCharge(ts) : null;   // ジャイロなしの時: 頭上静止→振りでエクスカリバー
+    if (pc && pc.pose === 'up' && pc.dur >= sk.exHold) cast('excalibur');
+    else if (!dualPair('R', now)) attack();   // 直前に左手も振っていたら「同じ動きか」を判定（同じ=ダブルサーキュラー / 違う=つられ動きとして無視）
     wii.rSwT = now;
   }
 }
@@ -1300,8 +1352,9 @@ function onWii(e){
 // ===== ソードスキル（MotionPlusのジャイロで 縦斬り→横斬り を判定）=====
 // ジャイロ積分で「上向きベクトル」を追い、角速度を 水平軸まわり(=縦斬り成分) と 鉛直軸まわり(=横斬り成分) に分解する。
 // 握りが回っても縦/横を判定できる（センサー軸 yaw/roll/pitch は縦横に一対一対応しないため）。
-const sk = { on:true, win:1.5, sqWin:1.1, rB:.18, rA:.30, minPk:600, mult:5, dbg:true, st:0, last:null, armedAt:0, lastHead:'',
-             heavyV:400, heavyH:260, spin:360, thrustA:4.0, thrustRot:150, thrustPk:800, lastR:null, lr:false, dual:true, pass:true, nunTh:1.8, dualSim:.65, dbgT:0 };
+const sk = { on:true, win:1.5, sqWin:1.1, rB:.18, rA:.30, minPk:600, mult:5, dbg:false, st:0, last:null, armedAt:0, lastHead:'',
+             heavyV:400, heavyH:260, spin:360, thrustA:4.0, thrustRot:150, thrustPk:800, lastR:null, lr:false, dual:true, pass:true, nunTh:1.8, dualSim:.65, dbgT:0,
+             hid:true, exHold:1.0, chMin:.8, preGap:.8, zanA:1.3, zanN:4, tipFlip:true };   // 隠しコマンド（スライムから・フリー練習のみ）
 const GY = { SLOW:440/8192, FAST:2000/440, PRE:120, HOLD:150, MAXSW:1500, CAL_MS:1000, CAL_STD:80, UP_GAIN:.03, UP_TOL:.15 };
 // ==== MP-BEGIN ====
 function calStart(){
@@ -1364,7 +1417,8 @@ function wiiGyro(d, ax, ay, az, a, t, held){
   if (!m.calibrated) return;
   const w = raw.map((v, i) => (v - m.zero[i])*GY.SLOW*(slow[i] ? 1 : GY.FAST));
   const [wv, wh] = gyOrient(w, ax, ay, az, a, t);
-  gySwing({ t, a, wv, wh }, held);
+  m.wmag = Math.hypot(w[0], w[1], w[2]); m.wT = t;
+  gySwing({ t, a, wv, wh, tip:wii.tip }, held);
 }
 function gyInteg(o, s){
   if (s.a > o.pa) o.pa = s.a;
@@ -1380,7 +1434,7 @@ function gySwing(s, held){
   if (!m.sw){
     m.ring.push(s); while (m.ring.length && s.t - m.ring[0].t > GY.PRE) m.ring.shift();
     if (s.a >= wii.th){
-      const o = m.sw = { t0:m.ring[0].t, iv:0, ih:0, pv:0, ph:0, pa:0, last:null, lastHigh:s.t, held:held };
+      const o = m.sw = { t0:m.ring[0].t, iv:0, ih:0, pv:0, ph:0, pa:0, last:null, lastHigh:s.t, held:held, pre:preCharge(m.ring[0].t), tip0:m.ring[0].tip };
       for (const r of m.ring) gyInteg(o, r);
       m.ring.length = 0;
     }
@@ -1394,11 +1448,12 @@ function gyFinish(o, tEnd){
   const pk = Math.max(Math.abs(o.pv), o.ph), tot = Math.abs(o.iv) + o.ih, ratio = tot > 0 ? Math.abs(o.iv)/tot : 0, dur = (tEnd - o.t0)/1000;
   const f = v => Math.round(v), rot = o.ih + Math.abs(o.iv);
   if (o.held){ dbg(`斬り除外(A/B押下中) pk${f(pk)}`); return; }
-  const r = { t0:o.t0, t1:tEnd, pk, ratio, iv:o.iv, ih:o.ih, dur, pa:o.pa, rot, kind:'' };
+  const r = { t0:o.t0, t1:tEnd, pk, ratio, iv:o.iv, ih:o.ih, dur, pa:o.pa, rot, kind:'', pre:o.pre, down:o.tip0 < -.5 };
   r.kind = skKind(r);
   r.sx = (Math.sign(o.iv) || 1)*(sk.lr ? 1 : -1);   // 画面上の左右（+1=右）。ジャイロの向きが逆なら「横斬りの左右を反転」
   r.sy = -1;                                          // 縦は振り下ろし前提
-  dbg(`斬り[${r.kind}${r.kind[0] === '横' ? (r.sx > 0 ? '→' : '←') : ''}] 横度${ratio.toFixed(2)} ∫縦${f(o.ih)} ∫横${f(Math.abs(o.iv))} 計${f(rot)}° pk${f(pk)}°/s ${o.pa.toFixed(1)}g ${dur.toFixed(2)}s`);
+  dbg(`斬り[${r.kind}${r.kind[0] === '横' ? (r.sx > 0 ? '→' : '←') : ''}] 横度${ratio.toFixed(2)} ∫縦${f(o.ih)} ∫横${f(Math.abs(o.iv))} 計${f(rot)}° pk${f(pk)}°/s ${o.pa.toFixed(1)}g ${dur.toFixed(2)}s`
+    + (r.pre ? ` 直前静止:${POSE_JP[r.pre.pose]}${r.pre.dur.toFixed(1)}s` : '') + (r.down ? ' 切っ先↓' : ''));
   strokeDone(r);
 }
 function skKind(r){
@@ -1421,10 +1476,19 @@ function strokeDone(r){
 function skStroke(r){
   const k = r.kind;
   if (k === '小') return;
+  if (hidOK()){   // 隠しコマンド（フリー練習のみ）
+    if (r.pre && r.pre.pose === 'up' && r.pre.dur >= sk.exHold && k !== '突'){ sk.st = 0; cast('excalibur', r); return; }   // 頭上で静止→振り下ろし
+    if (r.down){ dbg('切っ先が下向きの振り → スキル判定しない（斬鉄剣の構え）'); return; }
+  }
   if (k === '突'){ sk.st = 0; cast('vorpal', r); return; }
   if (k === '回転'){ sk.st = 0; cast('meteor', r); return; }
   if (k === '縦重'){ sk.st = 0; cast('sonic', r); return; }
-  if (k === '横重'){ sk.st = 0; cast('lotus', r); return; }
+  if (k === '横重'){
+    sk.st = 0;
+    if (hidOK() && r.sx < 0){ r.lv = r.pre && r.pre.pose === 'flat' ? chLv(r.pre.dur) : 0; cast('strash', r); }   // 隠し: 右→左はストラッシュ（静止で溜め）
+    else cast('lotus', r);
+    return;
+  }
   const gap = sk.last ? (r.t0 - sk.last.t1)/1000 : 1e9;
   if (sk.st === 1 && gap > sk.win) sk.st = 0;
   if ((sk.st === 2 || sk.st === 3) && gap > sk.sqWin) sk.st = 0;
@@ -1435,6 +1499,50 @@ function skStroke(r){
   else sk.st = isA ? 1 : 0;
   sk.last = r; sk.armedAt = performance.now();
   if (sk.st === 1 || sk.st === 3) dbg(`${sk.st === 3 ? '縦横+縦' : '縦'}OK → 横を`);
+}
+// ===== 隠しコマンド（エクスカリバー / 斬鉄剣 / ストラッシュ溜め）と 二刀流 =====
+const POSE_JP = { up:'上', down:'下', flat:'水平', mid:'斜め' };
+function poseOf(tip){ return tip > .7 ? 'up' : tip < -.7 ? 'down' : Math.abs(tip) < .5 ? 'flat' : 'mid'; }
+function hidOK(){ return sk.on && sk.hid && PR.free && ctl.mode === 'wii' && state === 'play' && !menuOn; }   // 練習モードではフリー練習の時だけ（各ステップの判定と混ざらないように）
+function chLv(dur){ return dur < sk.chMin ? 0 : dur < sk.chMin + .8 ? 1 : dur < sk.chMin + 1.6 ? 2 : 3; }
+// 切っ先の向き: センサーY軸(リモコンの長手方向)と「上」の内積。ジャイロがあれば動いている最中も追従
+function wiiPose(){
+  const mp = wii.mp; let u;
+  if (mp.ok && mp.calibrated && mp.up) u = mp.up;
+  else { const l = Math.hypot(wii.gx, wii.gy, wii.gz) || 1; u = [wii.gx/l, wii.gy/l, wii.gz/l]; }
+  wii.tip = sk.tipFlip ? -u[1] : u[1]; wii.poseNow = poseOf(wii.tip);
+}
+// 静止の検出: |a|≈1g・前サンプルとの差が小さい・(ジャイロがあれば)角速度が小さい。120ms以内の揺れは許容
+function stillUpd(x, y, z, a, t){
+  const s = wii.still, mp = wii.mp, gy = mp.ok && mp.calibrated && t - mp.wT < 100;
+  const calm = Math.abs(a - 1) < .12 && Math.hypot(x - s.px, y - s.py, z - s.pz) < .1 && (!gy || mp.wmag < 45);
+  s.px = x; s.py = y; s.pz = z;
+  const p = poseOf((sk.tipFlip ? -y : y)/(a || 1));   // 静止中は加速度=上向き
+  if (calm){
+    if (!s.on || p !== s.pose){ s.on = true; s.t0 = t; s.pose = p; s.fired = false; }
+    s.t1 = t; s.dur = (t - s.t0)/1000;
+  } else if (s.on && t - s.t1 > 120){ s.on = false; s.last = { t0:s.t0, t1:s.t1, pose:s.pose }; s.dur = 0; }
+  if (s.on && s.pose === 'up' && s.dur >= sk.exHold && !s.fired && hidOK()){
+    s.fired = true; popCam('EXCALIBUR', '#ffe9a0', 1, 1); wiiRumble(120); dbg('★ 聖剣チャージ完了 → 振り下ろせ！');
+  }
+}
+// 振り始めの直前(preGap秒以内)まで続いていた静止 → { pose, dur }
+function preCharge(t){
+  const s = wii.still, g = s.on ? { t0:s.t0, t1:s.t1, pose:s.pose } : s.last;
+  if (!g || t - g.t1 > sk.preGap*1000) return null;
+  return { pose:g.pose, dur:(g.t1 - g.t0)/1000 };
+}
+// 斬鉄剣: 切っ先を下に向けたまま、上下方向の加速度が ±zanA を交互に zanN 回超える（1.6秒以内）
+function zanDetect(x, y, z, upG, now){
+  const mp = wii.mp, Z = wii.zan;
+  const lin = mp.ok && mp.calibrated && mp.up ? x*mp.up[0] + y*mp.up[1] + z*mp.up[2] - 1 : upG;
+  const sg = lin > sk.zanA ? 1 : lin < -sk.zanA ? -1 : 0;
+  if (!sg || sg === Z.sg) return;
+  if (wii.tip > -.5){ Z.n = 0; Z.sg = 0; return; }   // 切っ先が下を向いていない
+  if (now - Z.last > 350){ Z.n = 0; Z.t0 = now; }
+  Z.sg = sg; Z.n++; Z.last = now;
+  if (Z.n >= 2) dbg(`斬鉄剣: 上下 ${Z.n}/${sk.zanN}`);
+  if (Z.n >= sk.zanN && now - Z.t0 < 1600 && now > Z.cd){ Z.n = 0; Z.sg = 0; Z.cd = now + 3000; cast('zantetsu'); }
 }
 // ===== 二刀流（ヌンチャク）=====
 function nunOn(){ return sk.dual && (wii.nun.fake || performance.now() - wii.nun.seen < 1500); }
@@ -1511,6 +1619,17 @@ function nunLine(){
   if (d) s += `\n直近の両手判定: 一致${f2(d.score)}/${f2(sk.dualSim)} 相関${f2(d.cm)} 上下${d.vert ? f2(d.cv) : '-'} 強さ比${f2(d.ratio)}/0.60 → ${d.ok ? '✔同じ' : '✕別'}`;
   return s;
 }
+// 構え中の剣の光: 頭上静止=金（チャージ完了で明滅）/ 水平静止=溜めLvで白く / 下段=赤
+const HG = { base:new THREE.Color(0x2a6f88), ex:new THREE.Color(0xfff0b0), ch:new THREE.Color(0xbff8ff), zan:new THREE.Color(0xff4060), c:new THREE.Color() };
+function hidGlow(){
+  const c = HG.c.copy(HG.base); if (!hidOK()) return c;
+  const s = wii.still;
+  if (wii.poseNow === 'down') return c.lerp(HG.zan, .5);
+  if (!s.on) return c;
+  if (s.pose === 'up'){ const k = Math.min(1, s.dur/sk.exHold); c.lerp(HG.ex, k >= 1 ? .75 + .25*Math.sin(performance.now()/40) : k*.7); }
+  else if (s.pose === 'flat'){ const lv = chLv(s.dur); if (lv) c.lerp(HG.ch, lv/3); }
+  return c;
+}
 // ==== MP-END ====
 const dbgLines = [], SK_T0 = performance.now();
 function dbg(t){ dbgLines.push(((performance.now() - SK_T0)/1000).toFixed(1) + ' ' + t); if (dbgLines.length > 9) dbgLines.shift(); dbgDraw(); try { console.log('[wii] ' + t); } catch (e){} }
@@ -1519,7 +1638,9 @@ function skHead(){
   let t = !wii.dev ? 'Wii未接続' : m.state === 'none' ? 'ジャイロ: なし（加速度のみ）' : m.state === 'cal' ? 'ジャイロ: 静止して調整中 ' + m.calPct + '%'
         : m.state === 'ready' ? 'ジャイロ: 有効' + (m.sw ? ' / 斬り中' : '') + (sk.st === 1 || sk.st === 3 ? ' / 縦OK→横を！' : sk.st === 2 ? ' / 続けて縦横でスクエア' : ' / 待機')
         : m.state === 'lost' ? 'ジャイロ: データ停止' : 'ジャイロ: 有効化中…';
-  return t + (sk.on ? '' : '（スキルOFF）') + (sb.ready ? ' / STARBURST READY' : sb.n ? ' / CHAIN ' + sb.n + '/16' : '') + nunLine();
+  const s = wii.still;
+  const hid = wii.dev && sk.hid && PR.free ? `\n隠し: 姿勢=${POSE_JP[wii.poseNow]}(${wii.tip.toFixed(1)})` + (s.on ? ` 静止${s.dur.toFixed(1)}s` + (s.pose === 'flat' && chLv(s.dur) ? ` 溜めLv${chLv(s.dur)}` : '') + (s.pose === 'up' && s.dur >= sk.exHold ? ' 聖剣READY' : '') : '') : '';
+  return t + (sk.on ? '' : '（スキルOFF）') + (sb.ready ? ' / STARBURST READY' : sb.n ? ' / CHAIN ' + sb.n + '/16' : '') + (mr.ready ? ' / ROSARIO READY' : mr.n ? ' / ROSARIO ' + mr.n + '/11' : '') + hid + nunLine();
 }
 function dbgDraw(){ const el = $('wiiDbg'); el.style.display = sk.dbg ? '' : 'none'; if (sk.dbg) el.textContent = (sk.lastHead = skHead()) + '\n' + dbgLines.join('\n'); }
 function skTick(){
@@ -1542,6 +1663,22 @@ function updSkillFx(dt){
     if (k >= 1){ camera.remove(f.m); f.m.geometry.dispose(); f.m.material.dispose(); skFxList.splice(i, 1); continue; }
     f.m.visible = true; f.m.scale.x = Math.min(1, k*4) + .001; f.m.material.opacity = k < .35 ? 1 : (1 - k)/.65;
   }
+  updWaves(dt);
+}
+// 飛ぶ斬撃: 三日月をボスまで飛ばし、到達で onHit
+const waves = [];
+function wave(hex, size, dur, onHit){
+  const m = new THREE.Mesh(new THREE.RingGeometry(1.0, 1.3, 40, 1, Math.PI*.1, Math.PI*.8), new THREE.MeshBasicMaterial({ color:hex, transparent:true, opacity:.95, blending:THREE.AdditiveBlending, depthTest:false, side:THREE.DoubleSide }));
+  const from = rig.localToWorld(new THREE.Vector3(0, -.3, -2.5));
+  m.position.copy(from); m.quaternion.copy(camera.quaternion); m.renderOrder = 14; scene.add(m);
+  waves.push({ m, from, t:0, dur, size, onHit });
+}
+function updWaves(dt){
+  for (let i = waves.length - 1; i >= 0; i--){
+    const w = waves[i]; w.t += dt; const k = Math.min(1, w.t/w.dur);
+    w.m.position.lerpVectors(w.from, bossG.position, k); const s = w.size*(1 + 1.5*k); w.m.scale.set(s, s*.35, 1);
+    if (k >= 1){ scene.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); waves.splice(i, 1); w.onHit(); }
+  }
 }
 const fxDown = hex => fxLine(-Math.PI/2, 0, 3.2, 6.4, hex), fxRight = hex => fxLine(0, -3.2, 0, 6.4, hex), fxLeft = hex => fxLine(Math.PI, 3.2, 0, 6.4, hex);
 // ---- スキル定義 ----
@@ -1549,7 +1686,11 @@ const SKD = {
   vertical:{ en:'VERTICAL', jp:'バーチカル', c:'#7ae7ff' }, vorpal:{ en:'VORPAL STRIKE', jp:'ヴォーパルストライク', c:'#b8f0ff' },
   sonic:{ en:'SONIC LEAP', jp:'ソニックリープ', c:'#ffd35a' }, lotus:{ en:'LOTUS SLASH', jp:'ロータススラッシュ', c:'#ff9ae0' },
   square:{ en:'HORIZONTAL SQUARE', jp:'ホリゾンタルスクエア', c:'#7ae7ff' }, meteor:{ en:'METEOR BREAK', jp:'メテオブレイク', c:'#ff9a20' },
-  starburst:{ en:'STARBURST STREAM', jp:'スターバーストストリーム', c:'#ffd35a' }, dcircular:{ en:'DOUBLE CIRCULAR', jp:'ダブルサーキュラー', c:'#dff6ff' } };
+  starburst:{ en:'STARBURST STREAM', jp:'スターバーストストリーム', c:'#ffd35a' }, dcircular:{ en:'DOUBLE CIRCULAR', jp:'ダブルサーキュラー', c:'#dff6ff' },
+  rosario:{ en:"MOTHER'S ROSARIO", jp:'マザーズ・ロザリオ', c:'#d8b8ff' },
+  excalibur:{ en:'EXCALIBUR', jp:'エクスカリバー', c:'#ffe9a0' }, zantetsu:{ en:'ZANTETSUKEN', jp:'斬鉄剣', c:'#ffffff' },
+  strash:{ en:'STRASH', jp:'ストラッシュ', c:'#9ff6ff' } };
+const SK_DIRECT = { excalibur:1, zantetsu:1, strash:1, dcircular:1 };   // READY中でもスターバースト等に置き換えない
 function skBanner(k){ const d = SKD[k]; popCam(d.en, d.c, 1.4, 1.5); popup(d.jp, '#ffffff', new THREE.Vector3(0, -.15, -3), .6, 1.5, camera); }
 // 倍率mのダメージ（通常攻撃6/弱点9 × m × 設定倍率/5）。照準に関わらずボスへ命中（オートロック）
 const skHit = (m, big = true) => { if (tgMode()){ playAtk(); return; } if ((state !== 'play' && state !== 'clear') || B.s === 'dead') return; hurtBoss((B.weak > 0 ? 9 : 6)*m*sk.mult/5, bossG.position.clone(), big); playAtk(); };
@@ -1557,11 +1698,14 @@ function skImpact(fl, sh, fov, col){ flash = Math.max(flash, fl); flashM.materia
 function cast(name, r){
   const d = SKD[name];
   if (!sk.on){ dbg('（スキルOFFのため ' + d.jp + ' は発動せず）'); return; }
-  if (state !== 'play' || B.s === 'dead' || sb.active) return;
-  if (sb.ready){ startStarburst(); return; }
+  if (state !== 'play' || B.s === 'dead' || sb.active || mr.active) return;
+  if (name === 'vorpal' && mr.ready){ startRosario(); return; }   // READY中の突き → マザーズ・ロザリオ
+  if (sb.ready && !SK_DIRECT[name]){ startStarburst(); return; }
   const at = () => tgMode() ? TG.fx : bossG.position, ring2 = (rr, hex) => { ring(at(), rr, hex, .5); ring(at(), rr*.5, 0xffffff, .3); };
   dbg(`★ ${d.jp}（${d.en}）` + (name === 'vertical' || name === 'square' ? ` 間隔${sk.last ? ((r.t0 - sk.last.t1)/1000).toFixed(2) : '-'}s` : ''));
-  skBanner(name); P.swing = 0; P.swingCd = Math.max(P.swingCd, .5); prCount(name); tgCast(name, r);
+  skBanner(name); P.swing = 0; PL.swing = 0; P.swingCd = Math.max(P.swingCd, .5); prCount(name); tgCast(name, r);
+  if (name === 'strash' && r && r.lv){ popup('溜め Lv.' + r.lv, '#bff8ff', new THREE.Vector3(0, -.75, -3), .55, 1.3, camera); dbg(`溜め Lv${r.lv}（静止${r.pre.dur.toFixed(1)}s）`); }
+  if (name === 'excalibur' || name === 'zantetsu') P.inv = Math.max(P.inv, 1.2);
   let seq;
   if (name === 'vertical') seq = [
     { type:'chop', d:.2, on:() => { skHit(2.5); fxDown(0xdff6ff); skImpact(.3, .3, 4); } },
@@ -1573,13 +1717,41 @@ function cast(name, r){
     { type:'sweepL', d:.24, on:() => { skHit(3); fxLeft(0xffd35a); skImpact(.6, .6, 10); ring2(6, 0x7ae7ff); burst(at(), 0xffd35a, 90, 10); } } ];
   else if (name === 'vorpal') seq = [
     { type:'thrustWind', d:.14 }, { type:'thrustOut', d:.1 },
-    { type:'thrustBack', d:.3, on:() => { skHit(6); skImpact(.6, .5, 12); ring2(5, 0xb8f0ff); burst(at(), 0xb8f0ff, 80, 12); for (let i = 0; i < 3; i++){ const a = i*Math.PI/3 + .2; fxLine(a, -Math.cos(a)*2, -Math.sin(a)*2, 4, 0xb8f0ff, .3, .14); } } } ];
+    { type:'thrustBack', d:.3, on:() => { skHit(6); mrHit(); skImpact(.6, .5, 12); ring2(5, 0xb8f0ff); burst(at(), 0xb8f0ff, 80, 12); for (let i = 0; i < 3; i++){ const a = i*Math.PI/3 + .2; fxLine(a, -Math.cos(a)*2, -Math.sin(a)*2, 4, 0xb8f0ff, .3, .14); } } } ];
   else if (name === 'sonic') seq = [
     { type:'chopWind', d:.24 },
     { type:'chop', d:.22, on:() => { skHit(5); skImpact(.6, .7, 14, 0xfff2b0); fxDown(0xffd35a); fxLine(-Math.PI/2, -.5, 3.2, 6.4, 0xffffff, .3, .12); ring2(6, 0xffd35a); burst(at(), 0xffd35a, 90, 10); } } ];
   else if (name === 'lotus') seq = [
     { type:'sweepWind', d:.26 },
     { type:'sweepR', d:.16, on:() => { skHit(5); skImpact(.6, .6, 10, 0xffd0f0); fxRight(0xff9ae0); fxLine(0, -3.2, .5, 6.4, 0xffffff, .3, .12); ring2(6, 0xff9ae0); burst(at(), 0xff9ae0, 90, 10); } } ];
+  else if (name === 'excalibur') seq = [
+    { type:'exRaise', d:.28, on:() => { skImpact(.5, .2, 4, 0xfff2b0); fxLine(Math.PI/2, 0, -1.5, 8, 0xffe9a0, .5, .5); burst(rig.localToWorld(new THREE.Vector3(0, 1.5, -2.5)), 0xffe9a0, 40, 5); } },
+    { type:'exDown', d:.22, on:() => { skHit(14); skImpact(1, 1, 18, 0xfff2b0); fxLine(-Math.PI/2, 0, 4.5, 9, 0xffd35a, .8, 1.2); fxLine(-Math.PI/2, 0, 4.5, 9, 0xffffff, .7, .4);
+      ring(at(), 10, 0xffd35a, .8); ring2(6, 0xffffff); burst(at(), 0xffd35a, 200, 14); wiiRumble(600); } },
+    { type:'exEnd', d:.35 } ];
+  else if (name === 'zantetsu'){
+    const ang = Math.atan2(4.2, -5.6), cut = (hex, th, dur) => fxLine(ang, 2.8, -2.1, 7, hex, dur, th);
+    seq = [
+      { type:'zanLow', d:.12 },
+      { type:'zanCut', d:.07, on:() => { cut(0xffffff, .05, 1.1); flash = Math.max(flash, .9); flashM.material.color.set(0xffffff); } },
+      { type:'zanHold', d:.55 },   // 静寂 → 遅れて斬れる
+      { type:'zanHold', d:.35, on:() => {
+        if (state !== 'play' || B.s === 'dead') return;
+        skHit(8); popCam('一刀両断', '#ffffff', 1.2, 1.4);   // 練習用サンドバッグは倒れないので一撃必殺はなし
+        popup('斬', '#ffffff', new THREE.Vector3(0, .05, -3), 2.4, 1.3, camera);
+        cut(0xff4060, .18, .5); skImpact(1, 1.2, 16, 0xffffff); ring2(7, 0xffffff); burst(at(), 0xffffff, 120, 12); wiiRumble(500);
+      } } ];
+  }
+  else if (name === 'strash'){
+    const lv = (r && r.lv) || 0, col = lv ? 0xdff6ff : 0x7ae7ff;
+    seq = [
+      { type:'strWind', d:lv ? .3 : .16, on:lv ? () => { skImpact(.15*lv, .1, 2, 0xbff8ff); burst(rig.localToWorld(new THREE.Vector3(1.4, -.8, -2.2)), 0xbff8ff, 20*lv, 4); } : null },
+      { type:'sweepL', d:.16, on:() => {
+        fxLeft(col); if (lv) fxLine(Math.PI, 3.2, .35, 6.4, 0xffffff, .3, .08*lv);
+        wave(lv ? 0xffffff : 0x7ae7ff, 1 + .35*lv, .2, () => { skHit(5 + 2.5*lv); skImpact(.4 + .2*lv, .4 + .15*lv, 6 + 3*lv, 0xbfefff); ring2(5 + lv, col); burst(at(), col, 60 + 30*lv, 9 + lv); if (lv >= 3) ring(at(), 10, 0x9ff6ff, .7); });
+      } },
+      { type:'idle', d:.25 } ];
+  }
   else if (name === 'dcircular') seq = [
     { type:'crossWind', d:.14 },
     { type:'cross', d:.16, on:() => { skHit(3.5); mrDiag(1, 1.15, 0xdff6ff, .4, .16); mrDiag(-1, 1.15, 0xffd35a, .4, .16); skImpact(.5, .5, 8); burst(at(), 0xdff6ff, 70, 10); } },
@@ -1630,10 +1802,57 @@ function startStarburst(){
   seq.push({ type:'idle', d:.25, on:() => { sb.active = false; } });
   startAnim(seq);
 }
+// ---- マザーズ・ロザリオ: ヴォーパルストライクを11回成功 → READY → 次の突きで11連撃（十字に5+5、最後に中心へ1）----
+const mr = { n:0, ready:false, active:false };
+let mrS = null;
+function mrDraw(){
+  if (mrS){ hud.remove(mrS); mrS.material.map.dispose(); mrS.material.dispose(); mrS = null; }
+  if (mr.n <= 0 && !mr.ready) return;
+  mrS = mkSprite(mr.ready ? "MOTHER'S ROSARIO READY! 突いて発動" : 'VORPAL ' + mr.n + ' / 11', mr.ready ? '#d8b8ff' : '#b8f0ff', .28);
+  mrS.position.set(0, 1.08, -3); hud.add(mrS);
+}
+function mrHit(){
+  if (!PR.free || mr.ready || mr.active || state !== 'play' || B.s === 'dead') return;   // 練習モードではフリー練習の時だけ数える
+  mr.n++; mrDraw();
+  if (mr.n >= 11){ mr.ready = true; mrDraw(); popCam("MOTHER'S ROSARIO READY!", '#d8b8ff', 1.1, 1.6); dbg('★ ヴォーパルストライク11回成功 → マザーズ・ロザリオ READY（次の突きで発動）'); wiiRumble(250); }
+}
+function startRosario(){
+  if (state !== 'play' || B.s === 'dead') return;
+  mr.ready = false; mr.active = true; mr.n = 0; mrDraw();
+  P.inv = Math.max(P.inv, 2.2); P.swingCd = 2; P.swing = 0;
+  dbg('★ マザーズ・ロザリオ 11連撃！'); skBanner('rosario');
+  skImpact(.5, .3, 8, 0xe8d8ff);
+  const at = () => bossG.position, col = [0xd8b8ff, 0xffffff];
+  // 十字の点（カメラ前の面: 左上→右下 を5点、右上→左下 を5点）
+  const pts = [];
+  for (let i = 0; i < 5; i++){ const t = -1 + i*.5; pts.push([t*1.1, -t*.9]); }
+  for (let i = 0; i < 5; i++){ const t = -1 + i*.5; pts.push([-t*1.1, -t*.9]); }
+  const seq = [];
+  pts.forEach(([x, y], i) => seq.push({ type:'rosThrust', d:.085, x, y, on:() => {
+    skHit(1.3, false); hitstop = 0;
+    // 突いた点に小さな十字の光
+    fxLine(Math.PI/4, x - .3, y - .3, .85, col[i % 2], .3, .1); fxLine(-Math.PI/4, x - .3, y + .3, .85, col[i % 2], .3, .1);
+    burst(at(), 0xd8b8ff, 10, 7); shake = Math.max(shake, .12);
+    if (i === 4) mrDiag(1, 1, 0xd8b8ff, .5, .16);   // 5撃ごとに斜めの軌跡
+    if (i === 9) mrDiag(-1, 1, 0xd8b8ff, .5, .16);
+    if (i % 3 === 0) wiiRumble(70);
+  } }));
+  // 11撃目: 十字の中心へ渾身の突き
+  seq.push({ type:'thrustWind', d:.16 });
+  seq.push({ type:'thrustOut', d:.1, on:() => {
+    skHit(8); skImpact(1, .9, 16, 0xf0e0ff);
+    mrDiag(1, 1.3, 0xffffff, .6, .2); mrDiag(-1, 1.3, 0xffffff, .6, .2);   // 大きな十字
+    ring(at(), 9, 0xd8b8ff, .7); ring(at(), 5, 0xffffff, .4); burst(at(), 0xd8b8ff, 180, 15); wiiRumble(400);
+  } });
+  seq.push({ type:'thrustBack', d:.3 });
+  seq.push({ type:'idle', d:.2, on:() => { mr.active = false; } });
+  startAnim(seq);
+}
 // メニュー設定（sk[key] ⇔ スライダー ⇔ 表示ラベル）
 const f2 = v => v.toFixed(2), f1 = v => v.toFixed(1);
 const SK_UI = { win:['skWin','skWinV'], rB:['skRB','skRBV',f2], rA:['skRA','skRAV',f2], minPk:['skPk','skPkV'], mult:['skMul','skMulV'], sqWin:['skSq','skSqV'],
-  heavyV:['skHV','skHVV'], heavyH:['skHH','skHHV'], spin:['skSp','skSpV'], thrustA:['skTA','skTAV',f1], thrustRot:['skTR','skTRV'], thrustPk:['skTP','skTPV'], nunTh:['skNt','skNtV',f1], dualSim:['skDs','skDsV',f2] };
+  heavyV:['skHV','skHVV'], heavyH:['skHH','skHHV'], spin:['skSp','skSpV'], thrustA:['skTA','skTAV',f1], thrustRot:['skTR','skTRV'], thrustPk:['skTP','skTPV'], nunTh:['skNt','skNtV',f1], dualSim:['skDs','skDsV',f2],
+  exHold:['skEx','skExV',f1], chMin:['skCh','skChV',f1], zanA:['skZa','skZaV',f1], zanN:['skZn','skZnV'] };
 function skSet(key, v){ const [i, l, fm] = SK_UI[key], el = $(i); el.value = v; sk[key] = +el.value; $(l).textContent = fm ? fm(sk[key]) : sk[key]; }
 for (const key in SK_UI) $(SK_UI[key][0]).oninput = e => skSet(key, +e.target.value);
 // 直近の斬りを基準にしきい値を登録（実際の動きに合わせる）
@@ -1645,12 +1864,17 @@ function skLearn(n){
     skSet('thrustA', Math.max(2.5, Math.floor(r.pa*.85*10)/10)); skSet('thrustRot', Math.max(60, Math.ceil(r.rot*1.4/10)*10)); skSet('thrustPk', Math.max(400, Math.ceil(r.pk*1.4/50)*50));
     dbg(`②突きを登録: ${r.pa.toFixed(1)}g/回転${f(r.rot)}°/pk${f(r.pk)} → 加速度≥${sk.thrustA}g 回転<${sk.thrustRot}° 速度<${sk.thrustPk}`); }
   else if (n === 3){ skSet('heavyH', Math.max(100, Math.round(Math.abs(r.iv)*.85/10)*10)); dbg(`③横重撃を登録: ∫横${f(Math.abs(r.iv))}° → しきい値${sk.heavyH}°`); }
+  else if (n === 5){ if (!r.iv){ dbg('⑤は横に振ってから押してください'); return; } sk.lr = r.iv < 0; $('skLR').checked = sk.lr; try { localStorage.setItem('cw_skLR', sk.lr ? '1' : '0'); } catch (err){} dbg('⑤ストラッシュの向きを登録（この向き=右→左）'); }
   else if (n === 4){ skSet('spin', Math.max(150, Math.round(Math.abs(r.iv)*.85/10)*10)); dbg(`④一回転を登録: ∫横${f(Math.abs(r.iv))}° → しきい値${sk.spin}°`); }
 }
-for (let n = 1; n <= 4; n++) $('skL' + n).onclick = () => skLearn(n);
-addEventListener('keydown', e => { if (e.key >= '1' && e.key <= '4') skLearn(+e.key); });
+for (let n = 1; n <= 5; n++) $('skL' + n).onclick = () => skLearn(n);
+addEventListener('keydown', e => { if (e.key >= '1' && e.key <= '5') skLearn(+e.key); });
+$('skHid').onchange = e => { sk.hid = e.target.checked; dbgDraw(); };
+$('skTip').onchange = e => { sk.tipFlip = e.target.checked; };
 $('skOn').onchange = e => { sk.on = e.target.checked; dbgDraw(); };
-$('skDbg').onchange = e => { sk.dbg = e.target.checked; dbgDraw(); };
+function setLog(v){ sk.dbg = v; $('skDbg').checked = v; $('mLog').textContent = '📋 リモコンログ: ' + (v ? '表示中' : '表示しない'); $('mLog').classList.toggle('on', v); dbgDraw(); }
+$('skDbg').onchange = e => setLog(e.target.checked);
+$('mLog').onclick = () => setLog(!sk.dbg);
 $('skDual').onchange = e => { sk.dual = e.target.checked; };
 $('skPass').onchange = e => { sk.pass = e.target.checked; if (wii.dev) wiiEnableMP(); };
 $('skLR').onchange = e => { sk.lr = e.target.checked; try { localStorage.setItem('cw_skLR', sk.lr ? '1' : '0'); } catch (err){} };
@@ -1846,22 +2070,22 @@ const prSigOf = () => { const w = prWarn(prSt()); return (w ? w[0] : '') + '|' +
 // ---- 進行 ----
 function prGo(i){
   PR.i = i; PR.n = 0; PR.by = {}; PR.free = false; if (i === 0) PR.res = [];
-  sb.n = 0; sb.ready = false; sb.active = false; sbDraw();
+  sb.n = 0; sb.ready = false; sb.active = false; sbDraw(); mr.n = 0; mr.ready = false; mr.active = false; mrDraw();
   state = 'intro'; P.guard = false; anim = null; sk.st = 0; lane.visible = false; tgReset();
   PR.lock = performance.now() + 500;   // 直前のⒶ連打でいきなり始まらないように
   drawIntro(); prHud();
 }
 function prStart(){
-  if (!PR.camInit){   // 最初の1回だけカメラ・顔認識を起動
+  if (!PR.camInit){   // 最初の1回だけ背景カメラを起動
     PR.camInit = true;
-    (async () => { if (!camStream && (tp || bgMode === 'cam')) await openCam(camSel.value || null); applyBg(); if (tp) enterTP(); else if (face.on && !face.stream) startFace(); else faceRecenter(); })();
+    (async () => { if (!camStream && (tp || bgMode === 'cam')) await openCam(camSel.value || null); applyBg(); })();   // 顔認識は使わない
   }
   Object.assign(P, { armed:false, x:0, hp:PMAX, inv:.6, swing:0, swingCd:0, par:0, parAge:0, parCd:0, counter:0, guard:false });
   Object.assign(B, { x:0, z:HOVER, vz:0, s:'idle', t:1.6, hit:false, weak:0, combo:0, stun:false, phase:1, unp:false });
   sk.st = 0; anim = null; PR.n = 0; PR.by = {};
   state = 'play'; setMsg(null); prHud(); bgmPlay(true);
   tgReset(); if (prSt().gyro || prSt().tg) TG.respawn = .6;   // 的は少し間をおいて出す
-  sb.n = 0; sb.ready = false; sb.active = false; sbDraw();
+  sb.n = 0; sb.ready = false; sb.active = false; sbDraw(); mr.n = 0; mr.ready = false; mr.active = false; mrDraw(); wii.zan.n = 0;
 }
 function prFree(){   // フリー練習: カウントなし・サンドバッグは赤/紫ランダムで攻撃してくる・スキルは全部使える
   PR.free = true; prStart();
@@ -2428,10 +2652,11 @@ $('qMode').onchange = e => setQuality(e.target.value);
 let last = performance.now();
 function loop(now){
   const dt = Math.min(.033, (now - last)/1000); last = now;
-  mlFrame = false; faceStep(now); poseStep(now); handStep(now); perfTick(now); hcStep(now, dt); palmUI(now); faceDraw(); update(dt);
+  mlFrame = false; poseStep(now); update(dt);   // 顔認識・ピース(手)の認識・プレビューは使わない
   const _t = performance.now(); render(); perf.rend += performance.now() - _t; requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
+setView(false);   // 一人称固定（スライムと同じ）
 prGo(0);
 setCtl();
 </script>
