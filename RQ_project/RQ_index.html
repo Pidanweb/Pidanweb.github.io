@@ -229,7 +229,7 @@ body.jobmode #title,body.jobmode #prompt,body.jobmode #blink,body.jobmode #statu
   <div class="btns">
     <button class="btn" id="bWii">🎮 Wiiリモコン接続</button>
     <button class="btn" id="bAR">📷 AR背景</button>
-    <button class="btn" id="bRaid">⚔ レイドへ直接</button>
+    <button class="btn" id="bRaid">⚔ ロビーへ直接</button>
   </div>
 </div>
 
@@ -255,11 +255,11 @@ body.jobmode #title,body.jobmode #prompt,body.jobmode #blink,body.jobmode #statu
   <div id="jToast"></div>
   <div id="jDone"><div class="a">JOB REGISTERED</div><div class="b" id="jDoneN">SWORDSMAN</div></div>
 </div>
-  
+
 <script>
 // ===== 設定 =====
-const NEXT = 'lobby.html';          // 剣士を選んだ後に行くチュートリアル
-const RAID = 'lobby.html';
+const NEXT = 'lobby.html';   // ジョブを選んだ後に行く拠点（練習・レイド・準備はロビーから選ぶ）
+const RAID = 'lobby.html';   // 「ロビーへ直接」ボタンの行き先（2回目以降は演出を飛ばしてここへ）
 const $ = id => document.getElementById(id);
 const lsGet = k => { try { return localStorage.getItem(k); } catch (e){ return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e){} };
@@ -663,7 +663,7 @@ function jobDecide(){
   $('jDoneN').textContent = j.en;
   setTimeout(() => { $('jCards').style.transition = 'opacity .4s'; $('jCards').style.opacity = 0; $('jHint').style.opacity = 0; document.querySelector('.jHead').style.opacity = 0; $('jDone').classList.add('on'); sfx.welcome(); }, 700);
   setTimeout(() => $('jobs').classList.add('leave'), 2300);
-  setTimeout(() => { lsSet('rq_linked', String(Date.now())); location.href = j.url; }, 3300);
+  setTimeout(() => { lsSet('rq_linked', String(Date.now())); location.href = NEXT + '?job=' + j.id; }, 3300);
 }
 function jobBack(){ if (!JOB.on || JOB.busy) return; sfx.holdOff(); location.reload(); }
 addEventListener('keydown', e => {
