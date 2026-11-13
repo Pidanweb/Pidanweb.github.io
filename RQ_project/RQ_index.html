@@ -255,11 +255,11 @@ body.jobmode #title,body.jobmode #prompt,body.jobmode #blink,body.jobmode #statu
   <div id="jToast"></div>
   <div id="jDone"><div class="a">JOB REGISTERED</div><div class="b" id="jDoneN">SWORDSMAN</div></div>
 </div>
-
+  
 <script>
 // ===== 設定 =====
-const NEXT = 'sord/sord_demo.html?link=1';          // 剣士を選んだ後に行くチュートリアル
-const RAID = 'sord/RQ_project_sord_hukan.html?start=1';
+const NEXT = 'lobby.html';          // 剣士を選んだ後に行くチュートリアル
+const RAID = 'lobby.html';
 const $ = id => document.getElementById(id);
 const lsGet = k => { try { return localStorage.getItem(k); } catch (e){ return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e){} };
