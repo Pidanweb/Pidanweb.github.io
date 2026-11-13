@@ -48,6 +48,26 @@ body{overflow:hidden}
 #me .cal .dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
 #me .cal.ok .dot{background:var(--ok);box-shadow:0 0 8px var(--ok)}
 
+/* 左：クエストの詳細（クエスト選択中だけ #me と入れ替わる）*/
+#quest{position:relative;padding-left:22px;display:none}
+#quest::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;background:var(--acc)}
+body.qmode #me{display:none} body.qmode #quest{display:block}
+#quest .s{display:flex;align-items:center;gap:14px;font:700 12px var(--en);letter-spacing:.5em;color:var(--acc)}
+#quest .stars{font-size:15px;letter-spacing:.15em;color:var(--dim)}
+#quest .stars b{color:var(--acc2);font-weight:400}
+#quest .ico{height:clamp(90px,17vh,150px);margin:12px 0 4px;display:flex;align-items:flex-end}
+#quest .ico svg{height:100%;width:auto}
+#quest .boss{font:300 clamp(28px,3.4vw,48px)/1 var(--en);letter-spacing:.24em;white-space:nowrap;color:var(--ink);text-shadow:0 0 18px rgba(170,215,255,.35)}
+#quest .nm{font:700 clamp(20px,2.2vw,28px)/1.3 var(--jp);margin-top:8px}
+#quest .bj{font:500 14px var(--jp);color:var(--sub)}
+#quest dl{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;margin:16px 0 0;font:500 14px var(--jp)}
+#quest dt{font:700 12px var(--en);letter-spacing:.3em;color:var(--dim);align-self:center}
+#quest dd{margin:0;color:var(--ink)}
+#quest .ds{margin-top:14px;max-width:34em;font:400 14px/1.75 var(--jp);color:var(--sub)}
+#quest .warn{margin-top:12px;font:500 13px var(--jp);color:var(--acc2)}
+#quest.locked .ico,#quest.locked .boss{opacity:.35}
+.it .r .st{color:var(--acc2);letter-spacing:.1em;font-size:13px}
+
 /* 右：メニュー */
 #menu{position:relative}
 #crumb{font:700 12px var(--en);letter-spacing:.5em;color:var(--dim);margin-bottom:12px;min-height:1em}
@@ -100,6 +120,9 @@ body{overflow:hidden}
   #wrap{position:static;display:block;padding:calc(24px + env(safe-area-inset-top,0px)) 18px 120px}
   #me{margin-bottom:26px}
   #me .ico{height:90px}
+  #quest{margin-bottom:26px}
+  #quest .ico{height:70px}
+  #quest .ds{display:none}
   #status{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px))}
   .chips,#hint .kb{display:none}
 }
@@ -120,6 +143,7 @@ body{overflow:hidden}
     <div class="en" id="meEn">SWORDSMAN</div>
     <div class="cal" id="meCal"><span class="dot"></span><span id="meCalT">カメラ調整：未設定</span></div>
   </section>
+  <section id="quest" aria-live="polite"></section>
 
   <section id="menu">
     <div id="crumb"></div>
@@ -209,27 +233,60 @@ function goTo(href){
   tone(1200, .12, 'sine', .08); wiiRumble(150); bgmFade();
   $('fade').classList.add('on'); setTimeout(() => location.href = href, still ? 0 : 550);
 }
-const views = Object.entries(J.raid);
-const goggleView = views.find(([, v]) => v.needsCal);
+const QUESTS = J.quests || [];
+const calQuest = QUESTS.find(q => q.needsCal && q.url);   // カメラ調整が要るクエスト（調整後の戻り先）
+const BOSS_ICON = {
+  slime:`<svg viewBox="0 0 140 100"><ellipse cx="70" cy="92" rx="56" ry="6" fill="#000" opacity=".35"/>
+    <path d="M14 88 C10 50 40 14 70 14 C100 14 130 50 126 88 Z" fill="#5fd6a0" opacity=".85"/>
+    <path d="M30 70 C30 46 48 28 66 26" fill="none" stroke="#e8fff4" stroke-width="5" stroke-linecap="round" opacity=".6"/>
+    <ellipse cx="54" cy="60" rx="6" ry="9" fill="#06261a"/><ellipse cx="86" cy="60" rx="6" ry="9" fill="#06261a"/></svg>`,
+  volgram:`<svg viewBox="0 0 140 100"><ellipse cx="70" cy="94" rx="58" ry="5" fill="#000" opacity=".35"/>
+    <path d="M20 90 L30 40 L18 14 L46 30 L70 22 L94 30 L122 14 L110 40 L120 90 L96 74 L70 84 L44 74 Z" fill="#8c98a8"/>
+    <path d="M46 30 L70 22 L94 30 L86 50 L70 44 L54 50 Z" fill="#c6d0dc"/>
+    <path d="M50 54 L62 58 L52 62 Z M90 54 L78 58 L88 62 Z" fill="#ff9a3c"/>
+    <path d="M58 74 L62 88 L66 76 M82 74 L78 88 L74 76" fill="#f4f8ff"/></svg>`,
+  locked:`<svg viewBox="0 0 140 100"><polygon points="70,8 116,32 116,80 70,96 24,80 24,32" fill="none" stroke="#5d7186" stroke-width="2" stroke-dasharray="4 6"/>
+    <text x="70" y="66" text-anchor="middle" font-family="Rajdhani,sans-serif" font-size="40" fill="#5d7186">?</text></svg>`,
+};
+const stars = n => `<b>${'★'.repeat(n)}</b>${'☆'.repeat(Math.max(0, 5 - n))}`;
+function questDetail(q, i){
+  const el = $('quest'); el.classList.toggle('locked', !!q.locked);
+  const no = String(i + 1).padStart(2, '0');
+  if (q.locked){
+    el.innerHTML = `<div class="s">QUEST ${no}</div><div class="ico">${BOSS_ICON.locked}</div>
+      <div class="boss">? ? ?</div><div class="nm">新しいクエストを準備中</div>`;
+    return;
+  }
+  el.innerHTML = `<div class="s">QUEST ${no}<span class="stars" aria-label="難しさ ${q.rank} / 5">${stars(q.rank)}</span></div>
+    <div class="ico">${BOSS_ICON[q.id] || BOSS_ICON[q.id.split('-')[0]] || BOSS_ICON.locked}</div>
+    <div class="boss">${q.bossEn}</div>
+    <div class="nm">${q.jp}</div><div class="bj">${q.boss}</div>
+    <dl><dt>BOSS HP</dt><dd>${q.hp}</dd><dt>VIEW</dt><dd>${q.view}</dd><dt>DEVICE</dt><dd>${q.device}</dd></dl>
+    <div class="ds">${q.desc}</div>
+    ${q.needsCal && !calDone ? '<div class="warn">カメラの位置合わせがまだです。出撃すると先に位置合わせへ進みます</div>' : ''}`;
+}
 const MENUS = {
   main: { crumb:'', items: [
     { t:'練習する', d:'動きを確かめるチュートリアル', off: J.practice ? '' : 'このジョブの練習はまだありません',
       run: () => goTo(RQ.url('practice', { link:1 })) },
-    { t:'レイドに出撃', d: views.length > 1 ? '遊び方（視点）を選んで出撃します' : '巨大スライムと戦います',
-      run: () => views.length > 1 ? open('raid') : goTo(RQ.url('raid', { start:1 }, JOB_ID, views[0][0])) },
+    { t:'レイドに出撃', d:'クエストを選んで出撃します', off: QUESTS.some(q => q.url) ? '' : 'このジョブのクエストはまだありません',
+      run: () => open('quest') },
     { t:'準備する', d:'PCの中継・カメラの位置合わせ', run: () => open('setup') },
     { t:'ジョブを変える', d:'タイトルからジョブ選択をやり直します', run: () => goTo(RQ.url('title')) },
   ]},
-  raid: { crumb:'レイドに出撃', items: views.map(([k, v]) => ({
-    t:v.jp, d:v.note, r: v.needsCal ? (calDone ? 'カメラ調整済み' : '先にカメラ調整が必要') : '',
-    run: () => goTo(RQ.url('raid', { start:1 }, JOB_ID, k)),
-  }))},
+  quest: { crumb:'クエスト選択', detail:true, items: QUESTS.map(q => q.locked
+    ? { q, t:'？？？', off:'新しいクエストを準備中' }
+    : { q, t:q.jp, d:`${q.view}／${q.device}`, r:`<span class="st">${'★'.repeat(q.rank)}</span>`,
+        // カメラ調整がまだなら、位置合わせ → 終わったらこのクエストへ
+        run: () => goTo(q.needsCal && !calDone
+          ? RQ.url('calibrate', { return: RQ.url('raid', { start:1 }, JOB_ID, q.id) })
+          : RQ.url('raid', { start:1 }, JOB_ID, q.id)) })},
   setup: { crumb:'準備する', items: [
     { t:'PC中継を開く', d:'Wiiリモコンと足の位置をスマホへ送るページ。PCで開いてください', r:'PC用',
       run: () => goTo(RQ.url('hub')) },
     { t:'カメラの位置合わせ', d:'カメラ2台で体とボスの位置を測ります', r: calDone ? '保存済み' : '未設定',
-      off: goggleView ? '' : 'このジョブはカメラを使いません',
-      run: () => goTo(RQ.url('calibrate', { return: goggleView ? RQ.url('raid', { start:1 }, JOB_ID, goggleView[0]) : RQ.url('lobby') })) },
+      off: calQuest ? '' : 'このジョブはカメラを使いません',
+      run: () => goTo(RQ.url('calibrate', { return: RQ.url('raid', { start:1 }, JOB_ID, calQuest.id) })) },
   ]},
 };
 let stack = ['main'], sel = 0;
@@ -237,6 +294,7 @@ function cur(){ return MENUS[stack[stack.length - 1]]; }
 function render(){
   const m = cur(), items = stack.length > 1 ? [...m.items, { back:true, t:'もどる', run: back }] : m.items;
   $('crumb').innerHTML = m.crumb ? `LOBBY ／ <b>${m.crumb}</b>` : '';
+  document.body.classList.toggle('qmode', !!m.detail);
   $('list').innerHTML = items.map((it, i) => it.back
     ? `<button class="it back" role="menuitem" data-i="${i}"><span class="k">◀</span><span class="t">${it.t}</span></button>`
     : `<button class="it${it.off ? ' off' : ''}" role="menuitem" data-i="${i}" aria-disabled="${!!it.off}">
@@ -254,6 +312,8 @@ function pick(i, quiet){
   const n = render.items.length; i = (i + n) % n;
   if (i !== sel && !quiet) tone(1800, .05);
   sel = i; document.querySelectorAll('.it').forEach((b, k) => b.classList.toggle('sel', k === i));
+  const it = render.items[i];
+  if (cur().detail && it && it.q) questDetail(it.q, i);   // もどる を選んでいる間は直前のクエストを表示したまま
 }
 function decide(){
   const it = render.items[sel]; if (!it) return;
@@ -333,7 +393,7 @@ if ('hid' in navigator){
   navigator.hid.addEventListener('disconnect', e => { if (e.device === wii.dev){ wii.dev = null; chip('cWii', 'ng', '切断'); $('bWii').textContent = '🎮 Wiiリモコン接続'; } });
 } else chip('cWii', 'ng', 'WebHID非対応');
 
-if (location.hash === '#raid' && views.length > 1) stack.push('raid');
+if (location.hash === '#raid' || location.hash === '#quest') stack.push('quest');   // 練習の「本番へ」から
 render();
 </script>
 </body>
