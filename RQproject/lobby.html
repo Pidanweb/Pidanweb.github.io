@@ -276,10 +276,13 @@ function questDetail(q, i){
 const GOG = RQ.gog;   // ゴーグルモードの枠の中なら、その窓口
 const NO_GOG = 'ゴーグルモードでは遊べません（⚙ →「通常の表示に戻る」）';
 const PC_ONLY = 'PCで開くページです（ゴーグルでは開けません）';
+// 練習の一覧（routes.js の practice が配列なら複数、文字列なら1つ）
+const PRACTICES = !J.practice ? [] : Array.isArray(J.practice) ? J.practice : [{ id:'', jp:'練習', url:J.practice }];
 const MENUS = {
   main: { crumb:'', items: [
-    { t:'練習する', d:'動きを確かめるチュートリアル', off: !J.practice ? 'このジョブの練習はまだありません' : GOG ? NO_GOG : '',
-      run: () => goTo(RQ.url('practice', { link:1 })) },
+    { t:'練習する', d: PRACTICES.length > 1 ? PRACTICES.map(p => p.jp).join('・') : '動きを確かめるチュートリアル',
+      off: !PRACTICES.length ? 'このジョブの練習はまだありません' : GOG && !PRACTICES.some(p => p.goggle) ? NO_GOG : '',
+      run: () => PRACTICES.length > 1 ? open('practice') : goTo(RQ.url('practice', { link:1 }, JOB_ID, PRACTICES[0].id)) },
     { t:'レイドに出撃', d:'クエストを選んで出撃します', off: QUESTS.some(q => q.url) ? '' : 'このジョブのクエストはまだありません',
       run: () => open('quest') },
     { t:'準備する', d:'PCの中継・カメラの位置合わせ', run: () => open('setup') },
@@ -293,6 +296,8 @@ const MENUS = {
         run: () => goTo(q.needsCal && !calDone && !GOG
           ? RQ.url('calibrate', { return: RQ.url('raid', { start:1 }, JOB_ID, q.id) })
           : RQ.url('raid', { start:1 }, JOB_ID, q.id)) })},
+  practice: { crumb:'練習する', items: PRACTICES.map(p => ({ t:p.jp, d:p.d || '', off: GOG && !p.goggle ? NO_GOG : '',
+    r: p.goggle ? '🥽 対応' : '', run: () => goTo(RQ.url('practice', { link:1 }, JOB_ID, p.id)) })) },
   setup: { crumb:'準備する', items: [
     { t:'PC中継を開く', d:'Wiiリモコンと足の位置をスマホへ送るページ。PCで開いてください', r:'PC用',
       off: GOG ? PC_ONLY : '', run: () => goTo(RQ.url('hub')) },
