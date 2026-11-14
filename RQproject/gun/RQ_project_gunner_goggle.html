@@ -781,11 +781,12 @@ $('viewBtn').onclick = () => setView(!tp); $('mView').onclick = () => setView(!t
 $('mClose').onclick = () => toggleMenu(false); $('mFace').onclick = $('faceFlip').onclick = flipFaceCam;
 $('mVol').oninput = e => vol = +e.target.value; $('mBgm').oninput = e => bgm.volume = +e.target.value;
 $('mRestart').onclick = () => { toggleMenu(false); startBattle(); };
-$('mTitle').onclick = () => location.href = 'parytitle.html';
+$('mTitle').onclick = () => RQ.go('lobby');   // ロビーへ
 const JOB = 'gun';   // このHTMLの職業
-for (const [k, id, url] of [['sword', 'jSword', 'pary_game.html'], ['wiz', 'jWiz', 'Connectworld_Wizard.html'], ['gun', 'jGun', 'Connectworld_gunner.html']]){
-  const b = $(id); if (k === JOB){ b.textContent = '✔ ' + b.textContent; b.style.borderColor = '#ffd35a'; b.onclick = () => toggleMenu(false); }
-  else b.onclick = () => location.href = url + '?start=1';   // 別HTMLへ移動して自動スタート
+for (const [k, id] of [['sword', 'jSword'], ['wiz', 'jWiz'], ['gun', 'jGun']]){
+  const b = $(id); if (!b) continue;
+  if (k === JOB){ b.textContent = '✔ ' + b.textContent; b.style.borderColor = '#ffd35a'; b.onclick = () => toggleMenu(false); }
+  else b.onclick = () => { RQ.ls.set('rq_job', k); location.href = RQ.url('raid', { start:1 }, k); };   // そのジョブの最初のクエストへ（行き先は routes.js）
 }
 $('jobBtn').onclick = () => $('jobs').classList.toggle('on');
 
