@@ -128,9 +128,12 @@ function place(el, r, scale){
   el.style.width = (r.w/scale) + 'px'; el.style.height = (r.h/scale) + 'px';
   el.style.transform = scale === 1 ? 'none' : `scale(${scale})`;
 }
+// 2Dページは、スマホの大きさ・縦横比に関係なく「横幅 VW の画面」として組み立ててから、片目の大きさに縮める。
+// （片目の幅で組み立てると、スマホによっては幅が狭すぎてスマホ用の詰めた配置になり、文字が重なる）
+const VW = () => 480/S.ui;   // メニューの文字の大きさ 50% → 横幅960の画面として表示
 function layout(){
   $('stage').classList.toggle('full', mode !== '2d'); document.body.classList.toggle('self', mode === 'self');
-  if (mode === '2d'){ const [a, b] = eyes(); place(L, a, S.ui); place(R, b, S.ui); }
+  if (mode === '2d'){ const [a, b] = eyes(), k = a.w/VW(); place(L, a, k); place(R, b, k); }
   else place(L, { x:0, y:0, w:innerWidth, h:innerHeight }, 1);
 }
 addEventListener('resize', layout);

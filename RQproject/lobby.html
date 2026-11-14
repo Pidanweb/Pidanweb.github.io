@@ -130,6 +130,15 @@ body.qmode #me{display:none} body.qmode #quest{display:block}
   #status{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px))}
   .chips,#hint .kb{display:none}
 }
+/* 横長で背が低い画面（スマホの横向き・ゴーグル）：縦にスクロールできるようにして、下のボタンと重ならないようにする */
+@media (max-height:600px) and (min-width:821px){
+  body{overflow-y:auto}
+  #wrap{position:static;padding:64px 84px 20px;align-items:start}
+  #status{position:static;margin:0 84px 28px}   /* 下のボタンはメニューの後ろに並べる（重ならない）*/
+  #topbar{position:absolute}   /* 上の帯もいっしょにスクロールさせる（固定だと中身と重なる）*/
+  #me .ico{height:clamp(70px,18vh,120px)}
+  #quest .ico{height:clamp(60px,14vh,100px)}
+}
 @media (prefers-reduced-motion:reduce){.it,#fade{transition:none}}
 </style>
 </head>
@@ -332,6 +341,7 @@ function pick(i, quiet){
   const n = render.items.length; i = (i + n) % n;
   if (i !== sel && !quiet) tone(1800, .05);
   sel = i; document.querySelectorAll('.it').forEach((b, k) => b.classList.toggle('sel', k === i));
+  { const el = document.querySelectorAll('.it')[i]; if (el && el.scrollIntoView) el.scrollIntoView({ block:'nearest' }); }   // Wii・キーで選んだ項目が画面の外なら見える所までスクロール
   const it = render.items[i];
   if (cur().detail && it && it.q) questDetail(it.q, i);   // もどる を選んでいる間は直前のクエストを表示したまま
 }

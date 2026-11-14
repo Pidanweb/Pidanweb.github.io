@@ -123,7 +123,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
 #welcome .w3{margin-top:12px;font:700 16px var(--en);letter-spacing:.7em;color:var(--acc);text-align:center}
 
 /* ===== ジョブ選択 ===== */
-#jobs{position:fixed;inset:0;z-index:90;display:none;flex-direction:column;align-items:center;justify-content:center;gap:clamp(14px,3vh,28px);padding:70px 20px 60px}
+#jobs{position:fixed;inset:0;z-index:90;display:none;flex-direction:column;align-items:center;justify-content:flex-start;gap:clamp(14px,3vh,28px);padding:70px 20px 60px;overflow-y:auto;overflow-x:hidden}
+#jobs .jHead{margin-top:auto} #jobs #jHint{margin-bottom:auto}   /* 入りきる時は上下中央、入りきらない時は上からスクロール */
+@media (max-height:600px) and (min-width:821px){#jobs{padding-top:40px}.jc .ico{height:clamp(60px,14vh,100px)}.jc .ico svg{height:clamp(56px,13vh,94px)}}
 #jobs.on{display:flex}
 #jw{position:fixed;inset:0;background:#fff;opacity:1;transition:opacity 1.1s ease;pointer-events:none;z-index:3}
 #jobs.show #jw{opacity:0}
@@ -705,6 +707,7 @@ function jobSel(i, quiet){
   if (JOB.busy) return; i = (i + JOBS.length) % JOBS.length;
   if (i !== JOB.sel && !quiet) tone(1800, .05, 'sine', .06);
   JOB.sel = i; document.querySelectorAll('.jc').forEach((c, k) => c.classList.toggle('sel', k === i));
+  { const c = document.querySelectorAll('.jc')[i]; if (c && c.scrollIntoView) c.scrollIntoView({ block:'nearest', inline:'nearest' }); }   // 選んだカードが見えるようにスクロール
 }
 let toastT = 0;
 function jobToast(t){ const el = $('jToast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 1600); }
