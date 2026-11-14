@@ -66,7 +66,11 @@
     gun: {
       jp:'ガンナー', en:'GUNNER', ok:true,
       bgm: 'sounds/battle_gun.mp3',
-      practice: null,
+      // 練習が2つ以上ある時は配列で書く（ロビーで選べるようになる）
+      practice: [
+        { id:'normal', jp:'通常練習', d:'課題をこなして操作を覚える（Wiiリモコン）', goggle:true, url:'gun/gun_practice.html' },
+        { id:'trial',  jp:'体験版（マウス操作）', d:'Wiiリモコンなし・マウスだけで遊べるお試し版', goggle:true, url:'gun/gun_trial.html' },
+      ],
       quests: [
         { id:'slime', jp:'巨大スライム討伐', ...SLIME,
           view:'一人称', device:'スマホ ＋ Wiiリモコン', url:'gun/RQ_project_gunner.html' },
@@ -96,7 +100,8 @@
     let p = PAGES[name];
     if (!p){
       const j = JOBS[jobId || job()];
-      if (name === 'practice') p = j && j.practice;
+      if (name === 'practice' && j){   // view には練習の id を渡す（省略すると最初の練習）
+        const pr = j.practice; p = Array.isArray(pr) ? ((pr.find(x => x.id === view) || pr[0] || {}).url) : pr; }
       if (name === 'raid' && j){   // view にはクエストの id を渡す（省略すると最初のクエスト）
         const qs = j.quests.filter(q => q.url), q = qs.find(q => q.id === view) || qs[0]; p = q && q.url; }
     }
