@@ -44,6 +44,16 @@
   </div>
 
   <section>
+    <h2>🎤 音声認識（PCのマイク）</h2>
+    <label><input type="checkbox" id="voiceOn" checked> タイトルの「ハロー・ニューワールド」をPCのマイクで聞き取る</label>
+    <div style="margin-top:6px"><button id="voiceMic">🎤 マイクを許可</button> <button id="voiceTest">🗣 押している間だけ試しに聞き取る</button></div>
+    <div class="st" id="voiceSt">待機中（スマホでⒶを押すと聞き取ります）</div>
+    <div class="st" id="voiceTxt" style="color:#bfe6ff"></div>
+    <small>スマホ（ゴーグルモード）でⒶを押している間、このPCのマイクで聞き取って、聞こえた言葉をスマホに送ります。<br>
+    最初に「🎤 マイクを許可」を押しておいてください。Chrome / Edge で、このページを画面に出したままにしてください。</small>
+  </section>
+
+  <section>
     <h2>③ 足の位置（剣版のキャリブレーション結果を使用）</h2>
     <div class="st" id="calSt">キャリブレーションを確認中…</div>
     <div style="margin-top:8px"><button id="startBtn">▶ カメラと認識を開始</button> <button id="reloadCal">🔄 キャリブレーションを読み直す</button> <a href="calibrate.html" target="_blank">📐 キャリブレーションのページを開く</a></div>
@@ -87,13 +97,52 @@ function startPeer(){
   peer.on('connection', c => {
     if (conn) try { conn.close(); } catch (e){}
     conn = c;
-    c.on('open', () => { st('phoneSt', 'スマホ: 接続中 ✅', 'ok'); sendWiiState(); sendCal(); });
+    c.on('open', () => { st('phoneSt', 'スマホ: 接続中 ✅', 'ok'); sendWiiState(); sendVoiceCap(); sendCal(); });
     c.on('data', onPhone);
-    c.on('close', () => { if (conn === c){ conn = null; st('phoneSt', 'スマホ: 切断されました', 'ng'); } });
+    c.on('close', () => { if (conn === c){ conn = null; st('phoneSt', 'スマホ: 切断されました', 'ng'); if (vo.want) voStop(); } });
   });
 }
 const send = m => { if (conn && conn.open) conn.send(m); };
 const sendWiiState = () => send({ t:'wii', on:!!dev });
+const sendVoiceCap = () => send({ t:'voiceCap', ok:!!SRC && $('voiceOn').checked });
+
+// ================= 音声認識（PCのマイク）=================
+// スマホのⒶを押している間（{t:'voice', cmd:'start'} 〜 'stop'）だけ聞き取り、候補をそのままスマホへ送る。
+// 「ハロー・ニューワールド」かどうかの判定はスマホ側（RQ_index.html）がする
+const SRC = window.SpeechRecognition || window.webkitSpeechRecognition;
+const vo = { rec:null, on:false, want:false, stopT:0 };
+function voStart(){
+  clearTimeout(vo.stopT); vo.want = true;
+  if (!SRC){ st('voiceSt', 'このブラウザは音声認識に対応していません（Chrome / Edge で開いてください）', 'ng'); send({ t:'voiceErr', msg:'PCのブラウザが音声認識に非対応' }); return; }
+  if (!$('voiceOn').checked){ send({ t:'voiceErr', msg:'PC中継で音声認識がオフになっています' }); return; }
+  if (vo.on) return;
+  const r = vo.rec = new SRC(); r.lang = 'ja-JP'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 5;
+  r.onresult = e => {
+    for (let i = e.resultIndex; i < e.results.length; i++){
+      const x = e.results[i], alts = Array.from(x, a => a.transcript);
+      send({ t:'voice', alts, final:x.isFinal }); $('voiceTxt').textContent = '「' + alts[0] + '」';
+    }
+  };
+  r.onerror = e => {
+    if (e.error === 'no-speech' || e.error === 'aborted') return;
+    const msg = e.error === 'not-allowed' ? 'PCのマイクが許可されていません（PC中継の「🎤 マイクを許可」）' : e.error === 'network' ? 'PCの音声認識がネットにつながりません' : 'PCの音声認識エラー: ' + e.error;
+    st('voiceSt', msg, 'ng'); send({ t:'voiceErr', msg });
+  };
+  r.onend = () => { vo.on = false; if (vo.want) setTimeout(voStart, 60); else st('voiceSt', '待機中（スマホでⒶを押すと聞き取ります）', 'ok'); };
+  try { r.start(); vo.on = true; st('voiceSt', '🎤 聞き取り中…', 'ok'); } catch (e){}
+}
+function voStop(){   // 言い終わりの結果を少し待ってから止める
+  vo.want = false; clearTimeout(vo.stopT);
+  vo.stopT = setTimeout(() => { try { vo.rec && vo.rec.stop(); } catch (e){} }, 1000);
+}
+$('voiceOn').onchange = sendVoiceCap;
+$('voiceMic').onclick = async () => {
+  try { const s = await navigator.mediaDevices.getUserMedia({ audio:true }); s.getTracks().forEach(t => t.stop()); st('voiceSt', '✅ マイクOK', 'ok'); }
+  catch (e){ st('voiceSt', 'マイクを使えません: ' + e.name, 'ng'); }
+};
+$('voiceTest').addEventListener('pointerdown', voStart);
+for (const ev of ['pointerup', 'pointerleave']) $('voiceTest').addEventListener(ev, () => { if (vo.want) voStop(); });
+if (!SRC) st('voiceSt', 'このブラウザは音声認識に対応していません（Chrome / Edge で開いてください）', 'ng');
 
 // ================= Wiiリモコン（生のレポートをそのまま中継）=================
 const WVID = 0x057e, WPIDS = [0x0306, 0x0330];
@@ -120,7 +169,8 @@ if ('hid' in navigator){
 function onPhone(m){
   if (!m) return;
   if (m.t === 'out' && dev) dev.sendReport(m.id, new Uint8Array(m.d)).catch(() => {});
-  else if (m.t === 'hi'){ sendWiiState(); sendCal(); }
+  else if (m.t === 'hi'){ sendWiiState(); sendVoiceCap(); sendCal(); }
+  else if (m.t === 'voice'){ if (m.cmd === 'start') voStart(); else voStop(); }
 }
 setInterval(() => { st('rateSt', dev ? `受信 ${nRep} 回/秒` + (conn ? ' → スマホへ転送中' : '（スマホ未接続）') : ''); nRep = 0; }, 1000);
 
