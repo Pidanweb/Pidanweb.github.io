@@ -2009,6 +2009,7 @@ function prSet(i){
   if (s.final){ B.max = B.hp = FINAL_HP; B.phase = 1; }
   else { B.max = 800; B.hp = 800; }
   if (s.key === 'weak') B.weak = 99;
+  if (s.key === 'weapon') PR.wpSeen.clear();
   prDraw();
 }
 function prCount(key, k = 1){
@@ -2046,7 +2047,8 @@ finishReload = function(perfect){
 const _setWeapon = setWeapon;
 setWeapon = function(w){
   const before = P.wp; _setWeapon(w);
-  if (P.wp !== before && (P.wp === 'p90' || P.wp === 'sr') && !PR.wpSeen.has(P.wp)){ PR.wpSeen.add(P.wp); prCount('weapon'); }
+  // 「持ち替え」の課題中に持ち替えた分だけ数える（それより前の課題で持ち替えた分は数えない）
+  if (step() && step().key === 'weapon' && P.wp !== before && (P.wp === 'p90' || P.wp === 'sr') && !PR.wpSeen.has(P.wp)){ PR.wpSeen.add(P.wp); prCount('weapon'); }
 };
 const _guarded = guarded; guarded = function(){ _guarded(); prCount('guard'); };
 const _parried = parried; parried = function(){ _parried(); prCount('parry'); };
