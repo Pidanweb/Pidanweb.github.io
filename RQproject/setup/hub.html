@@ -44,6 +44,16 @@
   </div>
 
   <section>
+    <h2>🖱 マウス中継（PCのマウス → スマホ）</h2>
+    <div id="mousePad" tabindex="0" style="margin-top:4px;height:110px;border:2px dashed #7ae7ff88;border-radius:10px;display:grid;place-items:center;text-align:center;cursor:pointer;color:#9fdcea;user-select:none">
+      ここをクリックすると、PCのマウスでスマホを操作できます<br><small>（Esc キーで解除）</small></div>
+    <div class="st" id="mouseSt">オフ</div>
+    <small>ゴーグルモードで、Wiiリモコンの代わりにPCのマウスを使えます。<br>
+    タイトル・ロビー：ホイール＝選ぶ / 左クリック＝決定（タイトルは長押しで「ハロー・ニューワールド」）/ 右クリック＝戻る<br>
+    ガンナー体験版：左クリック＝射撃 / 右クリック＝リロード / ホイール＝武器の持ち替え（狙いは頭の向き）</small>
+  </section>
+
+  <section>
     <h2>🎤 音声認識（PCのマイク）</h2>
     <label><input type="checkbox" id="voiceOn" checked> タイトルの「ハロー・ニューワールド」をPCのマイクで聞き取る</label>
     <div style="margin-top:6px"><button id="voiceMic">🎤 マイクを許可</button> <button id="voiceTest">🗣 押している間だけ試しに聞き取る</button></div>
@@ -136,6 +146,19 @@ function voStop(){   // 言い終わりの結果を少し待ってから止め�
   vo.stopT = setTimeout(() => { try { vo.rec && vo.rec.stop(); } catch (e){} }, 1000);
 }
 $('voiceOn').onchange = sendVoiceCap;
+
+// ================= マウス中継（PCのマウス → スマホ）=================
+// 枠をクリックするとマウスをこのページに閉じ込め（ポインターロック）、クリックとホイールをスマホへ送る
+const mp = $('mousePad'), mouseOn = () => document.pointerLockElement === mp;
+mp.addEventListener('click', () => { if (!mouseOn()) try { mp.requestPointerLock(); } catch (e){} });
+document.addEventListener('pointerlockchange', () => {
+  const on = mouseOn(); mp.style.borderColor = on ? '#5fe07a' : '#7ae7ff88'; mp.style.color = on ? '#5fe07a' : '#9fdcea';
+  st('mouseSt', on ? '🖱 中継中（Esc で解除）' + (conn ? '' : '　※スマホが未接続') : 'オフ', on ? 'ok' : '');
+});
+document.addEventListener('mousedown', e => { if (mouseOn()){ e.preventDefault(); send({ t:'mouse', down:true, button:e.button }); } });
+document.addEventListener('mouseup', e => { if (mouseOn()){ e.preventDefault(); send({ t:'mouse', down:false, button:e.button }); } });
+document.addEventListener('contextmenu', e => { if (mouseOn()) e.preventDefault(); });
+document.addEventListener('wheel', e => { if (mouseOn()){ e.preventDefault(); send({ t:'wheel', dy:e.deltaY }); } }, { passive:false });
 $('voiceMic').onclick = async () => {
   try { const s = await navigator.mediaDevices.getUserMedia({ audio:true }); s.getTracks().forEach(t => t.stop()); st('voiceSt', '✅ マイクOK', 'ok'); }
   catch (e){ st('voiceSt', 'マイクを使えません: ' + e.name, 'ng'); }
