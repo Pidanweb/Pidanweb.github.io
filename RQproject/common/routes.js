@@ -19,6 +19,7 @@
   // ---------------- ページ一覧 ----------------
   const PAGES = {
     title:     'RQ_index.html',
+    jobSelect: 'RQ_index.html?jobs=1',          // タイトルの演出を飛ばして、ジョブ選択から
     lobby:     'lobby.html',
     hp:        'RQ_HP_site/RQ_HP.html',
     // 準備（PC側で開くもの・カメラ）
@@ -54,7 +55,8 @@
       ],
     },
     wiz: {
-      jp:'魔法使い', en:'WIZARD', ok:false,
+      jp:'魔法使い', en:'WIZARD', ok:true,
+      bgm: 'sounds/battle.mp3',
       practice: null,
       quests: [
         { id:'slime', jp:'巨大スライム討伐', ...SLIME,
@@ -62,7 +64,8 @@
       ],
     },
     gun: {
-      jp:'ガンナー', en:'GUNNER', ok:false,
+      jp:'ガンナー', en:'GUNNER', ok:true,
+      bgm: 'sounds/battle_gun.mp3',
       practice: null,
       quests: [
         { id:'slime', jp:'巨大スライム討伐', ...SLIME,
