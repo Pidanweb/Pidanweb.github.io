@@ -2111,10 +2111,25 @@ titleMsg = function(){
 };
 titleMsg();
 
-// ---- 体験版：マウスだけで遊ぶ（Wiiリモコン・PC中継・PCのカメラは使わない）----
+// ---- PC中継のマウス（setup/hub.html の「🖱 マウス中継」）：届いたクリック・ホイールを、このページのマウス操作として流す ----
+const _relayData = relayData;
+relayData = function(m){
+  if (m && m.t === 'mouse'){
+    const o = { button:m.button, buttons:m.down ? 1 : 0, clientX:innerWidth/2, clientY:innerHeight/2, bubbles:true, cancelable:true };
+    (document.querySelector('canvas') || document.body).dispatchEvent(new MouseEvent(m.down ? 'mousedown' : 'mouseup', o));
+    return;
+  }
+  if (m && m.t === 'wheel'){ (document.querySelector('canvas') || document.body).dispatchEvent(new WheelEvent('wheel', { deltaY:m.dy, bubbles:true, cancelable:true })); return; }
+  _relayData(m);
+};
+if (!TRIAL){   // 通常練習：Wiiリモコンがない時は、PCのマウスでも操作できるように中継のクリックをマウス操作として受ける
+  const _rd2 = relayData;
+  relayData = function(m){ if (m && (m.t === 'mouse' || m.t === 'wheel') && ctl.mode !== 'mouse') return; _rd2(m); };
+}
+
+// ---- 体験版：マウスだけで遊ぶ（Wiiリモコン・PCのカメラは使わない。PC中継はマウスのためだけ）----
 if (TRIAL){
-  openWii = async () => {};                 // Wiiリモコン（PC中継の仮想リモコンも）を使わない
-  relayConnect = () => {};                  // PC中継につながない（goggle-game.js からも呼ばれる）
+  openWii = async () => {};                 // Wiiリモコン（PC中継の仮想リモコンも）を使わない。PC中継はマウス中継のためだけにつなぐ
   const _openCam = openCam;
   openCam = id => head.on ? _openCam(id) : Promise.resolve();   // PCではカメラを開かない（ゴーグルの背景映像だけ使う）
   face.on = false; try { $('faceOn').checked = false; } catch (e){}
