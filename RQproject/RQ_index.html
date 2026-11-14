@@ -585,6 +585,11 @@ if (GOG){
       for (const a of m.alts || []) if (isPhrase(a)) return accept(a + '（PC）');
       if (m.alts && m.alts[0]) heard('「' + m.alts[0] + '」（PC）', 'var(--ice)');
     } else if (m.t === 'voiceErr') heard(m.msg, 'var(--ng)');
+    // PC中継のマウス：ジョブ選択は ホイール＝選ぶ / 左＝決定 / 右＝戻る、タイトルは 左長押し＝Ⓐ
+    else if (m.t === 'mouse'){
+      if (JOB.on){ if (m.down && m.button === 0) jobDecide(); else if (m.down && m.button === 2) jobBack(); }
+      else if (m.button === 0){ if (m.down) holdStart(); else holdEnd(); }
+    } else if (m.t === 'wheel' && JOB.on) jobSel(JOB.sel + (m.dy > 0 ? 1 : -1));
   };
   setTimeout(micChip, 1200);
   $('bWii').hidden = true;

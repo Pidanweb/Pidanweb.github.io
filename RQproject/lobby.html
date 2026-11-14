@@ -427,6 +427,12 @@ if (GOG){
   const relayWii = on => { if (on) openWii(GOG.wii).then(() => chip('cWii', 'ok', 'PC中継')).catch(() => {}); else { wii.dev = null; chip('cWii', 'ng', 'PC中継：Wii待ち'); } };
   GOG.onwii = relayWii; relayWii(GOG.wiiOn());
   $('bWii').hidden = true;
+  // PC中継のマウス：ホイール＝選ぶ / 左クリック＝決定 / 右クリック＝戻る
+  let wheelT = 0;
+  GOG.onmsg = m => {
+    if (m.t === 'mouse' && m.down){ if (m.button === 0) decide(); else if (m.button === 2) back(); }
+    else if (m.t === 'wheel'){ const now = performance.now(); if (now - wheelT > 150){ wheelT = now; pick(sel + (m.dy > 0 ? 1 : -1)); } }
+  };
   GOG.cam().then(s => { if (s){ $('arv').srcObject = s; $('arv').classList.add('on'); } }).catch(() => {});
 }
 
