@@ -385,14 +385,24 @@ function bgmStopTitle(){
 document.addEventListener('pointerover', e => { const b = e.target.closest && e.target.closest('.btn,#aBtn'); if (b && !b.contains(e.relatedTarget) && AC) tone(1800, .05, 'sine', .06); });
 
 // ===== 起動ゲート（ユーザー操作で音とマイクを有効化）=====
-let gateOpen = false, micStream = null, analyser = null, wave = [];
+let gateOpen = false, micStream = null, analyser = null, micOk = false, wave = [];
+// スマホ（とくにAndroid）は、ページがマイクを開いたままだと音声認識に音が届かない。
+// だから「Ⓐを押している間」は波形用のマイクを閉じて、音声認識にマイクをゆずる
+const MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || !!(window.RQ && RQ.gog);
+const HOLD_OK_MS = 4000;   // スマホ・ゴーグル：音声が通らなくても、Ⓐをこの時間押し続ければ起動（保険）
+async function micOpen(){
+  if (micStream) return;
+  micStream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true } });
+  const src = AC.createMediaStreamSource(micStream); analyser = AC.createAnalyser(); analyser.fftSize = 256; src.connect(analyser);
+  micOk = true;
+}
+function micClose(){ if (micStream) micStream.getTracks().forEach(t => t.stop()); micStream = null; analyser = null; }
 for (let i = 0; i < 18; i++){ const s = document.createElement('span'); $('wave').appendChild(s); wave.push(s); }
 async function openGate(){
   if (gateOpen) return; gateOpen = true; $('gate').classList.add('off');
   audio(); sfx.boot(); setTimeout(bgmStart, 600);
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true } });
-    const src = AC.createMediaStreamSource(micStream); analyser = AC.createAnalyser(); analyser.fftSize = 256; src.connect(analyser);
+    await micOpen();
     chip('cMic', SR ? 'ok' : 'warn', SR ? 'マイクOK' : '音声認識非対応（長押しで代用）');
   } catch (e){ chip('cMic', 'ng', 'マイク不可：' + e.name); }
 }
@@ -431,7 +441,7 @@ function norm(s){
   s = kata(s.toLowerCase())
     .replace(/hello|hallo|hullo|harrow|halo/g, 'ハロ').replace(/new/g, 'ニュ').replace(/world|warudo|wald|word/g, 'ワルド')
     .replace(/[\s、。,.!！?？・ー〜~'"「」『』\-]/g, '')
-    .replace(/ハロウ/g, 'ハロ').replace(/ニュウ/g, 'ニュ').replace(/ワア?ルド|ワド/g, 'ワルド').replace(/[ヴウ]ォ?ルド/g, 'ワルド');
+    .replace(/ハロウ|ハッロ|ハロ[ゥォオ]/g, 'ハロ').replace(/ワルト|ワード|ワアド/g, 'ワルド').replace(/ニュウ/g, 'ニュ').replace(/ワア?ルド|ワド/g, 'ワルド').replace(/[ヴウ]ォ?ルド/g, 'ワルド');
   return s;
 }
 function lev(a, b){
@@ -443,6 +453,7 @@ function lev(a, b){
 function isPhrase(raw){
   const s = norm(raw); if (!s) return false;
   if (s.includes(TARGET)) return true;
+  if (s.includes('ニュワルド') || s.includes('ニューワルド')) return true;   // 「ニューワールド」まで聞こえれば十分（ハローは聞き落とされやすい）
   for (let L = TARGET.length - 1; L <= TARGET.length + 2; L++)   // 少しの聞き間違いは許す（「ハローワールド」は不可）
     for (let i = 0; i + L <= s.length; i++) if (lev(s.substr(i, L), TARGET) <= (L >= TARGET.length ? 2 : 1)) return true;
   return false;
@@ -475,16 +486,20 @@ function holdStart(){
   if (holding || linked) return;
   holding = true; holdT0 = performance.now(); clearTimeout(stopTimer);
   $('aBtn').classList.add('hold'); $('blink').textContent = 'LISTENING…'; sfx.holdOn();
-  heard(SR ? '聞き取り中…「ハロー・ニューワールド」' : '音声認識非対応：そのまま長押しで起動', 'var(--acc2)');
-  recStart();
+  heard(SR ? (MOBILE ? '聞き取り中…「ハロー・ニューワールド」（そのまま4秒押し続けても起動）' : '聞き取り中…「ハロー・ニューワールド」') : '音声認識非対応：そのまま長押しで起動', 'var(--acc2)');
+  if (MOBILE && SR){ micClose(); setTimeout(() => { if (holding && !linked) recStart(); }, 150); }   // マイクが解放されるのを少し待つ
+  else recStart();
 }
 function holdEnd(){
   if (!holding || linked) return;
   holding = false; $('aBtn').classList.remove('hold'); $('blink').textContent = 'AWAITING VOICE COMMAND'; sfx.holdOff();
-  stopTimer = setTimeout(() => { recStop(); if (!linked) heard('待機中'); }, 700);   // 言い終わりの結果を少し待つ
+  stopTimer = setTimeout(() => {
+    recStop(); if (!linked) heard('待機中');
+    if (MOBILE && micOk && !linked) setTimeout(() => { if (!holding) micOpen().catch(() => {}); }, 400);   // 波形用のマイクを戻す
+  }, 1200);   // 言い終わりの結果を少し待つ（スマホは結果が遅れて届くので長め）
 }
 function accept(t){
-  if (linked) return; linked = true; recStop();
+  if (linked) return; linked = true; recStop(); micClose();
   heard('✔ 音声コマンド認証：「' + t + '」', 'var(--ok)'); wiiRumble(300);
   startLink();
 }
@@ -494,13 +509,15 @@ let lastT = performance.now();
 function uiTick(now){
   const ring = $('aRing');
   if (holding){
-    const k = SR ? ((now - holdT0)/1000 % 1.6)/1.6 : Math.min(1, (now - holdT0)/2500);
+    const k = !SR ? Math.min(1, (now - holdT0)/2500) : MOBILE ? Math.min(1, (now - holdT0)/HOLD_OK_MS) : ((now - holdT0)/1000 % 1.6)/1.6;
     ring.style.strokeDashoffset = 283*(1 - k);
-    if (!SR && k >= 1) accept('（長押し）');
+    if ((!SR || MOBILE) && k >= 1) accept('（長押し）');
   } else ring.style.strokeDashoffset = 283;
   if (analyser){
     const a = new Uint8Array(analyser.frequencyBinCount); analyser.getByteFrequencyData(a);
     wave.forEach((s, i) => { const v = a[2 + i*3]/255; s.style.height = (3 + (holding ? v*18 : v*5)) + 'px'; s.style.opacity = holding ? 1 : .4; });
+  } else if (holding){   // マイクを音声認識にゆずっている間は、それっぽく揺らすだけ
+    wave.forEach((s, i) => { s.style.height = (4 + 10*Math.abs(Math.sin(now/140 + i*.7))) + 'px'; s.style.opacity = 1; });
   }
 }
 
@@ -559,7 +576,7 @@ const CHECKS = [
   { n:'AUDIO',      c:'#ffa53d', ok:() => !!AC },
   { n:'MOTION',     c:'#4cd68a', ok:() => true },
   { n:'CONTROLLER', c:'#4aa8ff', ok:() => !!wii.dev },
-  { n:'VOICE',      c:'#a77bff', ok:() => !!micStream },
+  { n:'VOICE',      c:'#a77bff', ok:() => micOk },
 ];
 function startLink(){
   audio(); sfx.accept(); bgmStopTitle();
