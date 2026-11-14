@@ -283,7 +283,7 @@ const MENUS = {
     { t:'レイドに出撃', d:'クエストを選んで出撃します', off: QUESTS.some(q => q.url) ? '' : 'このジョブのクエストはまだありません',
       run: () => open('quest') },
     { t:'準備する', d:'PCの中継・カメラの位置合わせ', run: () => open('setup') },
-    { t:'ジョブを変える', d:'タイトルからジョブ選択をやり直します', run: () => goTo(RQ.url('title')) },
+    { t:'ジョブを変える', d:'ジョブ選択の画面に戻ります', run: () => goTo(RQ.url('jobSelect')) },
   ]},
   quest: { crumb:'クエスト選択', detail:true, items: QUESTS.map(q => q.locked
     ? { q, t:'？？？', off:'新しいクエストを準備中' }

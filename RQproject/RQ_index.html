@@ -674,6 +674,7 @@ const JOBS = [
     ds:'リモコンで照準を合わせて撃ち抜く射撃職。距離を保って立ち回れ。',
     st:{ 攻撃:3, 防御:2, 射程:5, 難易度:3 }, ctl:'🎮 ポインター＝照準 ／ Ⓑ＝射撃' },
 ];
+if (window.RQ) for (const j of JOBS) if (RQ.JOBS[j.id]) j.ok = RQ.JOBS[j.id].ok;   // 選べるかどうかは routes.js の ok に合わせる
 const JOB = { on:false, sel:0, busy:false };
 function jobCards(){
   $('jCards').innerHTML = JOBS.map((j, i) => `
@@ -692,7 +693,8 @@ function jobCards(){
   });
 }
 function showJobs(){
-  LK.done = true; $('link').classList.remove('on');
+  if (LK) LK.done = true; else LK = { done:true, ev:{} };
+  $('link').classList.remove('on');
   document.body.classList.add('jobmode'); jobCards();
   const saved = JOBS.findIndex(j => j.id === lsGet('rq_job') && j.ok);
   JOB.on = true; JOB.busy = false; $('jobs').classList.add('on'); jobSel(saved >= 0 ? saved : 0, true);
@@ -720,7 +722,7 @@ function jobDecide(){
   setTimeout(() => $('jobs').classList.add('leave'), 2300);
   setTimeout(() => { lsSet('rq_linked', String(Date.now())); location.href = NEXT + '?job=' + j.id; }, 3300);
 }
-function jobBack(){ if (!JOB.on || JOB.busy) return; sfx.holdOff(); location.reload(); }
+function jobBack(){ if (!JOB.on || JOB.busy) return; sfx.holdOff(); location.href = location.pathname; }   // タイトル（演出の最初）へ
 addEventListener('keydown', e => {
   if (!JOB.on) return;
   if (e.code === 'ArrowLeft' || e.code === 'ArrowUp'){ e.preventDefault(); jobSel(JOB.sel - 1); }
@@ -728,6 +730,15 @@ addEventListener('keydown', e => {
   else if ((e.code === 'Enter' || e.code === 'Space') && !e.repeat){ e.preventDefault(); jobDecide(); }
   else if (e.code === 'Escape' || e.code === 'Backspace'){ jobBack(); }
 });
+
+// ロビーの「ジョブを変える」から（?jobs=1）：演出を飛ばしてジョブ選択を出す
+if (new URLSearchParams(location.search).get('jobs') === '1'){
+  linked = true; gateOpen = true; $('gate').classList.add('off');
+  const unlock = () => { audio(); removeEventListener('pointerdown', unlock, true); removeEventListener('keydown', unlock, true); };
+  addEventListener('pointerdown', unlock, true); addEventListener('keydown', unlock, true);   // 音は最初の操作で鳴らせるようになる
+  try { audio(); } catch (e){}
+  showJobs();
+}
 
 // ===== メインループ =====
 function loop(now){
