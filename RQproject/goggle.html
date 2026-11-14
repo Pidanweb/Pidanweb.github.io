@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RQ ゴーグルモード</title>
+<!--
+  =====================================================================
+   RQ_project ゴーグルモード（goggle.html）
+   スマホで開いて「開始」→ そのままゴーグルに入れると、
+   タイトル（ハロー・ニューワールドの演出）→ ロビー → クエスト まで
+   ゴーグルを外さずに進めます。
+
+   しくみ：
+   ・このページは「枠」で、中に本物のページ（RQ_index.html など）を iframe で開く。
+     ページを移動しても枠は残るので、全画面・横向き固定・画面スリープ防止・
+     PC中継の接続・背景カメラが切れない。
+   ・タイトルやロビーのような2Dのページは、左目＝本物、右目＝そっくりの複製（ミラー）で2画面表示。
+   ・クエスト（ゲーム本体）は自分で2画面を描くので、全面に出してゲームにまかせる。
+     ゲーム側は RQ.gog（この枠）を見つけると自動でゴーグル表示・PC中継の接続を始める。
+
+   ページ側の宣言（ページの先頭の <script> で）：
+     window.RQ_GOGGLE = '2d'    … 2Dページ。この枠が左右に複製して表示する
+     window.RQ_GOGGLE = 'self'  … 自分で2画面を描くゲーム。全面に出す
+     （書いていないページは複製して表示し、「非対応」の帯を出す）
+  =====================================================================
+-->
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--acc:#ff9a3c;--ice:#bfe6ff;--sub:#9fb4c8;--ok:#6dffb0;--ng:#ff6b7a;--line:rgba(220,236,255,.28)}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#000;color:#f4f8ff;font-family:"Noto Sans JP",sans-serif;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+#stage{position:fixed;inset:0;background:#000}
+#stage iframe{position:absolute;left:0;top:0;border:0;transform-origin:0 0;background:#000;display:block}
+#R{pointer-events:none}
+#stage.full #R{display:none}
+
+/* ---- 設定パネル（開始前と ⚙ から）---- */
+#panel{position:fixed;inset:0;z-index:20;display:grid;place-items:center;overflow-y:auto;padding:16px;
+  background:radial-gradient(ellipse at 50% 40%,#13233c,#03060c 75%)}
+#panel.over{background:rgba(3,6,12,.92)}
+#panel[hidden]{display:none}
+.box{width:min(560px,100%);padding:20px 22px;background:rgba(8,16,30,.7);border:1px solid var(--line);
+  clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px)}
+.box h1{margin:0;font:300 30px "Rajdhani",sans-serif;letter-spacing:.3em}
+.box h1 b{color:var(--acc);font-weight:500}
+.box .lead{margin:6px 0 14px;font-size:13px;color:var(--sub);line-height:1.7}
+.row{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:14px;flex-wrap:wrap}
+.row input[type=text]{width:8em;font:22px monospace;letter-spacing:3px;padding:6px 8px;background:#0a1424;color:#fff;border:1px solid var(--line)}
+label.sl{display:block;margin-top:12px;font-size:13px;color:var(--ice)}
+label.sl input{width:100%}
+label.sl b{color:#fff}
+small{display:block;color:var(--sub);font-size:12px;line-height:1.6;margin-top:4px}
+.btns{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+button{font:500 15px "Noto Sans JP",sans-serif;color:#fff;background:#0d2238;border:1px solid var(--line);padding:10px 16px;cursor:pointer}
+button.main{flex:1;font-size:18px;padding:14px;color:#1a0d00;background:var(--acc);border-color:var(--acc);font-weight:700}
+#st{margin-top:10px;font-size:12px;color:#ffd35a;min-height:1.4em;white-space:pre-line}
+
+/* ---- ゴーグル中の小さなボタン・帯 ---- */
+#gear{position:fixed;left:50%;top:4px;transform:translateX(-50%);z-index:10;display:none;width:34px;height:34px;padding:0;border-radius:50%;
+  font-size:17px;line-height:32px;background:rgba(0,0,0,.45);border:1px solid rgba(122,231,255,.35);color:#7ae7ff;opacity:.55}
+body.on #gear{display:block}
+body.self #gear{display:none}   /* ゲーム中はゲーム自身のバー（✕ 終了でロビーへ）を使う */
+.note{position:fixed;bottom:8px;transform:translateX(-50%);z-index:9;display:none;max-width:44vw;padding:4px 10px;border-radius:6px;
+  background:rgba(0,0,0,.7);color:#ffd35a;font-size:11px;line-height:1.4;text-align:center;pointer-events:none}
+body.unsup .note{display:block}
+</style>
+</head>
+<body>
+<div id="stage"><iframe id="L" title="ページ（左目）" allow="camera; microphone; autoplay; hid; accelerometer; gyroscope; magnetometer; screen-wake-lock"></iframe><iframe id="R" title="複製（右目）" tabindex="-1" aria-hidden="true" src="about:blank"></iframe></div>
+<button id="gear" title="設定">⚙</button>
+<div class="note" style="left:25%">このページはゴーグル表示に対応していません<br>⚙ →「通常の表示に戻る」</div>
+<div class="note" style="left:75%">このページはゴーグル表示に対応していません<br>⚙ →「通常の表示に戻る」</div>
+
+<div id="panel">
+  <div class="box">
+    <h1>GOGGLE <b>MODE</b></h1>
+    <div class="lead">スマホを横向きにしてゴーグルに入れたまま、タイトル → ロビー → クエストまで進めます。<br>
+      先にPCで <b>setup/hub.html</b>（PC中継）を開いておくと、Wiiリモコンで操作できます。</div>
+    <div class="row">PC中継のコード <input type="text" id="code" inputmode="numeric" maxlength="6" placeholder="000000"></div>
+    <small>PC中継の画面に出ている6桁。空のままでも始められます（そのときはWiiリモコンが使えません）。</small>
+    <label class="sl">左右の映像の中心の間隔 <b id="sepV">50</b>%<input type="range" id="sep" min="25" max="50" step=".5" value="50"></label>
+    <label class="sl">片目の映像の大きさ <b id="eyeKV">100</b>%<input type="range" id="eyeK" min="40" max="100" step="1" value="100"></label>
+    <label class="sl">メニューの文字の大きさ <b id="uiV">50</b>%<input type="range" id="ui" min="30" max="100" step="1" value="50"></label>
+    <small>上の2つはゲームの「🥽 ゴーグル」の設定と共通です（片方で合わせればもう片方も同じになります）。</small>
+    <div class="row"><label><input type="checkbox" id="pass" checked> 背景にカメラ映像（周りが見える）</label></div>
+    <div class="btns" id="bStartRow"><button class="main" id="bStart">🥽 開始</button></div>
+    <div class="btns" id="bMenuRow" hidden><button class="main" id="bResume">▶ 戻る</button><button id="bExit">✕ 通常の表示に戻る</button></div>
+    <div id="st"></div>
+  </div>
+</div>
+
+<script src="common/routes.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const ls = {
+  get(k){ try { return localStorage.getItem(k); } catch (e){ return null; } },
+  set(k, v){ try { localStorage.setItem(k, v); } catch (e){} },
+};
+const L = $('L'), R = $('R');
+const st = t => $('st').textContent = t;
+
+// ================= 設定（ゲームと同じ保存場所を使う）=================
+const S = { sep:.5, eyeK:1, ui:.5, pass:true };
+function loadS(){
+  const a = +ls.get('rq_goggle_sep'), b = +ls.get('rq_goggle_eyeK'), c = +ls.get('rq_goggle_ui');
+  if (a >= 25 && a <= 50) S.sep = a/100; if (b >= 40 && b <= 100) S.eyeK = b/100; if (c >= 30 && c <= 100) S.ui = c/100;
+  S.pass = ls.get('rq_goggle_pass') !== '0';
+  $('sep').value = S.sep*100; $('eyeK').value = S.eyeK*100; $('ui').value = S.ui*100; $('pass').checked = S.pass;
+  $('sepV').textContent = +(S.sep*100).toFixed(1); $('eyeKV').textContent = Math.round(S.eyeK*100); $('uiV').textContent = Math.round(S.ui*100);
+  $('code').value = ls.get('rqgun_code') || '';
+}
+loadS();
+$('sep').oninput = e => { S.sep = +e.target.value/100; $('sepV').textContent = e.target.value; ls.set('rq_goggle_sep', e.target.value); layout(); };
+$('eyeK').oninput = e => { S.eyeK = +e.target.value/100; $('eyeKV').textContent = e.target.value; ls.set('rq_goggle_eyeK', e.target.value); layout(); };
+$('ui').oninput = e => { S.ui = +e.target.value/100; $('uiV').textContent = e.target.value; ls.set('rq_goggle_ui', e.target.value); layout(); };
+$('pass').onchange = e => { S.pass = e.target.checked; ls.set('rq_goggle_pass', S.pass ? '1' : '0'); if (!S.pass) camStop(); };
+
+// ================= 左右の目の配置（ゲームの render() と同じ計算）=================
+let mode = 'off';   // off（開始前）/ 2d（複製して2画面）/ self（ゲームが自分で2画面）
+function eyes(){
+  const W = innerWidth, H = innerHeight, k = S.eyeK, vw = W/2*k, vh = H*k, sep = Math.min(S.sep*W, W - vw);
+  return [-1, 1].map(e => ({ x:W/2 + e*sep/2 - vw/2, y:(H - vh)/2, w:vw, h:vh }));
+}
+function place(el, r, scale){
+  el.style.left = r.x + 'px'; el.style.top = r.y + 'px';
+  el.style.width = (r.w/scale) + 'px'; el.style.height = (r.h/scale) + 'px';
+  el.style.transform = scale === 1 ? 'none' : `scale(${scale})`;
+}
+function layout(){
+  $('stage').classList.toggle('full', mode !== '2d'); document.body.classList.toggle('self', mode === 'self');
+  if (mode === '2d'){ const [a, b] = eyes(); place(L, a, S.ui); place(R, b, S.ui); }
+  else place(L, { x:0, y:0, w:innerWidth, h:innerHeight }, 1);
+}
+addEventListener('resize', layout);
+layout();
+
+// ================= 背景カメラ（ページを移動しても開きっぱなし）=================
+let camStream = null, camWait = null;
+function camLive(){ return camStream && camStream.getVideoTracks().some(t => t.readyState === 'live'); }
+async function cam(){
+  if (!S.pass) return null;
+  if (camLive()) return camStream;
+  if (camWait) return camWait;
+  camWait = navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' }, width:{ ideal:1280 }, height:{ ideal:720 } }, audio:false })
+    .then(s => (camStream = s), e => { st('カメラを開けません: ' + e.name); return null; })
+    .finally(() => { camWait = null; });
+  return camWait;
+}
+function camStop(){ if (camStream) camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+
+// ================= PC中継（Wiiリモコンのボタンをページに渡す）=================
+// ページからは本物のWiiリモコン（WebHID）と同じ形に見える「仮想のWiiリモコン」
+const relay = { peer:null, conn:null, want:false, wiiOn:false, retry:0 };
+const fakeWii = {
+  opened:true, vendorId:0x057e, productId:0x0306, productName:'Wii Remote (PC中継)', oninputreport:null,
+  open: async () => {}, close: async () => {},
+  sendReport: async (id, data) => { if (relay.conn && relay.conn.open) relay.conn.send({ t:'out', id, d:Array.from(data) }); },
+};
+function code(){ return ($('code').value || '').replace(/\D/g, ''); }
+function relayClose(){
+  clearTimeout(relay.retry);
+  try { relay.conn && relay.conn.close(); } catch (e){} try { relay.peer && relay.peer.destroy(); } catch (e){}
+  relay.conn = relay.peer = null; relay.wiiOn = false;
+}
+function relayConnect(){
+  const c = code(); relayClose();
+  if (!relay.want || c.length !== 6) return;
+  if (typeof Peer === 'undefined'){ st('❌ PeerJS を読み込めませんでした（ネット接続を確認）'); return; }
+  const peer = relay.peer = new Peer();
+  peer.on('open', () => {
+    const conn = relay.conn = peer.connect('rqgun-' + c, { reliable:true, serialization:'json' });
+    conn.on('open', () => { st('✅ PC中継に接続しました'); ls.set('rqgun_code', c); conn.send({ t:'hi' }); });
+    conn.on('data', relayData);
+    conn.on('close', () => { if (relay.conn === conn) relayLater('PC中継との接続が切れました（再接続します）'); });
+    conn.on('error', () => { if (relay.conn === conn) relayLater('PC中継: 通信エラー（再接続します）'); });
+  });
+  peer.on('error', e => relayLater(e.type === 'peer-unavailable' ? 'PC中継が見つかりません（PCで setup/hub.html を開いていますか？）' : 'PC中継: ' + (e.type || e.message)));
+}
+function relayLater(msg){
+  st(msg); setWii(false);
+  clearTimeout(relay.retry); if (relay.want) relay.retry = setTimeout(relayConnect, 3000);
+}
+function setWii(on){
+  if (relay.wiiOn === on) return; relay.wiiOn = on;
+  try { RQG.onwii && RQG.onwii(on); } catch (e){}
+}
+function relayData(m){
+  if (!m) return;
+  if (m.t === 'in'){
+    const h = fakeWii.oninputreport; if (!h) return;
+    try { h({ reportId:m.id, data:new DataView(new Uint8Array(m.d).buffer), timeStamp:performance.now(), device:fakeWii }); } catch (e){}
+  } else if (m.t === 'wii') setWii(!!m.on);
+}
+function relayPause(){ relay.want = false; relayClose(); }
+function relayResume(){ if (relay.want && relay.conn) return; relay.want = true; relayConnect(); }
+
+// ================= ページに見せる窓口（ページからは RQ.gog で使う）=================
+window.RQG = {
+  wii: fakeWii,                 // 仮想のWiiリモコン（openWii(RQ.gog.wii) で使える）
+  wiiOn: () => relay.wiiOn,     // PCにWiiリモコンがつながっているか
+  onwii: null,                  // ページが入れる：PC側のWiiリモコンがつながった/切れた時に呼ばれる
+  cam,                          // 背景カメラの MediaStream（背景カメラがオフなら null）
+  pass: () => S.pass,
+  code,                         // PC中継のコード（ゲームが自分で接続する時に使う）
+  release(){ camStop(); relayPause(); if (mode !== 'self'){ mode = 'self'; mirrorStop(); layout(); } },   // ゲームが自分でカメラ・PC中継を開く前に呼ぶ
+  menu: () => showPanel(true),
+  exit,
+};
+
+// ================= 右目の複製（ミラー）=================
+// 左のページのDOMをまるごと右に写し、その後の変化（クラス・文字・style・要素の追加）を
+// MutationObserver で追いかける。canvas は毎フレーム絵をコピー、video は同じ映像をつなぐ。
+const MR = { obs:null, src:null, dst:null, map:new WeakMap(), canv:[], vids:[], base:null, off:[] };
+function mirrorStop(){
+  if (MR.obs) MR.obs.disconnect(); MR.obs = null;
+  for (const f of MR.off) try { f(); } catch (e){} MR.off = [];
+  MR.src = MR.dst = null; MR.canv = []; MR.vids = []; MR.map = new WeakMap();
+}
+function mClone(n){
+  const c = MR.dst.importNode(n, false); MR.map.set(n, c);
+  if (n.nodeType === 1){
+    const tag = n.localName;
+    if (tag === 'canvas') MR.canv.push([n, c, null]);
+    else if (tag === 'video'){ c.muted = true; c.autoplay = true; c.setAttribute('playsinline', ''); MR.vids.push([n, c]); }
+    for (const ch of n.childNodes){
+      if (ch.nodeType === 1 && (ch.localName === 'script' || ch.localName === 'iframe')) continue;   // スクリプトは写さない（二重に動くので）
+      c.appendChild(mClone(ch));
+    }
+  }
+  return c;
+}
+function mResync(t){
+  const c = MR.map.get(t); if (!c || !t.isConnected) return;
+  while (c.firstChild) c.removeChild(c.firstChild);
+  for (const ch of t.childNodes){
+    if (ch.nodeType === 1 && (ch.localName === 'script' || ch.localName === 'iframe')) continue;
+    c.appendChild(mClone(ch));
+  }
+  if (t === MR.src.head) mHeadExtra();
+}
+function mHeadExtra(){
+  const d = MR.dst, b = d.createElement('base'); b.href = MR.src.baseURI; d.head.insertBefore(b, d.head.firstChild);
+  const s = d.createElement('style');
+  s.textContent = 'html,body,*{pointer-events:none!important;cursor:none!important}::-webkit-scrollbar{display:none}*{scrollbar-width:none}';
+  d.head.appendChild(s);
+}
+function mirrorBuild(srcDoc){
+  mirrorStop();
+  const d = R.contentDocument; if (!d || !srcDoc || !srcDoc.documentElement) return;
+  d.open(); d.write('<!DOCTYPE html><html><head></head><body></body></html>'); d.close();
+  MR.src = srcDoc; MR.dst = d;
+  const sh = srcDoc.documentElement, dh = d.documentElement;
+  for (const a of sh.attributes) dh.setAttribute(a.name, a.value);
+  MR.map.set(sh, dh);
+  dh.replaceChild(mClone(srcDoc.head), d.head); mHeadExtra();
+  dh.replaceChild(mClone(srcDoc.body), d.body);
+  MR.obs = new (srcDoc.defaultView.MutationObserver)(recs => {
+    const kids = new Set();
+    for (const r of recs){
+      const t = r.target;
+      if (r.type === 'childList'){ kids.add(t); continue; }
+      const c = MR.map.get(t); if (!c) continue;
+      if (r.type === 'characterData') c.data = t.data;
+      else if (r.type === 'attributes'){
+        const v = r.attributeNamespace ? t.getAttributeNS(r.attributeNamespace, r.attributeName.replace(/^.*:/, '')) : t.getAttribute(r.attributeName);
+        try {
+          if (v == null) r.attributeNamespace ? c.removeAttributeNS(r.attributeNamespace, r.attributeName.replace(/^.*:/, '')) : c.removeAttribute(r.attributeName);
+          else r.attributeNamespace ? c.setAttributeNS(r.attributeNamespace, r.attributeName, v) : c.setAttribute(r.attributeName, v);
+        } catch (e){}
+      }
+    }
+    for (const t of kids) mResync(t);
+  });
+  MR.obs.observe(srcDoc, { subtree:true, childList:true, attributes:true, characterData:true });
+  // スクロール位置・入力欄の値も写す
+  const onScroll = e => {
+    const t = e.target === srcDoc ? srcDoc.scrollingElement : e.target, c = t === srcDoc.scrollingElement ? d.scrollingElement : MR.map.get(t);
+    if (c && t){ c.scrollTop = t.scrollTop; c.scrollLeft = t.scrollLeft; }
+  };
+  const onInput = e => { const c = MR.map.get(e.target); if (c && 'value' in c){ c.value = e.target.value; if ('checked' in c) c.checked = e.target.checked; } };
+  srcDoc.addEventListener('scroll', onScroll, true); srcDoc.addEventListener('input', onInput, true); srcDoc.addEventListener('change', onInput, true);
+  MR.off.push(() => { srcDoc.removeEventListener('scroll', onScroll, true); srcDoc.removeEventListener('input', onInput, true); srcDoc.removeEventListener('change', onInput, true); });
+}
+function mirrorFrame(){
+  if (!MR.src) return;
+  MR.canv = MR.canv.filter(p => p[0].isConnected && p[1].isConnected);
+  for (const p of MR.canv){
+    const [o, c] = p; if (!o.width || !o.height) continue;
+    if (c.width !== o.width) c.width = o.width; if (c.height !== o.height) c.height = o.height;
+    const x = p[2] || (p[2] = c.getContext('2d')); if (!x) continue;
+    try { x.clearRect(0, 0, c.width, c.height); x.drawImage(o, 0, 0); } catch (e){}
+  }
+  MR.vids = MR.vids.filter(p => p[0].isConnected && p[1].isConnected);
+  for (const [o, c] of MR.vids){
+    if (c.srcObject !== o.srcObject){ try { c.srcObject = o.srcObject; } catch (e){} }
+    if (c.paused && !o.paused) c.play().catch(() => {});
+  }
+}
+(function tick(){ requestAnimationFrame(tick); try { mirrorFrame(); } catch (e){} })();
+
+// ================= ページが切り替わった時 =================
+let curUrl = null;
+L.addEventListener('load', () => {
+  if (mode === 'off') return;
+  let win = null, doc = null;
+  try { win = L.contentWindow; doc = L.contentDocument; void doc.body; } catch (e){ win = doc = null; }   // 別のサイトに出た
+  if (!win || !doc){ mode = 'self'; mirrorStop(); layout(); document.body.classList.add('unsup'); return; }
+  curUrl = win.location.href;
+  try { history.replaceState(null, '', '?p=' + encodeURIComponent(curUrl.startsWith(RQ.BASE) ? curUrl.slice(RQ.BASE.length) : curUrl)); } catch (e){}
+  win.addEventListener('pagehide', () => { fakeWii.oninputreport = null; RQG.onwii = null; mirrorStop(); });
+  const decl = win.RQ_GOGGLE;
+  document.body.classList.toggle('unsup', decl !== '2d' && decl !== 'self');
+  if (decl === 'self'){
+    // ゲーム：全面に出して、カメラとPC中継はゲームにゆずる（同時に2つ開くと取り合いになる）
+    mode = 'self'; mirrorStop(); camStop(); relayPause(); layout();
+  } else {
+    mode = '2d'; layout(); relayResume(); mirrorBuild(doc);
+  }
+  try { win.focus(); } catch (e){}
+});
+
+// ================= 開始・終了 =================
+function startPage(){
+  const p = new URLSearchParams(location.search).get('p');
+  let u = null;
+  try { if (p){ const x = new URL(p, RQ.BASE); if (x.origin === location.origin) u = x.href; } } catch (e){}
+  return u || RQ.url('title');
+}
+async function start(){
+  // ここはボタンを押した直後（ユーザー操作の中）なので、全画面・向きセンサーの許可・音を有効にできる
+  try { if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) await DeviceOrientationEvent.requestPermission(); } catch (e){}
+  try { const AC = new (window.AudioContext || window.webkitAudioContext)(); AC.resume(); setTimeout(() => AC.close(), 300); } catch (e){}
+  try { await Promise.race([document.documentElement.requestFullscreen({ navigationUI:'hide' }), new Promise(r => setTimeout(r, 800))]); } catch (e){}
+  try { await screen.orientation.lock('landscape'); } catch (e){}
+  wakeLock();
+  if (S.pass) cam();
+  document.body.classList.add('on');
+  showPanel(false);
+  relay.want = true; relayConnect();
+  mode = '2d'; layout();
+  L.src = startPage();
+}
+let wl = null;
+function wakeLock(){ try { navigator.wakeLock.request('screen').then(w => wl = w, () => {}); } catch (e){} }
+document.addEventListener('visibilitychange', () => { if (mode !== 'off' && document.visibilityState === 'visible') wakeLock(); });
+function exit(){
+  const u = curUrl || RQ.url('title');
+  try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e){}
+  try { screen.orientation.unlock(); } catch (e){}
+  try { wl && wl.release(); } catch (e){}
+  relayPause(); camStop();
+  location.href = u;
+}
+function showPanel(on){
+  $('panel').hidden = !on;
+  $('panel').classList.toggle('over', mode !== 'off');
+  $('bStartRow').hidden = mode !== 'off'; $('bMenuRow').hidden = mode === 'off';
+}
+$('bStart').onclick = start;
+$('bResume').onclick = () => {
+  showPanel(false);
+  if (mode === '2d' && code().length === 6 && (!relay.conn || code() !== ls.get('rqgun_code'))){ relay.want = true; relayConnect(); }
+};
+$('bExit').onclick = exit;
+$('gear').onclick = () => showPanel(true);
+$('code').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
+</script>
+</body>
+</html>

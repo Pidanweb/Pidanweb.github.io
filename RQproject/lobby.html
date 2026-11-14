@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LOBBY ─ Radiqle_Project</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;700&family=Noto+Sans+JP:wght@300;500;700&display=swap" rel="stylesheet">
+<script>window.RQ_GOGGLE = '2d';   // ゴーグルモード（goggle.html）では左右に複製して表示する</script>
+<script src="common/routes.js"></script>
+<style>
+:root{
+  --bg:#050912; --ink:#f4f8ff; --sub:#9fb4c8; --dim:#5d7186;
+  --acc:#ff9a3c; --acc2:#ffc078; --ice:#bfe6ff; --ok:#6dffb0; --ng:#ff6b7a;
+  --line:rgba(220,236,255,.28); --glass:rgba(8,16,30,.55);
+  --en:"Rajdhani","Noto Sans JP",sans-serif; --jp:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--jp);user-select:none}
+body{overflow:hidden}
+#bg{position:fixed;inset:0;width:100%;height:100%;display:block}
+/* ゴーグルモードの背景カメラ（RQ_index の AR背景と同じ見た目）*/
+#arv{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .8s;filter:saturate(.6) brightness(.55) contrast(1.05)}
+#arv.on{opacity:1}
+.vign{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 45%,transparent 45%,rgba(0,0,0,.65) 100%)}
+.scan{position:fixed;inset:0;pointer-events:none;opacity:.07;background:repeating-linear-gradient(0deg,#fff 0 1px,transparent 1px 3px)}
+
+/* 四隅のARフレーム（RQ_index と同じ）*/
+.corner{position:fixed;width:46px;height:46px;border:2px solid var(--ink);opacity:.75;pointer-events:none}
+.corner.tl{left:18px;top:18px;border-right:0;border-bottom:0}
+.corner.tr{right:18px;top:18px;border-left:0;border-bottom:0}
+.corner.bl{left:18px;bottom:18px;border-right:0;border-top:0}
+.corner.br{right:18px;bottom:18px;border-left:0;border-top:0}
+.corner::after{content:"";position:absolute;width:8px;height:8px;background:var(--acc)}
+.corner.tl::after{left:-5px;top:-5px}.corner.tr::after{right:-5px;top:-5px}.corner.bl::after{left:-5px;bottom:-5px}.corner.br::after{right:-5px;bottom:-5px}
+#topbar{position:fixed;left:84px;right:84px;top:22px;display:flex;justify-content:space-between;align-items:center;font:500 13px/1 var(--en);letter-spacing:.25em;color:var(--sub)}
+#topbar b{color:var(--ink);font-weight:700}
+#clock{font:500 18px var(--en);letter-spacing:.15em;color:var(--ink)}
+
+/* ---- レイアウト：左にジョブ、右にメニュー ---- */
+#wrap{position:fixed;inset:70px 84px 84px;display:grid;grid-template-columns:minmax(260px,1fr) minmax(320px,1.15fr);gap:clamp(24px,5vw,80px);align-items:center}
+
+/* 左：今のジョブ */
+#me{position:relative;padding-left:22px}
+#me::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;background:var(--acc)}
+#me .s{font:700 12px var(--en);letter-spacing:.5em;color:var(--acc)}
+#me .ico{height:clamp(110px,22vh,190px);margin:14px 0 6px;display:flex;align-items:center}
+#me .ico svg{height:100%;width:auto;filter:drop-shadow(0 0 14px rgba(255,170,90,.45))}
+#me .nm{font:700 clamp(34px,4.4vw,58px)/1.1 var(--jp)}
+#me .en{font:300 clamp(18px,2vw,26px) var(--en);letter-spacing:.45em;color:var(--sub);margin-top:4px}
+#me .cal{margin-top:18px;font:500 13px var(--jp);color:var(--sub);display:flex;align-items:center;gap:8px}
+#me .cal .dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+#me .cal.ok .dot{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+
+/* 左：クエストの詳細（クエスト選択中だけ #me と入れ替わる）*/
+#quest{position:relative;padding-left:22px;display:none}
+#quest::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;background:var(--acc)}
+body.qmode #me{display:none} body.qmode #quest{display:block}
+#quest .s{display:flex;align-items:center;gap:14px;font:700 12px var(--en);letter-spacing:.5em;color:var(--acc)}
+#quest .stars{font-size:15px;letter-spacing:.15em;color:var(--dim)}
+#quest .stars b{color:var(--acc2);font-weight:400}
+#quest .ico{height:clamp(90px,17vh,150px);margin:12px 0 4px;display:flex;align-items:flex-end}
+#quest .ico svg{height:100%;width:auto}
+#quest .boss{font:300 clamp(28px,3.4vw,48px)/1 var(--en);letter-spacing:.24em;white-space:nowrap;color:var(--ink);text-shadow:0 0 18px rgba(170,215,255,.35)}
+#quest .nm{font:700 clamp(20px,2.2vw,28px)/1.3 var(--jp);margin-top:8px}
+#quest .bj{font:500 14px var(--jp);color:var(--sub)}
+#quest dl{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;margin:16px 0 0;font:500 14px var(--jp)}
+#quest dt{font:700 12px var(--en);letter-spacing:.3em;color:var(--dim);align-self:center}
+#quest dd{margin:0;color:var(--ink)}
+#quest .ds{margin-top:14px;max-width:34em;font:400 14px/1.75 var(--jp);color:var(--sub)}
+#quest .warn{margin-top:12px;font:500 13px var(--jp);color:var(--acc2)}
+#quest.locked .ico,#quest.locked .boss{opacity:.35}
+.it .r .st{color:var(--acc2);letter-spacing:.1em;font-size:13px}
+
+/* 右：メニュー */
+#menu{position:relative}
+#crumb{font:700 12px var(--en);letter-spacing:.5em;color:var(--dim);margin-bottom:12px;min-height:1em}
+#crumb b{color:var(--acc)}
+#list{display:flex;flex-direction:column;gap:10px}
+.it{position:relative;display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:14px;padding:14px 18px 14px 14px;cursor:pointer;
+  background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(6px);color:inherit;text-align:left;font:inherit;width:100%;
+  clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);
+  transition:border-color .15s,background .15s,transform .2s cubic-bezier(.2,1.4,.4,1)}
+.it::before{content:"";position:absolute;left:0;top:14px;bottom:0;width:3px;background:transparent;transition:background .15s}
+.it .k{font:700 18px var(--en);color:var(--dim);display:grid;place-items:center}
+.it .k .in{opacity:0}.it.sel .k .in{opacity:1}
+.it .t{font:700 clamp(17px,1.7vw,21px) var(--jp)}
+.it .d{font:400 13px/1.5 var(--jp);color:var(--sub);margin-top:2px}
+.it .r{font:500 12px var(--jp);color:var(--dim)}
+.it.sel{border-color:var(--acc);background:rgba(255,154,60,.08);transform:translateX(6px)}
+.it.sel::before{background:var(--acc)}
+.it.sel .k{color:var(--acc)}
+.it:focus-visible{outline:2px solid var(--ice);outline-offset:3px}
+.it.off{cursor:not-allowed}
+.it.off .t,.it.off .d,.it.off .k{opacity:.4}
+.it.off .r{color:var(--acc2)}
+.it.back{grid-template-columns:44px 1fr;padding-top:10px;padding-bottom:10px;background:transparent}
+.it.back .t{font:500 14px var(--jp);color:var(--sub)}
+
+#hint{margin-top:16px;font:500 13px var(--jp);color:var(--sub);letter-spacing:.06em}
+#hint b{color:var(--ink);font-family:var(--en)}
+
+/* 下部 */
+#status{position:fixed;left:84px;right:84px;bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.chips{display:flex;gap:10px;flex-wrap:wrap}
+.chip{display:flex;align-items:center;gap:8px;padding:7px 12px;font:500 12px var(--en);letter-spacing:.18em;background:var(--glass);border:1px solid var(--line)}
+.chip .dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+.chip.ok .dot{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.chip.ng .dot{background:var(--ng)}
+.chip small{font:400 11px var(--jp);letter-spacing:0;color:var(--sub)}
+.btn{font:500 13px var(--jp);color:var(--ink);background:var(--glass);border:1px solid var(--line);padding:8px 14px;cursor:pointer;letter-spacing:.05em;
+  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+.btn:hover,.btn:focus-visible{border-color:var(--acc);color:var(--acc2);background:rgba(255,154,60,.1);outline:none}
+
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);padding:10px 22px;background:rgba(8,16,30,.92);border:1px solid var(--acc);
+  font:500 14px var(--jp);color:var(--acc2);opacity:0;transition:opacity .25s;pointer-events:none;z-index:10;max-width:90vw;text-align:center}
+#toast.on{opacity:1}
+#fade{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .6s;z-index:20}
+#fade.on{opacity:1}
+
+@media (max-width:820px){
+  body{overflow-y:auto}
+  .corner,#topbar{display:none}
+  #wrap{position:static;display:block;padding:calc(24px + env(safe-area-inset-top,0px)) 18px 120px}
+  #me{margin-bottom:26px}
+  #me .ico{height:90px}
+  #quest{margin-bottom:26px}
+  #quest .ico{height:70px}
+  #quest .ds{display:none}
+  #status{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+  .chips,#hint .kb{display:none}
+}
+@media (prefers-reduced-motion:reduce){.it,#fade{transition:none}}
+</style>
+</head>
+<body>
+<video id="arv" autoplay playsinline muted></video>
+<canvas id="bg"></canvas>
+<div class="vign"></div><div class="scan"></div>
+<div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+<div id="topbar"><div><b>RADIQLE</b> SYSTEM&nbsp;&nbsp;LOBBY</div><div id="clock">00:00:00</div><div>AR LINK DEVICE</div></div>
+
+<main id="wrap">
+  <section id="me">
+    <div class="s">CURRENT JOB</div>
+    <div class="ico" id="meIco"></div>
+    <div class="nm" id="meJp">剣士</div>
+    <div class="en" id="meEn">SWORDSMAN</div>
+    <div class="cal" id="meCal"><span class="dot"></span><span id="meCalT">カメラ調整：未設定</span></div>
+  </section>
+  <section id="quest" aria-live="polite"></section>
+
+  <section id="menu">
+    <div id="crumb"></div>
+    <div id="list" role="menu"></div>
+    <div id="hint"><b>▲ ▼</b> 選ぶ　<b>Ⓐ</b> 決定　<b>Ⓑ</b> 戻る<span class="kb">　（キーボード：↑ ↓ / Enter / Esc）</span></div>
+  </section>
+</main>
+
+<div id="status">
+  <div class="chips">
+    <div class="chip" id="cWii"><span class="dot"></span>CONTROLLER <small id="cWiiT">未接続</small></div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn" id="bBgm" hidden>♪ BGM オン</button>
+    <button class="btn" id="bWii">🎮 Wiiリモコン接続</button>
+    <button class="btn" id="bTitle">タイトルへ</button>
+  </div>
+</div>
+<div id="toast"></div>
+<div id="fade"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+if (!window.RQ){ document.body.innerHTML = '<p style="padding:40px;font:16px sans-serif;color:#fff">common/routes.js が読み込めませんでした。lobby.html と同じ場所に common フォルダがあるか確認してください。</p>'; throw new Error('routes.js missing'); }
+
+// ===== 時計 =====
+setInterval(() => { const d = new Date(); $('clock').textContent = [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':'); }, 500);
+
+// ===== 背景（六角グリッド＋地平線）RQ_index の軽量版 =====
+const bg = $('bg'), bx = bg.getContext('2d');
+const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let W = 0, H = 0, DPR = 1;
+function resize(){ DPR = Math.min(devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight; bg.width = W*DPR; bg.height = H*DPR; }
+resize(); addEventListener('resize', resize);
+function hexPath(x, cx, cy, r){ x.beginPath(); for (let i = 0; i < 6; i++){ const a = Math.PI/3*i + Math.PI/6; x[i ? 'lineTo' : 'moveTo'](cx + r*Math.cos(a), cy + r*Math.sin(a)); } x.closePath(); }
+function drawBg(t){
+  const x = bx; x.setTransform(DPR, 0, 0, DPR, 0, 0);
+  x.clearRect(0, 0, W, H);
+  if (!$('arv').classList.contains('on')){   // 背景カメラの時は、グリッドだけ重ねる
+    const g = x.createRadialGradient(W*.35, H*.45, 0, W*.35, H*.45, Math.max(W, H)*.85);
+    g.addColorStop(0, '#13233c'); g.addColorStop(.5, '#08111f'); g.addColorStop(1, '#03060c');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+  }
+  x.save(); x.strokeStyle = '#7fb4ff'; const hy = H*.7;
+  for (let i = 0; i < 12; i++){ const k = ((i + (t*.1)%1)/12); const y = hy + Math.pow(k, 2.2)*(H - hy); x.globalAlpha = .3*k; x.beginPath(); x.moveTo(0, y); x.lineTo(W, y); x.stroke(); }
+  for (let i = -16; i <= 16; i++){ x.globalAlpha = .1; x.beginPath(); x.moveTo(W/2 + i*24, hy); x.lineTo(W/2 + i*W*.12, H); x.stroke(); }
+  x.restore();
+  const R = 34, hw = R*Math.sqrt(3); x.lineWidth = 1;
+  for (let row = -1; row < H/(R*1.5) + 1; row++) for (let col = -1; col < W/hw + 1; col++){
+    const cx = col*hw + (row & 1 ? hw/2 : 0), cy = row*R*1.5;
+    const p = .5 + .5*Math.sin(t*.6 + col*.7 + row*1.3);
+    x.strokeStyle = `rgba(150,195,255,${.03 + .05*p})`; hexPath(x, cx, cy, R - 2); x.stroke();
+    if (p > .997){ x.fillStyle = 'rgba(255,154,60,.08)'; x.fill(); }
+  }
+}
+function loop(now){ drawBg(now/1000); if (!still) requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+if (still) addEventListener('resize', () => drawBg(0));
+
+// ===== 効果音（小さな電子音）=====
+let AC = null;
+function tone(f, d, type = 'sine', v = .06){
+  try { AC = AC || new AudioContext(); const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type; o.frequency.value = f; g.gain.setValueAtTime(v, AC.currentTime); g.gain.exponentialRampToValueAtTime(.0001, AC.currentTime + d);
+    o.connect(g).connect(AC.destination); o.start(); o.stop(AC.currentTime + d); } catch (e){}
+}
+
+// ===== ジョブ表示 =====
+const ICONS = {
+  sword:`<svg viewBox="0 0 100 160"><defs><linearGradient id="bl" x1="0" x2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#9fbcd8"/></linearGradient></defs>
+    <path d="M50 4 L58 22 L56 112 L44 112 L42 22 Z" fill="url(#bl)"/><path d="M50 10 L50 110" stroke="#5d7a96" stroke-width="1"/>
+    <path d="M22 112 L78 112 L74 120 L26 120 Z" fill="#ff9a3c"/><rect x="45" y="120" width="10" height="26" fill="#cfe0f0"/><circle cx="50" cy="151" r="6" fill="#ff9a3c"/></svg>`,
+  wiz:`<svg viewBox="0 0 100 160"><circle cx="50" cy="30" r="20" fill="none" stroke="#bfe6ff" stroke-width="2"/>
+    <path d="M50 12 L60 30 L50 48 L40 30 Z" fill="#a77bff"/><path d="M50 48 L50 152" stroke="#cfe0f0" stroke-width="5" stroke-linecap="round"/>
+    <path d="M38 56 Q50 64 62 56" fill="none" stroke="#ff9a3c" stroke-width="3"/><circle cx="50" cy="30" r="27" fill="none" stroke="#bfe6ff" stroke-opacity=".4" stroke-dasharray="3 6"/></svg>`,
+  gun:`<svg viewBox="0 0 160 110"><path d="M10 30 L130 30 L146 40 L146 50 L70 50 L62 56 L58 96 L36 96 L40 56 L10 50 Z" fill="#cfe0f0"/>
+    <rect x="20" y="36" width="96" height="6" fill="#4aa8ff"/><path d="M70 50 L84 50 L80 70 L66 70" fill="none" stroke="#cfe0f0" stroke-width="4"/>
+    <rect x="130" y="40" width="22" height="6" fill="#ff9a3c"/></svg>`,
+};
+const JOB_ID = RQ.job(), J = RQ.JOBS[JOB_ID];
+$('meIco').innerHTML = ICONS[JOB_ID] || '';
+$('meJp').textContent = J.jp; $('meEn').textContent = J.en;
+const calDone = RQ.ls.get('connectworld_dual_on') === '1' && !!RQ.ls.get('connectworld_bodycal_v1');
+if (calDone){ $('meCal').classList.add('ok'); $('meCalT').textContent = 'カメラ調整：保存済み'; }
+
+// ===== メニュー =====
+// 項目: { t:見出し, d:説明, r:右の小さい文字, off:選べない理由, run:決定したとき }
+function goTo(href){
+  if (!href) return toast('このページはまだありません');
+  tone(1200, .12, 'sine', .08); wiiRumble(150); bgmFade();
+  $('fade').classList.add('on'); setTimeout(() => location.href = href, still ? 0 : 550);
+}
+const QUESTS = J.quests || [];
+const calQuest = QUESTS.find(q => q.needsCal && q.url);   // カメラ調整が要るクエスト（調整後の戻り先）
+const BOSS_ICON = {
+  slime:`<svg viewBox="0 0 140 100"><ellipse cx="70" cy="92" rx="56" ry="6" fill="#000" opacity=".35"/>
+    <path d="M14 88 C10 50 40 14 70 14 C100 14 130 50 126 88 Z" fill="#5fd6a0" opacity=".85"/>
+    <path d="M30 70 C30 46 48 28 66 26" fill="none" stroke="#e8fff4" stroke-width="5" stroke-linecap="round" opacity=".6"/>
+    <ellipse cx="54" cy="60" rx="6" ry="9" fill="#06261a"/><ellipse cx="86" cy="60" rx="6" ry="9" fill="#06261a"/></svg>`,
+  volgram:`<svg viewBox="0 0 140 100"><ellipse cx="70" cy="94" rx="58" ry="5" fill="#000" opacity=".35"/>
+    <path d="M20 90 L30 40 L18 14 L46 30 L70 22 L94 30 L122 14 L110 40 L120 90 L96 74 L70 84 L44 74 Z" fill="#8c98a8"/>
+    <path d="M46 30 L70 22 L94 30 L86 50 L70 44 L54 50 Z" fill="#c6d0dc"/>
+    <path d="M50 54 L62 58 L52 62 Z M90 54 L78 58 L88 62 Z" fill="#ff9a3c"/>
+    <path d="M58 74 L62 88 L66 76 M82 74 L78 88 L74 76" fill="#f4f8ff"/></svg>`,
+  locked:`<svg viewBox="0 0 140 100"><polygon points="70,8 116,32 116,80 70,96 24,80 24,32" fill="none" stroke="#5d7186" stroke-width="2" stroke-dasharray="4 6"/>
+    <text x="70" y="66" text-anchor="middle" font-family="Rajdhani,sans-serif" font-size="40" fill="#5d7186">?</text></svg>`,
+};
+const stars = n => `<b>${'★'.repeat(n)}</b>${'☆'.repeat(Math.max(0, 5 - n))}`;
+function questDetail(q, i){
+  const el = $('quest'); el.classList.toggle('locked', !!q.locked);
+  const no = String(i + 1).padStart(2, '0');
+  if (q.locked){
+    el.innerHTML = `<div class="s">QUEST ${no}</div><div class="ico">${BOSS_ICON.locked}</div>
+      <div class="boss">? ? ?</div><div class="nm">新しいクエストを準備中</div>`;
+    return;
+  }
+  el.innerHTML = `<div class="s">QUEST ${no}<span class="stars" aria-label="難しさ ${q.rank} / 5">${stars(q.rank)}</span></div>
+    <div class="ico">${BOSS_ICON[q.id] || BOSS_ICON[q.id.split('-')[0]] || BOSS_ICON.locked}</div>
+    <div class="boss">${q.bossEn}</div>
+    <div class="nm">${q.jp}</div><div class="bj">${q.boss}</div>
+    <dl><dt>BOSS HP</dt><dd>${q.hp}</dd><dt>VIEW</dt><dd>${q.view}</dd><dt>DEVICE</dt><dd>${q.device}</dd></dl>
+    <div class="ds">${q.desc}</div>
+    ${q.needsCal && !calDone && !RQ.gog ? '<div class="warn">カメラの位置合わせがまだです。出撃すると先に位置合わせへ進みます</div>' : ''}`;
+}
+const GOG = RQ.gog;   // ゴーグルモードの枠の中なら、その窓口
+const NO_GOG = 'ゴーグルモードでは遊べません（⚙ →「通常の表示に戻る」）';
+const PC_ONLY = 'PCで開くページです（ゴーグルでは開けません）';
+const MENUS = {
+  main: { crumb:'', items: [
+    { t:'練習する', d:'動きを確かめるチュートリアル', off: !J.practice ? 'このジョブの練習はまだありません' : GOG ? NO_GOG : '',
+      run: () => goTo(RQ.url('practice', { link:1 })) },
+    { t:'レイドに出撃', d:'クエストを選んで出撃します', off: QUESTS.some(q => q.url) ? '' : 'このジョブのクエストはまだありません',
+      run: () => open('quest') },
+    { t:'準備する', d:'PCの中継・カメラの位置合わせ', run: () => open('setup') },
+    { t:'ジョブを変える', d:'タイトルからジョブ選択をやり直します', run: () => goTo(RQ.url('title')) },
+  ]},
+  quest: { crumb:'クエスト選択', detail:true, items: QUESTS.map(q => q.locked
+    ? { q, t:'？？？', off:'新しいクエストを準備中' }
+    : { q, t:q.jp, d:`${q.view}／${q.device}`, r:`<span class="st">${'★'.repeat(q.rank)}</span>`,
+        off: GOG && !q.goggle ? NO_GOG : '',   // ゴーグルモードの位置合わせの結果は、ゲームがPC中継から受け取る
+        // カメラ調整がまだなら、位置合わせ → 終わったらこのクエストへ
+        run: () => goTo(q.needsCal && !calDone && !GOG
+          ? RQ.url('calibrate', { return: RQ.url('raid', { start:1 }, JOB_ID, q.id) })
+          : RQ.url('raid', { start:1 }, JOB_ID, q.id)) })},
+  setup: { crumb:'準備する', items: [
+    { t:'PC中継を開く', d:'Wiiリモコンと足の位置をスマホへ送るページ。PCで開いてください', r:'PC用',
+      off: GOG ? PC_ONLY : '', run: () => goTo(RQ.url('hub')) },
+    { t:'カメラの位置合わせ', d:'カメラ2台で体とボスの位置を測ります', r: calDone ? '保存済み' : '未設定',
+      off: !calQuest ? 'このジョブはカメラを使いません' : GOG ? PC_ONLY : '',
+      run: () => goTo(RQ.url('calibrate', { return: RQ.url('raid', { start:1 }, JOB_ID, calQuest.id) })) },
+    GOG
+      ? { t:'ゴーグルモードを終わる', d:'ふつうの表示に戻します', run: () => GOG.exit() }
+      : { t:'ゴーグルモードで遊ぶ', d:'スマホをゴーグルに入れたまま、タイトルからクエストまで進めます', r:'スマホ用', run: () => goTo(RQ.url('goggle')) },
+  ]},
+};
+let stack = ['main'], sel = 0;
+function cur(){ return MENUS[stack[stack.length - 1]]; }
+function render(){
+  const m = cur(), items = stack.length > 1 ? [...m.items, { back:true, t:'もどる', run: back }] : m.items;
+  $('crumb').innerHTML = m.crumb ? `LOBBY ／ <b>${m.crumb}</b>` : '';
+  document.body.classList.toggle('qmode', !!m.detail);
+  $('list').innerHTML = items.map((it, i) => it.back
+    ? `<button class="it back" role="menuitem" data-i="${i}"><span class="k">◀</span><span class="t">${it.t}</span></button>`
+    : `<button class="it${it.off ? ' off' : ''}" role="menuitem" data-i="${i}" aria-disabled="${!!it.off}">
+         <span class="k"><svg viewBox="0 0 20 20" width="16" height="16"><polygon points="10,1 18,5.5 18,14.5 10,19 2,14.5 2,5.5" fill="none" stroke="currentColor" stroke-width="2"/><polygon class="in" points="10,6 14,8.3 14,11.7 10,14 6,11.7 6,8.3" fill="currentColor"/></svg></span>
+         <span><div class="t">${it.t}</div><div class="d">${it.off || it.d}</div></span>
+         <span class="r">${it.off ? '準備中' : (it.r || '')}</span></button>`).join('');
+  render.items = items;
+  document.querySelectorAll('.it').forEach(b => {
+    b.addEventListener('pointerenter', () => pick(+b.dataset.i, true));
+    b.addEventListener('click', () => { pick(+b.dataset.i, true); decide(); });
+  });
+  pick(Math.min(sel, items.length - 1), true);
+}
+function pick(i, quiet){
+  const n = render.items.length; i = (i + n) % n;
+  if (i !== sel && !quiet) tone(1800, .05);
+  sel = i; document.querySelectorAll('.it').forEach((b, k) => b.classList.toggle('sel', k === i));
+  const it = render.items[i];
+  if (cur().detail && it && it.q) questDetail(it.q, i);   // もどる を選んでいる間は直前のクエストを表示したまま
+}
+function decide(){
+  const it = render.items[sel]; if (!it) return;
+  if (it.off){ tone(220, .15, 'square', .04); toast(it.off); return; }
+  it.run();
+}
+function open(name){ tone(1500, .08); stack.push(name); sel = 0; render(); }
+function back(){ if (stack.length > 1){ tone(900, .08); stack.pop(); sel = 0; render(); } }
+let tt = 0;
+function toast(t){ const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('on'), 1800); }
+
+addEventListener('keydown', e => {
+  if (e.code === 'ArrowUp' || e.code === 'ArrowLeft'){ e.preventDefault(); pick(sel - 1); }
+  else if (e.code === 'ArrowDown' || e.code === 'ArrowRight'){ e.preventDefault(); pick(sel + 1); }
+  else if ((e.code === 'Enter' || e.code === 'Space') && !e.repeat){ e.preventDefault(); decide(); }
+  else if (e.code === 'Escape' || e.code === 'Backspace'){ e.preventDefault(); back(); }
+});
+$('bTitle').onclick = () => goTo(RQ.url('title'));
+// ブラウザの「戻る」で白いまま残らないように
+addEventListener('pageshow', e => { $('fade').classList.remove('on'); if (e.persisted) bgmStart(); });
+
+// ===== BGM（ジョブごと。routes.js の bgm に書いた曲）=====
+// ブラウザは「ページを開いただけ」では音を鳴らせないことがあるので、
+// 自動再生がだめなときは最初のクリック・タップ・キー入力で流し始める
+const BGM_VOL = .45;
+const bgm = J.bgm ? new Audio(RQ.abs(J.bgm)) : null;
+let bgmOn = RQ.ls.get('rq_lobby_bgm') !== 'off';
+function bgmLabel(){ $('bBgm').textContent = bgmOn ? '♪ BGM オン' : '♪ BGM オフ'; }
+function bgmStart(){
+  if (!bgm || !bgmOn || !bgm.paused) return;
+  bgm.volume = BGM_VOL; bgm.play().catch(() => {});
+}
+function bgmFade(){
+  if (!bgm || bgm.paused) return;
+  const t0 = performance.now(), v0 = bgm.volume;
+  (function f(now){ const k = Math.min(1, (now - t0)/500); bgm.volume = v0*(1 - k); if (k < 1) requestAnimationFrame(f); else bgm.pause(); })(t0);
+}
+if (bgm){
+  bgm.loop = true; bgm.preload = 'auto';
+  $('bBgm').hidden = false; bgmLabel();
+  $('bBgm').onclick = e => {
+    e.stopPropagation(); bgmOn = !bgmOn; RQ.ls.set('rq_lobby_bgm', bgmOn ? 'on' : 'off'); bgmLabel();
+    if (bgmOn){ bgm.currentTime = 0; bgmStart(); } else bgm.pause();
+  };
+  bgmStart();   // 自動再生できればここで流れる
+  for (const ev of ['pointerdown', 'keydown', 'touchstart']) addEventListener(ev, bgmStart, { capture:true });
+}
+
+// ===== Wiiリモコン（WebHID）RQ_index と同じ方式 =====
+const WVID = 0x057e, WPIDS = [0x0306, 0x0330];
+const wii = { dev:null, a:false, b:false, d:0 };
+const wsend = async (id, b) => { if (!wii.dev) return; try { await wii.dev.sendReport(id, new Uint8Array(b)); } catch (e){} };
+function wiiRumble(ms){ if (!wii.dev) return; wsend(0x11, [0x11]); setTimeout(() => wsend(0x11, [0x10]), ms); }
+function chip(id, cls, t){ const c = $(id); c.classList.remove('ok', 'ng'); if (cls) c.classList.add(cls); $(id + 'T').textContent = t; }
+async function openWii(d){
+  wii.dev = d; if (!d.opened) await d.open();
+  d.oninputreport = e => {
+    if (e.reportId === 0x20){ wsend(0x12, [0x00, 0x30]); return; }
+    if (e.reportId < 0x30 || e.reportId > 0x3f) return;
+    const b0 = e.data.getUint8(0), b1 = e.data.getUint8(1), A = !!(b1 & 0x08), B = !!(b1 & 0x04);
+    const dpad = b0 & 0x0f, pressD = dpad & ~wii.d;   // 左0x01 右0x02 下0x04 上0x08（縦持ち・横持ちどちらでも）
+    if (pressD & 0x09) pick(sel - 1); if (pressD & 0x06) pick(sel + 1);
+    if (A && !wii.a) decide(); if (B && !wii.b) back();
+    wii.a = A; wii.b = B; wii.d = dpad;
+  };
+  await wsend(0x12, [0x00, 0x30]); await wsend(0x11, [0x10]);
+  chip('cWii', 'ok', '接続済み'); $('bWii').textContent = '🎮 接続済み';
+}
+$('bWii').onclick = async () => {
+  if (!('hid' in navigator)){ chip('cWii', 'ng', 'WebHID非対応（Chrome/Edge）'); return; }
+  try { const [d] = await navigator.hid.requestDevice({ filters: WPIDS.map(p => ({ vendorId:WVID, productId:p })) }); if (d) await openWii(d); }
+  catch (e){ chip('cWii', 'ng', '接続失敗'); }
+};
+if ('hid' in navigator){
+  // タイトル画面で一度つないでいれば、ここでは自動で再接続される
+  navigator.hid.getDevices().then(l => { const d = l.find(x => x.vendorId === WVID && WPIDS.includes(x.productId)); if (d) openWii(d).catch(() => {}); });
+  navigator.hid.addEventListener('disconnect', e => { if (e.device === wii.dev){ wii.dev = null; chip('cWii', 'ng', '切断'); $('bWii').textContent = '🎮 Wiiリモコン接続'; } });
+} else chip('cWii', 'ng', 'WebHID非対応');
+// ゴーグルモード：スマホにはWebHIDがないので、PC中継の仮想Wiiリモコンを使う。背景は枠の背面カメラ
+if (GOG){
+  const relayWii = on => { if (on) openWii(GOG.wii).then(() => chip('cWii', 'ok', 'PC中継')).catch(() => {}); else { wii.dev = null; chip('cWii', 'ng', 'PC中継：Wii待ち'); } };
+  GOG.onwii = relayWii; relayWii(GOG.wiiOn());
+  $('bWii').hidden = true;
+  GOG.cam().then(s => { if (s){ $('arv').srcObject = s; $('arv').classList.add('on'); } }).catch(() => {});
+}
+
+if (location.hash === '#raid' || location.hash === '#quest') stack.push('quest');   // 練習の「本番へ」から
+render();
+</script>
+</body>
+</html>
