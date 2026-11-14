@@ -1,0 +1,2144 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>RQ ガンナー 練習</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#0a1110}
+  canvas{display:block;cursor:crosshair;touch-action:none}
+  #ui{position:fixed;top:10px;right:10px;z-index:5;font:14px sans-serif;color:#fff;text-align:right}
+  #ui button{background:#0d2a30cc;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer}
+  #camPanel{margin-top:6px;padding:10px;background:#000c;border:1px solid #7ae7ff55;border-radius:8px;width:280px;text-align:left}
+  #camPanel select{width:100%;margin:4px 0 8px;padding:4px;font:inherit}
+  #camPanel div{margin-top:6px}
+  #camStat{font-size:12px;color:#ffd35a;word-break:break-all}
+  #v,#fv{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
+  #gzOv{position:fixed;inset:0;z-index:20;display:none} #gzCv{width:100%;height:100%;display:block;cursor:default}
+  #gzSkip{position:absolute;right:16px;bottom:16px;background:#0d2a30;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:8px;padding:10px 14px;font:15px sans-serif;cursor:pointer}
+  #facePrev{position:fixed;left:10px;bottom:10px;z-index:5;width:240px;height:180px;border:2px solid #7ae7ff88;border-radius:8px;background:#000;pointer-events:none;display:none}
+  #faceBadge{margin-top:6px;font-size:12px;color:#7ae7ff;text-shadow:0 0 4px #000}
+  #camPanel input[type=range]{width:100%}
+  #menu{position:fixed;top:0;bottom:0;left:50%;transform:translateX(-50%);width:min(260px,44vw);z-index:9;background:#061418cc;border:1px solid #7ae7ff88;border-radius:12px;padding:16px;display:none;flex-direction:column;gap:12px;justify-content:center;font:15px sans-serif;color:#fff;text-align:center;box-sizing:border-box}
+  #menu.on{display:flex} #menu{overflow-y:auto;gap:8px} #menu>:first-child{margin-top:auto} #menu>:last-child{margin-bottom:auto} #jobs{display:none;flex-direction:column;gap:6px} #jobs.on{display:flex} #menu button:disabled{opacity:.45;cursor:not-allowed} #menu button{background:#0d2a30;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:8px;padding:10px;font:inherit;cursor:pointer}
+  #wiiDbg{position:fixed;left:10px;top:10px;z-index:6;margin:0;padding:6px 8px;max-width:46vw;font:11px/1.35 monospace;color:#9fffb0;background:#000a;border:1px solid #7ae7ff44;border-radius:6px;pointer-events:none;white-space:pre-wrap}
+  #gnMenu{border:1px solid #7ae7ff44;border-radius:8px;padding:6px 8px;font-size:13px;text-align:left} #gnMenu summary{cursor:pointer;color:#ffd35a;font-weight:bold} #gnMenu label{display:block;margin-top:6px} #gnMenu input[type=range]{width:100%} #gnMenu small{color:#9fdcea}
+  #gnMenu small{display:block;margin-top:6px;line-height:1.5}
+  #ui{z-index:8!important}
+  #xrPanel{max-height:calc(100vh - 70px);overflow-y:auto;box-sizing:border-box;max-width:calc(100vw - 20px);margin-top:6px;padding:10px;background:#000c;border:1px solid #7ae7ff55;border-radius:8px;width:280px;text-align:left;font-size:13px}
+  #xrPanel label{display:block;margin-top:8px} #xrPanel input[type=range]{width:100%} #xrPanel small{display:block;color:#9fdcea;line-height:1.5;margin-top:6px}
+  #xrPanel input[type=text]{width:7em;font:18px monospace;padding:4px;letter-spacing:2px}
+  #xrStat{margin-top:6px;font-size:12px;color:#ffd35a;word-break:break-all}
+  #gogGo{width:100%;margin-top:10px;padding:10px!important;font-size:16px!important;color:#5fe07a!important;border-color:#5fe07a88!important}
+  #gogBar{flex-wrap:wrap;justify-content:center;max-width:96vw}
+  #gogBar .adj{background:#0d2a30;color:#7ae7ff;border:1px solid #7ae7ff66;border-radius:10px;min-width:30px;padding:2px 8px;margin:0 4px;font:15px sans-serif}
+  #gogBar .gb{background:#000a;color:#7ae7ff;border:1px solid #7ae7ff66;border-radius:16px;padding:6px 14px;font:13px sans-serif}
+</style>
+</head>
+<body>
+<div id="gogBar" style="position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:30;display:none;gap:8px"><button id="gogAlign" class="gb">🧭 向き合わせ</button><button id="gogPlace" class="gb">📍 ボスを置く</button><span class="gb">間隔 <button id="sepM" class="adj">−</button><b id="sepV">50</b>%<button id="sepP" class="adj">＋</button></span><span class="gb">大きさ <button id="ekM" class="adj">−</button><b id="ekV">100</b>%<button id="ekP" class="adj">＋</button></span><button id="gogExit" class="gb">✕ 終了</button></div>
+<div id="ui"><button id="camBtn">📷 カメラ設定</button> <button id="viewBtn">👁 一人称</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰</button> <button id="xrBtn">🥽 ゴーグル</button>
+  <div id="xrPanel" hidden>
+    <b style="color:#ffd35a">📡 PC中継（Wiiリモコン・立ち位置）</b>
+    <div style="margin-top:6px">コード <input type="text" id="rlCode" inputmode="numeric" maxlength="6" placeholder="000000"> <button id="rlGo">接続</button></div>
+    <div id="xrStat">PCで setup/hub.html を開き、表示されたコードを入力</div>
+    <label><input type="checkbox" id="xrPass" checked> 背景にカメラ映像（ビデオシースルー）</label>
+    <div id="roomStat" style="margin-top:6px;font-size:12px;color:#9fdcea">部屋モード: キャリブレーション待ち</div>
+    <label>スマホカメラの画角（映像の長い辺）<b id="xrCamFovV">66</b>°<input type="range" id="xrCamFov" min="40" max="100" step=".5" value="66"></label>
+    <small style="margin-top:0">床のグリッドが実際の床にピタッと重なるように合わせる（目地・壁の際が目安）</small>
+    <label>床の高さの補正 <b id="xrEyeV">0</b>cm<input type="range" id="xrEye" min="-30" max="30" step="1" value="0"></label>
+    <label>− で合わせる方向 <select id="xrAlign"><option value="cam" selected>PCのメインカメラの真下の床（三脚の足元）を照準で指して −（向き＋床の高さ）</option><option value="boss">ボスの方を向いて −</option></select></label>
+    <label>ボスの大きさ（高さ）<b id="xrSizeV">3.6</b>m<input type="range" id="xrSize" min=".4" max="1.8" step=".05" value="1.8"></label>
+    <small style="margin-top:0">開始後、床を照準で指して「📍 ボスを置く」でその場所に立たせます（位置は保存）。<button id="bossReset" style="margin-top:4px;padding:4px 8px">キャリブレーションの位置に戻す</button></small>
+    <label><input type="checkbox" id="xrGrid" checked> 床のグリッドとPCカメラの位置を表示</label>
+    <label><input type="checkbox" id="xrOrb" checked> 周回モード（回り込むと戦う向きが付いてくる）</label>
+    <label>表示の視野角 <b id="xrFovV">60</b>°<input type="range" id="xrFov" min="35" max="100" step="1" value="60"></label>
+    <label>目の間隔 <b id="xrIpdV">64</b>mm<input type="range" id="xrIpd" min="50" max="75" step="1" value="64"></label>
+    <label>片目の映像の大きさ <b id="xrEyeKV">100</b>%<input type="range" id="xrEyeK" min="40" max="100" step="1" value="100"></label>
+    <label>左右の映像の中心の間隔 <b id="xrSepV">50</b>%（画面の横幅に対して）<input type="range" id="xrSep" min="25" max="50" step=".5" value="50"></label>
+    <small style="margin-top:0">目安：ゴーグルのレンズの中心間隔（多くは約6.3cm）÷ スマホを横にした時の画面の横幅。例: 画面幅15cm → 42%。映像が近すぎる・二重に見える時は小さく。</small>
+    <label>立ち位置の移動倍率 <b id="xrGainV">1.0</b>×<input type="range" id="xrGain" min="1" max="3" step=".1" value="1"></label>
+    <label><input type="checkbox" id="xrSbs" checked> 2画面（ゴーグルに入れる）　※外すと手持ちの1画面で、床合わせの確認用</label>
+    <button id="gogGo">🥽 開始（頭の向きで見回す）</button>
+    <small>横向きでゴーグルに入れ、<b>PCのメインカメラの方を向いて Wii の −</b> で向きを合わせる。B でスタート。<br>PC側で setup/calibrate.html のキャリブレーションが済んでいれば「部屋モード」になり、ボスが床の決まった位置に立って周りを歩けます。</small>
+  </div>
+  <div id="camPanel" hidden>
+    <label>使うカメラ<select id="camSel"></select></label>
+    <label><input type="checkbox" id="mir"> 左右反転</label>
+    <div><button id="camApply">このカメラを使う</button> <button id="camRefresh">一覧を更新</button></div>
+    <div id="camStat">USBカメラは接続後「一覧を更新」</div>
+    <hr style="border:0;border-top:1px solid #7ae7ff44;margin:10px 0 4px">
+    <label><input type="checkbox" id="faceOn" checked> 顔・目の動きで照準を操作</label>
+    <label>照準の操作 <select id="aimMode"><option value="auto" selected>自動照準（ボスを自動で狙う）</option><option value="wii">Wiiリモコンのジャイロ（向けた方向）</option><option value="gaze">視線（見ている所）</option><option value="face">顔の位置（従来）</option></select></label>
+    <label>顔認識に使うカメラ<select id="faceSel"><option value="">自動（インカメラ）</option><option value="user">フロント</option><option value="environment">バック</option></select></label>
+    <label>カメラの種類 <select id="faceType"><option value="auto">自動判定</option><option value="front">フロント（鏡像）</option><option value="back">バック（非鏡像）</option></select></label> <button id="faceFlip">🔄 前/後 切替</button>
+    <label>照準のなめらかさ <input type="range" id="gzSmooth" min="0.1" max="2" step="0.1" value="0.7"><br><small style="color:#9fdcea">左ほどゆっくり滑らか・右ほど素早い</small></label>
+    <label>照準の感度 <b id="gzGainV">1.0</b><input type="range" id="gzGain" min="0.5" max="1.5" step="0.05" value="1"><br><small style="color:#9fdcea">左ほど照準の動きが小さい（1.0 = 見ている所ぴったり）</small></label>
+    <label>感度（キャリブレーション前・顔の位置モード） <input type="range" id="faceGain" min="0.5" max="3" step="0.1" value="1.5"></label>
+    <label><input type="checkbox" id="facePrevOn" checked> 認識プレビューを表示</label>
+    <div><button id="faceStart">顔認識を開始/再起動</button> <button id="faceCal">ずれ補正 (C)</button></div>
+    <div><button id="gzCalBtn">👁 視線キャリブレーション (K)</button></div>
+    <div id="faceStat" style="font-size:12px;color:#ffd35a"></div>
+  </div>
+  <div id="faceBadge"></div><div id="wiiStat" style="margin-top:4px;font-size:12px;color:#ffd35a;text-shadow:0 0 4px #000"></div></div>
+<div id="menu"><h3 style="margin:0">MENU</h3>
+  <button id="mClose">▶ 再開</button><button id="mView">👁 視点: 一人称</button><button id="mFace">🔄 顔カメラ: フロント</button><button id="mCtrl">🖱 操作: マウス</button><button id="mGaze">👁 視線キャリブレーション</button>
+  <button id="jobBtn">🔁 ジョブチェンジ</button>
+  <div id="jobs"><button id="jSword">⚔ 剣士</button><button id="jWiz">🪄 魔法使い</button><button id="jGun">🔫 ガンナー</button></div>
+  <label>効果音 <input type="range" id="mVol" min="0" max="1" step=".1" value=".8"></label><label>BGM <input type="range" id="mBgm" min="0" max="1" step=".05" value=".5"></label><label>パリィ振り上げ感度 <input type="range" id="mWiiTh" min="1.2" max="4" step=".1" value="2.2"><br><small style="color:#9fdcea">左ほど敏感</small></label><label>Wii照準の感度 <b id="wpDegV">20</b>°<input type="range" id="wpDeg" min="8" max="45" step="1" value="20"><br><small style="color:#9fdcea">中央→画面の端まで動かすのに必要なリモコンの角度（小さいほど敏感）</small></label><label><input type="checkbox" id="wpInvX"> Wii照準 左右反転</label><label><input type="checkbox" id="wpInvY"> Wii照準 上下反転</label>
+  <details id="gnMenu" open><summary>🔫 ガンナー設定</summary>
+    <label><input type="checkbox" id="hbOn" checked> 当たり判定（四角）を表示</label>
+    <label>当たり判定の濃さ<input type="range" id="hbOp" min="0.05" max="1" step="0.05" value="0.25"></label>
+    <label>スナイパー判定の甘さ <b id="snTolV">0.25</b><input type="range" id="snTol" min="0.1" max="0.5" step="0.05" value="0.25"><br><small style="color:#9fdcea;margin:0">右ほど甘い（金色の帯が太くなる）</small></label>
+    <label>スナイパー円の速さ <b id="snPerV">2.0</b>秒<input type="range" id="snPer" min="1" max="3.5" step="0.1" value="2.0"><br><small style="color:#9fdcea;margin:0">1往復の時間。右ほどゆっくり</small></label>
+    <label>剣の振り感度 <input type="range" id="swTh" min="1.2" max="4" step=".1" value="2.2"><br><small style="color:#9fdcea;margin:0">左ほど敏感（振り始めと見なす加速度）</small></label>
+    <label>突き 加速度 <b id="skTAV">4.0</b>g<input type="range" id="skTA" min="2.5" max="8" step="0.1" value="4.0"></label>
+    <label>縦重撃 ∫縦 <b id="skHVV">650</b>°<input type="range" id="skHV" min="200" max="1500" step="10" value="650"></label>
+    <label>横重撃 ∫横 <b id="skHHV">260</b>°<input type="range" id="skHH" min="100" max="500" step="10" value="260"></label>
+    <small>十字で武器切替: ↑=ハンドガン(8発) / ←=P90(50発・押しっぱなしで連射) / →=スナイパー(1発ずつ) / ↓=ビームサーベル<br>
+    スナイパー: 伸び縮みする白い円が金色の帯の中に入った時（緑に光る間）に撃つと命中<br>
+    サーベル: 前に突く=突き / 縦・横に大きく振る=重撃（B=突き）。MotionPlus付きなら剣士版と同じジャイロ判定<br>
+    Wii: B=射撃・攻撃 / A長押し=ガード / 振り上げ=パリィ（ボタンは押しても押さなくてもOK）/ 縦に立てる=リロード（黄色の所でB）<br>
+    1=グレネード / 2=時限地雷 / +=回り込み弾 / −=照準を中央に（画面中央に向けて押す）/ HOME=メニュー<br>
+    マウス: ←↑→↓ か 1〜4=武器切替 / サーベルはクリック=突き・ドラッグ縦横=重撃（W/Sでも可）/ G=グレネード F=地雷 Q,E=回り込み<br>
+    照準が四角に重なると赤くなり、その時だけ当たります<br>黄色い小さい四角=弱点（回避直後・スタン中だけ開く）</small>
+  </details>
+  <button id="mRestart">↻ リスタート</button><button id="mTitle">⌂ タイトルへ</button>
+  <small style="color:#9fdcea">✋ 人差し指で「1」を描く / M キーで開閉</small></div>
+<div id="gzOv"><canvas id="gzCv"></canvas><button id="gzSkip">スキップ (Esc)</button></div>
+<div id="sndHint" style="position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:30;display:none;background:#2a0d12ee;color:#ffd35a;border:1px solid #ff4d5e;border-radius:10px;padding:10px 16px;font:bold 16px sans-serif;cursor:pointer">🔇 音を出すには、画面を一度クリック（またはキーを押す）してください</div>
+<canvas id="facePrev" width="320" height="240"></canvas>
+<video id="v" autoplay playsinline muted></video>
+<video id="fv" autoplay playsinline muted></video>
+<script src="../common/routes.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+// ===== GIANT SLIME RAID : GUNNER =====
+// Wii: B=射撃・攻撃 / A長押し=ガード / 振り上げ=パリィ(ボタン不要) / 十字=武器切替(↑ハンドガン ←P90 →スナイパー ↓ビームサーベル) / 1=グレネード 2=時限地雷 +=回り込み弾 / −=照準中心リセット
+// マウス: 左=攻撃 / 右=パリィ / Space=ガード / 矢印・1〜4=武器切替 / G,F,Q,E=サブ武器 / A,D=回避 / V:VR / T:視点 / C:顔の中心リセット
+const FONT = '"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif';
+const vid = document.getElementById('v');
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setScissorTest(true);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(70, 1, .05, 100);
+camera.rotation.order = 'YXZ'; scene.add(camera);
+const EYE = 1.6; let R = 1.8, HOVER = -8.5;   // R: ボスの半径（部屋モードでは大きさを変えられる）   // HOVER: 部屋モードではキャリブレーションのボスの距離
+let W, H;
+function resize(){ W = innerWidth; H = innerHeight; renderer.setSize(W, H); }
+resize(); addEventListener('resize', resize);
+addEventListener('contextmenu', e => e.preventDefault());
+scene.background = new THREE.Color(0x0b1622);
+scene.add(new THREE.HemisphereLight(0xcfeaff, 0x203020, 1.0));
+const sun = new THREE.DirectionalLight(0xffffff, .9); sun.position.set(3, 8, 4); scene.add(sun);
+
+function canvasTex(w, h, fn){ const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), w, h); return new THREE.CanvasTexture(c); }
+function mkSprite(text, hex, sc){
+  const t = canvasTex(384, 128, (x, w, h) => {
+    let f = 60; do { x.font = `bold ${f}px ${FONT}`; f -= 4; } while (x.measureText(text).width > 360 && f > 16);
+    x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineWidth = 10; x.strokeStyle = '#000c';
+    x.strokeText(text, w/2, h/2); x.fillStyle = hex; x.fillText(text, w/2, h/2);
+  });
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:t, transparent:true, depthTest:false }));
+  s.scale.set(3*sc, sc, 1); s.renderOrder = 20; return s;
+}
+
+// ===== 床（ARでは映像の上に半透明グリッド）=====
+const gridTex = canvasTex(256, 256, (x, w, h) => { x.strokeStyle = 'rgba(122,231,255,.6)'; x.lineWidth = 4; x.strokeRect(0, 0, w, h); });
+gridTex.wrapS = gridTex.wrapT = THREE.RepeatWrapping; gridTex.repeat.set(10, 20);
+const floorMat = new THREE.MeshBasicMaterial({ map:gridTex, transparent:true, opacity:.5, depthWrite:false });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 40), floorMat);
+floor.rotation.x = -Math.PI/2; floor.position.set(0, 0, -16); scene.add(floor);
+const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
+  map:canvasTex(128, 128, (x, w, h) => { const g = x.createRadialGradient(64,64,0,64,64,64); g.addColorStop(0,'rgba(0,0,0,.6)'); g.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0,0,w,h); }),
+  transparent:true, depthWrite:false }));
+shadow.rotation.x = -Math.PI/2; shadow.position.y = .02; scene.add(shadow);
+const lane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color:0xff3a4a, transparent:true, opacity:.3, depthWrite:false }));
+lane.rotation.x = -Math.PI/2; lane.visible = false; scene.add(lane);
+
+// ===== ボス：ジャイアントスライム =====
+const bossG = new THREE.Group(); scene.add(bossG);
+const bGeo = new THREE.SphereGeometry(1, 40, 28), bBase = bGeo.attributes.position.array.slice();
+const bMat = new THREE.MeshStandardMaterial({ color:0x5fe07a, roughness:.12, transparent:true, opacity:.86, emissive:0x0a3a18 });
+bossG.add(new THREE.Mesh(bGeo, bMat));
+const core = new THREE.Mesh(new THREE.SphereGeometry(.32, 16, 12), new THREE.MeshStandardMaterial({ color:0x1d9a44, emissive:0x0a5a20 }));
+core.position.set(0, -.1, -.1); bossG.add(core);
+const eyes = [], pupils = [];
+for (const s of [-1, 1]){
+  const w = new THREE.Mesh(new THREE.SphereGeometry(.15, 12, 10), new THREE.MeshBasicMaterial({ color:0xffffff }));
+  w.position.set(s*.33, .22, .86);
+  const p = new THREE.Mesh(new THREE.SphereGeometry(.07, 10, 8), new THREE.MeshBasicMaterial({ color:0x111111 }));
+  p.position.set(0, 0, .12); w.add(p); bossG.add(w); eyes.push(w); pupils.push(p);
+}
+const stars = new THREE.Group(); stars.position.y = 1.35; bossG.add(stars);
+for (let i = 0; i < 3; i++){ const m = new THREE.Mesh(new THREE.SphereGeometry(.12, 8, 6), new THREE.MeshBasicMaterial({ color:0xffd35a })); m.position.set(Math.cos(i*2.09)*.6, 0, Math.sin(i*2.09)*.6); stars.add(m); }
+function jiggle(t, amp){
+  const p = bGeo.attributes.position.array;
+  for (let i = 0; i < p.length; i += 3){
+    const x = bBase[i], y = bBase[i+1], z = bBase[i+2], k = 1 + amp*Math.sin(t*7 + x*4 + y*3)*Math.cos(t*5 + z*4);
+    p[i] = x*k; p[i+1] = y*k; p[i+2] = z*k;
+  }
+  bGeo.attributes.position.needsUpdate = true; bGeo.computeVertexNormals();
+}
+
+// ===== エフェクト =====
+const NP = 500, pp = new Float32Array(NP*3), pc = new Float32Array(NP*3), pv = new Float32Array(NP*3), pl = new Float32Array(NP); let pn = 0;
+const pg = new THREE.BufferGeometry();
+pg.setAttribute('position', new THREE.BufferAttribute(pp, 3)); pg.setAttribute('color', new THREE.BufferAttribute(pc, 3));
+const pts = new THREE.Points(pg, new THREE.PointsMaterial({ size:.16, vertexColors:true, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false }));
+pts.frustumCulled = false; scene.add(pts);
+function burst(v, hex, n, sp){
+  const c = new THREE.Color(hex);
+  for (let k = 0; k < n; k++){
+    const i = pn++ % NP, a = Math.random()*6.28, b = Math.random()*3.14 - 1.57, s = sp*(.3 + Math.random());
+    pp.set([v.x, v.y, v.z], i*3); pc.set([c.r, c.g, c.b], i*3); pl[i] = .4 + Math.random()*.6;
+    pv.set([Math.cos(a)*Math.cos(b)*s, Math.sin(b)*s + 1, Math.sin(a)*Math.cos(b)*s], i*3);
+  }
+}
+const rings = [], pops = [];
+function ring(v, r1, hex, life = .45){
+  const m = new THREE.Mesh(new THREE.RingGeometry(.85, 1, 48), new THREE.MeshBasicMaterial({ color:hex, transparent:true, blending:THREE.AdditiveBlending, depthTest:false, side:THREE.DoubleSide }));
+  m.position.copy(v); m.quaternion.copy(camera.quaternion); m.renderOrder = 15; scene.add(m);
+  rings.push({ m, r1, life, max:life });
+}
+function popup(text, hex, pos, sc = .8, life = .9, parent = scene){
+  const s = mkSprite(text, hex, sc); s.position.copy(pos); parent.add(s); pops.push({ s, life, max:life, parent });
+}
+const popCam = (text, hex, sc = 1, life = .9) => popup(text, hex, new THREE.Vector3(0, .5, -3), sc, life, camera);
+function updFX(dt){
+  for (let i = 0; i < NP; i++){
+    if (pl[i] <= 0){ pp[i*3+1] = -999; continue; }
+    pl[i] -= dt; pv[i*3+1] -= 6*dt;
+    for (let j = 0; j < 3; j++){ pp[i*3+j] += pv[i*3+j]*dt; pc[i*3+j] *= 1 - dt*1.2; }
+  }
+  pg.attributes.position.needsUpdate = true; pg.attributes.color.needsUpdate = true;
+  for (let i = rings.length - 1; i >= 0; i--){
+    const r = rings[i]; r.life -= dt; const k = Math.max(0, r.life/r.max);
+    r.m.scale.setScalar(.1 + r.r1*(1-k)); r.m.material.opacity = k;
+    if (r.life <= 0){ scene.remove(r.m); r.m.geometry.dispose(); r.m.material.dispose(); rings.splice(i, 1); }
+  }
+  for (let i = pops.length - 1; i >= 0; i--){
+    const p = pops[i]; p.life -= dt; p.s.position.y += .6*dt; p.s.material.opacity = Math.min(1, p.life/p.max*2);
+    if (p.life <= 0){ p.parent.remove(p.s); p.s.material.map.dispose(); p.s.material.dispose(); pops.splice(i, 1); }
+  }
+}
+
+// ===== 一人称の銃 =====
+const gun = new THREE.Group(); gun.rotation.order = 'YXZ'; camera.add(gun);
+const gunM = new THREE.MeshStandardMaterial({ color:0x2b3442, metalness:.75, roughness:.3, emissive:0x081820 });
+const gunAcc = new THREE.MeshStandardMaterial({ color:0x7ae7ff, metalness:.3, roughness:.3, emissive:0x2a8fb0 });
+const gHG = new THREE.Group(), gP90 = new THREE.Group(), gSR = new THREE.Group(), gSW = new THREE.Group(); gun.add(gHG, gP90, gSR, gSW);
+let gPart = gHG;
+const gBox = (w, h, d, m, x, y, z) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); gPart.add(o); return o; };
+const gCyl = (r, l, m, x, y, z) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, l, 14), m); o.rotation.x = Math.PI/2; o.position.set(x, y, z); gPart.add(o); return o; };
+gBox(.22, .24, .85, gunM, 0, 0, 0);                 // 本体
+gBox(.05, .07, .14, gunM, 0, .16, -.15);            // 照門
+gBox(.03, .04, .7, gunAcc, .115, .04, -.05);        // 発光ライン
+gBox(.03, .04, .7, gunAcc, -.115, .04, -.05);
+gBox(.15, .42, .2, gunM, 0, -.27, .22).rotation.x = .3;   // グリップ
+const barrel = new THREE.Mesh(new THREE.CylinderGeometry(.06, .07, .6, 14), gunM); barrel.rotation.x = Math.PI/2; barrel.position.set(0, .03, -.7); gHG.add(barrel);
+const mzRing = new THREE.Mesh(new THREE.CylinderGeometry(.09, .09, .08, 14), gunAcc); mzRing.rotation.x = Math.PI/2; mzRing.position.set(0, .03, -1.0); gHG.add(mzRing);
+// P90：ずんぐりした本体＋上面の半透明マガジン
+gPart = gP90;
+const p90Mag = new THREE.MeshStandardMaterial({ color:0x7ae7ff, transparent:true, opacity:.45, emissive:0x1a5f78, roughness:.2 });
+gBox(.26, .26, 1.0, gunM, 0, 0, 0); gBox(.2, .08, .82, p90Mag, 0, .17, -.02); gBox(.03, .04, .8, gunAcc, .135, -.02, 0); gBox(.03, .04, .8, gunAcc, -.135, -.02, 0);
+gBox(.14, .36, .18, gunM, 0, -.24, .1).rotation.x = .2; gCyl(.06, .3, gunM, 0, 0, -.62); gCyl(.08, .06, gunAcc, 0, 0, -.78);
+// スナイパー：細長い銃身＋スコープ＋ストック
+gPart = gSR;
+gBox(.18, .22, 1.0, gunM, 0, 0, 0); gBox(.16, .3, .5, gunM, 0, -.04, .7); gBox(.13, .36, .16, gunM, 0, -.26, .2).rotation.x = .3;
+gCyl(.045, 1.4, gunM, 0, .02, -1.2); gCyl(.07, .1, gunAcc, 0, .02, -1.9);
+gCyl(.075, .55, gunM, 0, .22, -.1); gCyl(.08, .03, gunAcc, 0, .22, -.39); gBox(.04, .1, .06, gunM, 0, .14, -.1);
+gBox(.025, .035, .9, gunAcc, .095, .03, -.05); gSR.scale.setScalar(.8);
+// ビームサーベル：柄＋光刃（先端が照準方向）
+gPart = gSW;
+const swCol = 0xff5ad8, beamM = new THREE.MeshBasicMaterial({ color:swCol, transparent:true, opacity:.75, blending:THREE.AdditiveBlending, depthWrite:false });
+const beamCore = new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:.95, depthWrite:false });
+gCyl(.06, .42, gunM, 0, 0, .1); gCyl(.065, .05, gunAcc, 0, 0, -.06); gCyl(.065, .05, gunAcc, 0, 0, .26);
+const beamO = gCyl(.07, 1.9, beamM, 0, 0, -1.05), beamI = gCyl(.03, 1.9, beamCore, 0, 0, -1.05);
+gPart = gHG;
+const muzzle = new THREE.Object3D(); muzzle.position.set(0, .03, -1.08); gun.add(muzzle);
+const mFlash = new THREE.Sprite(new THREE.SpriteMaterial({ transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, opacity:0,
+  map:canvasTex(64, 64, (x, w, h) => { const g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.3, 'rgba(255,220,120,.9)'); g.addColorStop(1, 'rgba(255,120,0,0)'); x.fillStyle = g; x.fillRect(0, 0, w, h); }) }));
+mFlash.scale.setScalar(.6); muzzle.add(mFlash);
+gun.position.set(.5, -.5, -1.4); gun.scale.setScalar(.72);
+// スナイパー用：金色の「的の円」と伸び縮みする円（照準の位置に重ねる）
+const snG = new THREE.Group(); snG.visible = false; camera.add(snG);
+const snTgtM = new THREE.MeshBasicMaterial({ color:0xffd35a, transparent:true, opacity:.9, depthTest:false });
+const snPulM = new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:.9, depthTest:false });
+const snTgt = new THREE.Mesh(new THREE.RingGeometry(.9, 1, 64), snTgtM), snPul = new THREE.Mesh(new THREE.RingGeometry(.93, 1, 64), snPulM);
+const snBandM = new THREE.MeshBasicMaterial({ color:0xffd35a, transparent:true, opacity:.18, depthTest:false });
+let snBand = new THREE.Mesh(new THREE.RingGeometry(.75, 1.25, 64), snBandM);   // 白い円がこの帯に入っていれば成功
+snTgt.renderOrder = snPul.renderOrder = 36; snBand.renderOrder = 35; snG.add(snBand, snTgt, snPul);
+const muzzleWorld = () => muzzle.getWorldPosition(new THREE.Vector3());
+const shield = new THREE.Group(); shield.position.z = -2.3; shield.visible = false; camera.add(shield);
+shield.add(new THREE.Mesh(new THREE.CircleGeometry(.9, 32), new THREE.MeshBasicMaterial({ color:0xffd35a, transparent:true, opacity:.25, blending:THREE.AdditiveBlending, depthTest:false })));
+shield.add(new THREE.Mesh(new THREE.RingGeometry(.85, .95, 40), new THREE.MeshBasicMaterial({ color:0xffd35a, transparent:true, blending:THREE.AdditiveBlending, depthTest:false })));
+const gShield = new THREE.Group(); gShield.position.z = -2.2; gShield.visible = false; camera.add(gShield);
+gShield.add(new THREE.Mesh(new THREE.CircleGeometry(1.1, 6), new THREE.MeshBasicMaterial({ color:0x7ae7ff, transparent:true, opacity:.22, blending:THREE.AdditiveBlending, depthTest:false })));
+gShield.add(new THREE.Mesh(new THREE.RingGeometry(1.05, 1.15, 6), new THREE.MeshBasicMaterial({ color:0x7ae7ff, transparent:true, blending:THREE.AdditiveBlending, depthTest:false })));
+const flashM = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0, depthTest:false }));
+flashM.position.z = -.5; flashM.renderOrder = 40; camera.add(flashM);
+
+// ===== 三人称(俯瞰)用アバター：一人称では非表示。剣・盾・斬撃は視点に応じて付け替える =====
+let tp = false, rig = camera, menuOn = false;
+const aim = new THREE.Group(); aim.rotation.order = 'YXZ'; scene.add(aim);
+const av = new THREE.Group(), M = (c, r = .6) => new THREE.MeshStandardMaterial({ color:c, roughness:r }), headM = new THREE.Group();
+const mk = (g, m, x, y, z) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); return o; };
+headM.position.y = 1.6; headM.add(mk(new THREE.SphereGeometry(.24, 16, 12), M(0xffd9b0), 0, 0, 0), mk(new THREE.SphereGeometry(.26, 16, 12), M(0x5a3a22), 0, .04, .07));
+const cape = mk(new THREE.PlaneGeometry(.75, 1.1), new THREE.MeshStandardMaterial({ color:0xc0303c, side:THREE.DoubleSide }), 0, .9, .36); cape.rotation.x = .12;
+av.add(mk(new THREE.CylinderGeometry(.3, .28, .6, 12), M(0x223049), 0, .3, 0), mk(new THREE.CylinderGeometry(.32, .38, 1, 12), M(0x3a7bd5), 0, 1.0, 0), headM, cape);
+av.visible = false; scene.add(av);
+function setView(v){
+  tp = v; av.visible = tp; rig = tp ? aim : camera; rig.add(gun, shield, gShield);
+  const t = tp ? '俯瞰(後方)' : '一人称'; $('viewBtn').textContent = '👁 ' + t; $('mView').textContent = '👁 視点: ' + t;
+}
+
+// ===== HUD（3Dで描くのでVRモードでも見える）=====
+const hud = new THREE.Group(); camera.add(hud);
+function bar(w, y, hex){
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(w + .06, .2), new THREE.MeshBasicMaterial({ color:0, transparent:true, opacity:.6, depthTest:false }));
+  back.position.set(0, y, -3); back.renderOrder = 10;
+  const g = new THREE.PlaneGeometry(w, .14); g.translate(w/2, 0, 0);
+  const fill = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color:hex, depthTest:false })); fill.position.set(-w/2, y, -3); fill.renderOrder = 11;
+  hud.add(back, fill); return fill;
+}
+const bossBar = bar(3.4, 1.55, 0xff4d5e), pBar = bar(2.4, -1.55, 0x5ee08a), parBar = bar(1.0, -1.78, 0xffd35a);
+const nameS = mkSprite('GIANT SLIME', '#ffffff', .4); nameS.position.set(0, 1.85, -3); hud.add(nameS);
+hud.visible = false;
+const msg = new THREE.Sprite(new THREE.SpriteMaterial({ transparent:true, depthTest:false }));
+msg.position.z = -4; msg.renderOrder = 30; camera.add(msg);
+// ===== 照準（顔の動きで動く。敵の四角に重なると赤＝命中する）=====
+const retTex = col => canvasTex(128, 128, (x, w, h) => {
+  const segs = [[64,14,64,34],[64,94,64,114],[14,64,34,64],[94,64,114,64]];
+  for (const [c, lw] of [['#000a', 10], [col, 5]]){
+    x.strokeStyle = c; x.lineWidth = lw; x.beginPath(); x.arc(64, 64, 30, 0, 7); x.stroke();
+    x.beginPath(); for (const [a, b, cc, d] of segs){ x.moveTo(a, b); x.lineTo(cc, d); } x.stroke();
+  }
+  x.fillStyle = col; x.beginPath(); x.arc(64, 64, 4, 0, 7); x.fill();
+});
+const RET_N = retTex('#7ae7ff'), RET_L = retTex('#ff4d5e'), RET_C = retTex('#ffd35a');
+const reticle = new THREE.Sprite(new THREE.SpriteMaterial({ transparent:true, depthTest:false, map:RET_N }));
+reticle.renderOrder = 35; reticle.visible = false; camera.add(reticle);
+function setMsg(L){
+  if (!L){ msg.visible = false; return; }
+  const t = canvasTex(1024, 512, (x, w, h) => {
+    x.fillStyle = 'rgba(0,0,0,.62)'; x.fillRect(0, 0, w, h); x.strokeStyle = '#ffd35a'; x.lineWidth = 4; x.strokeRect(8, 8, w-16, h-16);
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    let y = h/2 - L.reduce((a, l) => a + l[2]*1.5, 0)/2;
+    for (const [s, c, z] of L){ y += z*.75; x.font = `bold ${z}px ${FONT}`; x.fillStyle = c; x.fillText(s, w/2, y); y += z*.75; }
+  });
+  if (msg.material.map) msg.material.map.dispose();
+  msg.material.map = t; msg.material.needsUpdate = true; msg.visible = true;
+}
+
+// ===== Webカメラ =====
+let camTex = null, camMirror = true, camStream = null;
+const $ = id => document.getElementById(id), camSel = $('camSel'), camStat = $('camStat'), faceSel = $('faceSel');
+async function listCams(){
+  try {
+    const ds = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'), cur = camSel.value;
+    camSel.innerHTML = '';
+    ds.forEach((d, i) => { const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || ('カメラ ' + (i+1)); camSel.appendChild(o); });
+    if (cur) camSel.value = cur;
+    const fcur = faceSel.value; faceSel.innerHTML = '<option value="">自動（インカメラ）</option><option value="user">フロント</option><option value="environment">バック</option>';
+    ds.forEach((d, i) => { const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || ('カメラ ' + (i+1)); faceSel.appendChild(o); });
+    if (fcur) faceSel.value = fcur;
+    if (!camStream) camStat.textContent = ds.length ? ds.length + '台検出（名前は一度カメラを許可すると表示されます）' : 'カメラが見つかりません';
+  } catch (e){ camStat.textContent = '一覧を取得できません'; }
+}
+async function openCam(id){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ camStat.textContent = 'HTTPS か localhost で開いてください'; return false; }
+  if (camStream) camStream.getTracks().forEach(t => t.stop());
+  camStream = null;
+  const tries = id ? [{ video:{ deviceId:{ exact:id } }, audio:false }] : [{ video:{ facingMode:'environment' }, audio:false }, { video:true, audio:false }];
+  let err;
+  for (const c of tries){ try { camStream = await navigator.mediaDevices.getUserMedia(c); break; } catch (e){ err = e; } }
+  if (!camStream){ camStat.textContent = '起動失敗: ' + (err && err.name) + '（他のアプリが使用中、または許可なし）'; popCam('カメラ起動失敗', '#ff4d5e', .6, 3); return false; }
+  const tr = camStream.getVideoTracks()[0], st = tr.getSettings();
+  $('mir').checked = camMirror = st.facingMode !== 'environment';
+  vid.srcObject = camStream;
+  try { await vid.play(); } catch (e){}
+  if (!camTex){ camTex = new THREE.VideoTexture(vid); camTex.minFilter = THREE.LinearFilter; scene.background = camTex; }
+  camStat.textContent = '使用中: ' + (tr.label || 'カメラ');
+  await listCams(); if (st.deviceId) camSel.value = st.deviceId;
+  return true;
+}
+$('camBtn').onclick = () => { const p = $('camPanel'); p.hidden = !p.hidden; if (!p.hidden) listCams(); };
+$('camApply').onclick = () => openCam(camSel.value || null);
+$('camRefresh').onclick = () => camStream ? listCams() : openCam(null);
+$('mir').onchange = e => camMirror = e.target.checked;
+for (const ev of ['mousedown', 'keydown', 'keyup']) for (const el of ['ui', 'menu']) $(el).addEventListener(ev, e => e.stopPropagation());
+if (navigator.mediaDevices) navigator.mediaDevices.addEventListener('devicechange', listCams);
+function cover(a){
+  if (!camTex || !vid.videoWidth) return;
+  if (vplane.visible){ camTex.repeat.set(1, 1); camTex.offset.set(0, 0); return; }   // ゴーグル：映像はカメラの画角どおりの板に貼る
+  const va = vid.videoWidth/vid.videoHeight; let rx = 1, ry = 1; if (a > va) ry = va/a; else rx = a/va;
+  const c0 = (1 - rx)/2; camTex.repeat.set(camMirror ? -rx : rx, ry); camTex.offset.set(camMirror ? c0 + rx : c0, (1 - ry)/2);
+}
+
+// ===== 顔トラッキング（MediaPipe Face Landmarker）=====
+// 鼻先の位置を「構えた中心」からの差分にして、マウス座標(-1〜1)の代わりに使う
+const fv = $('fv');
+const face = { on:true, lm:null, loading:false, stream:null, src:null, seen:false, x:0, y:0, cx:null, cy:null, sx:0, sy:0,
+               sumx:0, sumy:0, cn:0, lastT:-1, gain:1.5, badge:'' };
+const FACE_GX = 6, FACE_GY = 9, FACE_CAL = 20, FACE_DEAD = .012;
+// ===== 視線で照準（黒目の位置＋顔の向き → 画面上の見ている所）=====
+// 顔の向きは剣士版の「耳の中点から見た鼻の位置」と同じ考え方（ここでは頬の両端の中点から見た鼻先）。
+// それに黒目が目の中のどこにあるかを足して、キャリブレーションで画面座標(-1〜1)に対応させる。
+const GZ_PTS = [[0, 0], [-.75, .7], [.75, .7], [.75, -.7], [-.75, -.7], [0, .7], [.75, 0], [0, -.7], [-.75, 0]];
+const GZ_HX = 5, GZ_EX = 6, GZ_HY = 7, GZ_EY = 8, GZ_OPEN = .12, GZ_KEY = 'rq_gunner_gaze_v1';
+const GZ_MED = 5, GZ_DEAD = .035;   // 中央値を取るフレーム数 / これより小さい揺れは無視（画面幅の約2%）
+const gaze = { buf:[], hx:0, hy:0, s1:null, s2:null, gain:1, mode:'auto', f:null, ft:0, c0:null, cs:[], M:null, ofs:[0, 0], cal:null, ex:{}, ey:{}, smooth:.7, tx:null, ty:null };
+try { const g = JSON.parse(localStorage.getItem(GZ_KEY) || 'null'); if (g && g.M) gaze.M = g.M; } catch (e){}
+const faceActive = () => face.on && !!face.lm && !!face.src && (gaze.mode === 'gaze' ? !!(gaze.M || gaze.c0) : gaze.mode === 'face' && face.cx !== null);
+// Wiiジャイロで照準中か（MotionPlus が有効で調整済みの時だけ。無ければマウス照準に戻る）
+const wiiAim = () => gaze.mode === 'wii' && ctl.mode === 'wii' && wii.mp.ok && wii.mp.calibrated;
+const autoAim = () => gaze.mode === 'auto';
+const aimExt = () => autoAim() || faceActive() || wiiAim();
+function gazeFeat(p, va){
+  const Q = i => ({ x:p[i].x*va, y:p[i].y }), iris = p.length >= 478;
+  const eye = (a, b, ir, up, dn) => {
+    const A = Q(a), B = Q(b), ux = B.x - A.x, uy = B.y - A.y, L2 = ux*ux + uy*uy || 1e-6, L = Math.sqrt(L2), U = Q(up), D = Q(dn);
+    if (!iris) return { u:0, v:0, open:Math.hypot(U.x - D.x, U.y - D.y)/L };
+    const I = Q(ir), rx = I.x - A.x, ry = I.y - A.y;
+    return { u:(rx*ux + ry*uy)/L2 - .5, v:(ux*ry - uy*rx)/L2, open:Math.hypot(U.x - D.x, U.y - D.y)/L };
+  };
+  const l = eye(33, 133, 468, 159, 145), r = eye(362, 263, 473, 386, 374);   // どちらも映像の左→右の向きで測る
+  const a = Q(234), b = Q(454), n = Q(1), fw = Math.hypot(b.x - a.x, b.y - a.y) || 1e-6;
+  const ca = (b.x - a.x)/fw, sa = (b.y - a.y)/fw, dx = n.x - (a.x + b.x)/2, dy = n.y - (a.y + b.y)/2;   // 首をかしげても崩れないよう回転を戻す
+  return { hx:(dx*ca + dy*sa)/fw, hy:(-dx*sa + dy*ca)/fw, ex:(l.u + r.u)/2, ey:(l.v + r.v)/2, open:Math.min(l.open, r.open) };
+}
+function gazeMap(f){
+  if (gaze.M){ const [a, b] = gaze.M; return [a[0]*f.hx + a[1]*f.ex + a[2] + gaze.ofs[0], b[0]*f.hy + b[1]*f.ey + b[2] + gaze.ofs[1]]; }
+  const c = gaze.c0; if (!c) return null;
+  const g = face.gain/1.5, sg = faceMirror() ? -1 : 1;   // フロント(鏡像)は左右反転
+  return [sg*((f.hx - c.hx)*GZ_HX + (f.ex - c.ex)*GZ_EX)*g, -((f.hy - c.hy)*GZ_HY + (f.ey - c.ey)*GZ_EY)*g];
+}
+// One Euro フィルタ：止まっている時はブレを強く抑え、素早く目を動かした時は遅れを少なく
+function euro(st, x, dt, mc, beta = 1.5){
+  const al = c => { const r = 2*Math.PI*c*dt; return r/(r + 1); };
+  if (st.x === undefined || !(dt > 0)){ st.x = x; st.d = 0; return x; }
+  st.d += al(1)*((x - st.x)/dt - st.d); st.x += al(mc + beta*Math.abs(st.d))*(x - st.x); return st.x;
+}
+const median = a => { const b = a.slice().sort((x, y) => x - y), m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m])/2; };
+const featAvg = L => ({ hx:median(L.map(f => f.hx)), hy:median(L.map(f => f.hy)), ex:median(L.map(f => f.ex)), ey:median(L.map(f => f.ey)) });
+// 最小二乗: t = c0*x0 + c1*x1 + c2
+function fit3(X0, X1, T){
+  const m = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], v = [0, 0, 0];
+  for (let i = 0; i < T.length; i++){ const r = [X0[i], X1[i], 1]; for (let j = 0; j < 3; j++){ v[j] += r[j]*T[i]; for (let k = 0; k < 3; k++) m[j][k] += r[j]*r[k]; } }
+  m[0][0] += 1e-6; m[1][1] += 1e-6;
+  const det = M => M[0][0]*(M[1][1]*M[2][2] - M[1][2]*M[2][1]) - M[0][1]*(M[1][0]*M[2][2] - M[1][2]*M[2][0]) + M[0][2]*(M[1][0]*M[2][1] - M[1][1]*M[2][0]);
+  const d = det(m); if (!isFinite(d) || Math.abs(d) < 1e-14) return null;
+  const out = [0, 1, 2].map(c => det(m.map((row, j) => row.map((x, k) => k === c ? v[j] : x)))/d);
+  return out.every(isFinite) ? out : null;
+}
+const gzOv = $('gzOv'), gzCv = $('gzCv'), gzx = gzCv.getContext('2d');
+// kind: 'full' = 9点キャリブレーション / 'quick' = 画面中央を見て ずれだけ補正
+function gazeCalStart(kind, done){
+  if (gaze.cal) return;
+  if (kind === 'full' && (!face.on || !navigator.mediaDevices)){ if (done) done(); return; }
+  toggleMenu(false); mgStop(true);
+  gaze.cal = { kind, pts:kind === 'full' ? GZ_PTS : [[0, 0]], i:0, t:0, s:[], got:[], done, wait:0, lastFt:-1, endT:0 };
+  gzOv.style.display = 'block';
+}
+function gazeCalEnd(ok){
+  const c = gaze.cal; if (!c) return;
+  gaze.cal = null; gzOv.style.display = 'none'; gaze.ex = {}; gaze.ey = {};
+  if (ok) setBadge(c.kind === 'full' ? (gaze.M ? '👁 視線キャリブレーション完了' : '👁 キャリブレーションできず、簡易モードで動きます') : '👁 ずれを補正しました');
+  if (c.done) c.done();
+}
+function gazeCalFinish(c){
+  if (c.kind === 'quick'){
+    const f = c.got[0];
+    if (gaze.M){ const m = gazeMap(f); gaze.ofs[0] -= m[0]; gaze.ofs[1] -= m[1]; }
+    else gaze.c0 = f;
+    return;
+  }
+  gaze.c0 = c.got[0]; gaze.ofs = [0, 0];
+  const G = c.got, P = c.pts.slice(0, G.length);
+  const a = fit3(G.map(f => f.hx), G.map(f => f.ex), P.map(q => q[0])), b = fit3(G.map(f => f.hy), G.map(f => f.ey), P.map(q => q[1]));
+  gaze.M = a && b ? [a, b] : null;
+  try { if (gaze.M) localStorage.setItem(GZ_KEY, JSON.stringify({ M:gaze.M })); } catch (e){}
+}
+function gazeCalStep(dt){
+  const c = gaze.cal; if (!c) return;
+  if (c.endT){ c.endT -= dt; gazeCalDraw(); if (c.endT <= 0) gazeCalEnd(true); return; }
+  const ready = face.lm && face.src && face.seen && gaze.f;
+  if (!ready){ c.wait += dt; if (c.wait > 25){ gazeCalEnd(false); return; } gazeCalDraw(); return; }
+  const SETTLE = c.kind === 'full' ? .6 : .35, COLLECT = c.kind === 'full' ? .8 : .5;
+  c.t += dt;
+  if (c.t > SETTLE && gaze.ft !== c.lastFt){ c.lastFt = gaze.ft; if (gaze.f.open > GZ_OPEN) c.s.push(gaze.f); }   // まばたき中は使わない
+  if (c.t >= SETTLE + COLLECT && c.s.length >= 6){
+    c.got.push(featAvg(c.s)); c.s = []; c.t = 0;
+    if (++c.i >= c.pts.length){ gazeCalFinish(c); c.endT = c.kind === 'full' ? .9 : .4; }
+  }
+  gazeCalDraw();
+}
+function gazeCalDraw(){
+  const c = gaze.cal, dpr = Math.min(2, devicePixelRatio || 1), w = innerWidth, h = innerHeight;
+  if (gzCv.width !== Math.round(w*dpr) || gzCv.height !== Math.round(h*dpr)){ gzCv.width = Math.round(w*dpr); gzCv.height = Math.round(h*dpr); }
+  const x = gzx; x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, w, h);
+  x.fillStyle = 'rgba(0,10,14,.78)'; x.fillRect(0, 0, w, h);
+  x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `bold ${Math.max(16, Math.min(26, w/40))}px ${FONT}`;
+  const halves = vr ? [[0, w/2], [w/2, w/2]] : [[0, w]];
+  const text = (t, col = '#ffd35a') => { for (const [ox, hw] of halves){ x.fillStyle = col; x.fillText(t, ox + hw/2, h*.12); } };
+  if (c.endT){ text(c.kind === 'full' ? (gaze.M ? '✔ キャリブレーション完了' : '✖ うまく測れませんでした（簡易モード）') : '✔ ずれを補正しました', gaze.M || c.kind !== 'full' ? '#5ee08a' : '#ff4d5e'); return; }
+  if (!(face.lm && face.src && face.seen && gaze.f)){
+    text(!face.lm ? '視線認識を準備中…' : !face.src ? 'カメラを準備中…' : 'カメラに顔を映してください', '#ffd35a'); return;
+  }
+  const [tx, ty] = c.pts[c.i], SETTLE = c.kind === 'full' ? .6 : .35, COLLECT = c.kind === 'full' ? .8 : .5;
+  const k = Math.min(1, c.t/(SETTLE + COLLECT));
+  text(c.kind === 'full' ? `● を目で見続けてください（${c.i + 1} / ${c.pts.length}）　頭は自然に動いてOK` : '画面中央の ● を見てください');
+  for (const [ox, hw] of halves){
+    const px = ox + (tx + 1)/2*hw, py = (1 - ty)/2*h, R = 26*(1 - k) + 8;
+    x.strokeStyle = '#ffffff'; x.lineWidth = 3; x.beginPath(); x.arc(px, py, R, 0, 7); x.stroke();
+    x.fillStyle = c.t > SETTLE ? '#ff4d5e' : '#ffd35a'; x.beginPath(); x.arc(px, py, 7, 0, 7); x.fill();
+    x.strokeStyle = '#5ee08a'; x.lineWidth = 4; x.beginPath(); x.arc(px, py, 38, -Math.PI/2, -Math.PI/2 + k*Math.PI*2); x.stroke();
+  }
+}
+// C / − / ずれ補正ボタン：視線モードなら画面中央を見てずれ補正、顔の位置モードなら従来の中心リセット
+function gazeRecenter(){
+  if (gaze.mode !== 'gaze'){ faceRecenter(); return; }
+  if (!face.on) return;
+  if (!face.src && !face.stream) startFace();
+  gazeCalStart(gaze.M || gaze.c0 ? 'quick' : 'full');
+}
+function gazeFullCal(done){
+  if (!face.on){ $('faceOn').checked = face.on = true; }
+  if (!face.src && !face.stream) startFace();
+  gazeCalStart('full', done);
+}
+$('gzSkip').onclick = () => gazeCalEnd(false);
+function setBadge(t){ if (face.badge === t) return; face.badge = t; $('faceBadge').textContent = t; $('faceStat').textContent = t; }
+function faceRecenter(){ face.cx = face.cy = null; face.sumx = face.sumy = face.cn = 0; }
+async function loadFaceModel(){
+  if (face.lm || face.loading) return;
+  face.loading = true; setBadge('👤 顔認識モデル読み込み中…');
+  try {
+    const V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+    const mp = await import(V + '/vision_bundle.mjs');
+    const fs = await mp.FilesetResolver.forVisionTasks(V + '/wasm');
+    const opt = d => ({ baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task', delegate:d },
+                        runningMode:'VIDEO', numFaces:1 });
+    try { face.lm = await mp.FaceLandmarker.createFromOptions(fs, opt('GPU')); }
+    catch (e){ face.lm = await mp.FaceLandmarker.createFromOptions(fs, opt('CPU')); }
+    setBadge('👤 顔を探しています…');
+  } catch (e){ console.error(e); setBadge('👤 顔認識を読み込めません: ' + (e && e.message || e)); }
+  face.loading = false;
+}
+async function openFaceCam(){
+  if (face.stream) face.stream.getTracks().forEach(t => t.stop());
+  face.stream = null; face.src = null; faceRecenter(); gaze.c0 = null; gaze.cs = [];
+  const id = faceSel.value, sz = { width:{ ideal:640 }, height:{ ideal:480 } };
+  const tries = (id === 'user' || id === 'environment') ? [{ video:{ facingMode:{ ideal:id }, ...sz }, audio:false }, { video:true, audio:false }] : id ? [{ video:{ deviceId:{ exact:id }, ...sz }, audio:false }]
+                   : [{ video:{ facingMode:'user', ...sz }, audio:false }, { video:true, audio:false }];
+  for (const c of tries){ try { face.stream = await navigator.mediaDevices.getUserMedia(c); break; } catch (e){} }
+  if (face.stream){
+    face.fm = (face.stream.getVideoTracks()[0].getSettings().facingMode || (id === 'environment' ? 'environment' : 'user')) !== 'environment'; fv.srcObject = face.stream; try { await fv.play(); } catch (e){}
+    face.src = fv;
+  } else if (camStream){ face.src = vid; setBadge('👤 顔用カメラを開けず、背景カメラで認識します'); }
+  else setBadge('👤 顔認識用カメラを開けません');
+  listCams();
+}
+async function startFace(){
+  if (!face.on || !navigator.mediaDevices) return;
+  loadFaceModel(); loadHandModel(); await openFaceCam();
+}
+function faceStep(now){
+  const v = face.src;
+  if (!face.on || !face.lm || !v || v.readyState < 2 || !v.videoWidth || v.currentTime === face.lastT) return;
+  face.lastT = v.currentTime;
+  let r; try { r = face.lm.detectForVideo(v, now); } catch (e){ console.error(e); return; }
+  const p = r.faceLandmarks && r.faceLandmarks[0]; face.pts = p || null;
+  if (!p){ face.seen = false; setBadge('👤 顔が見つかりません'); return; }
+  face.seen = true; face.x = p[1].x; face.y = p[1].y;           // 1 = 鼻先
+  if (face.cx === null){
+    face.sumx += face.x; face.sumy += face.y;
+    if (++face.cn >= FACE_CAL){ face.cx = face.sumx/face.cn; face.cy = face.sumy/face.cn; }
+    else setBadge('👤 顔を画面の中心に構えてください…');
+  }
+  if (gaze.mode === 'gaze'){
+    const f0 = gazeFeat(p, v.videoWidth/v.videoHeight);
+    if (f0.open > GZ_OPEN){ gaze.buf.push(f0); if (gaze.buf.length > GZ_MED) gaze.buf.shift(); }   // まばたき中の値は入れない
+    gaze.f = gaze.buf.length ? Object.assign(featAvg(gaze.buf), { open:f0.open }) : f0; gaze.ft = now;
+    if (!gaze.M && !gaze.c0 && !gaze.cal){   // キャリブレーション前は、最初に画面中央を見ている所を基準にする
+      if (gaze.f.open > GZ_OPEN) gaze.cs.push(gaze.f);
+      if (gaze.cs.length >= FACE_CAL){ gaze.c0 = featAvg(gaze.cs); gaze.cs = []; }
+      else { setBadge('👁 画面の中央を見てください…'); return; }
+    }
+    setBadge(gaze.M ? '👁 視線照準 OK' : '👁 視線照準（簡易）… K でキャリブレーションすると正確になります');
+    return;
+  }
+  if (face.cx !== null) setBadge('👤 顔認識 OK');
+}
+function faceUpdate(dt){
+  if (!faceActive()) return;
+  if (gaze.mode === 'gaze'){
+    if (face.seen && gaze.f && gaze.f.open > GZ_OPEN){   // まばたき中は直前の位置のまま
+      const m = gazeMap(gaze.f); if (m){ gaze.tx = Math.max(-1.1, Math.min(1.1, m[0])); gaze.ty = Math.max(-1.1, Math.min(1.1, m[1])); }
+    }
+    if (gaze.tx === null) return;
+    aimSmooth(gaze.tx*gaze.gain, gaze.ty*gaze.gain, dt, GZ_DEAD);
+    return;
+  }
+  if (face.seen){
+    const dx = face.x - face.cx, dy = face.y - face.cy, f = d => Math.abs(d) < FACE_DEAD ? 0 : d - Math.sign(d)*FACE_DEAD;
+    face.tx = Math.max(-1, Math.min(1, (faceMirror() ? -1 : 1)*f(dx)*FACE_GX*face.gain));   // フロント(鏡像)は左右反転、バックはそのまま
+    face.ty = Math.max(-1, Math.min(1, -f(dy)*FACE_GY*face.gain));
+  }
+  aimSmooth(face.tx || 0, face.ty || 0, dt, .015);
+}
+// 照準のなめらか移動：小さな揺れは不感帯で止め、2段の追従で加速・減速をなめらかにする
+function aimSmooth(tx, ty, dt, dead){
+  const g = gaze;
+  if (g.s1 === null){ g.hx = tx; g.hy = ty; g.s1 = [tx, ty]; g.s2 = [tx, ty]; }
+  const dx = tx - g.hx, dy = ty - g.hy, d = Math.hypot(dx, dy);
+  if (d > dead){ const m = (d - dead)/d; g.hx += dx*m; g.hy += dy*m; }   // 不感帯の外に出た分だけ目標を動かす
+  const k = 1 - Math.exp(-dt*(2.5 + 7*g.smooth));
+  g.s1[0] += (g.hx - g.s1[0])*k; g.s1[1] += (g.hy - g.s1[1])*k;
+  g.s2[0] += (g.s1[0] - g.s2[0])*k; g.s2[1] += (g.s1[1] - g.s2[1])*k;
+  mouse.nx = Math.max(-1, Math.min(1, g.s2[0])); mouse.ny = Math.max(-1, Math.min(1, g.s2[1]));
+}
+const prevC = $('facePrev'), pctx = prevC.getContext('2d');
+function faceDraw(){
+  const show = prevOn && face.on && !vr && !head.on && $('xrPanel').hidden && state !== undefined;   // ゴーグル設定中・ゴーグル中は顔のプレビューを出さない
+  prevC.style.display = show ? 'block' : 'none'; if (!show) return;
+  const w = prevC.width, h = prevC.height, v = face.src;
+  pctx.fillStyle = '#000'; pctx.fillRect(0, 0, w, h);
+  if (!v || v.readyState < 2 || !v.videoWidth){
+    pctx.fillStyle = '#ffd35a'; pctx.font = 'bold 18px sans-serif'; pctx.textAlign = 'center';
+    pctx.fillText(face.lm || face.loading ? 'カメラ待機中…' : '「顔認識を開始」を押すか、ゲームを開始', w/2, h/2); return;
+  }
+  pctx.save(); if (faceMirror()){ pctx.translate(w, 0); pctx.scale(-1, 1); }
+  const va = v.videoWidth/v.videoHeight, dw = va > w/h ? h*va : w, dh = va > w/h ? h : w/va;
+  pctx.drawImage(v, (w - dw)/2, (h - dh)/2, dw, dh); pctx.restore();
+  const X = x => (faceMirror() ? 1 - x : x)*w, Y = y => y*h;
+  if (face.seen && face.pts){
+    pctx.fillStyle = '#5ee08a'; for (const q of face.pts) pctx.fillRect(X(q.x) - 1, Y(q.y) - 1, 2, 2);
+    pctx.fillStyle = '#ff4d5e'; pctx.beginPath(); pctx.arc(X(face.x), Y(face.y), 5, 0, 7); pctx.fill();   // 鼻先
+    if (gaze.mode === 'gaze' && face.pts.length >= 478){ pctx.strokeStyle = '#7ae7ff'; pctx.lineWidth = 2; for (const i of [468, 473]){ pctx.beginPath(); pctx.arc(X(face.pts[i].x), Y(face.pts[i].y), 4, 0, 7); pctx.stroke(); } }   // 黒目
+  }
+  if (face.cx !== null && gaze.mode !== 'gaze'){   // 構えた中心
+    pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 1.5; const cx = X(face.cx), cy = Y(face.cy);
+    pctx.beginPath(); pctx.moveTo(cx - 12, cy); pctx.lineTo(cx + 12, cy); pctx.moveTo(cx, cy - 12); pctx.lineTo(cx, cy + 12); pctx.stroke();
+    if (face.seen){ pctx.strokeStyle = '#ff4d5e'; pctx.beginPath(); pctx.moveTo(cx, cy); pctx.lineTo(X(face.x), Y(face.y)); pctx.stroke(); }
+  }
+  if (hand.trail.length > 1){ pctx.strokeStyle = '#ffd35a'; pctx.lineWidth = 3; pctx.beginPath(); hand.trail.forEach((q, i) => i ? pctx.lineTo(X(q.x), Y(q.y)) : pctx.moveTo(X(q.x), Y(q.y))); pctx.stroke(); }
+  pctx.font = 'bold 16px sans-serif'; pctx.textAlign = 'left';
+  pctx.fillStyle = !face.lm ? '#ffd35a' : face.seen ? '#5ee08a' : '#ff4d5e';
+  pctx.fillText(!face.lm ? 'モデル読み込み中…' : face.seen ? (gaze.mode === 'gaze' ? (gaze.M ? '👁 視線 追跡中' : gaze.c0 ? '👁 視線 追跡中（簡易）' : '画面の中央を見て…') : face.cx === null ? '顔を中心に構えて…' : '● 追跡中') : '× 顔が見つかりません', 8, 22);
+}
+$('faceOn').onchange = e => {
+  face.on = e.target.checked;
+  if (face.on){ if (state !== 'title' || camStream) startFace(); }
+  else { if (face.stream) face.stream.getTracks().forEach(t => t.stop()); face.stream = face.src = null; faceRecenter(); setBadge(''); }
+};
+$('faceGain').oninput = e => face.gain = +e.target.value;
+faceSel.onchange = () => { if (face.on) openFaceCam(); };
+$('faceCal').onclick = gazeRecenter;
+$('gzCalBtn').onclick = $('mGaze').onclick = () => gazeFullCal();
+$('aimMode').onchange = e => { gaze.mode = e.target.value; wiiPtrCenter(); gaze.tx = gaze.ty = null; gaze.s1 = null; gaze.buf = []; gaze.ex = {}; gaze.ey = {}; mouse.nx = mouse.ny = 0; faceRecenter(); };
+$('gzSmooth').oninput = e => gaze.smooth = +e.target.value;
+$('gzGain').oninput = e => { gaze.gain = +e.target.value; $('gzGainV').textContent = gaze.gain.toFixed(2); };
+$('faceStart').onclick = () => { if (!face.on){ $('faceOn').checked = face.on = true; } startFace(); };
+let prevOn = true; $('facePrevOn').onchange = e => prevOn = e.target.checked;
+
+// ===== 指ジェスチャー(人差し指で縦に「1」)でメニュー開閉 =====
+const hand = { lm:null, loading:false, trail:[], last:-1, cool:0 };
+async function loadHandModel(){
+  if (hand.lm || hand.loading) return; hand.loading = true;
+  try {
+    const V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14', mp = await import(V + '/vision_bundle.mjs'), fs = await mp.FilesetResolver.forVisionTasks(V + '/wasm');
+    const o = d => ({ baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate:d }, runningMode:'VIDEO', numHands:1 });
+    try { hand.lm = await mp.HandLandmarker.createFromOptions(fs, o('GPU')); } catch (e){ hand.lm = await mp.HandLandmarker.createFromOptions(fs, o('CPU')); }
+  } catch (e){ console.error(e); }
+  hand.loading = false;
+}
+function handStep(now){
+  const v = face.src; if (!hand.lm || !v || v.readyState < 2 || !v.videoWidth || now - hand.last < 50) return; hand.last = now;
+  let r; try { r = hand.lm.detectForVideo(v, now); } catch (e){ return; }
+  const p = r.landmarks && r.landmarks[0]; if (!p){ hand.trail = []; return; }
+  const d = (a, b) => Math.hypot(p[a].x - p[b].x, p[a].y - p[b].y);
+  // 人差し指だけ伸ばし、他の指は曲げている形
+  if (!(d(8, 0) > d(6, 0)*1.1 && d(12, 0) < d(10, 0) && d(16, 0) < d(14, 0) && d(20, 0) < d(18, 0))){ hand.trail = []; return; }
+  const T = hand.trail; T.push({ x:p[8].x, y:p[8].y, t:now }); while (T.length && now - T[0].t > 900) T.shift();
+  if (T.length < 5 || now < hand.cool) return;
+  const dy = T[T.length-1].y - T[0].y, xs = T.map(q => q.x), wd = Math.max(...xs) - Math.min(...xs);
+  if (dy > .22 && wd < dy*.35 && now - T[0].t > 250){ hand.cool = now + 1500; hand.trail = []; toggleMenu(); }   // 上→下へ縦一線
+}
+function toggleMenu(f){ menuOn = f === undefined ? !menuOn : f; $('menu').classList.toggle('on', menuOn); }
+function flipFaceCam(){
+  faceSel.value = faceSel.value === 'environment' ? 'user' : 'environment';
+  $('mFace').textContent = '🔄 顔カメラ: ' + (faceSel.value === 'environment' ? 'バック' : 'フロント');
+  if (face.on) openFaceCam();
+}
+function faceMirror(){ const t = $('faceType').value; return t === 'auto' ? (face.src === vid ? camMirror : face.fm !== false) : t === 'front'; }
+// 音はすべて RQ_project/sounds（../sounds/）にまとめてある（剣・銃・共通とも）
+// 置き場所（リポジトリ）: RQ_project/sounds/
+// HTMLを別の場所に置いた・ローカルで開いた時でも鳴るよう、相対パスで読めなければ公開サイトのURLから読む
+const SHARED_SND = '../sounds/', GUN_SND = '../sounds/', SITE = 'https://pidanweb.github.io/RQ_project/';
+const sndAbs = rel => SITE + rel.replace(/^\.\.\//, '');   // 音はすべて RQ_project/sounds にまとめてある
+function audioWithFallback(...rels){   // <audio> 用：候補を順に試す（各ファイル 相対 → 公開URL）
+  const list = rels.flatMap(r => [r, sndAbs(r)]), a = new Audio(list[0]); let i = 0;
+  a.addEventListener('error', () => { if (++i >= list.length) return; const p = !a.paused; a.src = list[i]; if (p) a.play().catch(() => {}); });
+  return a;
+}
+const sPary = audioWithFallback(SHARED_SND + 'pary.mp3'); let vol = .8; sPary.preload = 'auto';
+// 戦闘BGM（ループ）：ガンナー用 battle_gun.mp3。読めない時は共通の battle.mp3 に切り替え
+const bgm = audioWithFallback(GUN_SND + 'battle_gun.mp3', SHARED_SND + 'battle.mp3');
+bgm.loop = true; bgm.preload = 'auto'; bgm.volume = .5;
+function bgmPlay(restart){ try { if (restart) bgm.currentTime = 0; bgm.play().catch(() => { bgm.wantPlay = true; }); } catch (e){} }
+// ===== 音のロック解除 =====
+// ブラウザは「マウスクリック・キー・タッチ」をするまで音を出させない。Wiiリモコンのボタンはこの操作に数えられないので、
+// Wiiだけで遊ぶと無音になる。最初に1回クリック等があったら音を有効にし、まだなら画面上部に案内を出す。
+function audioUnlock(){
+  try { const a = getCtx(); if (a.state !== 'running') a.resume(); } catch (e){}
+  if (bgm.wantPlay && state === 'play'){ bgm.wantPlay = false; bgmPlay(); }
+  $('sndHint').style.display = 'none';
+}
+for (const ev of ['pointerdown', 'keydown', 'touchstart']) addEventListener(ev, audioUnlock, { capture:true });
+const audioLocked = () => (navigator.userActivation ? !navigator.userActivation.hasBeenActive : false) || (actx && actx.state === 'suspended');
+setInterval(() => { $('sndHint').style.display = audioLocked() && vol > 0 ? 'block' : 'none'; }, 500);
+function bgmStop(){ try { bgm.pause(); } catch (e){} }
+// ガード音（素材なしのため簡易合成）
+let actx = null;
+function playGuard(){ try {
+  actx = actx || new AudioContext(); const t = actx.currentTime, o = actx.createOscillator(), g = actx.createGain();
+  o.type = 'square'; o.frequency.setValueAtTime(240, t); o.frequency.exponentialRampToValueAtTime(70, t + .15);
+  g.gain.setValueAtTime(.25*vol + .001, t); g.gain.exponentialRampToValueAtTime(.001, t + .18);
+  o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + .2);
+} catch (e){} }
+function playPary(){ try { const a = sPary.cloneNode(); a.volume = vol; a.play().catch(() => {}); } catch (e){} }
+// 銃・爆発の効果音（素材なしのため簡易合成）
+let noiseBuf = null;
+function sfx(fn){ try {
+  actx = actx || new AudioContext(); if (actx.state === 'suspended') actx.resume();
+  if (!noiseBuf){ noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random()*2 - 1; }
+  fn(actx, actx.currentTime);
+} catch (e){} }
+function env(a, t, peak, dur){ const g = a.createGain(); g.gain.setValueAtTime(peak*vol + .0001, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur); g.connect(a.destination); return g; }
+function noise(a, t, dur, type, freq, peak){ const s = a.createBufferSource(); s.buffer = noiseBuf; const f = a.createBiquadFilter(); f.type = type; f.frequency.value = freq; s.connect(f); f.connect(env(a, t, peak, dur)); s.start(t); s.stop(t + dur); }
+function tone(a, t, type, f0, f1, dur, peak){ const o = a.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur); o.connect(env(a, t, peak, dur)); o.start(t); o.stop(t + dur + .02); }
+// ===== 効果音ファイル（sounds/XX.mp3）。読めない時は合成音で代用 =====
+// gun=ハンドガン / machinegun=P90 / biggun=スナイパー、fire=発射 reload=マガジン交換 slide=装填完了・持ち替え、kara=空撃ち、atack=剣の攻撃
+const SND_FILES = ['gun_fire', 'gun_reload', 'gun_slide', 'machinegun_fire', 'machinegun_reload', 'machinegun_slide',
+                   'biggun_fire', 'biggun_reload', 'biggun_slide', 'kara', 'atack'];
+const SND_SHARED = new Set(['atack']);   // ../sounds/ にあるもの
+const SND = {}, WSND = { hg:'gun', p90:'machinegun', sr:'biggun' };
+const getCtx = () => (actx = actx || new AudioContext());
+function sndLoad(){
+  for (const n of SND_FILES){
+    const o = SND[n] = { buf:null, el:null, bad:false }, url = (SND_SHARED.has(n) ? SHARED_SND : GUN_SND) + (n === 'atack' ? 'swing' : n) + '.mp3'   /* 剣の攻撃は剣士と同じ swing.mp3 */;
+    const abs = sndAbs(url);
+    const html = () => { const a = new Audio(url); a.preload = 'auto'; let s2 = false; a.onerror = () => { if (!s2){ s2 = true; a.src = abs; } else o.bad = true; }; o.el = a; };
+    // Web Audio で読めれば低遅延・重ね鳴らしOK（相対 → 公開URL の順に試し、だめなら <audio> で再生）
+    const get = u => fetch(u).then(r => { if (!r.ok) throw 0; return r.arrayBuffer(); });
+    try { get(url).catch(() => get(abs)).then(ab => getCtx().decodeAudioData(ab)).then(b => o.buf = b).catch(html); }
+    catch (e){ html(); }
+  }
+}
+sndLoad();
+// 戻り値: 再生できたら true
+function playSnd(n, fallback, v = 1){
+  const o = SND[n];
+  if (o && o.buf){ sfx((a, t) => { const s = a.createBufferSource(); s.buffer = o.buf; const g = a.createGain(); g.gain.value = vol*v; s.connect(g); g.connect(a.destination); s.start(t); }); return true; }
+  if (o && o.el && !o.bad){ try { const c = o.el.cloneNode(); c.volume = Math.min(1, vol*v); c.play().catch(() => { o.bad = true; if (fallback) fallback(); }); return true; } catch (e){} }
+  if (fallback) fallback(); return false;
+}
+// P90 の発射音：短い音なら1発ごと、長い(連射の録音)ならループ再生して指を離したら止める
+const mgLoop = { src:null, el:null, last:0 };
+function mgFire(){
+  const o = SND.machinegun_fire, long = o && ((o.buf && o.buf.duration > .35) || (!o.buf && o.el && !o.bad && o.el.duration > .35));
+  if (!long){ playSnd('machinegun_fire', () => playShot(true), .8); return; }
+  mgLoop.last = performance.now();
+  if (o.buf){ if (!mgLoop.src) sfx((a, t) => { const s = a.createBufferSource(); s.buffer = o.buf; s.loop = true; const g = a.createGain(); g.gain.value = vol*.8; s.connect(g); g.connect(a.destination); s.start(t); mgLoop.src = s; }); }
+  else if (!mgLoop.el){ const c = o.el.cloneNode(); c.loop = true; c.volume = Math.min(1, vol*.8); c.play().catch(() => {}); mgLoop.el = c; }
+}
+function mgStop(){
+  if (mgLoop.src){ try { mgLoop.src.stop(); } catch (e){} mgLoop.src = null; }
+  if (mgLoop.el){ mgLoop.el.pause(); mgLoop.el = null; }
+}
+const sndFire = w => w === 'p90' ? mgFire() : w === 'sr' ? playSnd('biggun_fire', playSnipe) : playSnd('gun_fire', () => playShot(false));
+const sndReload = w => WSND[w] && playSnd(WSND[w] + '_reload', () => playReload(false));
+const sndSlide = w => WSND[w] && playSnd(WSND[w] + '_slide', () => playReload(true));
+const sndKara = () => playSnd('kara', playEmpty);
+const playShot = light => sfx((a, t) => { noise(a, t, light ? .04 : .07, 'highpass', light ? 2600 : 1800, light ? .18 : .3); tone(a, t, 'square', light ? 1300 : 900, 140, light ? .05 : .08, .1); });
+const playSnipe = () => sfx((a, t) => { noise(a, t, .35, 'lowpass', 1400, .7); tone(a, t, 'sawtooth', 600, 60, .3, .25); });
+const playSaber = heavy => sfx((a, t) => { tone(a, t, 'sawtooth', heavy ? 180 : 320, heavy ? 520 : 900, heavy ? .28 : .14, .15); noise(a, t, heavy ? .25 : .1, 'bandpass', heavy ? 700 : 1400, .2); });
+const playBoom = () => sfx((a, t) => { noise(a, t, .7, 'lowpass', 500, .9); tone(a, t, 'sine', 120, 35, .5, .6); });
+const playCurve = () => sfx((a, t) => tone(a, t, 'sawtooth', 260, 1100, .28, .12));
+const playBeep = hi => sfx((a, t) => tone(a, t, 'square', hi ? 1600 : 1100, hi ? 1600 : 1100, .06, .1));
+const playThrow = () => sfx((a, t) => noise(a, t, .18, 'bandpass', 900, .25));
+const playEmpty = () => sfx((a, t) => tone(a, t, 'square', 2400, 1800, .03, .08));
+const playReload = done => sfx((a, t) => { noise(a, t, .05, 'bandpass', done ? 2500 : 1500, .4); if (done) noise(a, t + .08, .05, 'bandpass', 3200, .4); });
+const playPerfect = () => sfx((a, t) => { tone(a, t, 'triangle', 700, 1400, .12, .2); tone(a, t + .1, 'triangle', 1400, 2100, .15, .2); });
+$('viewBtn').onclick = () => setView(!tp); $('mView').onclick = () => setView(!tp); $('menuBtn').onclick = () => toggleMenu();
+$('mClose').onclick = () => toggleMenu(false); $('mFace').onclick = $('faceFlip').onclick = flipFaceCam;
+$('mVol').oninput = e => vol = +e.target.value; $('mBgm').oninput = e => bgm.volume = +e.target.value;
+$('mRestart').onclick = () => { toggleMenu(false); startBattle(); };
+$('mTitle').onclick = () => RQ.go('lobby');   // ロビーへ
+const JOB = 'gun';   // このHTMLの職業
+for (const [k, id] of [['sword', 'jSword'], ['wiz', 'jWiz'], ['gun', 'jGun']]){
+  const b = $(id); if (!b) continue;
+  if (k === JOB){ b.textContent = '✔ ' + b.textContent; b.style.borderColor = '#ffd35a'; b.onclick = () => toggleMenu(false); }
+  else b.onclick = () => { RQ.ls.set('rq_job', k); location.href = RQ.url('raid', { start:1 }, k); };   // そのジョブの最初のクエストへ（行き先は routes.js）
+}
+$('jobBtn').onclick = () => $('jobs').classList.toggle('on');
+
+// ===== ゲーム状態 =====
+const keys = {}, mouse = { nx:0, ny:0 }, ray = new THREE.Raycaster(), tmp = new THREE.Vector3(), mv2 = new THREE.Vector2();
+const PMAX = 250;
+const CD = { G:3, M:5, C:1.2 };   // クールタイム: グレネード / 地雷 / 回り込み弾
+const AR_ZONE = [.5, .68], CRIT = 3;   // パーフェクトリロードの範囲(割合) / 弱点倍率
+// 武器：十字 ↑=ハンドガン ←=P90 →=スナイパー ↓=ビームサーベル
+const WPN = {
+  hg:   { name:'ハンドガン',     mag:8,  cd:.1,   dmg:5,  rl:1.1, auto:false, col:0x9ff3ff, mz:[0, .03, -1.08] },
+  p90:  { name:'P90',            mag:50, cd:.065, dmg:2,  rl:1.8, auto:true,  col:0x7affc8, mz:[0, 0, -.82] },
+  sr:   { name:'スナイパー',     mag:1,  cd:.3,   dmg:45, rl:1.3, auto:false, col:0xffffff, mz:[0, .02, -1.56] },
+  sword:{ name:'ビームサーベル', mag:0 }
+};
+const W_ORDER = ['hg', 'p90', 'sr', 'sword'], W_KEY = { hg:'▲', p90:'◀', sr:'▶', sword:'▼' };
+const SW = { thrust:{ dmg:12, cd:.35 }, heavy:{ dmg:30, cd:.9 } };   // サーベル：突き / 重撃
+let SN_PER = 2.0, SN_TOL = .25;   // スナイパー：円の伸縮周期(秒) / 重なり判定の許容幅（旧 1.3秒 / ±0.14）
+const SN_GRACE = 150, SN_R = .55, SN_AIM = .9;   // 押すのが遅れても成功にする猶予(ms) / 円の大きさ(旧0.3) / 当たり判定の広げ幅(m)
+const curW = () => WPN[P.wp], MAG = 8;
+const P = { armed:false, x:0, hp:PMAX, inv:0, par:0, parAge:0, parCd:0, counter:0, cBig:0, guard:false, fireCd:0, cdG:0, cdM:0, cdC:0, recoil:0, lock:false,
+            ammo:8, power:0, rl:null, vt:0, crit:false, hintT:0, weakWas:false,
+            wp:'hg', mags:{ hg:8, p90:50, sr:1 }, pows:{ hg:0, p90:0, sr:0 }, swCd:0, swA:null, snT:0, curveSide:1 };
+const B = { x:0, z:-16, vz:0, s:'enter', t:1, wt:1, hp:800, max:800, hit:false, weak:0, flash:0, combo:0, stun:false, phase:1, wob:0, time:0, unp:false };
+let state = 'title', hitstop = 0, shake = 0, fovp = 0, flash = 0, vr = false, endAt = 0;
+function reset(){
+  Object.assign(P, { armed:false, x:0, hp:PMAX, inv:0, par:0, parAge:0, parCd:0, counter:0, guard:false, fireCd:0, cdG:0, cdM:0, cdC:0, recoil:0, lock:false, ammo:8, power:0, rl:null, vt:0, crit:false, weakWas:false,
+                 wp:'hg', mags:{ hg:8, p90:50, sr:1 }, pows:{ hg:0, p90:0, sr:0 }, swCd:0, swA:null, snT:0 });
+  showWeapon();
+  Object.assign(B, { x:0, z:HOVER - 7.5, vz:0, s:'enter', t:1, hp:800, hit:false, weak:0, combo:0, stun:false, phase:1, unp:false });
+  bossG.visible = true; clearProj();
+}
+function titleMsg(){
+  setMsg([['GIANT SLIME RAID : GUNNER', '#ffd35a', 64],
+          ['照準は自動でボスを狙う → B で撃ちまくれ！', '#fff', 28],
+          ['十字で武器切替 ↑ハンドガン ←P90 →スナイパー ↓ビームサーベル', '#ffd35a', 24],
+          ['リモコンを縦に立ててリロード　黄色い所で B → 強化弾', '#9fe870', 24],
+          ['回避直後・スタン中は黄色い弱点が開く → 3倍ダメージ', '#ffd35a', 24],
+          ['A 長押し: ガード　振り上げ: パリィ（赤く光る間）', '#fff', 26],
+          ['紫に光る攻撃はパリィ不可 → ガードで防ぐ', '#c06bff', 26],
+          ['1 グレネード　2 時限地雷　+ 回り込み弾', '#9fe870', 24],
+          ['マウス: 左=攻撃 R=リロード 右=パリィ Space=ガード 矢印=武器 A/D=回避', '#7ae7ff', 22],
+          ['照準の方式（自動 / Wiiジャイロ / 視線）は 📷カメラ設定で変更　V:VR　T:視点　M:メニュー', '#7ae7ff', 22],
+          ['クリック / A・B でスタート（Webカメラを使います）', '#7ae7ff', 30]]);
+}
+titleMsg();
+
+// ===== 当たり判定（ボス全体を囲む四角。デモ版なので薄く表示）=====
+const HB = new THREE.Box3(), aimHit = new THREE.Vector3(), GROUND = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const hbFillM = new THREE.MeshBasicMaterial({ color:0xff4d5e, transparent:true, opacity:.07, depthWrite:false });
+const hbLineM = new THREE.LineBasicMaterial({ color:0xff4d5e, transparent:true, opacity:.25, depthWrite:false });
+const hbBox = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), hbFillM); hbBox.renderOrder = 6;
+hbBox.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), hbLineM)); scene.add(hbBox);
+let hbShow = true, hbOp = .25;
+// 弱点（目とコアのあたり）。ボスの子にして一緒に動かす。回避直後(B.weak)とスタン中だけ開く
+const WB = new THREE.Box3(), wkGeo = new THREE.BoxGeometry(1.1, .6, .5);
+const wkFillM = new THREE.MeshBasicMaterial({ color:0xffd35a, transparent:true, opacity:.1, depthTest:false, depthWrite:false });
+const wkLineM = new THREE.LineBasicMaterial({ color:0xffd35a, transparent:true, opacity:.4, depthTest:false, depthWrite:false });
+const wkBox = new THREE.Mesh(wkGeo, wkFillM); wkBox.position.set(0, .15, .8); wkBox.renderOrder = 7;
+const wkLine = new THREE.LineSegments(new THREE.EdgesGeometry(wkGeo), wkLineM); wkLine.renderOrder = 7; wkBox.add(wkLine); bossG.add(wkBox);
+const weakOpen = () => bossAlive() && state === 'play' && (B.weak > 0 || (B.s === 'knock' && B.stun));
+$('hbOn').onchange = e => hbShow = e.target.checked; $('hbOp').oninput = e => hbOp = +e.target.value;
+const bossAlive = () => bossG.visible && B.s !== 'dead';
+function updHitbox(){
+  const p = bossG.position, s = bossG.scale;   // ボス本体は半径1の球を scale で伸縮 → 半サイズ = scale
+  HB.min.set(p.x - s.x, p.y - s.y, p.z - s.z); HB.max.set(p.x + s.x, p.y + s.y, p.z + s.z);
+  hbBox.position.copy(p); hbBox.scale.set(s.x*2, s.y*2, s.z*2); hbBox.visible = hbShow && bossG.visible;
+  const c = P.lock ? 0xffd35a : 0xff4d5e; hbFillM.color.setHex(c); hbLineM.color.setHex(c);
+  hbFillM.opacity = hbOp*(P.lock ? .5 : .28); hbLineM.opacity = Math.min(1, hbOp*(P.lock ? 2.4 : 1));
+  bossG.updateMatrixWorld(true); WB.setFromObject(wkBox);
+  const open = weakOpen(), pul = .5 + .5*Math.sin(performance.now()/90);
+  wkBox.visible = hbShow && bossG.visible;
+  wkFillM.color.setHex(open ? 0xffd35a : 0x8a8f99); wkLineM.color.setHex(open ? (P.crit ? 0xffffff : 0xffd35a) : 0x8a8f99);
+  wkFillM.opacity = open ? Math.min(.8, hbOp*(.6 + .6*pul)) : hbOp*.15; wkLineM.opacity = Math.min(1, open ? hbOp*3 + .2 : hbOp*.8);
+}
+function aimRay(){ ray.setFromCamera(mv2.set(mouse.nx, mouse.ny), camera); return ray.ray; }
+const HB_SR = new THREE.Box3();
+function aimOnBoss(out){
+  const r = aimRay(), box = P.wp === 'sr' ? HB_SR.copy(HB).expandByScalar(SN_AIM) : HB;
+  return bossAlive() && !!r.intersectBox(box, out) && r.origin.distanceTo(out) < 40;
+}
+function aimOnWeak(out){ const r = aimRay(); return weakOpen() && !!r.intersectBox(WB, out) && r.origin.distanceTo(out) < 40; }
+
+function hurtBoss(d, at, big, small){
+  if (!bossAlive() || state !== 'play') return;
+  B.hp -= d; B.flash = .12; B.wob = small ? .12 : .25;
+  burst(at, big ? 0xffd35a : 0xffffff, small ? 8 : big ? 40 : 22, small ? 4 : 6);
+  popup(String(Math.round(d)), big ? '#ffd35a' : '#ffffff', at.clone().add(new THREE.Vector3((Math.random() - .5)*.6, .6, 0)), small ? .5 : big ? 1.1 : .8, small ? .5 : .9);
+  if (!small){ shake = Math.max(shake, .12); hitstop = Math.max(hitstop, .05); }
+  if (B.hp <= 0){
+    B.hp = 0; B.s = 'dead'; state = 'win'; bgmStop(); endAt = performance.now(); bossG.visible = false; lane.visible = false;
+    burst(bossG.position, 0x5fe07a, 200, 12); ring(bossG.position, 8, 0x5fe07a, .8); shake = .6;
+    setMsg([['VICTORY!', '#ffd35a', 80], ['ジャイアントスライムを倒した', '#fff', 34], ['クリックでもう一度', '#7ae7ff', 32]]);
+  }
+}
+
+// ===== 射撃（照準が四角に重なっている時だけダメージ）=====
+const trGeo = new THREE.BoxGeometry(.035, .035, 1), tracers = [], booms = [], boomGeo = new THREE.SphereGeometry(1, 20, 14);
+function tracer(a, b, hex, th = 1){
+  const m = new THREE.Mesh(trGeo, new THREE.MeshBasicMaterial({ color:hex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false }));
+  m.position.copy(a).lerp(b, .5); m.lookAt(b); m.scale.set(th, th, a.distanceTo(b)); scene.add(m); tracers.push({ m, life:.09*th, max:.09*th });
+}
+function boom(at, rad, hex){
+  const m = new THREE.Mesh(boomGeo, new THREE.MeshBasicMaterial({ color:hex, transparent:true, opacity:.7, blending:THREE.AdditiveBlending, depthWrite:false }));
+  m.position.copy(at); scene.add(m); booms.push({ m, rad, life:.45, max:.45 });
+}
+function updFX2(dt){
+  for (const [list, fn] of [[tracers, (o, k) => o.m.material.opacity = k], [booms, (o, k) => { o.m.scale.setScalar(o.rad*(.2 + .8*(1 - k*k))); o.m.material.opacity = .7*k; }]])
+    for (let i = list.length - 1; i >= 0; i--){
+      const o = list[i]; o.life -= dt; fn(o, Math.max(0, o.life/o.max));
+      if (o.life <= 0){ scene.remove(o.m); o.m.material.dispose(); list.splice(i, 1); }
+    }
+}
+const canAct = () => state === 'play' && !menuOn && !P.guard && P.par <= 0 && !P.armed;
+// 命中処理（反撃チャンス中なら大ダメージ）
+function dealHit(d, at, crit, big, small){
+  if (P.counter > 0){ P.counter = 0; hurtBoss(P.cBig + d, at, true); shake = .5; hitstop = .15; popCam('COUNTER!!', '#ffd35a', 1.2, 1); wiiPattern([200]); return; }
+  if (crit){ hurtBoss(d, at, true, small); popup('CRITICAL', '#ffd35a', at.clone().add(new THREE.Vector3(0, 1.1, 0)), .45, .45); wiiPattern([70]); hitstop = Math.max(hitstop, .03); }
+  else hurtBoss(d, at, big, small);
+}
+// スナイパーの伸縮円：0〜1の往復で半径が 0.35〜1.85倍。1倍(=的の円)付近なら命中
+const snScale = () => { const u = (P.snT/SN_PER) % 1; return .35 + 1.5*(1 - Math.abs(2*u - 1)); };
+const snOK = () => Math.abs(snScale() - 1) < SN_TOL;
+const snTiming = () => snOK() || performance.now() - (P.snOkT || 0) < SN_GRACE;   // Wiiの遅れ分、少し前まで重なっていればOK
+function snSetTol(t){
+  SN_TOL = t; snG.remove(snBand); snBand.geometry.dispose();
+  snBand = new THREE.Mesh(new THREE.RingGeometry(1 - t, 1 + t, 64), snBandM); snBand.renderOrder = 35; snG.add(snBand);
+}
+// ===== 武器切替 =====
+function showWeapon(){
+  gHG.visible = P.wp === 'hg'; gP90.visible = P.wp === 'p90'; gSR.visible = P.wp === 'sr'; gSW.visible = P.wp === 'sword';
+  muzzle.position.set(...(curW().mz || [0, 0, -1.9])); skStr = '';
+}
+function setWeapon(w){
+  if (!WPN[w] || w === P.wp || state !== 'play' || menuOn) return;
+  if (curW().mag){ P.mags[P.wp] = P.ammo; P.pows[P.wp] = P.power; }
+  P.rl = null; P.wp = w; P.swA = null; P.fireCd = .15; P.swCd = .15;
+  if (curW().mag){ P.ammo = P.mags[w]; P.power = P.pows[w]; } else { P.ammo = 0; P.power = 0; }
+  mgStop(true); showWeapon(); if (w === 'sword') playSaber(false); else sndSlide(w); wiiPattern([25]);
+  popCam(curW().name, w === 'sword' ? '#ff9ae8' : '#7ae7ff', .7, .7);
+  if (w === 'sr'){ popup('円が緑に光ったら撃て', '#ffd35a', new THREE.Vector3(0, -.6, -3), .55, 1.2, camera); if (ctl.mode === 'mouse' && P.ammo <= 0) startReload(); }
+}
+function shoot(){
+  const wd = curW(); if (!wd.mag) return;
+  if (P.fireCd > 0 || P.rl || !canAct()) return;
+  if (P.ammo <= 0){   // 弾切れ：空撃ち
+    P.fireCd = .2; mgStop(true); sndKara(); wiiPattern([25, 60, 25]);
+    if (performance.now() > P.hintT){ P.hintT = performance.now() + 1500; popCam(ctl.mode === 'wii' ? '弾切れ！ 縦に立ててリロード' : '弾切れ！ R でリロード', '#ff4d5e', .7, 1); }
+    if (ctl.mode === 'mouse' && P.wp === 'sr') startReload();
+    return;
+  }
+  P.ammo--; const pw = P.power > 0; if (pw) P.power--;
+  const sr = P.wp === 'sr', p90 = P.wp === 'p90';
+  P.fireCd = wd.cd; P.recoil = sr ? 1.6 : p90 ? .5 : 1; mFlash.material.opacity = 1; mFlash.material.rotation = Math.random()*6.28;
+  sndFire(P.wp); if (sr) shake = Math.max(shake, .15);
+  wiiPattern([sr ? 90 : p90 ? 18 : pw ? 50 : 35]);
+  const timing = !sr || snTiming();   // スナイパーは円が重なっている時だけ命中
+  const from = muzzleWorld(), crit = timing && aimOnWeak(aimHit), hit = crit || (timing && aimOnBoss(aimHit)), cnt = P.counter > 0;
+  aimRay(); const to = hit ? aimHit.clone() : ray.ray.at(30, new THREE.Vector3());
+  if (p90){ to.x += (Math.random() - .5)*.25; to.y += (Math.random() - .5)*.25; }
+  tracer(from, to, cnt || pw ? 0xffd35a : crit ? 0xfff2b0 : wd.col, sr ? 3 : 1);
+  if (sr){
+    ring(to, 1.2, timing ? 0xffd35a : 0x8a8f99, .35);
+    if (ctl.mode === 'mouse') setTimeout(() => { if (P.wp === 'sr' && P.ammo <= 0) startReload(); }, 250);
+    if (!timing){ popCam('MISS', '#8a8f99', .7, .6); return; }
+    if (hit) popCam('HIT!', '#ffd35a', .8, .6);
+  }
+  if (!hit) return;
+  dealHit(wd.dmg*(crit ? CRIT : 1)*(pw ? 2 : 1), to, crit, pw || sr, !sr);
+}
+// リロード：Wiiは縦に立てている間だけゲージが進む（マウスはRで自動進行）。黄色の範囲でB/クリック → 即完了＋強化弾(2倍)、外すとジャムで遅くなる
+function startReload(){
+  if (!curW().mag || P.rl || P.ammo >= curW().mag || state !== 'play' || menuOn) return;
+  P.rl = { t:0, jam:false }; mgStop(true); sndReload(P.wp); wiiPattern([30]);
+}
+function activeReload(){
+  const r = P.rl; if (!r || r.jam) return;
+  const k = r.t/curW().rl;
+  if (k >= AR_ZONE[0] && k <= AR_ZONE[1]) finishReload(true);
+  else { r.jam = true; sndKara(); wiiPattern([25, 40, 25]); popCam('ジャム！', '#ff4d5e', .8, .8); }
+}
+function finishReload(perfect){
+  P.rl = null; P.ammo = curW().mag; P.power = perfect ? curW().mag : 0; P.fireCd = .1;
+  sndSlide(P.wp);
+  if (perfect){ playPerfect(); wiiPattern([60, 50, 120]); popCam('PERFECT RELOAD! 強化弾', '#ffd35a', 1, 1); }
+  else wiiPattern([150]);
+}
+function trigger(){ if (P.wp === 'sword') swordAct('thrust'); else if (P.rl) activeReload(); else shoot(); }
+
+// ===== ビームサーベル：突き（照準の先を一瞬で貫く）/ 重撃（縦・横の斬撃波を飛ばす）=====
+const waveGeo = new THREE.RingGeometry(.8, 1, 40, 1, Math.PI*.15, Math.PI*.7);
+function swordAct(kind){
+  if (P.wp !== 'sword' || P.swCd > 0 || !canAct()) return;
+  const heavy = kind !== 'thrust', sp = heavy ? SW.heavy : SW.thrust;
+  P.swCd = sp.cd; P.swA = { k:kind, t:0, T:heavy ? .3 : .2 };
+  popup(heavy ? '重撃' : '突き', heavy ? '#ff9ae8' : '#ffffff', new THREE.Vector3(.9, -.55, -3), heavy ? .7 : .55, .6, camera);
+  playSaber(heavy); playSnd('atack'); wiiPattern([heavy ? 120 : 50]);
+  if (!heavy){
+    const from = muzzleWorld(), crit = aimOnWeak(aimHit), hit = crit || aimOnBoss(aimHit);
+    aimRay(); const to = hit ? aimHit.clone() : ray.ray.at(20, new THREE.Vector3());
+    tracer(from, to, swCol, 2.5); burst(to, swCol, hit ? 25 : 8, 5);
+    if (hit) dealHit(sp.dmg*(crit ? 2 : 1), to, crit, false, false);
+    return;
+  }
+  const from = muzzleWorld(), to = aimPoint(20), v = to.clone().sub(from).normalize().multiplyScalar(24);
+  const m = new THREE.Mesh(waveGeo, new THREE.MeshBasicMaterial({ color:swCol, transparent:true, opacity:.9, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide }));
+  m.position.copy(from); m.lookAt(to); m.rotateZ(kind === 'v' ? Math.PI/2 : 0); m.scale.set(kind === 'h' ? 2.2 : 1.6, kind === 'h' ? 1.6 : 2.2, 1);
+  // 横斬りは横方向に、縦斬りは縦方向に当たり判定が広い
+  const ext = kind === 'h' ? new THREE.Vector3(1.6, .35, .5) : new THREE.Vector3(.35, 1.6, .5);
+  addProj({ kind:'wave', m, v, ext, dmg:sp.dmg, t:0, dispose(){ m.material.dispose(); } });
+  shake = Math.max(shake, .15);
+}
+
+// ===== サブ武器（十字キー）=====
+const proj = [];
+const grenGeo = new THREE.SphereGeometry(.14, 12, 10), grenM = new THREE.MeshStandardMaterial({ color:0x3d5a2a, emissive:0x3a2a00, roughness:.5 });
+const orbGeo = new THREE.SphereGeometry(.17, 14, 10);
+const mineGeo = new THREE.CylinderGeometry(.32, .36, .12, 18), mineM = new THREE.MeshStandardMaterial({ color:0x3a3f46, metalness:.6, roughness:.4 }), lampGeo = new THREE.SphereGeometry(.08, 10, 8);
+const MINE_R = 2.6, MINE_FUSE = 3, GREN_R = 2.4;
+function addProj(o){ scene.add(o.m); proj.push(o); }
+function killProj(o){ scene.remove(o.m); if (o.dispose) o.dispose(); }
+function clearProj(){ for (const o of proj) killProj(o); proj.length = 0; }
+// 照準の先：敵の四角 → 床 → 前方
+function aimPoint(maxD){
+  if (aimOnBoss(aimHit)) return aimHit.clone();
+  const r = ray.ray, g = r.intersectPlane(GROUND, new THREE.Vector3());
+  return g && r.origin.distanceTo(g) < maxD ? g : r.at(maxD, new THREE.Vector3());
+}
+function explode(at, rad, dmg, opt = {}){
+  playBoom(); boom(at, rad, 0xff9a20); burst(at, 0xff9a20, 80, 9); burst(at, 0xffd35a, 40, 6); ring(at, rad*1.6, 0xffd35a, .5);
+  shake = Math.max(shake, .45); flash = Math.max(flash, .25); flashM.material.color.set(0xffc070); wiiRumble(250);
+  if (!bossAlive() || state !== 'play' || HB.distanceToPoint(at) > rad) return;   // 爆風が四角に届いたら命中
+  const charging = B.s === 'charge';
+  hurtBoss(B.weak > 0 ? dmg*1.5 : dmg, HB.clampPoint(at, new THREE.Vector3()), true);
+  if (opt.stun && charging && bossAlive()){   // 地雷で突進を止めるとスタン → 反撃チャンス
+    B.s = 'knock'; B.stun = true; B.t = 2; B.vz = -14; B.hit = true; P.armed = false; P.counter = B.t; P.cBig = 70;
+    popCam('突進ストップ!', '#ffd35a', 1, 1.2); popup('反撃チャンス!', '#7ae7ff', new THREE.Vector3(0, -.6, -3), .7, 1.2, camera);
+  }
+}
+// ↑ グレネード：照準の先へ放物線で投げ、四角に触れるか着地で爆発
+function throwGrenade(){
+  if (P.cdG > 0 || !canAct()) return; P.cdG = CD.G;
+  const from = muzzleWorld(), to = aimPoint(16); to.z = Math.max((P.z || 0) - 18, Math.min((P.z || 0) - 1.5, to.z)); to.y = Math.max(0, to.y);
+  const T = .85, v = to.clone().sub(from).divideScalar(T); v.y += .5*9.8*T;
+  const m = new THREE.Mesh(grenGeo, grenM); m.position.copy(from);
+  addProj({ kind:'gren', m, v, t:0 }); playThrow(); P.recoil = .6; popCam('GRENADE!', '#9fe870', .6, .6);
+}
+// ↓ 時限地雷：照準の先の床（狙えない時は前方5m）に設置、3秒後に爆発。突進中に巻き込むとスタン
+function placeMine(){
+  if (P.cdM > 0 || !canAct()) return;
+  aimRay(); let at = ray.ray.intersectPlane(GROUND, new THREE.Vector3());
+  if (!at || at.z > (P.z || 0) - 1.5 || at.z < (P.z || 0) - 14) at = new THREE.Vector3(P.x, 0, (P.z || 0) - 5);
+  at.x = Math.max(-4, Math.min(4, at.x)); at.y = 0; P.cdM = CD.M;
+  const g = new THREE.Group(); g.position.copy(at);
+  const body = new THREE.Mesh(mineGeo, mineM); body.position.y = .06;
+  const lampM = new THREE.MeshBasicMaterial({ color:0xff2a3a }), lamp = new THREE.Mesh(lampGeo, lampM); lamp.position.y = .16;
+  const zoneM = new THREE.MeshBasicMaterial({ color:0xff4d5e, transparent:true, opacity:.15, depthWrite:false, side:THREE.DoubleSide });
+  const zone = new THREE.Mesh(new THREE.RingGeometry(MINE_R - .08, MINE_R, 48), zoneM); zone.rotation.x = -Math.PI/2; zone.position.y = .03;
+  g.add(body, lamp, zone);
+  const o = { kind:'mine', m:g, t:0, sec:-1, lampM, zoneM, label:null,
+    dispose(){ lampM.dispose(); zoneM.dispose(); zone.geometry.dispose(); if (o.label){ o.label.material.map.dispose(); o.label.material.dispose(); } } };
+  addProj(o); ring(at.clone().setY(.1), 2, 0xff4d5e, .4); playBeep(); popCam('時限地雷 設置', '#ff9a9a', .6, .7);
+}
+// ←→ 回り込み弾：横へ大きく膨らんでから敵の側面に回り込む。照準が四角に重なっていればロックオン
+function curveShot(side){
+  if (P.cdC > 0 || !canAct()) return; P.cdC = CD.C;
+  if (!side){ side = P.curveSide; P.curveSide = -P.curveSide; }
+  const from = muzzleWorld(), lock = aimOnBoss(aimHit), fixed = lock ? null : ray.ray.at(18, new THREE.Vector3());
+  const col = side < 0 ? 0x7affc8 : 0xff9ae0;
+  const m = new THREE.Mesh(orbGeo, new THREE.MeshBasicMaterial({ color:col, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false }));
+  m.position.copy(from);
+  addProj({ kind:'curve', m, from, side, col, lock, fixed, t:0, T:.75, dispose(){ m.material.dispose(); } });
+  playCurve(); P.recoil = .8;
+  if (lock) popCam(side < 0 ? '◀ LOCK' : 'LOCK ▶', side < 0 ? '#7affc8' : '#ff9ae0', .6, .5);
+}
+const bez = (a, b, c, d, t) => { const u = 1 - t; return new THREE.Vector3()
+  .addScaledVector(a, u*u*u).addScaledVector(b, 3*u*u*t).addScaledVector(c, 3*u*t*t).addScaledVector(d, t*t*t); };
+function updProj(dt){
+  for (let i = proj.length - 1; i >= 0; i--){
+    const o = proj[i]; let done = false; o.t += dt;
+    if (o.kind === 'gren'){
+      o.v.y -= 9.8*dt; o.m.position.addScaledVector(o.v, dt); o.m.rotation.x += dt*10;
+      if ((bossAlive() && HB.containsPoint(o.m.position)) || o.m.position.y <= .12 || o.t > 3){ explode(o.m.position.clone(), GREN_R, 32); done = true; }
+    } else if (o.kind === 'mine'){
+      const left = MINE_FUSE - o.t, sec = Math.ceil(left);
+      if (sec !== o.sec && sec > 0){
+        o.sec = sec; if (o.label){ o.m.remove(o.label); o.label.material.map.dispose(); o.label.material.dispose(); }
+        o.label = mkSprite(String(sec), '#ff4d5e', .5); o.label.position.y = .9; o.m.add(o.label); playBeep(sec === 1);
+      }
+      o.lampM.color.setHex(Math.sin(o.t*(8 + o.t*10)) > 0 ? 0xff2a3a : 0x330808);
+      o.zoneM.opacity = .15 + .3*(o.t/MINE_FUSE);
+      if (left <= 0){ explode(o.m.position.clone().setY(.4), MINE_R, 45, { stun:true }); done = true; }
+    } else if (o.kind === 'wave'){
+      o.m.position.addScaledVector(o.v, dt); o.m.material.opacity = .9*Math.max(0, 1 - o.t/1.1); burst(o.m.position, swCol, 2, .5);
+      const pos = o.m.position;
+      if (bossAlive() && HB.clone().expandByVector(o.ext).containsPoint(pos)){
+        const crit = weakOpen() && WB.clone().expandByVector(o.ext).containsPoint(pos);
+        dealHit(o.dmg*(crit ? 2 : 1), HB.clampPoint(pos, new THREE.Vector3()), crit, true, false);
+        ring(pos.clone(), 3, swCol, .4); burst(pos, swCol, 45, 8); wiiRumble(120); done = true;
+      } else if (o.t > 1.1) done = true;
+    } else {   // curve
+      const k = Math.min(1, o.t/o.T), tgt = o.lock && bossAlive() ? bossG.position : (o.fixed || bossG.position);
+      const c1 = o.from.clone().add(new THREE.Vector3(o.side*4, .8, -3)), c2 = tgt.clone().add(new THREE.Vector3(o.side*4, .5, -1.5));
+      const pos = bez(o.from, c1, c2, tgt, k); o.m.position.copy(pos); burst(pos, o.col, 2, .5);
+      const touch = bossAlive() && (k >= 1 ? o.lock : HB.containsPoint(pos));
+      if (touch){
+        hurtBoss(B.weak > 0 ? 26 : 18, pos.clone(), true); ring(pos, 3, o.col, .4); burst(pos, o.col, 40, 7); wiiRumble(120); done = true;
+      } else if (k >= 1){ burst(pos, o.col, 15, 3); done = true; }
+    }
+    if (done){ killProj(o); proj.splice(i, 1); }
+  }
+}
+
+// ===== パリィ・ガード・被弾 =====
+// 赤く光っている間(予兆〜突進)に 振り上げ れば、突進が当たる瞬間までパリィが有効（armed）。ガード中(A押下)からでも出せる
+function parry(){ if (state !== 'play' || P.parCd > 0 || P.par > 0 || P.armed) return; P.par = .3; P.parAge = 0; P.parCd = .7; P.armed = (B.s === 'wind' || B.s === 'charge') && !B.unp; }
+function parried(){
+  playPary(); const perfect = P.parAge < .45, at = rig.localToWorld(new THREE.Vector3(0, 0, -2.4));
+  hitstop = perfect ? .22 : .14; shake = perfect ? .5 : .3; fovp = perfect ? 14 : 8; flash = perfect ? .8 : .4; flashM.material.color.set(0xfff2b0);
+  ring(at, perfect ? 6 : 4, 0xffd35a, .5); ring(at, 2.5, 0xffffff, .3); burst(at, 0xffd35a, perfect ? 90 : 55, 9);
+  popCam(perfect ? 'PERFECT!' : 'PARRY!', '#ffd35a', perfect ? 1.3 : 1, 1);
+  P.inv = .5; P.par = 0; P.armed = false; P.parCd = .15; wiiRumble(perfect ? 300 : 200);
+  B.s = 'knock'; B.stun = true; B.t = perfect ? 3 : 2.2; B.vz = perfect ? -24 : -17;
+  P.counter = B.t; P.cBig = perfect ? 140 : 90;
+  popup('反撃チャンス!', '#7ae7ff', new THREE.Vector3(0, -.6, -3), .7, 1.2, camera);
+}
+// ガード成功：ダメージ無効。突進を受け止めてボスを押し返す
+function guarded(){
+  playGuard(); wiiRumble(220);
+  const at = rig.localToWorld(new THREE.Vector3(0, 0, -2.2));
+  ring(at, 4, 0x7ae7ff, .45); ring(at, 2.2, 0xffffff, .25); burst(at, 0x7ae7ff, 45, 7);
+  hitstop = .08; shake = .3; fovp = 5; flash = .35; flashM.material.color.set(0x9fe8ff);
+  popCam('GUARD!', '#7ae7ff', 1, .9);
+  P.inv = .5; P.counter = 0;
+  B.s = 'knock'; B.stun = false; B.t = 1.0; B.vz = -12;
+}
+function hurtPlayer(mult = 1){
+  P.hp -= [20, 25, 30][B.phase-1]*mult; P.inv = 1.2; P.counter = 0; P.armed = false; shake = .8*mult; flash = .6*mult; flashM.material.color.set(0xff2a3a);
+  burst(rig.localToWorld(new THREE.Vector3(0, 0, -2)), 0xff4d5e, 60, 8); wiiRumble(300);
+  B.s = 'knock'; B.stun = false; B.t = 1.2; B.vz = -10;
+  if (P.hp <= 0){
+    P.hp = 0; state = 'over'; bgmStop(); endAt = performance.now();
+    setMsg([['GAME OVER', '#ff4d5e', 80], [`スライムの残りHP ${Math.ceil(B.hp)}`, '#fff', 34], ['クリックでリトライ', '#7ae7ff', 32]]);
+  }
+}
+
+function bossAI(dt){
+  B.t -= dt; B.weak -= dt;
+  const ph = B.hp/B.max > .6 ? 1 : B.hp/B.max > .3 ? 2 : 3;
+  if (ph > B.phase){ B.phase = ph; popCam('RAGE!!', '#ff4d5e', 1.2, 1.4); shake = .5; }
+  const idleT = () => (ph === 3 && B.combo % 2 === 1) ? .45 : [2.1, 1.5, 1.1][ph-1] + Math.random()*.5;
+  if (B.s === 'enter'){
+    B.z += (HOVER - B.z)*Math.min(1, dt*2.2);
+    if (B.z > HOVER - .25){ B.s = 'idle'; B.t = idleT(); }
+  } else if (B.s === 'idle'){
+    B.z += (HOVER - B.z)*dt*3; B.x += (Math.sin(B.time*.8)*2.2 + P.x*.4 - B.x)*dt*1.5;
+    if (B.t <= 0){
+      B.s = 'wind'; P.armed = false; B.t = B.wt = [1.1, .9, .7][ph-1];
+      B.unp = Math.random() < [.25, .33, .4][ph-1];   // パリィ不可攻撃（紫）をランダムで選ぶ
+      popup(B.unp ? '!!' : '!', B.unp ? '#c06bff' : '#ff4d5e', new THREE.Vector3(B.x, 4.6, B.z), 1.2, B.wt);
+      if (B.unp) popCam('パリィ不可！ ガード！', '#c06bff', .8, 1);
+    }
+  } else if (B.s === 'wind'){
+    if (B.t > .3) B.x += (P.x - B.x)*Math.min(1, dt*5);
+    if (B.t <= 0){ B.s = 'charge'; B.hit = false; }
+  } else if (B.s === 'charge'){
+    B.z += [17, 20, 24][ph-1]*dt;
+    if (!B.hit && B.z + R >= (P.z || 0) - 1.3){
+      B.hit = true;
+      if (Math.abs(B.x - P.x) < R*.8 + .35 && P.inv <= 0){
+        if (B.unp){   // パリィ不可：ガード中なら無効、それ以外は被弾
+          if (P.guard) guarded(); else { if (P.par > 0) popCam('パリィ不可!', '#c06bff', .9, .8); hurtPlayer(); }
+        } else if (P.par > 0 || P.armed) parried();
+        else if (P.guard) guarded();   // 通常突進もガードでダメージ無効
+        else hurtPlayer();
+        B.combo++;
+      }
+      else if (P.inv <= 0) popCam('回避!', '#7ae7ff', .9, .8);
+    }
+    if (B.s === 'charge' && B.z > (P.z || 0) + 3){ B.combo++; B.s = 'enter'; B.z = HOVER - 7.5; B.x = (Math.random()-.5)*5; B.weak = 3; P.armed = false; }
+  } else if (B.s === 'knock'){
+    B.z += B.vz*dt; B.vz *= Math.pow(.04, dt);
+    if (B.stun) B.z += (HOVER - B.z)*dt*.5;
+    if (B.t <= 0){ B.s = 'idle'; B.stun = false; B.t = idleT(); }
+  }
+}
+
+function bossAnim(dt){
+  B.time += dt; B.flash -= dt; B.wob = Math.max(0, B.wob - dt);
+  let sy = 1 + .05*Math.sin(B.time*3), zs = 1, hop = 0, k = 0;
+  if (B.s === 'enter') hop = Math.abs(Math.sin(B.time*6))*.5;
+  if (B.s === 'wind'){ k = 1 - B.t/B.wt; sy = 1 - .35*k; }
+  if (B.s === 'charge'){ sy = .8; zs = 1.4; }
+  if (B.s === 'knock' && B.stun) sy = 1 + .08*Math.sin(B.time*14);
+  sy += B.wob*Math.sin(B.time*40);
+  const sx = 1/Math.sqrt(sy), blink = Math.sin(B.time*40) > 0 ? 1 : .4;
+  bMat.emissive.setRGB(.04 + .7*k*blink + (B.flash > 0 ? .8 : 0), .23*(1-k) + (B.flash > 0 ? .8 : 0), .09*(1-k) + (B.flash > 0 ? .8 : 0));
+  const stunned = B.s === 'knock' && B.stun;
+  bossG.position.set(B.x, R*sy + hop, B.z); bossG.scale.set(R*sx, R*sy, R*sx*zs);
+  bossG.rotation.set(0, Math.atan2(P.x - B.x, (P.z || 0) - B.z)*.5, stunned ? Math.sin(B.time*6)*.18 : 0);
+  stars.visible = stunned; stars.rotation.y += dt*5; for (const p of pupils) p.visible = !stunned;
+  if (B.unp && (B.s === 'wind' || B.s === 'charge')){   // パリィ不可は紫に光る
+    const kk = B.s === 'charge' ? 1 : k, fl = B.flash > 0 ? .8 : 0;
+    bMat.emissive.setRGB(.04 + .5*kk*blink + fl, .04 + fl, .09 + .85*kk*blink + fl);
+  }
+  for (const e of eyes) e.material.color.set(B.s === 'wind' ? (B.unp ? 0xb04dff : 0xff4d5e) : 0xffffff);
+  shadow.position.set(B.x, .02, B.z); shadow.scale.setScalar(R*2.4);
+  lane.visible = B.s === 'wind';
+  if (lane.visible){ lane.material.color.setHex(B.unp ? 0xb04dff : 0xff3a4a); const zs0 = B.z + R - (P.z || 0); lane.scale.set(R*1.8, -zs0, 1); lane.position.set(B.x, .03, (P.z || 0) + zs0/2); lane.material.opacity = .22 + .25*blink*k; }
+  jiggle(B.time, B.s === 'knock' && B.stun ? .08 : .04);
+}
+
+// ===== 銃の追従（照準の方向へ銃口を向ける）=====
+function updGun(dt){
+  const asp = vr ? W/2/H : W/H, hh = Math.tan((70 - fovp)*Math.PI/360)*3, rx = mouse.nx*hh*asp, ry = mouse.ny*hh;
+  reticle.visible = state === 'play' || (aimExt() && !menuOn && !gaze.cal); reticle.position.set(rx, ry, -3); reticle.scale.setScalar(P.crit ? .54 : P.lock ? .46 : .4);
+  const want = P.crit ? RET_C : P.lock ? RET_L : RET_N; if (reticle.material.map !== want){ reticle.material.map = want; reticle.material.needsUpdate = true; }
+  // スナイパーの円
+  snG.visible = state === 'play' && P.wp === 'sr' && !P.rl && P.ammo > 0;
+  if (snG.visible){
+    const r0 = SN_R, f = snScale(), ok = snOK(); if (ok) P.snOkT = performance.now();
+    snG.position.set(rx, ry, -3); snTgt.scale.setScalar(r0); snPul.scale.setScalar(r0*f);
+    snPulM.color.setHex(ok ? 0x5ee08a : 0xffffff); snTgtM.color.setHex(ok ? 0x5ee08a : 0xffd35a);
+    snTgtM.opacity = snPulM.opacity = P.lock ? .95 : .55; snBandM.color.setHex(ok ? 0x5ee08a : 0xffd35a); snBandM.opacity = ok ? .35 : .18;
+  }
+  const sw = P.wp === 'sword';
+  const low = P.guard || P.par > 0 || P.armed, k = Math.min(1, dt*16);
+  const tx = low ? .3 : sw ? .42 : .5, ty = low ? -.8 : -.5, tz = (low ? -1.2 : -1.4) + P.recoil*.12;
+  gun.position.x += (tx - gun.position.x)*k; gun.position.y += (ty - gun.position.y)*k; gun.position.z += (tz - gun.position.z)*k;
+  const dx = rx*8/3 - gun.position.x, dy = ry*8/3 - gun.position.y, dz = -8 - gun.position.z;
+  gun.rotation.y = Math.atan2(-dx, -dz); gun.rotation.x = Math.atan2(dy, Math.hypot(dx, dz)) + P.recoil*.22 + (low ? -.5 : 0);
+  gun.rotation.z = 0;
+  if (sw){
+    gun.rotation.x += low ? 0 : .35;   // 構え：少し切っ先を上げる
+    const a = P.swA;
+    if (a){
+      a.t += dt; const u = Math.min(1, a.t/a.T), e = 1 - Math.pow(1 - u, 3);
+      if (a.k === 'thrust') gun.position.z -= .9*Math.sin(Math.PI*u);
+      else if (a.k === 'v') gun.rotation.x += 1.5 - 2.6*e;
+      else { gun.rotation.y += 1.4 - 2.8*e; gun.rotation.z = -1.2; }
+      if (u >= 1) P.swA = null;
+    }
+    beamO.scale.x = beamO.scale.z = 1 + .12*Math.sin(performance.now()/40);
+  }
+  gunAcc.emissive.setHex(P.counter > 0 || P.power > 0 ? 0xffa020 : P.lock ? 0xff4d5e : 0x2a8fb0);
+  gShield.visible = P.guard; shield.visible = P.par > 0 || P.armed;
+  if (shield.visible) shield.scale.setScalar(.6 + .5*Math.min(1, P.parAge/.1));
+}
+// サブ武器のクールタイム表示
+let skS = null, skStr = '';
+showWeapon();   // 起動時はハンドガンだけ表示
+function hudSkills(){
+  const f = v => v > 0 ? Math.ceil(v) + 's' : 'OK', wii_ = ctl.mode === 'wii';
+  const sub = wii_ ? `1グレネード ${f(P.cdG)}　2地雷 ${f(P.cdM)}　+回り込み ${f(P.cdC)}` : `Gグレネード ${f(P.cdG)}　F地雷 ${f(P.cdM)}　Q/E回り込み ${f(P.cdC)}`;
+  let am = '';
+  if (curW().mag) am = P.rl ? 'RELOAD' : `${P.ammo}/${curW().mag}`; else am = 'SABER';
+  const s = P.wp + '|' + sub + '|' + am;
+  if (s === skStr) return; skStr = s;
+  if (skS){ hud.remove(skS); skS.material.map.dispose(); skS.material.dispose(); }
+  const t = canvasTex(1024, 192, (x, w, h) => {
+    x.textBaseline = 'middle'; x.lineWidth = 8; x.strokeStyle = '#000c';
+    // 1段目：武器（選択中は金色・括弧つき）＋残弾
+    const parts = W_ORDER.map(k => ({ k, t:(k === P.wp ? '【' : ' ') + W_KEY[k] + WPN[k].name + (k === P.wp ? '】' : ' ') }));
+    const line1 = parts.map(p => p.t).join(' ') + '   ' + am;
+    let fs = 46; do { x.font = `bold ${fs}px ${FONT}`; fs -= 2; } while (x.measureText(line1).width > 1000 && fs > 14);
+    let cx = (w - x.measureText(line1).width)/2; x.textAlign = 'left';
+    for (const p of parts){
+      const col = p.k === P.wp ? (p.k === 'sword' ? '#ff9ae8' : '#ffd35a') : '#8a98a8';
+      x.strokeText(p.t, cx, h*.3); x.fillStyle = col; x.fillText(p.t, cx, h*.3); cx += x.measureText(p.t + ' ').width;
+    }
+    x.strokeText('   ' + am, cx, h*.3); x.fillStyle = P.power > 0 ? '#ffd35a' : '#7ae7ff'; x.fillText('   ' + am, cx, h*.3);
+    // 2段目：サブ武器
+    fs = 36; do { x.font = `bold ${fs}px ${FONT}`; fs -= 2; } while (x.measureText(sub).width > 990 && fs > 14);
+    x.textAlign = 'center'; x.strokeText(sub, w/2, h*.75); x.fillStyle = '#9fe870'; x.fillText(sub, w/2, h*.75);
+  });
+  skS = new THREE.Sprite(new THREE.SpriteMaterial({ map:t, transparent:true, depthTest:false })); skS.renderOrder = 20;
+  skS.scale.set(.56*1024/192, .56, 1); skS.position.set(0, -1.12, -3); hud.add(skS);
+}
+
+// 残弾(8発)とリロードゲージ
+const ammoPips = [];
+for (let i = 0; i < MAG; i++){ const m = new THREE.Mesh(new THREE.PlaneGeometry(.06, .2), new THREE.MeshBasicMaterial({ color:0x7ae7ff, depthTest:false })); m.position.set(-1.7 + i*.085, -1.42, -3); m.renderOrder = 11; hud.add(m); ammoPips.push(m); }
+// P90 は弾数が多いのでバー表示
+const amBarBack = new THREE.Mesh(new THREE.PlaneGeometry(.72, .12), new THREE.MeshBasicMaterial({ color:0x333a40, depthTest:false })); amBarBack.position.set(-1.39, -1.42, -3); amBarBack.renderOrder = 11; hud.add(amBarBack);
+const amBarG = new THREE.PlaneGeometry(.7, .08); amBarG.translate(.35, 0, 0);
+const amBar = new THREE.Mesh(amBarG, new THREE.MeshBasicMaterial({ color:0x7affc8, depthTest:false })); amBar.position.set(-1.74, -1.42, -3); amBar.renderOrder = 12; hud.add(amBar);
+const rlW = 1.6, rlG = new THREE.Group(); rlG.position.set(-.3, -.95, -3); rlG.visible = false; hud.add(rlG);
+const rlPl = (w, h, c, o, ro) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color:c, transparent:true, opacity:o, depthTest:false })); m.renderOrder = ro; rlG.add(m); return m; };
+rlPl(rlW + .06, .16, 0x000000, .6, 11);
+const rlZone = rlPl(rlW*(AR_ZONE[1] - AR_ZONE[0]), .12, 0xffd35a, .8, 12); rlZone.position.x = -rlW/2 + rlW*(AR_ZONE[0] + AR_ZONE[1])/2;
+const rlFillGeo = new THREE.PlaneGeometry(rlW, .06); rlFillGeo.translate(rlW/2, 0, 0);
+const rlFill = new THREE.Mesh(rlFillGeo, new THREE.MeshBasicMaterial({ color:0x7ae7ff, transparent:true, opacity:.9, depthTest:false })); rlFill.position.x = -rlW/2; rlFill.renderOrder = 13; rlG.add(rlFill);
+const rlMark = rlPl(.04, .22, 0xffffff, 1, 14);
+const rlLab = mkSprite('RELOAD', '#7ae7ff', .2); rlLab.position.y = .2; rlG.add(rlLab);
+let rlHint = null, rlHintStr = '';
+function hudAmmo(){
+  const mg = curW().mag, pip = mg > 0 && mg <= MAG;
+  for (let i = 0; i < MAG; i++){ ammoPips[i].visible = pip && i < mg; ammoPips[i].material.color.setHex(i < P.ammo ? (P.power > 0 ? 0xffd35a : 0x7ae7ff) : 0x333a40); }
+  amBar.visible = amBarBack.visible = mg > MAG;
+  if (amBar.visible){ amBar.scale.x = Math.max(.001, P.ammo/mg); amBar.material.color.setHex(P.power > 0 ? 0xffd35a : 0x7affc8); }
+  rlG.visible = !!P.rl && state === 'play'; if (!P.rl) return;
+  const k = Math.min(1, P.rl.t/curW().rl), paused = ctl.mode === 'wii' && !wii.vert;
+  rlFill.scale.x = Math.max(.001, k); rlMark.position.x = -rlW/2 + rlW*k;
+  rlFill.material.color.setHex(P.rl.jam ? 0xff4d5e : paused ? 0x556070 : 0x7ae7ff); rlZone.material.opacity = P.rl.jam ? .2 : .8;
+  const hs = P.rl.jam ? 'ジャム… 待って' : paused ? '縦に立てて！' : ctl.mode === 'wii' ? '黄色の所で B' : '黄色の所でクリック';
+  if (hs !== rlHintStr){
+    rlHintStr = hs; if (rlHint){ rlG.remove(rlHint); rlHint.material.map.dispose(); rlHint.material.dispose(); }
+    rlHint = mkSprite(hs, '#ffd35a', .2); rlHint.position.y = -.22; rlG.add(rlHint);
+  }
+}
+
+function update(dt){
+  if (hitstop > 0){ hitstop -= dt; dt *= .05; }
+  shake *= Math.pow(.002, dt); fovp *= Math.pow(.001, dt); flash = Math.max(0, flash - dt*2.5);
+  flashM.material.opacity = flash;
+  const playing = state === 'play' && !menuOn;
+  if (playing){
+    const mv = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
+    const gIn = ctl.mode === 'mouse' ? !!(keys[' '] || keys.shift) : wii.b;   // ガード: Wii B長押し / Space
+    P.guard = gIn && P.par <= 0 && !P.armed;
+    P.x = Math.max(-3.2, Math.min(3.2, P.x + mv*(P.par > 0 || P.guard ? 3 : 6)*dt));
+    { const rx = relayPos(); if (rx !== null && !mv) P.x += (Math.max(-3.2, Math.min(3.2, rx*relay.gain)) - P.x)*Math.min(1, dt*12); }   // PCカメラの実際の立ち位置
+    for (const k of ['counter', 'inv', 'parCd', 'fireCd', 'cdG', 'cdM', 'cdC', 'swCd']) P[k] -= dt;
+    P.snT += dt;
+    // P90：押しっぱなしで連射
+    const autoOn = curW().auto && !P.rl && P.ammo > 0 && (ctl.mode === 'mouse' ? mdn.on : wii.a);
+    if (autoOn) shoot(); else mgStop(true);   // 引き金を離したら連射音を止める
+    if (P.par > 0 || P.armed) P.parAge += dt;
+    if (P.par > 0) P.par -= dt;
+    // リロード：Wiiは縦向きを0.25秒保つと開始、縦向きの間だけ進む
+    P.vt = ctl.mode === 'wii' && wii.vert && curW().mag ? P.vt + dt : 0;
+    if (P.rl){ if (ctl.mode === 'mouse' || wii.vert){ P.rl.t += dt*(P.rl.jam ? .5 : 1); if (P.rl.t >= curW().rl) finishReload(false); } }
+    else if (P.vt > .25 && P.ammo < curW().mag) startReload();
+    bossAI(dt);
+  } else if (state === 'title'){ B.z += (HOVER - B.z)*Math.min(1, dt*2); B.s = 'enter'; }
+  if (!playing){ P.guard = false; mgStop(true); }
+  P.recoil = Math.max(0, P.recoil - dt*7); mFlash.material.opacity = Math.max(0, mFlash.material.opacity - dt*14);
+  if (autoAim()) autoAimUpdate(dt); else if (wiiAim()) wiiAimUpdate(dt); else faceUpdate(dt);
+  bossAnim(dt);
+  roomStep(dt); vplaneUpdate();
+  const sh = (Math.random()-.5)*shake;
+  aim.position.set(P.x, EYE, P.z || 0); aim.rotation.set(mouse.ny*.12, -mouse.nx*.2, 0);
+  av.position.x = P.x; av.rotation.y = -mouse.nx*.3; headM.rotation.y = -mouse.nx*.5;
+  const fixV = autoAim() || (gaze.mode === 'gaze' && faceActive()) || wiiAim(), vx = fixV ? 0 : mouse.nx, vy = fixV ? 0 : mouse.ny;   // 視線照準中は画面を動かさない
+  if (tp){ camera.rotation.set(vy*.12 - .22, -vx*.2, 0); camera.position.set(P.x + sh, EYE + 1.5 + sh*.6, (P.z || 0) + 4.2); }
+  else if (head.on && head.ok) headApply(sh);   // ゴーグル：頭の向き＝スマホの向き
+  else { camera.rotation.set(vy*.12, -vx*.2, 0); camera.position.set(P.x + sh, EYE + sh*.6, P.z || 0); }
+  camera.updateMatrixWorld();
+  updHitbox(); P.lock = state === 'play' && aimOnBoss(aimHit); P.crit = P.lock && aimOnWeak(aimHit);
+  { const wo = weakOpen(); if (wo && !P.weakWas) popCam('弱点露出！ 黄色を狙え', '#ffd35a', .8, 1); P.weakWas = wo; }
+  updGun(dt); if (playing) updProj(dt); updFX2(dt); updFX(dt);
+  bossBar.scale.x = Math.max(.0001, B.hp/B.max); pBar.scale.x = Math.max(.0001, P.hp/PMAX);
+  parBar.scale.x = Math.max(.0001, P.parCd > 0 ? 1 - P.parCd/.7 : 1);
+  hud.visible = state === 'play'; hudSkills(); hudAmmo(); $('ui').style.display = vr || head.on ? 'none' : '';
+  const asp = vr ? W/2/H : W/H, mw = Math.min(7, 5.3*asp); msg.scale.set(mw, mw/2, 1);
+}
+
+function view(x, y, w, h){ renderer.setViewport(x, y, w, h); renderer.setScissor(x, y, w, h); }
+function render(){
+  camera.fov = (head.on ? head.fov : 70) - fovp; const bx = camera.position.x;
+  if (!vr){ view(0, 0, W, H); camera.aspect = W/H; camera.updateProjectionMatrix(); cover(W/H); renderer.render(scene, camera); }
+  else {
+    // ゴーグル: 片目の映像をレンズの真下に置く（大きさ・左右の間隔を調整できる。余白は黒）
+    const k = head.on ? head.eyeK : 1, sep = Math.min(head.on ? head.sepK*W : W/2, W - W/2*k), vw = W/2*k, vh = H*k;
+    if (k < 1 || sep !== W/2){ view(0, 0, W, H); renderer.setClearColor(0x000000, 1); renderer.clear(); }
+    camera.aspect = vw/vh; camera.updateProjectionMatrix(); cover(vw/vh);
+    const p0 = camera.position.clone(), rgt = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);   // 目の間隔は頭の向きの「右」方向に
+    for (const e of [-1, 1]){
+      camera.position.copy(p0).addScaledVector(rgt, e*head.ipd); camera.updateMatrixWorld();
+      view(Math.round(W/2 + e*sep/2 - vw/2), Math.round((H - vh)/2), Math.round(vw), Math.round(vh)); renderer.render(scene, camera);
+    }
+    camera.position.copy(p0); camera.updateMatrixWorld();
+    camera.position.x = bx;
+  }
+}
+
+// ===== 入力 =====
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase(); keys[k] = true;
+  if (state === 'play' && bgm.paused && !menuOn) bgmPlay();
+  if (gaze.cal){ if (k === 'escape') gazeCalEnd(false); return; }
+  if (k === 'k'){ gazeFullCal(); return; }
+  if (k === 'v') vr = !vr; if (k === 'c'){ if (gaze.mode === 'wii') wiiPtrCenter(); else gazeRecenter(); } if (k === 'm') toggleMenu(); if (k === 't') setView(!tp); if (k === 'escape' && menuOn) toggleMenu(false);
+  if (k === ' ' || k.startsWith('arrow')) e.preventDefault();
+  if (e.repeat || state !== 'play' || menuOn) return;
+  const wk = { arrowup:'hg', arrowleft:'p90', arrowright:'sr', arrowdown:'sword', '1':'hg', '2':'p90', '3':'sr', '4':'sword' }[k];
+  if (wk) setWeapon(wk);
+  else if (k === 'g') throwGrenade(); else if (k === 'f') placeMine();
+  else if (k === 'q') curveShot(-1); else if (k === 'e') curveShot(1);
+  else if (k === 'w') swordAct('v'); else if (k === 's') swordAct('h');
+  else if (k === 'r') startReload();
+});
+addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+function setMouse(e){
+  if (aimExt()) return;   // 顔・Wiiで照準中はマウスで動かさない
+  const w = vr ? W/2 : W; mouse.nx = ((e.clientX % w)/w)*2 - 1; mouse.ny = -((e.clientY/H)*2 - 1);
+}
+addEventListener('mousemove', setMouse);
+// ===== 操作切替（マウス / Wiiリモコン）=====
+const ctl = { mode:'mouse' }, mdn = { on:false };
+const wii = { dev:null, leds:1, a:false, b:false, aBlock:false, pA:false, pB:false,   // a=射撃ボタン(B)押下中 / b=ガードボタン(A)押下中
+              pPlus:false, pHome:false, pMinus:false, pPad:0,
+              gx:0, gy:0, gz:1, gok:false, vert:false, lastSw:0, lastNeg:-1e9, th:2.2, rt:0, modeT:0,
+              p1:false, p2:false, swTh:2.2, sw:{ on:false, t0:0, ax:0, ay:0, az:0, cool:0 },
+              mode:0x35, mpOnce:false,
+              ptr:{ tx:0, ty:0, sx:0, sy:0, t:0, hx:0, th:0, th0:null, th0c:0, sg:0, sgS:0, pPrev:null, deg:20, ix:1, iy:1 },
+              mp:{ state:'off', ok:false, calibrated:false, zero:[8192, 8192, 8192], cal:null, up:null, upT:0, lastValid:0, sw:null, ring:[], to:0 } };
+const WVID = 0x057e, WPIDS = [0x0306, 0x0330];
+function wiiMsg(t){ $('wiiStat').textContent = t; }
+function setCtl(m){
+  ctl.mode = m; mdn.on = false; wii.a = wii.b = false;
+  const t = m === 'wii' ? '🎮 Wiiリモコン' : '🖱 マウス';
+  $('ctrlBtn').textContent = t; $('mCtrl').textContent = '操作: ' + t;
+  if (m === 'mouse' && !wii.dev) wiiMsg('');
+}
+const wsend = async (id, bytes) => { if (!wii.dev) return; try { await wii.dev.sendReport(id, new Uint8Array(bytes)); } catch (e){} };
+const wLed = (r = 0) => wsend(0x11, [(wii.leds << 4) | r]);
+// 振動はON/OFFしかないので、[ON,OFF,ON,...](ms) のパルス列で使い分ける
+function wiiPattern(seq){ if (!wii.dev) return; clearTimeout(wii.rt); let i = 0; const step = () => { if (i >= seq.length){ wLed(0); return; } wLed(i % 2 ? 0 : 1); wii.rt = setTimeout(step, seq[i++]); }; step(); }
+const wiiRumble = ms => wiiPattern([ms]);
+// ガンナーはジャイロ不要なので、ボタン+加速度(0x31)レポートだけを使う
+async function openWii(d){
+  wii.dev = d; if (!d.opened) await d.open();
+  d.oninputreport = onWii;   // 再接続しても二重登録にならないよう代入式にする
+  wii.gok = false;
+  await wiiEnableMP();
+  await wLed();
+  setCtl('wii'); wiiMsg('🎮 Wii: 接続中（B射撃 / Aガード / 振り上げパリィ / 十字で武器切替）');
+}
+// ===== MotionPlus（サーベルの 突き / 縦重撃 / 横重撃 を剣士版と同じジャイロ判定で行う）=====
+// 0xA600FE ← 0x04 で有効化 → レポート0x35。3秒データが来なければ 0x31(加速度のみ)に戻し、加速度で簡易判定する
+const SK = { thrustA:4.0, thrustRot:150, thrustPk:800, heavyV:650, heavyH:260, rB:.18, minPk:600 };   // 剣士版の初期値
+const GY = { SLOW:440/8192, FAST:2000/440, PRE:120, HOLD:150, MAXSW:1500, CAL_MS:1000, CAL_STD:80, UP_GAIN:.03, UP_TOL:.15 };
+const wreg = (addr, v) => { const b = new Array(21).fill(0); b[0] = 0x04; b[1] = (addr >> 16) & 255; b[2] = (addr >> 8) & 255; b[3] = addr & 255; b[4] = 1; b[5] = v; return b; };
+const wsleep = ms => new Promise(r => setTimeout(r, ms));
+async function wiiEnableMP(){
+  const m = wii.mp; clearTimeout(m.to);
+  m.ok = false; m.state = 'activating'; m.calibrated = false; m.cal = null; m.up = null; m.sw = null; m.ring.length = 0; m.lastValid = 0;
+  wii.mode = 0x35;
+  await wsend(0x12, [0x04, 0x35]);
+  if (wii.mpOnce){ await wsend(0x16, wreg(0xA400F0, 0x55)); await wsleep(120); }
+  await wsend(0x16, wreg(0xA600FE, 0x04)); wii.mpOnce = true;
+  await wsleep(150); await wsend(0x15, [0x00]);
+  m.to = setTimeout(() => {
+    if (m.ok || !wii.dev) return;
+    wii.mode = 0x31; m.state = 'none'; wsend(0x12, [0x04, 0x31]);
+    wiiMsg('🎮 Wii: ジャイロなし（サーベルは加速度で簡易判定）');
+  }, 3000);
+}
+function calStart(){ const m = wii.mp; m.cal = { n:0, sum:[0,0,0], sq:[0,0,0], t0:null }; m.calibrated = false; m.state = 'cal'; m.sw = null; m.ring.length = 0; wiiMsg('🎮 Wii: ジャイロ調整中…リモコンを画面中央に向けて静止してください'); }
+function calFeed(raw, slow, t){
+  const m = wii.mp, c = m.cal; if (!c) return;
+  const restart = () => { c.n = 0; c.sum = [0,0,0]; c.sq = [0,0,0]; c.t0 = null; };
+  if (!slow[0] || !slow[1] || !slow[2]){ restart(); return; }
+  if (c.t0 == null) c.t0 = t;
+  c.n++; for (let i = 0; i < 3; i++){ c.sum[i] += raw[i]; c.sq[i] += raw[i]*raw[i]; }
+  if (t - c.t0 < GY.CAL_MS || c.n < 20) return;
+  const mean = c.sum.map(v => v/c.n), std = c.sq.map((v, i) => Math.sqrt(Math.max(0, v/c.n - mean[i]*mean[i])));
+  if (Math.max(...std) > GY.CAL_STD){ restart(); return; }
+  m.zero = mean; m.calibrated = true; m.cal = null; m.state = 'ready'; m.up = null;
+  wii.ptr.t = 0; if (gaze.mode === 'wii') wiiPtrCenter();
+  wiiMsg(gaze.mode === 'wii' ? '🎮 Wii: ジャイロ照準 有効（ずれたら画面中央に向けて −）' : '🎮 Wii: ジャイロ有効（サーベル: 突き / 縦・横の重撃）');
+}
+// 上向きベクトルをジャイロで追い、角速度を「鉛直軸まわり(横振り)」と「水平軸まわり(縦振り)」に分ける
+function gyOrient(wyrp, ax, ay, az, a, t){
+  const m = wii.mp, w = [wyrp[2], wyrp[1], wyrp[0]];
+  if (!m.up){ m.up = a > .5 ? [ax/a, ay/a, az/a] : [0, 0, 1]; m.upT = t; }
+  const dt = Math.min(.05, Math.max(0, (t - m.upT)/1000)); m.upT = t;
+  const r = Math.PI/180, W = [w[0]*r, w[1]*r, w[2]*r], u = m.up;
+  let n = [u[0] - (W[1]*u[2] - W[2]*u[1])*dt, u[1] - (W[2]*u[0] - W[0]*u[2])*dt, u[2] - (W[0]*u[1] - W[1]*u[0])*dt];
+  let l = Math.hypot(n[0], n[1], n[2]) || 1; n = n.map(v => v/l);
+  if (Math.abs(a - 1) < GY.UP_TOL){ n = [n[0] + GY.UP_GAIN*(ax/a - n[0]), n[1] + GY.UP_GAIN*(ay/a - n[1]), n[2] + GY.UP_GAIN*(az/a - n[2])]; l = Math.hypot(n[0], n[1], n[2]) || 1; n = n.map(v => v/l); }
+  m.up = n;
+  const wv = w[0]*n[0] + w[1]*n[1] + w[2]*n[2];
+  // 照準用：リモコンの長手(先端)方向 f=[0,1,0] と上向き n から「右」軸 = f×n を作り、その軸まわり=上下の向き変化
+  const rl = Math.hypot(n[2], n[0]) || 1, wp = (w[0]*n[2] - w[2]*n[0])/rl;
+  return [wv, Math.hypot(w[0] - wv*n[0], w[1] - wv*n[1], w[2] - wv*n[2]), wp];
+}
+function wiiGyro(d, ax, ay, az, a, t, held){
+  const m = wii.mp, e = []; for (let i = 0; i < 6; i++) e.push(d.getUint8(5 + i));
+  const allFF = e.every(v => v === 0xff), all0 = e.every(v => v === 0), valid = !allFF && !all0 && (e[5] & 3) === 2;
+  if (!valid){ if (m.ok && t - m.lastValid > 1000){ m.ok = false; m.state = 'lost'; m.sw = null; } return; }
+  m.lastValid = t;
+  const raw = [e[0] | ((e[3] & 0xfc) << 6), e[1] | ((e[4] & 0xfc) << 6), e[2] | ((e[5] & 0xfc) << 6)], slow = [!!(e[3] & 2), !!(e[4] & 2), !!(e[3] & 1)];
+  if (!m.ok){ m.ok = true; clearTimeout(m.to); if (m.calibrated) m.state = 'ready'; else calStart(); }
+  if (m.cal){ calFeed(raw, slow, t); return; }
+  if (!m.calibrated) return;
+  const w = raw.map((v, i) => (v - m.zero[i])*GY.SLOW*(slow[i] ? 1 : GY.FAST));
+  // ほぼ静止している間は ゼロ点を少しずつ合わせ直す（ジャイロのドリフト＝照準が勝手に流れるのを防ぐ）
+  if (slow.every(Boolean) && Math.max(...w.map(Math.abs)) < 2.5 && Math.abs(a - 1) < .06) for (let i = 0; i < 3; i++) m.zero[i] += (raw[i] - m.zero[i])*.004;
+  const [wv, wh, wp] = gyOrient(w, ax, ay, az, a, t);
+  wiiPtrFeed(wv, wp, t, ax, ay, az, a);
+  gySwing({ t, a, wv, wh }, held);
+}
+function gyInteg(o, s){
+  if (s.a > o.pa) o.pa = s.a;
+  if (o.last){ const dt = Math.min(.05, (s.t - o.last.t)/1000); if (dt > 0){ o.iv += s.wv*dt; o.ih += s.wh*dt; } }
+  if (Math.abs(s.wv) > Math.abs(o.pv)) o.pv = s.wv; if (s.wh > o.ph) o.ph = s.wh; o.last = s;
+}
+// |a| が振り感度を超えてから、下回った状態が150ms続くまでを1回の振りとする（開始120ms前から積分）
+function gySwing(s, held){
+  const m = wii.mp;
+  if (!(ctl.mode === 'wii' && state === 'play' && !menuOn && P.wp === 'sword')){ m.sw = null; m.ring.length = 0; return; }
+  if (!m.sw){
+    m.ring.push(s); while (m.ring.length && s.t - m.ring[0].t > GY.PRE) m.ring.shift();
+    if (s.a >= wii.swTh){ const o = m.sw = { t0:m.ring[0].t, iv:0, ih:0, pv:0, ph:0, pa:0, last:null, lastHigh:s.t, held }; for (const r of m.ring) gyInteg(o, r); m.ring.length = 0; }
+  } else {
+    const o = m.sw; gyInteg(o, s); if (held) o.held = true;
+    if (s.a >= wii.swTh) o.lastHigh = s.t;
+    if (s.t - o.lastHigh >= GY.HOLD || s.t - o.t0 > GY.MAXSW){ m.sw = null; gyFinish(o); }
+  }
+}
+// 剣士版と同じ分類：回転が小さく加速度が大きい=突き / 横度が rB 以上で ∫横が大きい=横重撃 / それ以外で ∫縦が大きい=縦重撃（軽い振りは何もしない）
+function gyFinish(o){
+  if (o.held) return;   // A/B を押しながらの振り・パリィになった振りは除外
+  const pk = Math.max(Math.abs(o.pv), o.ph), tot = Math.abs(o.iv) + o.ih, ratio = tot > 0 ? Math.abs(o.iv)/tot : 0, rot = o.ih + Math.abs(o.iv);
+  if (o.pa >= SK.thrustA && pk < SK.thrustPk && rot < SK.thrustRot) swordAct('thrust');
+  else if (pk < SK.minPk) return;
+  else if (ratio >= SK.rB){ if (Math.abs(o.iv) >= SK.heavyH) swordAct('h'); }
+  else if (o.ih >= SK.heavyV) swordAct('v');
+}
+// ===== Wiiジャイロ・ポインター：リモコンを向けた方向の変化を積み上げて照準を動かす =====
+// 左右 = 鉛直軸まわりの回転（リモコンを傾けて持っても左右は左右のまま）、上下 = 右軸まわりの回転
+// 画面の端に当たったらそこで止まる（マウスを持ち上げて戻すのと同じ要領で、ずれたら端で合わせられる）
+function wiiPtrFeed(wv, wp, t, ax, ay, az, am){
+  const q = wii.ptr, dt = q.t ? Math.min(.05, Math.max(0, (t - q.t)/1000)) : 0; q.t = t;
+  if (!dt || gaze.mode !== 'wii') return;
+  const dz = v => Math.abs(v) < 1.2 ? 0 : v - Math.sign(v)*1.2;   // 手の微振動は無視
+  // 左右：ジャイロを積み上げる。端で止めずに少し先(±1.5)まで覚えておくので、行き過ぎて戻ってもずれない
+  q.hx = Math.max(-1.5, Math.min(1.5, q.hx - q.ix*dz(wv)*dt/q.deg));
+  q.tx = Math.max(-1, Math.min(1, q.hx));
+  // 上下：リモコンの傾き(角度)そのもので決める。ジャイロだけだと、パリィやリロードで大きく振り上げて戻した時に
+  // 積み上げの誤差で照準が下にずれていくので、重力で測った傾きに少しずつ寄せて「元の角度に戻せば元の高さ」にする
+  const g = -dz(wp);   // 上に向けた時に＋になる向き（実機確認済み）
+  q.th += g*dt;
+  const pAcc = Math.asin(Math.max(-1, Math.min(1, ay/(am || 1))))*180/Math.PI, still = Math.abs(am - 1) < .1;
+  if (still && q.pPrev !== null){   // 重力の傾きの向き(符号)を、ジャイロの上下と見比べて自動で決める
+    const r = (pAcc - q.pPrev)/dt;
+    if (Math.abs(g) > 8) { q.sgS = q.sgS*.98 + Math.sign(g*r); if (Math.abs(q.sgS) > 8) q.sg = Math.sign(q.sgS); }
+  }
+  q.pPrev = still ? pAcc : null;
+  if (q.sg && still){ const tgt = q.sg*pAcc; if (q.th0 === null) q.th0 = tgt - (q.th - q.th0c); q.th += (tgt - q.th)*Math.min(1, dt*2.5); }
+  q.ty = Math.max(-1, Math.min(1, q.iy*(q.th - (q.th0 ?? q.th0c))/(q.deg*.75)));
+}
+// ===== 自動照準：弱点が開いていれば弱点、そうでなければボスの体の中心へ、照準がスッと吸い付く =====
+const AA_V = new THREE.Vector3();
+function autoAimUpdate(dt){
+  let tx = 0, ty = 0;
+  if (state === 'play' && bossAlive()){
+    updHitbox(); (weakOpen() ? WB : HB).getCenter(AA_V); AA_V.project(camera);
+    if (AA_V.z < 1){ tx = Math.max(-1, Math.min(1, AA_V.x)); ty = Math.max(-1, Math.min(1, AA_V.y)); }
+  }
+  const k = 1 - Math.exp(-dt*14);
+  mouse.nx += (tx - mouse.nx)*k; mouse.ny += (ty - mouse.ny)*k;
+}
+function wiiAimUpdate(dt){
+  const q = wii.ptr, k = 1 - Math.exp(-dt*28);
+  q.sx += (q.tx - q.sx)*k; q.sy += (q.ty - q.sy)*k; mouse.nx = q.sx; mouse.ny = q.sy;
+}
+function wiiPtrCenter(){ const q = wii.ptr; q.tx = q.ty = q.sx = q.sy = q.hx = 0; q.th0c = q.th; q.th0 = q.sg ? q.th : null; mouse.nx = mouse.ny = 0; }   // 今の向き＝画面中央
+$('wpDeg').oninput = e => { wii.ptr.deg = +e.target.value; $('wpDegV').textContent = wii.ptr.deg; };
+$('wpInvX').onchange = e => wii.ptr.ix = e.target.checked ? -1 : 1;
+$('wpInvY').onchange = e => wii.ptr.iy = e.target.checked ? -1 : 1;
+async function connectWii(){
+  if (!('hid' in navigator)){ wiiMsg('🎮 WebHID非対応です（Chrome / Edge を使用）'); return false; }
+  try {
+    const [d] = await navigator.hid.requestDevice({ filters: WPIDS.map(p => ({ vendorId:WVID, productId:p })) });
+    if (!d) return false; await openWii(d); return true;
+  } catch (e){ wiiMsg('🎮 接続できません: ' + e.message); return false; }
+}
+async function toggleCtl(){
+  if (ctl.mode === 'wii'){ setCtl('mouse'); return; }
+  if (!wii.dev && !(await connectWii())) return;
+  setCtl('wii');
+}
+$('ctrlBtn').onclick = $('mCtrl').onclick = toggleCtl;
+$('snTol').oninput = e => { snSetTol(+e.target.value); $('snTolV').textContent = (+e.target.value).toFixed(2); };
+$('snPer').oninput = e => { SN_PER = +e.target.value; $('snPerV').textContent = SN_PER.toFixed(1); };
+$('mWiiTh').oninput = e => wii.th = +e.target.value; $('swTh').oninput = e => wii.swTh = +e.target.value;
+for (const [k, i, l, f] of [['thrustA', 'skTA', 'skTAV', v => v.toFixed(1)], ['heavyV', 'skHV', 'skHVV', v => v], ['heavyH', 'skHH', 'skHHV', v => v]])
+  $(i).oninput = e => { SK[k] = +e.target.value; $(l).textContent = f(SK[k]); };
+if ('hid' in navigator){
+  navigator.hid.getDevices().then(l => { const d = l.find(x => x.vendorId === WVID && WPIDS.includes(x.productId)); if (d) openWii(d).catch(() => {}); });
+  navigator.hid.addEventListener('disconnect', e => { if (e.device === wii.dev){ wii.dev = null; setCtl('mouse'); wiiMsg('🎮 Wiiリモコンが切断されました'); } });
+}
+function onWii(e){
+  const d = e.data, id = e.reportId, now = performance.now();
+  if (id === 0x20){ wsend(0x12, [0x04, wii.mode]); return; }   // ステータス応答(MotionPlus有効化後にも来る)でモードが戻るので再設定
+  if (id !== 0x31 && id !== 0x35){ if (now - wii.modeT > 1000){ wii.modeT = now; wsend(0x12, [0x04, wii.mode]); } return; }
+  if (id !== wii.mode && now - wii.modeT > 1000){ wii.modeT = now; wsend(0x12, [0x04, wii.mode]); }
+  const ts = e.timeStamp || now;
+  const b0 = d.getUint8(0), b1 = d.getUint8(1);
+  const A = !!(b1 & 0x08), Bb = !!(b1 & 0x04), plus = !!(b0 & 0x10), home = !!(b1 & 0x80), minus = !!(b1 & 0x10);
+  const pad = b0 & 0x0f, padDown = pad & ~wii.pPad;   // 十字: 0x01=左 0x02=右 0x04=下 0x08=上
+  const firing = Bb && !wii.pB && !wii.aBlock && state === 'play' && !menuOn;   // B(トリガー)を押した瞬間に1発
+  const one = !!(b1 & 0x02), two = !!(b1 & 0x01), press1 = one && !wii.p1, press2 = two && !wii.p2, pressPlus = plus && !wii.pPlus;
+  wii.p1 = one; wii.p2 = two;
+  const pressStart = (A && !wii.pA) || (Bb && !wii.pB) || (plus && !wii.pPlus), pressHome = home && !wii.pHome, pressMinus = minus && !wii.pMinus;
+  wii.pA = A; wii.pB = Bb; wii.pPlus = plus; wii.pHome = home; wii.pMinus = minus; wii.pPad = pad; wii.b = A;   // A長押し=ガード
+  if (!Bb) wii.aBlock = false;
+  if (gaze.cal){ wii.a = false; wii.aBlock = true; if (pressHome) gazeCalEnd(false); return; }   // キャリブレーション中は操作しない（HOME=スキップ）
+  if (pressHome) toggleMenu();
+  if (pressMinus && head.on) headRecenter();   // ゴーグル：今向いている方向＝ボスの方向
+  if (pressMinus){   // −: 視線のずれ補正（タイトルでは9点キャリブレーション）＋ジャイロ再調整
+    if (gaze.mode === 'wii') wiiPtrCenter();   // Wiiジャイロ照準：画面中央に向けて − で照準を中央へ
+    else if (gaze.mode === 'gaze' && face.on){ if (state === 'play') gazeRecenter(); else gazeFullCal(); } else faceRecenter();
+    if (wii.mp.ok && (gaze.mode !== 'wii' || state !== 'play')) calStart();   // 戦闘中は止まらないよう中央合わせだけ
+  }
+  if (pressStart && state !== 'play' && !menuOn && !(state !== 'title' && now - endAt < 600)){ startGame(); wii.aBlock = true; }   // スタートに使ったBは離すまで射撃しない
+  wii.a = Bb && !wii.aBlock;   // B押しっぱなし = P90の連射
+  // 加速度（0g=128, 1g≒26）
+  const x = (d.getUint8(2) - 128)/26, y = (d.getUint8(3) - 128)/26, z = (d.getUint8(4) - 128)/26, m = Math.hypot(x, y, z);
+  if (Math.abs(m - 1) < .12){   // ほぼ静止している時だけ重力方向を更新
+    if (!wii.gok){ wii.gx = x; wii.gy = y; wii.gz = z; wii.gok = true; }
+    else { wii.gx += (x - wii.gx)*.2; wii.gy += (y - wii.gy)*.2; wii.gz += (z - wii.gz)*.2; }
+  }
+  // 縦向き判定：重力がリモコンの長手方向(Y軸)に沿っている = 先端を上(または下)に向けて立てている
+  { const gL = Math.hypot(wii.gx, wii.gy, wii.gz) || 1; wii.vert = wii.gok && Math.abs(wii.gy)/gL > .8; }
+  if (id === 0x35 && d.byteLength >= 11) wiiGyro(d, x, y, z, m, ts, A || Bb);
+  if (ctl.mode !== 'wii' || state !== 'play' || menuOn) return;
+  if (firing) trigger();
+  // 十字：武器切替 ↑ハンドガン ←P90 →スナイパー ↓ビームサーベル
+  if (padDown & 0x08) setWeapon('hg');
+  if (padDown & 0x01) setWeapon('p90');
+  if (padDown & 0x02) setWeapon('sr');
+  if (padDown & 0x04) setWeapon('sword');
+  if (press1) throwGrenade();
+  if (press2) placeMine();
+  if (pressPlus) curveShot(0);
+  // B + 振り上げ → パリィ（重力方向に沿った上向き加速度で判定。持ち方に依存しない）
+  const gl = Math.hypot(wii.gx, wii.gy, wii.gz) || 1;
+  const up = ((x - wii.gx)*wii.gx + (y - wii.gy)*wii.gy + (z - wii.gz)*wii.gz)/gl, upTh = wii.th*.65;
+  if (up < -upTh*.7) wii.lastNeg = now;   // 直前に下向きの勢い = 振り下ろしの減速なので除外
+  // サーベル：A/Bを押していない時の振りを判定。立ち上がりから約0.1秒の各軸のピークで分類
+  //   Y(長手方向)が最大=突き / X(左右)=横の重撃 / Z(上下)=縦の重撃
+  if (P.wp === 'sword' && !A && !Bb && !wii.mp.ok){   // ジャイロが無い時だけ加速度で簡易判定
+    const S = wii.sw, ddx = x - wii.gx, ddy = y - wii.gy, ddz = z - wii.gz, dm = Math.hypot(ddx, ddy, ddz);
+    if (!S.on && dm > wii.swTh && now > S.cool){ S.on = true; S.t0 = now; S.ax = S.ay = S.az = 0; }
+    if (S.on){
+      S.ax = Math.max(S.ax, Math.abs(ddx)); S.ay = Math.max(S.ay, Math.abs(ddy)); S.az = Math.max(S.az, Math.abs(ddz));
+      if (now - S.t0 > 90){
+        S.on = false; S.cool = now + 380;
+        swordAct(S.ay > S.ax*1.2 && S.ay > S.az*1.2 ? 'thrust' : S.ax > S.az ? 'h' : 'v');
+      }
+    }
+  }
+  if (now - wii.lastSw < 450) return;
+  // 振り上げ → パリィ（ボタンを押していてもいなくても出る）。同じ振りがサーベルの縦重撃にならないよう判定中の振りを取り消す
+  if (up > upTh && now - wii.lastNeg > 220){
+    wii.lastSw = now + 200; parry();
+    wii.sw.on = false; wii.sw.cool = now + 500; if (wii.mp.sw) wii.mp.sw.held = true;
+  }
+}
+
+function startBattle(){ reset(); state = 'play'; setMsg(null); bgmPlay(true); }
+function startGame(){
+  if (gaze.cal) return;
+  const needCal = face.on && gaze.mode === 'gaze' && !gaze.M && !!navigator.mediaDevices;
+  (async () => { if (!camStream) await openCam(camSel.value || null); if (face.on && !face.stream) startFace(); else if (gaze.mode !== 'gaze') faceRecenter(); })();
+  if (needCal){ gazeCalStart('full', startBattle); return; }   // 初回だけ：見ている所と照準を合わせてから開始（結果は保存）
+  startBattle();
+}
+addEventListener('mousedown', e => {
+  if (gaze.cal) return;
+  if (state === 'play' && bgm.paused && !menuOn) bgmPlay();
+  if (menuOn) return;
+  setMouse(e);
+  if (state !== 'play'){
+    if (state !== 'title' && performance.now() - endAt < 600) return;
+    startGame(); return;
+  }
+  if (ctl.mode !== 'mouse') return;   // Wiiモード中はクリックで戦闘操作しない
+  if (e.button === 0){
+    mdn.on = true;
+    if (P.wp === 'sword'){ mdn.sx = e.clientX; mdn.sy = e.clientY; mdn.sw = true; }   // 離した時にドラッグ方向で判定
+    else trigger();   // 1クリック = 1発（リロード中はパーフェクト狙い）
+  }
+  else if (e.button === 2) parry();
+});
+addEventListener('mouseup', e => {
+  if (e.button !== 0) return; mdn.on = false;
+  if (!mdn.sw) return; mdn.sw = false;
+  if (ctl.mode !== 'mouse' || state !== 'play' || menuOn) return;
+  const dx = e.clientX - mdn.sx, dy = e.clientY - mdn.sy;
+  swordAct(Math.hypot(dx, dy) < 60 ? 'thrust' : Math.abs(dx) > Math.abs(dy) ? 'h' : 'v');   // クリック=突き / 横ドラッグ=横の重撃 / 縦ドラッグ=縦の重撃
+});
+
+// ===== ゴーグル（スマホをビデオシースルーのARグラス代わりに）=====
+// 頭の向き = スマホの DeviceOrientation（端末内で処理するので遅れない）/ 立ち位置・Wii = PCから中継
+const head = { on:false, ok:false, alpha:0, beta:0, gamma:0, q:new THREE.Quaternion(), fov:60, ipd:.032, need0:true, wl:null };
+const H_E = new THREE.Euler(), H_Z = new THREE.Vector3(0, 0, 1), H_Y = new THREE.Vector3(0, 1, 0), H_Q0 = new THREE.Quaternion(),
+      H_Q1 = new THREE.Quaternion(-Math.sqrt(.5), 0, 0, Math.sqrt(.5)), H_YAW = new THREE.Quaternion();
+const scrAngle = () => (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+function onOri(e){ if (e.alpha == null) return; head.alpha = e.alpha; head.beta = e.beta; head.gamma = e.gamma; head.ok = true; }
+function headQuat(out){   // three.js の DeviceOrientationControls と同じ変換（カメラが画面の奥を向く）
+  const d = Math.PI/180; H_E.set(head.beta*d, head.alpha*d, -head.gamma*d, 'YXZ');
+  return out.setFromEuler(H_E).multiply(H_Q1).multiply(H_Q0.setFromAxisAngle(H_Z, -scrAngle()*d));
+}
+function headRecenter(){
+  if (!head.ok){ head.need0 = true; return; }
+  headQuat(head.q); H_E.setFromQuaternion(head.q, 'YXZ');
+  // 部屋モード：今向いている方向を「床座標でのPCのメインカメラの方向（またはボスの方向）」に合わせる
+  let psi = 0, what = '正面';
+  if (room.on){
+    const f = roomFeet() || room.O, toCam = $('xrAlign').value === 'cam';
+    const dx = toCam ? -f.x : room.C.x - f.x, dz = toCam ? -f.z : room.C.z - f.z;
+    psi = Math.atan2(-dx, -dz); what = toCam ? 'PCのメインカメラ' : 'ボス';
+  }
+  H_YAW.setFromAxisAngle(H_Y, psi - H_E.y); head.need0 = false;
+  // PCカメラの真下の床を照準で指している時は、見下ろす角度とPCが測った距離から「目の高さ」も決める
+  //   目の高さ = 足からカメラ真下までの水平距離 × tan(見下ろす角度)
+  const f0 = roomFeet();
+  if (room.on && $('xrAlign').value === 'cam' && f0 && head.ok && !head.auto){
+    const dist = Math.hypot(f0.x, f0.z), down = -H_E.x;   // YXZ の x = 上下の角度（下向きが負）
+    if (dist > .8 && down > 12*Math.PI/180){
+      const h = dist*Math.tan(down);
+      if (h > .8 && h < 2.2){
+        room.eye0 = h; $('xrEye').value = 0; $('xrEyeV').textContent = 0; room.eye = h;
+        try { localStorage.setItem('rqgun_eye_meas', JSON.stringify({ h, Ox:room.calO ? room.calO.x : 0, Oz:room.calO ? room.calO.z : 0 })); } catch (e){}
+        popCam(`向きと床を合わせました（目の高さ ${h.toFixed(2)}m）`, '#5fe07a', .7, 1.6); return;
+      }
+    }
+  }
+  popCam(what + 'の方向に合わせました' + (room.on && $('xrAlign').value === 'cam' ? '（床も合わせるには三脚の足元を照準で指して）' : ''), '#7ae7ff', .7, 1.4);
+}
+const H_ORB = new THREE.Quaternion();
+function headApply(sh){
+  if (head.need0){ head.auto = true; headRecenter(); head.auto = false; }
+  headQuat(head.q); camera.quaternion.copy(H_YAW).multiply(head.q);   // 床座標での向き
+  if (room.on){
+    camera.quaternion.premultiply(H_ORB.setFromAxisAngle(H_Y, -room.yaw));   // 床座標 → ゲーム座標
+    camera.position.set((room.gx ?? P.x) + sh*.3, room.eye + sh*.2, room.gz ?? (P.z || 0));
+  } else camera.position.set(P.x + sh, EYE + sh*.6, P.z || 0);
+}
+const BG0 = scene.background;
+function applyPass(){ scene.background = head.on ? new THREE.Color(0) : (camTex || BG0); }   // ゴーグル中は映像の板の外側を黒に
+async function goggleStart(){
+  vid.style.cssText = 'position:fixed;left:0;top:0;width:4px;height:4px;opacity:.01;pointer-events:none;z-index:40';
+  try { if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission){   // iPhone は許可が必要
+    if (await DeviceOrientationEvent.requestPermission() !== 'granted'){ xrStat('❌ 向きセンサーが許可されませんでした'); return; } } } catch (e){}
+  addEventListener('deviceorientation', onOri);
+  try { await Promise.race([document.documentElement.requestFullscreen({ navigationUI:'hide' }), new Promise(r => setTimeout(r, 800))]); } catch (e){}
+  const sbs = $('xrSbs').checked;
+  if (sbs) try { await screen.orientation.lock('landscape'); } catch (e){}
+  if (face.on){ $('faceOn').checked = false; $('faceOn').dispatchEvent(new Event('change')); }
+  try { navigator.wakeLock.request('screen').then(w => head.wl = w, () => {}); } catch (e){}   // 待たない（返事が来ない端末でも止まらないように）
+  audioUnlock(); setView(false); head.on = true; head.need0 = true; vr = sbs;
+  $('xrPanel').hidden = true; $('gogBar').style.display = 'flex';
+  if ($('xrPass').checked && !camStream){ camMirror = false; await openCam(null); camMirror = false; $('mir').checked = false; }
+  applyPass();
+  setTimeout(() => { if (!head.ok) popCam('向きセンサーが取れません（HTTPSで開いていますか？）', '#ff4d5e', .6, 3); }, 1500);
+}
+function goggleStop(){
+  head.on = false; vr = false; $('gogBar').style.display = 'none'; removeEventListener('deviceorientation', onOri);
+  try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e){}
+  try { screen.orientation.unlock(); } catch (e){}
+  try { head.wl && head.wl.release(); } catch (e){} head.wl = null; applyPass();
+}
+document.addEventListener('visibilitychange', async () => { if (head.on && document.visibilityState === 'visible') try { head.wl = await navigator.wakeLock.request('screen'); } catch (e){} });
+$('xrBtn').onclick = () => { const p = $('xrPanel'); p.hidden = !p.hidden; };
+$('gogGo').onclick = goggleStart;
+$('gogExit').onclick = goggleStop;
+for (const ev of ['mousedown', 'pointerdown', 'touchstart']) $('gogBar').addEventListener(ev, e => e.stopPropagation());
+$('gogAlign').onclick = () => headRecenter();
+$('xrPass').onchange = () => { if ($('xrPass').checked && !camStream) openCam(null).then(applyPass); else applyPass(); };
+$('xrFov').oninput = e => { head.fov = +e.target.value; $('xrFovV').textContent = head.fov; };
+$('xrIpd').oninput = e => { head.ipd = +e.target.value/2000; $('xrIpdV').textContent = e.target.value; };
+$('xrGain').oninput = e => { relay.gain = +e.target.value; $('xrGainV').textContent = relay.gain.toFixed(1); };
+
+// ===== PC中継：PC側(setup/hub.html)が WebHID で読んだ生のレポートを WebRTC で受け取り、
+// 「仮想のWiiリモコン」として openWii() に渡す。LED・振動・MotionPlus初期化などの送信はPCへ送り返す =====
+const relay = { peer:null, conn:null, off:0, offOk:false, pos:null, posT:0, gain:1 };
+const xrStat = t => $('xrStat').textContent = t;
+const relayPos = () => relay.pos !== null && performance.now() - relay.posT < 500 ? relay.pos : null;
+const fakeWii = { opened:true, vendorId:WVID, productId:WPIDS[0], productName:'Wii Remote (PC中継)', oninputreport:null,
+  open: async () => {},
+  sendReport: async (id, data) => { if (relay.conn && relay.conn.open) relay.conn.send({ t:'out', id, d:Array.from(data) }); } };
+function relayLost(msg){
+  if (room.on) roomCal({ ok:false, msg:'PCとの接続が切れました' });
+  if (wii.dev === fakeWii){ wii.dev = null; setCtl('mouse'); wiiMsg('🎮 PC中継: ' + msg); }
+  relay.pos = null; relay.offOk = false; xrStat('⚠ ' + msg);
+}
+function relayClose(){ try { relay.conn && relay.conn.close(); } catch (e){} try { relay.peer && relay.peer.destroy(); } catch (e){} relay.conn = relay.peer = null; }
+function relayConnect(code){
+  if (typeof Peer === 'undefined'){ xrStat('❌ PeerJS を読み込めませんでした（ネット接続を確認）'); return; }
+  code = String(code || '').replace(/\D/g, ''); if (code.length !== 6){ xrStat('6桁のコードを入力してください'); return; }
+  relayClose(); xrStat('接続中…');
+  const peer = relay.peer = new Peer();
+  peer.on('open', () => {
+    const c = relay.conn = peer.connect('rqgun-' + code, { reliable:true, serialization:'json' });
+    c.on('open', () => { xrStat('✅ PCに接続しました（Wiiの状態を待っています）'); try { localStorage.setItem('rqgun_code', code); } catch (e){} c.send({ t:'hi' }); });
+    c.on('data', relayData);
+    c.on('close', () => relayLost('PCとの接続が切れました'));
+    c.on('error', e => relayLost('通信エラー ' + (e.type || e.message)));
+  });
+  peer.on('error', e => xrStat('❌ ' + (e.type === 'peer-unavailable' ? 'コードが見つかりません（PC側のページは開いていますか？）' : (e.type || e.message))));
+}
+function relayData(m){
+  if (!m) return;
+  if (m.t === 'in'){
+    // PCの時刻 → スマホの時刻に換算（ジャイロの積分間隔を正しく保つ）。到着遅れの最小値を基準にする
+    const o = performance.now() - m.ts;
+    relay.off = relay.offOk ? (o < relay.off ? o : relay.off + (o - relay.off)*.002) : o; relay.offOk = true;
+    if (wii.dev === fakeWii && fakeWii.oninputreport)
+      fakeWii.oninputreport({ reportId:m.id, data:new DataView(new Uint8Array(m.d).buffer), timeStamp:m.ts + relay.off });
+  } else if (m.t === 'wii'){
+    if (m.on){ xrStat('✅ PC接続中 / Wiiリモコン: あり'); openWii(fakeWii).catch(() => {}); }
+    else { xrStat('✅ PC接続中 / Wiiリモコン: なし（PCで接続してください）'); if (wii.dev === fakeWii){ wii.dev = null; setCtl('mouse'); } }
+  } else if (m.t === 'pos'){ relay.pos = m.ok ? m.x : null; relay.posT = performance.now(); }
+  else if (m.t === 'cal') roomCal(m);
+  else if (m.t === 'feet'){ if (m.ok){ room.feetF = { x:m.x, z:m.z }; room.feetT = performance.now(); room.src = m.src || ''; } }
+}
+$('rlGo').onclick = () => relayConnect($('rlCode').value);
+try { const c = localStorage.getItem('rqgun_code'); if (c) $('rlCode').value = c; } catch (e){}
+
+// ===== 部屋モード：PC(2台カメラ・キャリブレーション済み)の床座標で、ボスを部屋の決まった位置に立たせて周りを歩く =====
+// F = PCのメインカメラの床座標（カメラ真下が原点、-Zがカメラの向く方、m）/ G = ゲーム座標（ボスは -Z 方向・距離 -HOVER）
+// 周回モード：剣版と同じく、ゲーム座標そのものをボスの周りで回す（予兆〜突進の間は回さないので横移動の回避が効く）
+const ORB_TAU = 1.2;
+const room = { on:false, C:null, O:null, D:8.5, yaw:0, eye:1.58, eye0:1.58, feetF:null, feetT:-1e9, src:'', orbit:true };
+const roomFeet = () => room.feetF && performance.now() - room.feetT < 500 ? room.feetF : null;
+function roomSetG(yaw){ room.yaw = yaw; room.Ox = room.C.x + room.D*Math.sin(yaw); room.Oz = room.C.z + room.D*Math.cos(yaw); }
+function toG(p){ const c = Math.cos(room.yaw), s = Math.sin(room.yaw), dx = p.x - room.Ox, dz = p.z - room.Oz; return { x:c*dx - s*dz, z:s*dx + c*dz }; }
+function roomCal(m){
+  if (m.ok && !m.local){
+    // PC(Hub)でボスの位置を決め直したら、スマホで置いた位置より優先する
+    try { if (m.cid && localStorage.getItem('rqgun_hub_cid') !== String(m.cid)){ localStorage.setItem('rqgun_hub_cid', String(m.cid)); localStorage.removeItem(BOSS_KEY); } } catch (e){}
+    room.calC = m.C; room.calO = m.O; const sv = bossSaved(m); if (sv) m = Object.assign({}, m, { C:sv }); }   // PCから届いた時だけ
+  if (!m.ok){ room.on = false; HOVER = -8.5; floorReset(); $('roomStat').textContent = '部屋モード: OFF（' + (m.msg || 'PC側でキャリブレーションが未設定') + '）'; return; }
+  const O = m.O, dx = m.C.x - O.x, dz = m.C.z - O.z, d = Math.hypot(dx, dz) || 1;
+  room.D = Math.max(R + 1, d);   // 近すぎると体当たりがすぐ当たるので、最低でも半径＋1m
+  room.C = { x:m.C.x, z:m.C.z }; room.O = O;   // ボスは指定した位置のまま（近い時はゲーム上の待機距離だけ広げる） room.eye0 = m.eye || 1.58;
+  if (!m.local) try { const e = JSON.parse(localStorage.getItem('rqgun_eye_meas') || 'null'); if (e && Math.hypot(e.Ox - m.O.x, e.Oz - m.O.z) < .05) room.eye0 = e.h; } catch (er){}
+  room.eye = room.eye0 + (+$('xrEye').value)/100;
+  HOVER = -room.D; roomSetG(Math.atan2(-dx, -dz));
+  if (!m.local && !room.on) head.need0 = true;   // 最初の1回だけ（途中でボスの位置が変わっても向きは合わせ直さない）
+  room.on = true;   // スマホでボスを置き直した時は向きを合わせ直さない
+  gridTex.repeat.set(20, 40);   // 1マス = 1m
+  $('roomStat').textContent = `部屋モード: ON ✅ ボスは立ち位置から ${room.D.toFixed(1)}m 先・目の高さ ${room.eye0.toFixed(2)}m`;
+}
+function roomOrbit(dt){
+  const f = roomFeet(); if (!f) return;
+  if (state === 'play' && (B.s === 'wind' || B.s === 'charge')) return;
+  const px = f.x - room.C.x, pz = f.z - room.C.z; if (Math.hypot(px, pz) < .6) return;
+  let d = Math.atan2(px, pz) - room.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+  if (Math.abs(d) > 1e-4) roomSetG(room.yaw + d*(1 - Math.exp(-dt/ORB_TAU)));
+}
+const pcMark = new THREE.Group(); scene.add(pcMark); pcMark.visible = false;
+pcMark.add(new THREE.Mesh(new THREE.RingGeometry(.22, .3, 32), new THREE.MeshBasicMaterial({ color:0xffd35a, transparent:true, opacity:.9, depthWrite:false, side:THREE.DoubleSide })));
+pcMark.children[0].rotation.x = -Math.PI/2; pcMark.children[0].position.y = .02;
+{ const t = canvasTex(256, 64, (x, w, h) => { x.fillStyle = '#ffd35a'; x.font = 'bold 40px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('PCカメラ', w/2, h/2); });
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:t, transparent:true, depthWrite:false })); sp.scale.set(.8, .2, 1); sp.position.y = .35; pcMark.add(sp); }
+floor.rotation.order = 'YXZ';
+function floorReset(){ gridTex.repeat.set(10, 20); floor.position.set(0, 0, -16); floor.rotation.set(-Math.PI/2, 0, 0); pcMark.visible = false; }
+function roomStep(dt){
+  room.orbit = $('xrOrb').checked;
+  if (!room.on){ floor.visible = !head.on || $('xrGrid').checked; return; }
+  if (room.orbit) roomOrbit(dt);
+  const f = roomFeet();
+  if (f){
+    const g = toG(f), k = Math.min(1, dt*15);
+    if (room.gx === undefined){ room.gx = g.x; room.gz = g.z; }
+    room.gx += (g.x - room.gx)*k; room.gz += (g.z - room.gz)*k;   // 目の位置（制限しない＝近づけばそのまま大きく見える）
+    P.x = Math.max(-6, Math.min(6, room.gx));
+    P.z = Math.max(HOVER + R + .6, Math.min(4, room.gz));   // ゲームの判定用だけ、ボスの体の外に制限
+  } else if (room.gx === undefined){ room.gx = P.x; room.gz = P.z || 0; }
+  // 床グリッドとPCカメラの印は「部屋に固定」（ゲーム座標が回っても動かない）
+  const gc = toG(room.C), gp = toG({ x:0, z:0 });
+  floor.position.set(gc.x, 0, gc.z); floor.rotation.set(-Math.PI/2, -room.yaw, 0);
+  pcMark.position.set(gp.x, 0, gp.z);
+  floor.visible = $('xrGrid').checked || !head.on; pcMark.visible = $('xrGrid').checked && head.on;
+  const now = performance.now();
+  if (head.on && !f && now - (room.warnT || 0) > 4000){ room.warnT = now; popCam('PC: 足が見えていません（立って両方のカメラに全身を）', '#ff4d5e', .5, 2); }
+  $('roomStat').dataset.feet = f ? '1' : '0';
+}
+// カメラ映像は「スマホカメラの画角どおりの大きさの板」として視線の先に貼る → 表示の視野角に関係なく現実と3Dの縮尺がそろう
+const vplane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ depthTest:false, depthWrite:false }));
+vplane.renderOrder = -100; vplane.frustumCulled = false; vplane.visible = false; camera.add(vplane);
+head.camHfov = 66;
+// ===== 全画面：Android等は Fullscreen API。iPhone は非対応なので「ホーム画面に追加」から開くと全画面になる =====
+const isIOS = /iP(hone|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1 && !document.documentElement.requestFullscreen);
+const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+function toggleFs(){
+  const el = document.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (document.fullscreenElement || document.webkitFullscreenElement){ (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+  if (req){ try { const r = req.call(el, { navigationUI:'hide' }); if (r && r.catch) r.catch(() => fsHelp()); } catch (e){ fsHelp(); } }
+  else fsHelp();
+}
+function fsHelp(){
+  if (standalone()) return;
+  alert(isIOS ? 'iPhone の Safari は全画面表示に対応していません。\n\n共有ボタン（□↑）→「ホーム画面に追加」→ ホーム画面のアイコンから開くと、タブやアドレスバーなしの全画面で起動します。\n（ホーム画面から開いた時は、中継のコードをもう一度入力してください）'
+               : 'このブラウザは全画面表示に対応していません。メニューの「ホーム画面に追加」から開くと全画面になります。');
+}
+// 開始後に画面上部のボタンで、左右の映像の間隔・大きさを調整（パネルのスライダーと連動・保存）
+function eyeAdj(id, d){
+  const el = $(id), v = Math.max(+el.min, Math.min(+el.max, +el.value + d)); el.value = v; el.dispatchEvent(new Event('input')); eyeBarUI();
+}
+function eyeBarUI(){ $('sepV').textContent = $('xrSep').value; $('ekV').textContent = $('xrEyeK').value; }
+$('sepM').onclick = () => eyeAdj('xrSep', -.5); $('sepP').onclick = () => eyeAdj('xrSep', .5);
+$('ekM').onclick = () => eyeAdj('xrEyeK', -5); $('ekP').onclick = () => eyeAdj('xrEyeK', 5);
+setTimeout(eyeBarUI, 0);
+// iPhone: 見えない（透明・極小の）動画は省電力で止められて、背景が真っ黒になることがある → 再生を保つ
+function keepVid(){
+  if (!head.on || !vid.srcObject) return;
+  if (vid.paused) vid.play().catch(() => {});
+  if (camTex && vid.readyState >= 2) camTex.needsUpdate = true;
+}
+
+head.eyeK = 1; head.sepK = .5;
+$('xrEyeK').oninput = e => { head.eyeK = +e.target.value/100; $('xrEyeKV').textContent = e.target.value; try { localStorage.setItem('rq_goggle_eyeK', e.target.value); } catch (er){} };
+$('xrSep').oninput = e => { head.sepK = +e.target.value/100; $('xrSepV').textContent = e.target.value; try { localStorage.setItem('rq_goggle_sep', e.target.value); } catch (er){} };
+try { const a = localStorage.getItem('rq_goggle_eyeK'), b = localStorage.getItem('rq_goggle_sep');
+  if (a){ head.eyeK = +a/100; $('xrEyeK').value = a; $('xrEyeKV').textContent = a; } if (b){ head.sepK = +b/100; $('xrSep').value = b; $('xrSepV').textContent = b; } } catch (e){}
+
+function vplaneUpdate(){
+  keepVid();
+  const on = head.on && $('xrPass').checked && !!camTex && vid.videoWidth > 0;
+  vplane.visible = on; if (!on) return;
+  if (vplane.material.map !== camTex){ vplane.material.map = camTex; vplane.material.needsUpdate = true; }
+  const a = vid.videoWidth/vid.videoHeight, d = 60, L = 2*d*Math.tan(head.camHfov*Math.PI/360);
+  if (a >= 1) vplane.scale.set(L, L/a, 1); else vplane.scale.set(L*a, L, 1); vplane.position.set(0, 0, -d);
+}
+$('xrCamFov').oninput = e => { head.camHfov = +e.target.value; $('xrCamFovV').textContent = head.camHfov; try { localStorage.setItem('rqgun_camfov', head.camHfov); } catch (er){} };
+$('xrEye').oninput = e => { $('xrEyeV').textContent = e.target.value; room.eye = room.eye0 + (+e.target.value)/100; try { localStorage.setItem('rqgun_eyeadj', e.target.value); } catch (er){} };
+try { const v = +localStorage.getItem('rqgun_camfov'); if (v >= 40 && v <= 100){ head.camHfov = v; $('xrCamFov').value = v; $('xrCamFovV').textContent = v; } } catch (e){}
+try { const v = localStorage.getItem('rqgun_eyeadj'); if (v !== null){ $('xrEye').value = v; $('xrEyeV').textContent = v; } } catch (e){}
+
+// ===== ボスを床に置く：画面の中央（照準）が指している床の点にボスを立たせる。位置は床座標で保存 =====
+const BOSS_KEY = 'rqgun_bossF_v1';
+function bossSaved(m){ try { const d = JSON.parse(localStorage.getItem(BOSS_KEY) || 'null'); return d && Math.hypot(d.Ox - m.O.x, d.Oz - m.O.z) < .05 ? { x:d.x, z:d.z } : null; } catch (e){ return null; } }
+function placeBoss(){
+  if (!room.on){ popCam('先にPCとつないで部屋モードに', '#ff4d5e', .6, 1.5); return; }
+  const d = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion), o = camera.position;
+  if (d.y > -.05){ popCam('床を見下ろして押してください', '#ff4d5e', .6, 1.5); return; }
+  const t = -o.y/d.y, gx = o.x + d.x*t, gz = o.z + d.z*t;
+  if (t > 15){ popCam('遠すぎます（15m以内の床に）', '#ff4d5e', .6, 1.5); return; }
+  const c = Math.cos(room.yaw), s = Math.sin(room.yaw), C = { x:room.Ox + c*gx + s*gz, z:room.Oz - s*gx + c*gz };   // ゲーム座標 → 床座標
+  try { localStorage.setItem(BOSS_KEY, JSON.stringify({ x:C.x, z:C.z, Ox:room.calO.x, Oz:room.calO.z })); } catch (e){}
+  const f = roomFeet(), O = f ? { x:f.x, z:f.z } : room.calO;   // 今立っている所を「戦う立ち位置」に
+  roomCal({ ok:true, O, C, eye:room.eye0, local:true });
+  // 周回の向きを今の立ち位置に合わせる
+  roomSetG(Math.atan2(O.x - room.C.x, O.z - room.C.z)); B.x = 0; B.z = HOVER;
+  popCam('ボスをここに置きました', '#5fe07a', .7, 1.2);
+}
+function bossReset(){ try { localStorage.removeItem(BOSS_KEY); } catch (e){} if (room.on && room.calC) roomCal({ ok:true, O:room.calO, C:room.calC, eye:room.eye0, local:true }); popCam('ボスの位置をキャリブレーションに戻しました', '#7ae7ff', .6, 1.5); }
+$('gogPlace').onclick = placeBoss;
+$('bossReset').onclick = bossReset;
+$('xrSize').oninput = e => { R = +e.target.value; $('xrSizeV').textContent = (R*2).toFixed(1); try { localStorage.setItem('rqgun_bossR', R); } catch (er){} if (room.on){ room.D = Math.max(R + 1, room.D); HOVER = -room.D; } };
+try { const v = +localStorage.getItem('rqgun_bossR'); if (v >= .4 && v <= 1.8){ R = v; $('xrSize').value = v; $('xrSizeV').textContent = (v*2).toFixed(1); } } catch (e){}
+
+let last = performance.now();
+function loop(now){
+  const dt = Math.min(.033, (now - last)/1000); last = now;
+  faceStep(now); handStep(now); faceDraw(); if (gaze.cal) gazeCalStep(dt); else update(dt); render(); requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+// タイトル画面(parytitle.html)から ?start=1 で来たら自動スタート
+if (/[?&]start=1/.test(location.search)) setTimeout(() => dispatchEvent(new MouseEvent('mousedown', { button:0, clientX:innerWidth/2, clientY:innerHeight/2 })), 500);
+
+</script>
+<script>
+// =====================================================================
+//  ガンナーの練習モード（通常練習）
+//  RQ_project_gunner_goggle.html（本番・ゴーグル対応版）と同じゲームに、
+//  「課題を順にこなすチュートリアル」をかぶせたもの。本番の中身を直したら、ここ以外をコピーし直せばよい。
+//    PR_MODE = 'practice' … 通常練習（Wiiリモコン。マウスでも可）
+//    PR_MODE = 'trial'    … 体験版（マウスだけ：左クリック=射撃 / 右クリック=リロード / ホイール=武器）
+//  ・練習中はプレイヤーが倒れない。ボスは課題に合わせて「攻撃しない／ガード用に紫だけ／パリィ用に赤だけ」になる
+//  ・最後の「仕上げ」でスライムを倒すとクリア → 通常練習は本番へ、体験版はロビーへ
+// =====================================================================
+const PR_MODE = 'practice';
+const TRIAL = PR_MODE === 'trial';
+const PR = { i:0, n:0, tries:0, done:false, wpSeen:new Set(), sprite:null, str:'' };
+
+// ---- 操作の書き方（いまの操作方法に合わせて出し分ける）----
+const how = (wiiT, mouseT, trialT) => () => TRIAL ? trialT : ctl.mode === 'wii' ? wiiT : mouseT;
+const STEPS = [
+  { key:'shoot',   need:5, title:'① スライムを撃とう',
+    hint:how('照準を合わせて B で撃つ', '照準を合わせて左クリックで撃つ', '照準を合わせて左クリックで撃つ') },
+  { key:'reload',  need:1, title:'② 弾を撃ち切ってリロード',
+    hint:how('リモコンを縦に立てるとリロード', 'R キーでリロード', '右クリックでリロード') },
+  { key:'perfect', need:1, title:'③ パーフェクトリロード',
+    hint:how('リロード中、ゲージが黄色の所で B → 強化弾', 'リロード中、ゲージが黄色の所でクリック → 強化弾', 'リロード中、ゲージが黄色の所で左クリック → 強化弾') },
+  { key:'weapon',  need:2, title:'④ 武器を持ち替えよう（P90・スナイパー）',
+    hint:how('十字 ← で P90、→ でスナイパー', '← で P90、→ でスナイパー', 'ホイールを回して持ち替え') },
+  { key:'weak',    need:3, title:'⑤ 黄色い弱点を撃とう（ダメージ3倍）', weak:true,
+    hint:how('黄色く光る所に照準を合わせて撃つ', '黄色く光る所に照準を合わせて撃つ', '黄色く光る所に照準を合わせて撃つ') },
+  { key:'guard',   need:1, title:'⑥ 紫に光る突進をガード', attack:true, unp:true, skipTrial:true,
+    hint:how('突進が来たら A を押し続ける', '突進が来たら Space を押し続ける', '') },
+  { key:'parry',   need:1, title:'⑦ 赤く光る突進をパリィ', attack:true, unp:false, skipTrial:true,
+    hint:how('赤く光ったらリモコンを振り上げる', '赤く光ったら右クリック', '') },
+  { key:'final',   need:1, title:'仕上げ：スライムを倒そう！', attack:true, final:true,
+    hint:how('弱点・強化弾・武器を使い分けて', '弱点・強化弾・武器を使い分けて', '突進は撃ち続けてもOK（体験版は倒れません）') },
+].filter(s => !(TRIAL && s.skipTrial));
+const step = () => STEPS[PR.i];
+const FINAL_HP = TRIAL ? 240 : 320;
+
+// ---- 課題の表示（ゴーグルでも見えるよう、画面の上のほうに3Dの文字で出す）----
+function prDraw(){
+  const s = step(); if (!s) return;
+  const prog = s.need > 1 ? `　${Math.min(PR.n, s.need)} / ${s.need}` : '';
+  const hint = s.hint() + (s.key === 'perfect' && PR.tries >= 2 ? '（あと少し！失敗が続いたら次へ進みます）' : '');
+  const str = s.title + prog + '|' + hint;
+  if (str === PR.str) return; PR.str = str;
+  if (PR.sprite){ hud.remove(PR.sprite); PR.sprite.material.map.dispose(); PR.sprite.material.dispose(); }
+  const t = canvasTex(1024, 200, (x, w, h) => {
+    x.fillStyle = 'rgba(0,10,20,.55)'; x.fillRect(0, 0, w, h);
+    x.fillStyle = s.final ? '#ff4d5e' : '#ffd35a'; x.fillRect(0, 0, 10, h);
+    x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineWidth = 8; x.strokeStyle = '#000c';
+    const line = (txt, y, fs, col) => { do { x.font = `bold ${fs}px ${FONT}`; fs -= 2; } while (x.measureText(txt).width > 980 && fs > 14); x.strokeText(txt, w/2, y); x.fillStyle = col; x.fillText(txt, w/2, y); };
+    line(s.title + prog, h*.33, 56, s.final ? '#ff8a96' : '#ffd35a');
+    line(hint, h*.74, 38, '#ffffff');
+  });
+  PR.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map:t, transparent:true, depthTest:false })); PR.sprite.renderOrder = 21;
+  PR.sprite.scale.set(.5*1024/200, .5, 1); PR.sprite.position.set(0, 1.12, -3); hud.add(PR.sprite);
+}
+function prSet(i){
+  PR.i = i; PR.n = 0; PR.tries = 0; PR.str = '';
+  const s = step(); if (!s) return;
+  if (s.final){ B.max = B.hp = FINAL_HP; B.phase = 1; }
+  else { B.max = 800; B.hp = 800; }
+  if (s.key === 'weak') B.weak = 99;
+  prDraw();
+}
+function prCount(key, k = 1){
+  const s = step(); if (!s || s.key !== key || PR.done || state !== 'play') return;
+  PR.n += k; prDraw();
+  if (PR.n >= s.need){
+    playPerfect(); wiiPattern([60, 40, 60]);
+    popup(PR.i + 1 < STEPS.length - 1 ? 'CLEAR!' : 'CLEAR! 最後の仕上げ', '#5fe07a', new THREE.Vector3(0, .1, -3), 1.1, 1.1, camera);   // 課題の文字と重ならない高さ
+    setTimeout(() => { if (state === 'play' && step() === s) prSet(PR.i + 1); }, 900);
+  }
+}
+
+// ---- 本番のしくみに、練習用の判定を差し込む（関数を包む）----
+const _hurtBoss = hurtBoss;
+hurtBoss = function(d, at, big, small){
+  const s = step();
+  if (!s || !s.final){ B.hp = B.max + d; _hurtBoss(d, at, big, small); B.hp = B.max; return; }   // 課題中は倒れない（どんな大ダメージでも）
+  _hurtBoss(d, at, big, small);
+  if (state === 'win') prWin();
+};
+const _dealHit = dealHit;
+dealHit = function(d, at, crit, big, small){
+  _dealHit(d, at, crit, big, small);
+  prCount('shoot'); if (crit) prCount('weak');
+};
+const _finishReload = finishReload;
+finishReload = function(perfect){
+  _finishReload(perfect);
+  prCount('reload');
+  if (step() && step().key === 'perfect'){
+    if (perfect) prCount('perfect');
+    else if (++PR.tries >= 4){ popCam('OK！ 本番で狙ってみよう', '#7ae7ff', .8, 1); prCount('perfect'); } else prDraw();
+  }
+};
+const _setWeapon = setWeapon;
+setWeapon = function(w){
+  const before = P.wp; _setWeapon(w);
+  if (P.wp !== before && (P.wp === 'p90' || P.wp === 'sr') && !PR.wpSeen.has(P.wp)){ PR.wpSeen.add(P.wp); prCount('weapon'); }
+};
+const _guarded = guarded; guarded = function(){ _guarded(); prCount('guard'); };
+const _parried = parried; parried = function(){ _parried(); prCount('parry'); };
+const _hurtPlayer = hurtPlayer;
+hurtPlayer = function(mult){   // 練習中は倒れない（当たった感じだけ出す）
+  P.hp = PMAX; _hurtPlayer(mult); P.hp = PMAX;
+  const s = step();
+  if (s && s.key === 'guard') popCam(s.hint(), '#c06bff', .6, 1.4);
+  if (s && s.key === 'parry') popCam(s.hint(), '#ff4d5e', .6, 1.4);
+};
+const _bossAI = bossAI;
+bossAI = function(dt){
+  const s = step() || {};
+  if (!s.attack && B.s === 'idle') B.t = Math.max(B.t, .5);   // 攻撃しない課題：突進の予兆に入らせない
+  if (s.weak) B.weak = Math.max(B.weak, 1);                    // 弱点の課題：ずっと開けておく
+  if (s.unp !== undefined && B.s === 'idle' && B.t - dt <= 0){   // ガード課題は紫だけ・パリィ課題は赤だけにする
+    const r = Math.random; Math.random = () => s.unp ? 0 : .99; try { _bossAI(dt); } finally { Math.random = r; } return;
+  }
+  _bossAI(dt);
+};
+const _startBattle = startBattle;
+startBattle = function(){ PR.done = false; PR.wpSeen.clear(); _startBattle(); prSet(0); };
+const _startGame = startGame;
+startGame = function(){
+  if (PR.done){   // クリア後：通常練習は本番のクエストへ、体験版はロビーへ
+    if (window.RQ){ if (TRIAL) RQ.go('lobby'); else RQ.go('raid', { start:1 }, 'gun', head.on ? 'slime-goggle' : 'slime'); }
+    return;
+  }
+  _startGame();
+};
+function prWin(){
+  PR.done = true; endAt = performance.now();
+  if (PR.sprite) PR.sprite.visible = false;
+  setMsg(TRIAL
+    ? [['体験版クリア！', '#ffd35a', 80], ['おつかれさまでした', '#fff', 34],
+       ['本番は Wiiリモコンで、ガード・パリィ・サーベルも使えます', '#9fe870', 26],
+       ['クリックでロビーへ　（メニューの ↻ でもう一度）', '#7ae7ff', 30]]
+    : [['練習完了！', '#ffd35a', 80], ['これで本番に出撃できます', '#fff', 34],
+       ['クリック / B で 本番（巨大スライム討伐）へ', '#7ae7ff', 30],
+       ['メニューの ↻ でもう一度練習', '#9fe870', 24]]);
+}
+const _update = update;
+update = function(dt){ _update(dt); if (PR.sprite) PR.sprite.visible = state === 'play' && !PR.done; if (state === 'play') prDraw(); };
+
+// ---- 名前とタイトル画面 ----
+hud.remove(nameS); { const n = mkSprite(TRIAL ? '体験版スライム' : '練習用スライム', '#ffffff', .4); n.position.set(0, 1.85, -3); hud.add(n); }
+document.title = TRIAL ? 'RQ ガンナー 体験版（マウス操作）' : 'RQ ガンナー 練習';
+titleMsg = function(){
+  setMsg(TRIAL
+    ? [['GUNNER 体験版', '#ffd35a', 64], ['マウスだけで遊べるお試し版', '#fff', 30],
+       ['左クリック：撃つ　右クリック：リロード　ホイール：武器を持ち替え', '#7ae7ff', 26],
+       ['画面に出る課題を順にこなしていこう（倒れることはありません）', '#9fe870', 24],
+       ['🥽 ゴーグル：スマホにマウスをつなぐと、頭の向きで狙えます', '#ffd35a', 22],
+       ['クリックでスタート', '#7ae7ff', 32]]
+    : [['GUNNER 練習', '#ffd35a', 64], ['画面に出る課題を順にこなして、操作を覚えよう', '#fff', 28],
+       ['撃つ → リロード → 強化弾 → 持ち替え → 弱点 → ガード → パリィ → 仕上げ', '#9fe870', 24],
+       ['Wii：B 撃つ / 縦に立てる リロード / A ガード / 振り上げ パリィ / 十字 武器', '#7ae7ff', 22],
+       ['マウス：左 撃つ / R リロード / Space ガード / 右 パリィ / 矢印 武器', '#7ae7ff', 22],
+       ['練習中は倒れません。クリック / A・B でスタート', '#7ae7ff', 30]]);
+};
+titleMsg();
+
+// ---- 体験版：マウスだけで遊ぶ（Wiiリモコン・PC中継・PCのカメラは使わない）----
+if (TRIAL){
+  openWii = async () => {};                 // Wiiリモコン（PC中継の仮想リモコンも）を使わない
+  relayConnect = () => {};                  // PC中継につながない（goggle-game.js からも呼ばれる）
+  const _openCam = openCam;
+  openCam = id => head.on ? _openCam(id) : Promise.resolve();   // PCではカメラを開かない（ゴーグルの背景映像だけ使う）
+  face.on = false; try { $('faceOn').checked = false; } catch (e){}
+  const aimFor = () => { gaze.mode = head.on ? 'auto' : 'face'; };   // PC：マウスで狙う / ゴーグル：頭の向き＋自動照準
+  aimFor();
+  const _goggleStart = goggleStart; goggleStart = async function(){ await _goggleStart(); aimFor(); };
+  const _goggleStop = goggleStop; goggleStop = function(){ _goggleStop(); aimFor(); };
+  // 右クリック＝リロード（本番のマウス操作では右クリックはパリィ）。本番の処理より先に受け取る
+  addEventListener('mousedown', e => {
+    if (e.button !== 2 || state !== 'play' || menuOn || gaze.cal) return;
+    e.stopImmediatePropagation(); e.preventDefault();
+    if (P.rl) activeReload(); else startReload();
+  }, true);
+  // ゴーグル中はマウスを動かしても照準を動かさない（照準＝見ている方向）
+  addEventListener('mousemove', e => { if (head.on) e.stopImmediatePropagation(); }, true);
+  // ホイール＝武器の持ち替え（ハンドガン → P90 → スナイパー）
+  let wheelT = 0;
+  addEventListener('wheel', e => {
+    if (state !== 'play' || menuOn) return; e.preventDefault();
+    const now = performance.now(); if (now - wheelT < 180) return; wheelT = now;
+    const L = ['hg', 'p90', 'sr'], i = Math.max(0, L.indexOf(P.wp));
+    setWeapon(L[(i + (e.deltaY > 0 ? 1 : L.length - 1)) % L.length]);
+  }, { passive:false });
+  setCtl('mouse');
+}
+</script>
+<script src="../common/goggle-game.js"></script>   <!-- goggle.html の中で開かれた時だけ、自動でゴーグル表示へ -->
+</body>
+</html>
