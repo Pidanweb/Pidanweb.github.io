@@ -389,7 +389,11 @@ let gateOpen = false, micStream = null, analyser = null, micOk = false, wave = [
 // スマホ（とくにAndroid）は、ページがマイクを開いたままだと音声認識に音が届かない。
 // だから「Ⓐを押している間」は波形用のマイクを閉じて、音声認識にマイクをゆずる
 const MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || !!(window.RQ && RQ.gog);
-const HOLD_OK_MS = 4000;   // スマホ・ゴーグル：音声が通らなくても、Ⓐをこの時間押し続ければ起動（保険）
+const HOLD_OK_MS = 4000;
+// ゴーグルモードでPC中継につながっていれば、PCのマイクで聞き取る（setup/hub.html が聞いて、聞こえた言葉を送ってくる）
+const GOGV = window.RQ && RQ.gog;
+const pcVoice = () => !!(GOGV && GOGV.pcVoice && GOGV.pcVoice());
+let pcvOn = false;   // 今PCに聞き取りを頼んでいるか   // スマホ・ゴーグル：音声が通らなくても、Ⓐをこの時間押し続ければ起動（保険）
 async function micOpen(){
   if (micStream) return;
   micStream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true } });
@@ -486,6 +490,10 @@ function holdStart(){
   if (holding || linked) return;
   holding = true; holdT0 = performance.now(); clearTimeout(stopTimer);
   $('aBtn').classList.add('hold'); $('blink').textContent = 'LISTENING…'; sfx.holdOn();
+  if (pcVoice()){   // PCのマイクで聞き取る：スマホのマイクはそのまま（取り合いにならない）
+    pcvOn = true; GOGV.send({ t:'voice', cmd:'start' });
+    heard('聞き取り中…（PCのマイク）「ハロー・ニューワールド」', 'var(--acc2)'); return;
+  }
   heard(SR ? (MOBILE ? '聞き取り中…「ハロー・ニューワールド」（そのまま4秒押し続けても起動）' : '聞き取り中…「ハロー・ニューワールド」') : '音声認識非対応：そのまま長押しで起動', 'var(--acc2)');
   if (MOBILE && SR){ micClose(); setTimeout(() => { if (holding && !linked) recStart(); }, 150); }   // マイクが解放されるのを少し待つ
   else recStart();
@@ -493,6 +501,7 @@ function holdStart(){
 function holdEnd(){
   if (!holding || linked) return;
   holding = false; $('aBtn').classList.remove('hold'); $('blink').textContent = 'AWAITING VOICE COMMAND'; sfx.holdOff();
+  if (pcvOn){ pcvOn = false; GOGV.send({ t:'voice', cmd:'stop' }); stopTimer = setTimeout(() => { if (!linked) heard('待機中'); }, 1500); return; }
   stopTimer = setTimeout(() => {
     recStop(); if (!linked) heard('待機中');
     if (MOBILE && micOk && !linked) setTimeout(() => { if (!holding) micOpen().catch(() => {}); }, 400);   // 波形用のマイクを戻す
@@ -500,6 +509,7 @@ function holdEnd(){
 }
 function accept(t){
   if (linked) return; linked = true; recStop(); micClose();
+  if (pcvOn){ pcvOn = false; GOGV.send({ t:'voice', cmd:'stop' }); }
   heard('✔ 音声コマンド認証：「' + t + '」', 'var(--ok)'); wiiRumble(300);
   startLink();
 }
@@ -565,6 +575,16 @@ if ('hid' in navigator){
 if (GOG){
   const relayWii = on => { if (on) openWii(GOG.wii).then(() => chip('cWii', 'ok', 'PC中継')).catch(() => {}); else { wii.dev = null; chip('cWii', 'warn', 'PC中継：Wii待ち'); } };
   GOG.onwii = relayWii; relayWii(GOG.wiiOn());
+  // PC中継から届く音声認識の結果（Ⓐを離した後に遅れて届く分も判定する）
+  const micChip = () => { if (pcVoice()) chip('cMic', 'ok', 'PCのマイク'); };
+  GOG.onmsg = m => {
+    if (m.t === 'voiceCap') micChip();
+    else if (m.t === 'voice' && !linked){
+      for (const a of m.alts || []) if (isPhrase(a)) return accept(a + '（PC）');
+      if (m.alts && m.alts[0]) heard('「' + m.alts[0] + '」（PC）', 'var(--ice)');
+    } else if (m.t === 'voiceErr') heard(m.msg, 'var(--ng)');
+  };
+  setTimeout(micChip, 1200);
   $('bWii').hidden = true;
 }
 

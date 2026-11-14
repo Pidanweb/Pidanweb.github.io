@@ -152,7 +152,7 @@ function camStop(){ if (camStream) camStream.getTracks().forEach(t => t.stop());
 
 // ================= PC中継（Wiiリモコンのボタンをページに渡す）=================
 // ページからは本物のWiiリモコン（WebHID）と同じ形に見える「仮想のWiiリモコン」
-const relay = { peer:null, conn:null, want:false, wiiOn:false, retry:0 };
+const relay = { peer:null, conn:null, want:false, wiiOn:false, voiceCap:false, retry:0 };
 const fakeWii = {
   opened:true, vendorId:0x057e, productId:0x0306, productName:'Wii Remote (PC中継)', oninputreport:null,
   open: async () => {}, close: async () => {},
@@ -162,7 +162,7 @@ function code(){ return ($('code').value || '').replace(/\D/g, ''); }
 function relayClose(){
   clearTimeout(relay.retry);
   try { relay.conn && relay.conn.close(); } catch (e){} try { relay.peer && relay.peer.destroy(); } catch (e){}
-  relay.conn = relay.peer = null; relay.wiiOn = false;
+  relay.conn = relay.peer = null; relay.wiiOn = false; relay.voiceCap = false;
 }
 function relayConnect(){
   const c = code(); relayClose();
@@ -192,6 +192,10 @@ function relayData(m){
     const h = fakeWii.oninputreport; if (!h) return;
     try { h({ reportId:m.id, data:new DataView(new Uint8Array(m.d).buffer), timeStamp:performance.now(), device:fakeWii }); } catch (e){}
   } else if (m.t === 'wii') setWii(!!m.on);
+  else {
+    if (m.t === 'voiceCap') relay.voiceCap = !!m.ok;
+    try { RQG.onmsg && RQG.onmsg(m); } catch (e){}   // 音声認識の結果など、ページ宛てのもの
+  }
 }
 function relayPause(){ relay.want = false; relayClose(); }
 function relayResume(){ if (relay.want && relay.conn) return; relay.want = true; relayConnect(); }
@@ -201,6 +205,9 @@ window.RQG = {
   wii: fakeWii,                 // 仮想のWiiリモコン（openWii(RQ.gog.wii) で使える）
   wiiOn: () => relay.wiiOn,     // PCにWiiリモコンがつながっているか
   onwii: null,                  // ページが入れる：PC側のWiiリモコンがつながった/切れた時に呼ばれる
+  onmsg: null,                  // ページが入れる：PC中継から来たその他のメッセージ（音声認識の結果 {t:'voice', alts} など）
+  send: m => { if (relay.conn && relay.conn.open){ relay.conn.send(m); return true; } return false; },   // PC中継へ送る
+  pcVoice: () => !!(relay.conn && relay.conn.open && relay.voiceCap),   // PCのマイクで音声認識できるか
   cam,                          // 背景カメラの MediaStream（背景カメラがオフなら null）
   pass: () => S.pass,
   code,                         // PC中継のコード（ゲームが自分で接続する時に使う）
@@ -309,7 +316,7 @@ L.addEventListener('load', () => {
   if (!win || !doc){ mode = 'self'; mirrorStop(); layout(); document.body.classList.add('unsup'); return; }
   curUrl = win.location.href;
   try { history.replaceState(null, '', '?p=' + encodeURIComponent(curUrl.startsWith(RQ.BASE) ? curUrl.slice(RQ.BASE.length) : curUrl)); } catch (e){}
-  win.addEventListener('pagehide', () => { fakeWii.oninputreport = null; RQG.onwii = null; mirrorStop(); });
+  win.addEventListener('pagehide', () => { fakeWii.oninputreport = null; RQG.onwii = RQG.onmsg = null; RQG.send({ t:'voice', cmd:'stop' }); mirrorStop(); });
   const decl = win.RQ_GOGGLE;
   document.body.classList.toggle('unsup', decl !== '2d' && decl !== 'self');
   if (decl === 'self'){
