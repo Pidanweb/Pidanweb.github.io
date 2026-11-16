@@ -21,6 +21,14 @@
   #map{width:320px;height:320px;background:#000;border:1px solid #7ae7ff55;border-radius:8px}
   #feetV{font:bold 20px monospace;color:#7ae7ff}
   .top{display:grid;grid-template-columns:1fr 1fr;gap:12px} @media (max-width:760px){ .top{grid-template-columns:1fr} }
+  #specBox{position:relative;margin-top:8px;background:#000;border:1px solid #7ae7ff55;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  #specBox:fullscreen{border:0;border-radius:0}
+  #specCv{display:block}
+  #specHudEl{position:absolute;left:50%;top:10px;transform:translateX(-50%);width:min(60%,520px);text-align:center;pointer-events:none;text-shadow:0 0 6px #000,0 0 3px #000}
+  #specName{font:bold 18px sans-serif;color:#fff}
+  #specHp{margin-top:4px;height:10px;background:#0009;border:1px solid #fff6;border-radius:6px;overflow:hidden}
+  #specHpBar{height:100%;width:100%;background:linear-gradient(90deg,#ff4d5e,#ff9a3c)}
+  #specLabel{margin-top:6px;font:bold 26px sans-serif;letter-spacing:.1em}
 </style>
 </head>
 <body>
@@ -81,6 +89,22 @@
     </div>
     <small>先に calibrate.html で測定を済ませてください（同じサイトで開けば、保存された結果をそのまま読みます）。<br>
     キャリブレーションのページはカメラを使うので、このページで開始する前に閉じてください。</small>
+  </section>
+  <section>
+    <h2>🎥 観戦カメラ（メインカメラの映像にボスを重ねた三人称の映像）</h2>
+    <div class="row" style="align-items:center">
+      <label><input type="checkbox" id="specOn" checked> 表示する</label>
+      <label>ボス <select id="specKind"><option value="auto">自動（遊んでいるゲームに合わせる）</option><option value="slime">ジャイアントスライム</option><option value="volgram">灰牙の獣王 ヴォルグラム</option></select></label>
+      <label><input type="checkbox" id="specLane" checked> 攻撃範囲の帯</label>
+      <label><input type="checkbox" id="specHud" checked> 名前・HP</label>
+      <button id="specFull">⛶ 全画面（配信・プロジェクター用）</button>
+    </div>
+    <div class="st" id="specSt">準備中…</div>
+    <div id="specBox"><canvas id="specCv"></canvas>
+      <div id="specHudEl"><div id="specName">—</div><div id="specHp"><div id="specHpBar"></div></div><div id="specLabel"></div></div>
+    </div>
+    <small>③の「▶ カメラと認識を開始」でメインカメラの映像が出ます。キャリブレーションで測ったカメラの高さ・向き・画角で3Dのボスを描くので、映像の床にボスが立って見えます。<br>
+    スマホのゲーム（部屋モード：剣士「灰牙の獣王 討伐」「巨大スライム討伐」・ガンナーのゴーグル版）がPC中継につながると、ゲームと同じ動きをします。届いていない時は、決めた位置に待機中のボスを出します（位置合わせの確認に使えます）。</small>
   </section>
 </main>
 
@@ -194,6 +218,7 @@ function onPhone(m){
   if (m.t === 'out' && dev) dev.sendReport(m.id, new Uint8Array(m.d)).catch(() => {});
   else if (m.t === 'hi'){ sendWiiState(); sendVoiceCap(); sendCal(); }
   else if (m.t === 'voice'){ if (m.cmd === 'start') voStart(); else voStop(); }
+  else if (m.t === 'spec') specIn(m);   // 観戦カメラ：ゲームのボスの状態
 }
 setInterval(() => { st('rateSt', dev ? `受信 ${nRep} 回/秒` + (conn ? ' → スマホへ転送中' : '（スマホ未接続）') : ''); nRep = 0; }, 1000);
 
@@ -439,15 +464,338 @@ function drawMap(){
   x.strokeStyle = '#ff4d5e88'; x.beginPath(); x.arc(X(bc.bossC), Y(bc.bossC), R_BOSS*s, 0, 7); x.stroke(); dot(bc.bossC, '#ff4d5e', 6);
   if (feet.p && performance.now() - feet.t < 500) dot(feet.p, '#7ae7ff', 7);
 }
+
+// ================= 🎥 観戦カメラ（メインカメラの映像に、同じ位置・向き・画角の3Dカメラでボスを重ねる）=================
+// ・3Dカメラ：キャリブレーションの bc.FfromCam（カメラ → 床座標）をそのまま使う（軸の向きも three.js と同じ）
+// ・ボス：ゲーム本体と同じ作り方のモデルをここに入れておき、ゲームから届く状態（{t:'spec'}）で動かす
+//   ゲーム側は common/goggle-game.js が 1秒に20回送ってくる。届いていない時は、決めた位置に待機中のボスを出す
+// ・モデルの作り方は sord/sord_boss.html（ヴォルグラム）と gun/RQ_project_gunner_goggle.html（スライム）から写したもの。
+//   ゲームのボスの形を変えたら、ここも同じように写し直す（関節の数・順番が同じでないと動きがずれる）
+const SPEC = { renderer:null, scene:null, cam:null, bgTex:null, models:{}, buf:[], last:0, kind:'slime', shadow:null, lane:null, fsk:'' };
+// ---- ボスのモデル（ゲームからそのまま写したもの）----
+function specBuildVolgram(scene){
+  let R;
+  // ===== ボス：灰牙の獣王 ヴォルグラム（身長2.5m・大剣で斬りかかる獣人）=====
+  // 構造: bossG（床の位置・プレイヤーの方を向く）→ bossBody（大きさ・死亡時の倒れ込み）→ 関節（J.*）
+  // 向き: +Z が正面（プレイヤー側）。ボスの右手は -X 側。
+  const BOSS_H = 2.5;   // 身長(m)
+  R = .9;               // 当たり判定の胴回りの半径（待機距離などに使う）
+  const bossG = new THREE.Group(); scene.add(bossG);
+  const bossBody = new THREE.Group(); bossG.add(bossBody); bossBody.scale.setScalar(BOSS_H/2.5);
+  const bossCtr = new THREE.Vector3(0, 1.4, -8);   // 胴の中心（ヒットエフェクトの位置）
+  const BM = [];   // 被弾フラッシュ用に材質と元の発光色を覚えておく
+  function bm(c, o = {}){ const m = new THREE.MeshStandardMaterial(Object.assign({ color:c, roughness:.75, metalness:0 }, o)); BM.push({ m, e:m.emissive.clone() }); return m; }
+  const mFur = bm(0x4d5566, { roughness:.92 }), mFurD = bm(0x262b35, { roughness:.95 }), mBelly = bm(0x8e8574, { roughness:.88 }),
+        mSkin = bm(0x2b262b, { roughness:.55 }), mBronze = bm(0xa0702e, { metalness:.7, roughness:.33, emissive:0x1a0e02 }),
+        mCloth = bm(0x74201f, { roughness:.92, side:THREE.DoubleSide }), mLeather = bm(0x3e2717, { roughness:.8 }),
+        mHorn = bm(0xd6c9a8, { roughness:.45 }), mClaw = bm(0xece3cc, { roughness:.35 }), mMouth = bm(0x4a1418, { roughness:.6 }),
+        mIron = bm(0x7d8692, { metalness:.45, roughness:.38, emissive:0x0c1016 }), mEdge = bm(0xe4ecf4, { metalness:.35, roughness:.2, emissive:0x1c2836 }), mGrip = bm(0x2a1a10, { roughness:.9 });
+  const mEye = new THREE.MeshBasicMaterial({ color:0xffa020 });
+  const J = {};
+  const jt = (name, parent, x, y, z, order = 'XYZ') => { const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.order = order; parent.add(g); J[name] = g; return g; };
+  const bp = (parent, geo, mat, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => {
+    const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.scale.set(sx, sy, sz); parent.add(o); return o; };
+  const SPH = (r, w = 14, h = 10) => new THREE.SphereGeometry(r, w, h);
+  const CYL = (a, b, h, s = 10) => new THREE.CylinderGeometry(a, b, h, s);
+  const CONE = (r, h, s = 7) => new THREE.ConeGeometry(r, h, s);
+  const _up = new THREE.Vector3(0, 1, 0);
+  // 向きを指定して置く（円錐の先端 = +Y を dir へ向ける）
+  function bpDir(parent, geo, mat, x, y, z, dx, dy, dz){ const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.quaternion.setFromUnitVectors(_up, new THREE.Vector3(dx, dy, dz).normalize()); parent.add(o); return o; }
+  // 2点を結ぶ先細りの円柱（角・尻尾など）
+  function seg(parent, a, b, r0, r1, mat){
+    const d = new THREE.Vector3().subVectors(b, a), o = new THREE.Mesh(CYL(r1, r0, d.length(), 8), mat);
+    o.position.copy(a).addScaledVector(d, .5); o.quaternion.setFromUnitVectors(_up, d.normalize()); parent.add(o); return o; }
+  function chain(parent, pts, r0, r1, mat){ const V = pts.map(p => new THREE.Vector3(...p)); for (let i = 0; i < V.length - 1; i++){ seg(parent, V[i], V[i+1], r0 + (r1 - r0)*i/(V.length-1), r0 + (r1 - r0)*(i+1)/(V.length-1), mat); if (i) bp(parent, SPH(r0 + (r1 - r0)*i/(V.length-1), 8, 6), mat, ...pts[i]); } }
+
+  // --- 腰・脚 ---
+  const hips = jt('hips', bossBody, 0, 1.0, 0);
+  bp(hips, SPH(.28), mFurD, 0, 0, 0, 0, 0, 0, 1.25, .8, .95);
+  bp(hips, CYL(.34, .35, .13, 18), mLeather, 0, .08, 0, 0, 0, 0, 1, 1, .85);
+  bp(hips, CYL(.1, .1, .05, 14), mBronze, 0, .08, .3, Math.PI/2, 0, 0);
+  bp(hips, CYL(.05, .05, .055, 10), mFurD, 0, .08, .31, Math.PI/2, 0, 0);
+  const loinF = jt('loinF', hips, 0, .02, .27); bp(loinF, new THREE.PlaneGeometry(.38, .6), mCloth, 0, -.3, 0);
+  const loinB = jt('loinB', hips, 0, .02, -.27); bp(loinB, new THREE.PlaneGeometry(.44, .55), mCloth, 0, -.27, 0);
+  for (const s of [1, -1]){
+    const n = s > 0 ? 'L' : 'R';
+    const th = jt('th' + n, hips, s*.2, -.05, 0);
+    bp(th, SPH(.19), mFur, 0, -.1, 0, 0, 0, 0, 1, 1.35, 1.1);
+    bp(th, CYL(.17, .12, .48, 10), mFur, 0, -.24, 0);
+    for (let i = 0; i < 3; i++) bpDir(th, CONE(.045, .17, 5), mFurD, s*.13, -.08 - i*.11, -.03, s*.9, -.6, -.4);
+    const kn = jt('kn' + n, th, 0, -.48, 0);
+    bp(kn, SPH(.11), mFur);
+    bp(kn, CYL(.115, .08, .46, 10), mFur, 0, -.23, 0);
+    bp(kn, SPH(.1), mFur, 0, -.12, -.04, 0, 0, 0, 1, 1.5, 1);
+    bp(kn, CYL(.118, .098, .24, 12), mBronze, 0, -.17, .012);
+    bpDir(kn, CONE(.05, .14, 6), mBronze, 0, .02, .1, 0, .3, 1);   // 膝当てのトゲ
+    const an = jt('an' + n, kn, 0, -.46, 0);
+    bp(an, SPH(.075), mSkin);
+    bp(an, new THREE.BoxGeometry(.18, .085, .3), mSkin, 0, -.045, .08);
+    for (const cx of [-.055, 0, .055]) bp(an, CONE(.024, .09, 5), mClaw, cx, -.06, .27, Math.PI/2, 0, 0);
+  }
+  // 尻尾
+  const tail1 = jt('tail1', hips, 0, 0, -.24), tail2 = jt('tail2', tail1, 0, -.02, -.42);
+  chain(tail1, [[0, 0, 0], [0, -.01, -.22], [0, -.02, -.42]], .09, .07, mFur);
+  chain(tail2, [[0, 0, 0], [0, 0, -.2], [0, .02, -.4]], .07, .03, mFur);
+  for (let i = 0; i < 5; i++) bpDir(tail2, CONE(.05, .18, 5), mFurD, 0, .03, -.15 - i*.06, (i%2 ? .5 : -.5), .6, -1);
+
+  // --- 胴 ---
+  const sp = jt('spine', hips, 0, .1, 0);
+  bp(sp, SPH(.31), mBelly, 0, .16, .03, 0, 0, 0, 1.05, 1, .9);
+  bp(sp, SPH(.43, 18, 14), mFur, 0, .52, 0, 0, 0, 0, 1.3, 1, .86);
+  bp(sp, SPH(.32, 16, 12), mBelly, 0, .46, .13, 0, 0, 0, 1.3, .92, .66);
+  bp(sp, SPH(.36), mFurD, 0, .68, -.13, 0, 0, 0, 1.35, .82, .92);
+  // 革のたすき（右肩→左腰）
+  const strap = bp(sp, new THREE.TorusGeometry(.47, .028, 6, 28), mLeather, 0, .46, .02, 0, 0, .78); strap.scale.set(1, 1.05, .75);
+  bp(sp, CYL(.07, .07, .03, 12), mBronze, -.16, .62, .34, Math.PI/2 - .2, 0, 0);
+  // 首まわりのたてがみ
+  for (let i = 0; i < 18; i++){
+    const a = i/18*Math.PI*2, c = Math.cos(a); if (c > .55) continue;
+    bpDir(sp, CONE(.085, .36 + .08*(1 - c), 5), i%2 ? mFurD : mFur, Math.sin(a)*.32, .86, c*.24 - .04, Math.sin(a)*.9, .75, c*.7 - .45);
+  }
+  for (let i = 0; i < 7; i++) bpDir(sp, CONE(.08, .3, 5), mFurD, (i - 3)*.09, .8 - Math.abs(i - 3)*.04, -.42, (i - 3)*.15, .4, -1);   // 背中の毛
+
+  // --- 腕 ---
+  for (const s of [1, -1]){
+    const n = s > 0 ? 'L' : 'R';
+    const sh = jt('sh' + n, sp, s*.55, .7, 0, 'YXZ');
+    bp(sh, SPH(.18), mFur, 0, -.04, 0);
+    const pd = jt('pd' + n, sh, s*.04, .04, 0);   // 肩当て
+    bp(pd, new THREE.SphereGeometry(.24, 16, 10, 0, Math.PI*2, 0, Math.PI*.55), mBronze, 0, 0, 0, 0, 0, -s*.4, 1, .78, 1.08);
+    bp(pd, new THREE.TorusGeometry(.2, .022, 6, 20), mBronze, s*.05, -.04, 0, Math.PI/2, -s*.4, 0, 1, 1.08, 1);
+    for (let i = 0; i < 3; i++) bpDir(pd, CONE(.04, .2, 6), mHorn, s*(.06 + i*.045), .12 - i*.04, (i - 1)*.11, s*.75, 1, 0);
+    bp(sh, CYL(.135, .11, .5, 10), mFur, 0, -.27, 0);
+    bp(sh, SPH(.14), mFur, 0, -.2, .03, 0, 0, 0, 1, 1.35, 1);
+    const el = jt('el' + n, sh, 0, -.52, 0);
+    bp(el, SPH(.105), mFur);
+    bp(el, CYL(.115, .088, .46, 10), mFur, 0, -.23, 0);
+    bp(el, CYL(.128, .108, .25, 12), mBronze, 0, -.27, 0);
+    bpDir(el, CONE(.035, .14, 5), mHorn, s*.09, -.18, -.06, s*1, .2, -.4);
+    const wr = jt('wr' + n, el, 0, -.47, 0);
+    bp(wr, SPH(.105), mSkin, 0, -.065, 0, 0, 0, 0, 1.05, 1.15, .95);
+    for (const cx of [-.05, 0, .05]) bp(wr, CONE(.02, .08, 5), mClaw, cx, -.15, .05, Math.PI*.85, 0, 0);
+  }
+
+  // --- 首・頭 ---
+  const nk = jt('neck', sp, 0, .86, .06);
+  bp(nk, CYL(.16, .19, .28, 10), mFur, 0, .1, 0, .25, 0, 0);
+  const hd = jt('head', nk, 0, .22, .07); hd.scale.setScalar(1.15);
+  bp(hd, SPH(.205), mFur, 0, .07, -.02, 0, 0, 0, 1.02, .9, 1.1);
+  bp(hd, CYL(.075, .118, .3, 10), mFur, 0, .01, .2, Math.PI/2, 0, 0, 1, 1, .85);
+  bp(hd, CYL(.06, .095, .22, 10), mFurD, 0, .06, .21, Math.PI/2 + .12, 0, 0, .9, 1, .5);   // 鼻筋
+  bp(hd, SPH(.052), mSkin, 0, .04, .36, 0, 0, 0, 1.15, .85, 1);
+  for (const s of [1, -1]){
+    bp(hd, new THREE.BoxGeometry(.11, .035, .07), mFurD, s*.085, .145, .15, .2, 0, s*-.38);   // 眉（怒り顔）
+    bp(hd, SPH(.032, 8, 6), mEye, s*.085, .105, .158, 0, 0, 0, 1.3, .7, 1);
+    bp(hd, CONE(.018, .08, 5), mClaw, s*.052, -.065, .3, Math.PI, 0, 0);     // 上の牙
+    bp(hd, CONE(.07, .24, 6), mFur, s*.13, .25, -.06, -.3, 0, s*-.4);          // 耳
+    bp(hd, CONE(.04, .16, 5), mMouth, s*.13, .24, -.035, -.3, 0, s*-.4);
+    chain(hd, [[s*.09, .2, .07], [s*.17, .3, .02], [s*.24, .36, -.08], [s*.27, .37, -.21], [s*.24, .31, -.33]], .045, .012, mHorn);   // 後ろへ反る角
+    for (let i = 0; i < 3; i++) bpDir(hd, CONE(.045, .17, 5), mFurD, s*.17, -.02 - i*.03, .02 - i*.05, s*1, -.3, -.3);   // 頬の毛
+  }
+  for (let i = 0; i < 5; i++) bpDir(hd, CONE(.06, .28, 5), mFurD, (i - 2)*.06, .16, -.16, (i - 2)*.25, .5, -1);   // 後頭部の毛
+  bp(hd, SPH(.07, 10, 8), mMouth, 0, -.035, .18, 0, 0, 0, 1, .5, 1.6);   // 口の中
+  const jw = jt('jaw', hd, 0, -.04, .06);
+  bp(jw, CYL(.05, .085, .26, 10), mFur, 0, -.035, .13, Math.PI/2, 0, 0, 1, 1, .55);
+  for (const s of [1, -1]) bp(jw, CONE(.014, .055, 5), mClaw, s*.04, .0, .22);
+  // スタン時の星（頭の上）
+  const stars = new THREE.Group(); stars.position.set(0, .42, 0); hd.add(stars);
+  for (let i = 0; i < 3; i++){ const m = new THREE.Mesh(new THREE.OctahedronGeometry(.07), new THREE.MeshBasicMaterial({ color:0xffd35a })); m.position.set(Math.cos(i*2.09)*.3, 0, Math.sin(i*2.09)*.3); stars.add(m); }
+  stars.visible = false;
+
+  // --- 大剣（片刃の大鉈。刃渡り1.5m）: 握りの中心が右手、刃は手の +Z、刃先(切れる側)は手の -Y ---
+  const bSword = new THREE.Group(); J.wrR.add(bSword); bSword.position.set(0, -.075, .0);
+  { const back = [[-.06, 0], [-.065, 1.28], [-.02, 1.5], [.03, 1.58]], E = [[.105, 0], [.13, .14], [.18, .62], [.205, 1.02], [.15, 1.4], [.03, 1.58]];
+    const shp = new THREE.Shape(); shp.moveTo(...back[0]); for (const p of back.slice(1)) shp.lineTo(...p); for (let i = E.length - 2; i >= 0; i--) shp.lineTo(...E[i]);
+    const ex = (s, d) => { const g = new THREE.ExtrudeGeometry(s, { depth:d, bevelEnabled:true, bevelThickness:.008, bevelSize:.008, bevelSegments:1, curveSegments:4 });
+      g.translate(0, 0, -d/2); g.rotateZ(-Math.PI/2); g.rotateY(-Math.PI/2); g.translate(0, 0, .19); return g; };
+    bp(bSword, ex(shp, .03), mIron);
+    const band = new THREE.Shape(); band.moveTo(...E[0]); for (const p of E.slice(1)) band.lineTo(...p);
+    for (let i = E.length - 2; i >= 0; i--) band.lineTo(E[i][0] - .04, E[i][1] - (i === E.length - 2 ? .03 : 0));
+    bp(bSword, ex(band, .036), mEdge);
+    const ful = new THREE.Shape(); ful.moveTo(-.025, .1); ful.lineTo(-.03, 1.15); ful.lineTo(0, 1.15); ful.lineTo(.01, .1);   // 樋（みぞ）
+    bp(bSword, ex(ful, .04), mFurD);
+  }
+  bp(bSword, new THREE.BoxGeometry(.09, .44, .08), mBronze, 0, -.04, .15);              // 鍔
+  for (const s of [1, -1]) bpDir(bSword, CONE(.035, .12, 6), mBronze, 0, s*.26 - .04, .15, 0, s, .3);
+  bp(bSword, CYL(.034, .03, .3, 10), mGrip, 0, 0, -.0, Math.PI/2, 0, 0);                // 柄
+  bp(bSword, SPH(.05, 10, 8), mBronze, 0, 0, -.17);                                       // 柄頭
+  const bladeBase = new THREE.Vector3(0, 0, .3), bladeTip = new THREE.Vector3(0, -.07, 1.72);   // 軌跡用（剣のローカル座標）
+  // 描画を軽くするため、同じ関節・同じ材質の部品を1つにまとめる（160個 → 約50個）
+  (function bossMerge(){
+    const groups = []; bossG.traverse(o => { if (!o.isMesh) groups.push(o); });
+    for (const g of groups){
+      const by = new Map();
+      for (const c of g.children) if (c.isMesh){ if (!by.has(c.material)) by.set(c.material, []); by.get(c.material).push(c); }
+      for (const [mat, list] of by){
+        if (list.length < 2) continue;
+        const P = [], N = [];
+        for (const m of list){
+          m.updateMatrix(); let geo = m.geometry.clone().applyMatrix4(m.matrix); if (geo.index) geo = geo.toNonIndexed();
+          P.push(geo.attributes.position.array); N.push(geo.attributes.normal.array); g.remove(m);
+        }
+        const cat = A => { const out = new Float32Array(A.reduce((s, a) => s + a.length, 0)); let o = 0; for (const a of A){ out.set(a, o); o += a.length; } return out; };
+        const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(cat(P), 3)); geo.setAttribute('normal', new THREE.BufferAttribute(cat(N), 3));
+        g.add(new THREE.Mesh(geo, mat));
+      }
+    }
+  })();
+
+  J.thL.rotation.order = J.thR.rotation.order = 'ZXY';   // （ゲームの「姿勢」の最初の行）
+  return { bossG, bossBody, J, BM, mEye, stars };
+}
+function specBuildSlime(scene){
+  let R;
+  // ===== ボス：ジャイアントスライム =====
+  const bossG = new THREE.Group(); scene.add(bossG);
+  const bGeo = new THREE.SphereGeometry(1, 40, 28), bBase = bGeo.attributes.position.array.slice();
+  const bMat = new THREE.MeshStandardMaterial({ color:0x5fe07a, roughness:.12, transparent:true, opacity:.86, emissive:0x0a3a18 });
+  bossG.add(new THREE.Mesh(bGeo, bMat));
+  const core = new THREE.Mesh(new THREE.SphereGeometry(.32, 16, 12), new THREE.MeshStandardMaterial({ color:0x1d9a44, emissive:0x0a5a20 }));
+  core.position.set(0, -.1, -.1); bossG.add(core);
+  const eyes = [], pupils = [];
+  for (const s of [-1, 1]){
+    const w = new THREE.Mesh(new THREE.SphereGeometry(.15, 12, 10), new THREE.MeshBasicMaterial({ color:0xffffff }));
+    w.position.set(s*.33, .22, .86);
+    const p = new THREE.Mesh(new THREE.SphereGeometry(.07, 10, 8), new THREE.MeshBasicMaterial({ color:0x111111 }));
+    p.position.set(0, 0, .12); w.add(p); bossG.add(w); eyes.push(w); pupils.push(p);
+  }
+  const stars = new THREE.Group(); stars.position.y = 1.35; bossG.add(stars);
+  for (let i = 0; i < 3; i++){ const m = new THREE.Mesh(new THREE.SphereGeometry(.12, 8, 6), new THREE.MeshBasicMaterial({ color:0xffd35a })); m.position.set(Math.cos(i*2.09)*.6, 0, Math.sin(i*2.09)*.6); stars.add(m); }
+  function jiggle(t, amp){
+    const p = bGeo.attributes.position.array;
+    for (let i = 0; i < p.length; i += 3){
+      const x = bBase[i], y = bBase[i+1], z = bBase[i+2], k = 1 + amp*Math.sin(t*7 + x*4 + y*3)*Math.cos(t*5 + z*4);
+      p[i] = x*k; p[i+1] = y*k; p[i+2] = z*k;
+    }
+    bGeo.attributes.position.needsUpdate = true; bGeo.computeVertexNormals();
+  }
+  return { bossG, bMat, eyes, pupils, stars, jiggle };
+}
+function specModel(kind){
+  if (!SPEC.models[kind]){
+    const m = SPEC.models[kind] = kind === 'volgram' ? specBuildVolgram(SPEC.scene) : specBuildSlime(SPEC.scene);
+    m.bossG.matrixAutoUpdate = false; m.keys = m.J ? Object.keys(m.J) : null;
+  }
+  return SPEC.models[kind];
+}
+function specInit(){
+  if (SPEC.renderer) return;
+  const cv = $('specCv');
+  SPEC.renderer = new THREE.WebGLRenderer({ canvas:cv, antialias:true });
+  SPEC.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  SPEC.scene = new THREE.Scene(); SPEC.scene.background = new THREE.Color(0x0b1622);
+  SPEC.scene.add(new THREE.HemisphereLight(0xcfeaff, 0x203020, 1.0));
+  const sun = new THREE.DirectionalLight(0xffffff, .9); sun.position.set(3, 8, 4); SPEC.scene.add(sun);
+  SPEC.cam = new THREE.PerspectiveCamera(45, 16/9, .05, 200); SPEC.cam.matrixAutoUpdate = false;
+  // 足元の影（床にぼんやり）
+  const sc = document.createElement('canvas'); sc.width = sc.height = 128;
+  { const x = sc.getContext('2d'), g = x.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(0,0,0,.55)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 128, 128); }
+  SPEC.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map:new THREE.CanvasTexture(sc), transparent:true, depthWrite:false }));
+  SPEC.shadow.rotation.x = -Math.PI/2; SPEC.scene.add(SPEC.shadow);
+  // 攻撃範囲の帯（ゲームの lane と同じ1×1の板。行列はゲームから届く）
+  SPEC.lane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color:0xff3a4a, transparent:true, opacity:.3, depthWrite:false }));
+  SPEC.lane.matrixAutoUpdate = false; SPEC.lane.visible = false; SPEC.scene.add(SPEC.lane);
+}
+// ---- ゲームから届いた状態をためる（少し遅らせて、2つの間をなめらかにつなぐ）----
+function specIn(m){
+  SPEC.buf.push({ t:performance.now(), m }); if (SPEC.buf.length > 12) SPEC.buf.shift();
+  SPEC.last = performance.now(); SPEC.kind = m.kind;
+}
+const _pa = new THREE.Vector3(), _pb = new THREE.Vector3(), _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _sa = new THREE.Vector3(), _sb = new THREE.Vector3(), _ma = new THREE.Matrix4(), _mb = new THREE.Matrix4();
+function lerpMat(out, A, B, k){
+  _ma.fromArray(A).decompose(_pa, _qa, _sa); _mb.fromArray(B).decompose(_pb, _qb, _sb);
+  return out.compose(_pa.lerp(_pb, k), _qa.slerp(_qb, k), _sa.lerp(_sb, k));
+}
+const lerpArr = (A, B, k) => A.map((v, i) => v + ((B && B[i] !== undefined ? B[i] : v) - v)*k);
+function specSample(){
+  const b = SPEC.buf; if (!b.length) return null;
+  const T = performance.now() - 80;   // 80ms 遅らせて、前後2つの間を補う
+  let i = b.length - 1; while (i > 0 && b[i - 1].t > T) i--;
+  const a = b[Math.max(0, i - 1)], c = b[i];
+  if (a === c || c.t <= a.t) return { a:c.m, b:c.m, k:0 };
+  return { a:a.m, b:c.m, k:Math.max(0, Math.min(1, (T - a.t)/(c.t - a.t))) };
+}
+// ---- 毎フレーム ----
+function specFrame(){
+  if (!$('specOn').checked){ $('specBox').style.display = 'none'; return; }
+  $('specBox').style.display = '';
+  specInit();
+  const v = cams.m.vid, live = !!(v.videoWidth && cams.m.stream);
+  // 映像（背景）
+  if (live && (!SPEC.bgTex || SPEC.bgTex.image !== v)){ SPEC.bgTex = new THREE.VideoTexture(v); SPEC.scene.background = SPEC.bgTex; }
+  if (!live && SPEC.bgTex){ SPEC.bgTex = null; SPEC.scene.background = new THREE.Color(0x0b1622); }
+  // 大きさ：映像と同じ縦横比（全画面の時は画面に収める）
+  const vw = live ? v.videoWidth : (bc.vw || 1280), vh = live ? v.videoHeight : (bc.vh || 720), box = $('specBox'), cv = $('specCv');
+  const fs = document.fullscreenElement === box, BW = box.clientWidth, BH = fs ? box.clientHeight : BW*vh/vw;
+  let cw = BW, ch = BW*vh/vw; if (ch > BH){ ch = BH; cw = BH*vw/vh; }
+  const key = [cw|0, ch|0, fs].join();
+  if (key !== SPEC.fsk){ SPEC.fsk = key; SPEC.renderer.setSize(cw, ch, false); cv.style.width = cw + 'px'; cv.style.height = ch + 'px'; if (!fs) box.style.height = ''; }
+  // 3Dカメラ = メインカメラ
+  if (!bc.ok){ $('specSt').textContent = '⚠ キャリブレーションを読み込むと表示されます'; SPEC.renderer.render(SPEC.scene, SPEC.cam); return; }
+  const f = (vw/2)/Math.tan(bc.hfov*Math.PI/360);
+  SPEC.cam.fov = 2*Math.atan((vh/2)/f)*180/Math.PI; SPEC.cam.aspect = vw/vh; SPEC.cam.updateProjectionMatrix();
+  SPEC.cam.matrix.copy(bc.FfromCam); SPEC.cam.updateMatrixWorld(true);
+  // ボスの状態
+  const now = performance.now(), fresh = now - SPEC.last < 1500, smp = fresh ? specSample() : null;
+  const want = $('specKind').value === 'auto' ? SPEC.kind : $('specKind').value;
+  for (const k of Object.keys(SPEC.models)) SPEC.models[k].bossG.visible = false;
+  const M = specModel(want), t = now/1000;
+  let hp = 1, name = want === 'volgram' ? '灰牙の獣王 ヴォルグラム' : 'ジャイアントスライム', label = '', bx = 0, bz = 0, size = 1;
+  if (smp && smp.b.kind === want){
+    const A = smp.a.kind === want ? smp.a : smp.b, Bm = smp.b, k = smp.k;
+    lerpMat(M.bossG.matrix, A.M, Bm.M, k); M.bossG.visible = Bm.v; M.bossG.matrixWorldNeedsUpdate = true;
+    if (M.J){
+      const bd = lerpArr(A.body, Bm.body, k), b = M.bossBody; b.position.set(bd[0], bd[1], bd[2]); b.rotation.set(bd[3], bd[4], bd[5]); b.scale.setScalar(bd[6]);
+      M.keys.forEach((key, i) => { const ja = A.J[i], jb = Bm.J[i]; if (!ja) return; const j = M.J[key], q = lerpArr(ja, jb, k); j.position.set(q[0], q[1], q[2]); j.rotation.set(q[3], q[4], q[5]); });
+      M.BM.forEach((o, i) => { if (Bm.em[i] !== undefined) o.m.emissive.setHex(Bm.em[i]); }); M.mEye.color.setHex(Bm.eye);
+    } else {
+      M.bMat.emissive.setHex(Bm.em); for (const e of M.eyes) e.material.color.setHex(Bm.eye); for (const p of M.pupils) p.visible = Bm.pup !== false;
+      M.jiggle(t, Bm.stars ? .08 : .04);
+    }
+    M.stars.visible = !!Bm.stars; M.stars.rotation.y += .08;
+    hp = Bm.hp; name = Bm.name || name;
+    label = { wind:Bm.unp ? 'パリィ不可！' : '予兆！', charge:'突進！', knock:Bm.stars ? 'スタン' : '', dead:'撃破！' }[Bm.s] || '';
+    if (Bm.lane && $('specLane').checked){ SPEC.lane.matrix.fromArray(Bm.lane.M); SPEC.lane.matrixWorldNeedsUpdate = true; SPEC.lane.material.color.setHex(Bm.lane.c); SPEC.lane.material.opacity = Bm.lane.o; SPEC.lane.visible = true; }
+    else SPEC.lane.visible = false;
+    $('specSt').textContent = '✅ ゲームから受信中（' + name + '）';
+  } else {
+    // 届いていない時：中継ページで決めたボスの位置に、待機中のボスを置く（位置合わせの確認用）
+    const C = bc.bossC, o = bc.origin, yaw = Math.atan2(o.x - C.x, o.z - C.z);
+    if (M.J){ M.bossG.matrix.compose(_pa.set(C.x, 0, C.z), _qa.setFromAxisAngle(_up0, yaw), _sa.set(1, 1, 1)); }
+    else {
+      const sy = 1 + .05*Math.sin(t*3), sx = 1/Math.sqrt(sy);
+      M.bossG.matrix.compose(_pa.set(C.x, R_BOSS*sy, C.z), _qa.setFromAxisAngle(_up0, yaw), _sa.set(R_BOSS*sx, R_BOSS*sy, R_BOSS*sx));
+      M.bMat.emissive.setHex(0x0a3a18); for (const e of M.eyes) e.material.color.setHex(0xffffff); M.jiggle(t, .04);
+    }
+    M.bossG.visible = true; M.bossG.matrixWorldNeedsUpdate = true; M.stars.visible = false; SPEC.lane.visible = false;
+    $('specSt').textContent = SPEC.last ? '⚠ ゲームからの受信が止まっています（待機中のボスを表示）' : 'スマホのゲーム（部屋モード）から届くと動きます。今は決めた位置に待機中のボスを表示しています';
+  }
+  // 影：ボスの足元
+  M.bossG.matrix.decompose(_pb, _qb, _sb);
+  bx = _pb.x; bz = _pb.z; size = M.J ? 1.6 : Math.max(_sb.x, _sb.z)*2.4;
+  SPEC.shadow.position.set(bx, .015, bz); SPEC.shadow.scale.set(size, size, 1); SPEC.shadow.visible = M.bossG.visible;
+  // HP・状態の表示
+  $('specHudEl').style.display = $('specHud').checked ? '' : 'none';
+  $('specName').textContent = name; $('specHpBar').style.width = (hp*100).toFixed(1) + '%';
+  $('specLabel').textContent = label; $('specLabel').style.color = label === 'パリィ不可！' ? '#c06bff' : label === 'スタン' ? '#ffd35a' : '#ff4d5e';
+  SPEC.renderer.render(SPEC.scene, SPEC.cam);
+}
+const _up0 = new THREE.Vector3(0, 1, 0);
+$('specFull').onclick = () => { const b = $('specBox'); if (document.fullscreenElement) document.exitFullscreen(); else b.requestFullscreen().catch(() => {}); };
+document.addEventListener('fullscreenchange', () => { SPEC.fsk = ''; });
+try { const v = localStorage.getItem('rq_spec_on'); if (v === '0') $('specOn').checked = false; } catch (e){}
+$('specOn').onchange = e => { try { localStorage.setItem('rq_spec_on', e.target.checked ? '1' : '0'); } catch (er){} };
+
 function loop(){
   requestAnimationFrame(loop);
   camStep('m'); camStep('s'); drawMap();
+  try { specFrame(); } catch (e){ console.error(e); }
   const ok = feet.p && performance.now() - feet.t < 500;
   $('feetV').textContent = ok ? `x ${feet.p.x.toFixed(2)}  z ${feet.p.z.toFixed(2)} m` : '—'; $('srcV').textContent = ok ? feet.src : '-';
   if (!ok && performance.now() - feet.none > 300){ feet.none = performance.now(); send({ t:'feet', ok:false }); }
 }
 requestAnimationFrame(loop);
-window._hub = { bc, dual, rayM, obsFrom, camMat, fuse, cams, feet, loadCal };   // デバッグ用
+window._hub = { bc, dual, rayM, obsFrom, camMat, fuse, cams, feet, loadCal, SPEC }; window._specIn = specIn;   // デバッグ用
 loadCal();
 startPeer();
 </script>
