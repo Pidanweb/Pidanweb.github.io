@@ -1347,15 +1347,18 @@ function render(){
   camera.fov = (head.on ? head.fov : 70) - fovp; const bx = camera.position.x;
   if (!vr){ view(0, 0, W, H); camera.aspect = W/H; camera.updateProjectionMatrix(); cover(W/H); renderer.render(scene, camera); }
   else {
-    // ゴーグル: YouTube の VR 表示と同じく、画面を左右半分ずつ使い、円の窓（common/goggle-lens.js）で切り抜く
-    const sep = W/2, vw = W/2, vh = H, LK = head.on && window.RQ_LENS_K || 1;
+    // ゴーグル: YouTube（Cardboard）と同じく、片目の映像の中心をレンズの中心（実際の mm で計算）に置き、円の窓で切り抜く
+    // 投影の中心がレンズの中心と一致するので、左右の映像がきれいに重なる（common/goggle-lens.js）
+    const vw = W/2, vh = H, LK = head.on && window.RQ_LENS_K || 1;
+    { const cc = renderer.getClearColor(new THREE.Color()), ca = renderer.getClearAlpha(); view(0, 0, W, H); renderer.setClearColor(0x000000, 1); renderer.clear(); renderer.setClearColor(cc, ca); }   // 映像の外側を黒に
     const hs = hud.scale.clone(), ms = msg.scale.clone();   // 画面に付く表示（HUD・メッセージ）を円の中に収まるよう縮める
     hud.scale.set(hs.x*LK, hs.y*LK, hs.z); msg.scale.set(ms.x*LK, ms.y*LK, ms.z);
     camera.aspect = vw/vh; camera.updateProjectionMatrix(); cover(vw/vh);
     const p0 = camera.position.clone(), rgt = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);   // 目の間隔は頭の向きの「右」方向に
     for (const e of [-1, 1]){
       camera.position.copy(p0).addScaledVector(rgt, e*head.ipd); camera.updateMatrixWorld();
-      view(Math.round(W/2 + e*sep/2 - vw/2), Math.round((H - vh)/2), Math.round(vw), Math.round(vh)); renderer.render(scene, camera);
+      if (window.rqEyeView) rqEyeView(renderer, e, W, H, vw, vh); else view(Math.round(W/2 + e*W/4 - vw/2), 0, Math.round(vw), Math.round(vh));
+      renderer.render(scene, camera);
     }
     camera.position.copy(p0); camera.updateMatrixWorld();
     hud.scale.copy(hs); msg.scale.copy(ms);
