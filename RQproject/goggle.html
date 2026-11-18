@@ -51,6 +51,12 @@ html,body{margin:0;height:100%;overflow:hidden;background:#000;color:#f4f8ff;fon
 label.sl{display:block;margin-top:12px;font-size:13px;color:var(--ice)}
 label.sl input{width:100%}
 label.sl b{color:#fff}
+.cal{margin-top:14px;padding:10px 12px;border:1px solid var(--line);background:rgba(4,10,20,.5)}
+.calT{font-size:14px;color:var(--ice);font-weight:700}
+#calBar{position:relative;height:34px;margin:10px 0 4px;background:linear-gradient(90deg,#ff9a3c,#ffc078);color:#1a0d00;font-size:11px;display:flex;align-items:center;padding-left:8px;white-space:nowrap;overflow:hidden}
+#calBar::after{content:"";position:absolute;right:0;top:-6px;bottom:-6px;width:2px;background:#fff}
+.cal input[type=range]{width:100%}
+.cal select{font:14px "Noto Sans JP",sans-serif;background:#0a1424;color:#fff;border:1px solid var(--line);padding:4px}
 small{display:block;color:var(--sub);font-size:12px;line-height:1.6;margin-top:4px}
 .btns{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
 button{font:500 15px "Noto Sans JP",sans-serif;color:#fff;background:#0d2238;border:1px solid var(--line);padding:10px 16px;cursor:pointer}
@@ -70,8 +76,8 @@ body.unsup .note{display:block}
 <body>
 <div id="stage"><iframe id="L" title="ページ（左目）" allow="camera; microphone; autoplay; hid; accelerometer; gyroscope; magnetometer; screen-wake-lock"></iframe><iframe id="R" title="複製（右目）" tabindex="-1" aria-hidden="true" src="about:blank"></iframe></div>
 <button id="gear" title="設定">⚙</button>
-<div class="note" style="left:25%">このページはゴーグル表示に対応していません<br>Wiiの HOME でロビーへ戻ります</div>
-<div class="note" style="left:75%">このページはゴーグル表示に対応していません<br>Wiiの HOME でロビーへ戻ります</div>
+<div class="note" data-eye="0" style="left:25%">このページはゴーグル表示に対応していません<br>Wiiの HOME でロビーへ戻ります</div>
+<div class="note" data-eye="1" style="left:75%">このページはゴーグル表示に対応していません<br>Wiiの HOME でロビーへ戻ります</div>
 
 <div id="panel">
   <div class="box">
@@ -81,7 +87,17 @@ body.unsup .note{display:block}
     <div class="row">PC中継のコード <input type="text" id="code" inputmode="numeric" maxlength="6" placeholder="000000"></div>
     <small>PC中継の画面に出ている6桁。空のままでも始められます（そのときはWiiリモコンが使えません）。</small>
     <label class="sl">メニューの文字の大きさ <b id="uiV">50</b>%<input type="range" id="ui" min="30" max="100" step="1" value="50"></label>
-    <small>画面はYouTubeのVR表示と同じく、左右それぞれ円の窓で表示します（間隔・大きさの調整は不要です）。</small>
+    <small>画面はYouTubeのVR表示と同じく、左右それぞれ円の窓で、映像の中心をレンズの中心に合わせて表示します。</small>
+    <div class="cal">
+      <div class="calT">📏 画面の大きさ合わせ（最初の1回だけ）</div>
+      <small>左右の映像をレンズの位置にぴったり置くために、スマホの画面の実際の大きさを測ります。<br>
+        クレジットカード・交通系ICカード・キャッシュカードなど（縦 54mm）の<b>短い辺</b>を下の帯に当てて、帯の長さがカードと同じになるようにスライダーを動かしてください。</small>
+      <div id="calBar"><span>カードの短い辺（54mm）</span></div>
+      <input type="range" id="pxmm" min="4.5" max="8" step=".01">
+      <div class="row" style="margin-top:6px">ゴーグルのレンズの間隔
+        <select id="lensmm"><option value="58">58mm</option><option value="60">60mm</option><option value="62">62mm</option><option value="63.9">63.9mm（標準・Cardboard）</option><option value="66">66mm</option><option value="68">68mm</option><option value="70">70mm</option></select></div>
+      <small>ふつうは「標準」のまま。ゴーグルの中で左右がまだ二重に見える時だけ、ゴーグルのレンズの中心どうしの長さを測って選んでください（二重に見える時は小さめにすると重なりやすい）。</small>
+    </div>
     <div class="row"><label><input type="checkbox" id="pass" checked> 背景にカメラ映像（周りが見える）</label></div>
     <div class="row"><label><input type="checkbox" id="log"> ゲーム中に判定ログを表示する</label></div>
     <small>ふだんはOFFでOK（調整・不具合の確認用）。ゲーム中も Wii の HOME → メニューで切り替えられます。</small>
@@ -115,6 +131,11 @@ function loadS(){
 }
 loadS();
 $('ui').oninput = e => { S.ui = +e.target.value/100; $('uiV').textContent = e.target.value; ls.set('rq_goggle_ui', e.target.value); layout(); };
+// 画面の大きさ合わせ（mm → 画面の点）とレンズの間隔。値は goggle-lens.js が読む（ゲームと共通）
+function calUI(){ $('pxmm').value = rqPxPerMM(); $('calBar').style.width = (53.98*rqPxPerMM()) + 'px'; $('lensmm').value = String(rqLensMM()); }
+$('pxmm').oninput = e => { ls.set('rq_px_mm', e.target.value); calUI(); layout(); rqLensLayout(); };
+$('lensmm').onchange = e => { ls.set('rq_lens_mm', e.target.value); layout(); rqLensLayout(); };
+calUI();
 $('log').checked = ls.get('rq_show_log') === '1';
 $('log').onchange = e => ls.set('rq_show_log', e.target.checked ? '1' : '0');
 $('pass').onchange = e => { S.pass = e.target.checked; ls.set('rq_goggle_pass', S.pass ? '1' : '0'); if (!S.pass) camStop(); };
