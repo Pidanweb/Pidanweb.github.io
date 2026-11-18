@@ -123,7 +123,7 @@
     <label>突きの最大速度 <b id="skTPV">800</b>°/s<input type="range" id="skTP" min="300" max="1500" step="50" value="800"></label>
     <small style="display:block;margin-top:6px;color:#ffd35a">▼ 反応しない時: その動きを1回だけ行い、直後に押す（キー1〜4）。直近の斬りを基準にしきい値を自動設定</small>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px"><button id="skL1">①縦重撃を登録</button><button id="skL2">②突きを登録</button><button id="skL3">③横重撃を登録</button><button id="skL4">④一回転を登録</button></div>
-    <label><input type="checkbox" id="skDbg" checked> 判定ログを表示</label>
+    <label><input type="checkbox" id="skDbg"> 判定ログを表示（ゴーグル中は画面の下に出ます）</label>
     <small style="display:block;margin-top:6px">バーチカル:縦→横 / ヴォーパル:突き / ソニックリープ:縦重 / ロータス:横重 / スクエア:縦横縦横 / メテオ:一回転 / スターバースト:被ダメ0で16ヒット→READY→振る / マザーズ・ロザリオ:ヴォーパルストライク11回成功→READY→突く</small>
     <button id="skCal" style="margin-top:6px;width:100%">ジャイロ再キャリブ（−ボタンでも可）</button>
     <details id="hidMenu" style="margin-top:8px"><summary>🔒 隠しコマンド / 二刀流</summary>
@@ -1803,7 +1803,7 @@ function titleMsg(){
           ['顔を動かして狙う　C:中心リセット　V:VR　F:視点操作ON/OFF　M:メニュー', '#7ae7ff', 24],
           (() => { const sc = savedCal(); return sc.b ? [`📐 保存したキャリブレーションを使います（${sc.d ? '2台' : '1台'}）${savedAt(sc.b)}`, '#5fe07a', 24]
                                                    : ['📐 キャリブレーション未設定 → メニュー(M) → カメラ → キャリブレーションのページ', '#ffb35a', 22]; })(),
-          ['クリックでスタート（Webカメラを使います）', '#7ae7ff', 34]]);
+          ['クリック / Ⓐ でスタート（Webカメラを使います）', '#7ae7ff', 34]]);
 }
 titleMsg();
 
@@ -1875,7 +1875,7 @@ function hurtPlayer(mult = 1){
   burst(rig.localToWorld(new THREE.Vector3(0, 0, -2)), 0xff4d5e, 60, 8);   // ボスはそのまま剣を振り抜く（硬直へ）
   if (P.hp <= 0){
     P.hp = 0; state = 'over'; bgmStop(); endAt = performance.now();
-    setMsg([['GAME OVER', '#ff4d5e', 80], [`ヴォルグラムの残りHP ${Math.ceil(B.hp)}`, '#fff', 34], ['クリックでリトライ', '#7ae7ff', 32]]);
+    setMsg([['GAME OVER', '#ff4d5e', 80], [`ヴォルグラムの残りHP ${Math.ceil(B.hp)}`, '#fff', 34], ['クリック / Ⓐ でリトライ', '#7ae7ff', 32]]);
   }
 }
 
@@ -2026,7 +2026,7 @@ function bossAnim(dt){
       B.shattered = true; bossG.visible = false; zoneG.visible = false;
       burst(bossCtr, 0x4d5566, 160, 11); burst(bossCtr, 0xffd35a, 120, 13); burst(bossCtr, 0x7ae7ff, 90, 9);
       ring(bossCtr, 9, 0xffd35a, .8); ring(bossCtr, 5, 0xffffff, .5); shake = .7; playThud(1);
-      if (state === 'win') setMsg([['VICTORY!', '#ffd35a', 80], ['灰牙の獣王ヴォルグラムを倒した', '#fff', 34], ['クリックでもう一度', '#7ae7ff', 32]]);
+      if (state === 'win') setMsg([['VICTORY!', '#ffd35a', 80], ['灰牙の獣王ヴォルグラムを倒した', '#fff', 34], ['クリック / Ⓐ でもう一度', '#7ae7ff', 32]]);
     }
   } else {
     tgt = bpMix(BP.idle, BP.idle, 0);
@@ -2235,7 +2235,7 @@ function update(dt){
 
 function view(x, y, w, h){ renderer.setViewport(x, y, w, h); renderer.setScissor(x, y, w, h); }
 function render(){
-  if (window.rqLens) rqLens(vr && !menuOn);   // 円の窓（ゴーグルの2画面の時だけ。メニューを開いている間は外す）
+  if (window.rqLens) rqLens(vr && (!menuOn || window.RQ_GMENU_OPEN));   // 円の窓（ゴーグルの2画面の時だけ。☰メニューを開いている間は外す）
   camera.fov = head.on ? head.fov : glass.on && tp ? glassVFov(vr ? W/2/H : W/H) : bcARActive() ? bcFov() : 70 - fovp; const bx = camera.position.x;
   if (!vr){ view(0, 0, W, H); camera.aspect = W/H; camera.updateProjectionMatrix(); cover(W/H); renderer.render(scene, camera); }
   else {
@@ -2380,7 +2380,7 @@ function onWii(e){
 // ===== ソードスキル（MotionPlusのジャイロで 縦斬り→横斬り を判定）=====
 // ジャイロ積分で「上向きベクトル」を追い、角速度を 水平軸まわり(=縦斬り成分) と 鉛直軸まわり(=横斬り成分) に分解する。
 // 握りが回っても縦/横を判定できる（センサー軸 yaw/roll/pitch は縦横に一対一対応しないため）。
-const sk = { on:true, win:1.5, sqWin:1.1, rB:.18, rA:.30, minPk:600, mult:5, dbg:true, st:0, last:null, armedAt:0, lastHead:'',
+const sk = { on:true, win:1.5, sqWin:1.1, rB:.18, rA:.30, minPk:600, mult:5, dbg:(() => { try { return localStorage.getItem('rq_show_log') === '1'; } catch (e){ return false; } })(), st:0, last:null, armedAt:0, lastHead:'',
              heavyV:650, heavyH:260, spin:360, thrustA:4.0, thrustRot:150, thrustPk:800, lastR:null,
              hid:true, exHold:1.0, chMin:.8, preGap:.8, zanA:1.3, zanN:4, zanKill:.3, lrSign:-1, tipFlip:true, dual:true, pass:true, nunTh:1.8, dualSim:.65 };
 const GY = { SLOW:440/8192, FAST:2000/440, PRE:120, HOLD:150, MAXSW:1500, CAL_MS:1000, CAL_STD:80, UP_GAIN:.03, UP_TOL:.15 };
@@ -2633,7 +2633,7 @@ function skHead(){
     + ` / ヌンチャク:${nunOn() ? '二刀流' : wii.nun.ext ? '接続(併用モードOFF?)' : 'なし'}` : '';
   return t + (sk.on ? '' : '（スキルOFF）') + hid + (!sbOK() ? '' : sb.ready ? ' / STARBURST READY' : sb.n ? ' / CHAIN ' + sb.n + '/16' : '') + (mr.ready ? ' / ROSARIO READY' : mr.n ? ' / ROSARIO ' + mr.n + '/11' : '');
 }
-function dbgDraw(){ const el = $('wiiDbg'); el.style.display = sk.dbg && !glass.on ? '' : 'none'; if (sk.dbg) el.textContent = (sk.lastHead = skHead()) + '\n' + dbgLines.join('\n'); }
+function dbgDraw(){ const el = $('wiiDbg'); el.style.display = sk.dbg && !glass.on && !head.on ? '' : 'none'; if (sk.dbg) el.textContent = (sk.lastHead = skHead()) + '\n' + dbgLines.join('\n'); }
 function skTick(){
   const so = sbOK(); if (so !== sk.sbShown){ sk.sbShown = so; sbDraw(); }
   if (sk.st && !wii.mp.sw && performance.now() - sk.armedAt > sk.win*1000 + 100) sk.st = 0;
@@ -2870,7 +2870,8 @@ $('skHid').onchange = e => { sk.hid = e.target.checked; dbgDraw(); };
 $('skDual').onchange = e => { sk.dual = e.target.checked; };
 $('skPass').onchange = e => { sk.pass = e.target.checked; if (wii.dev) wiiEnableMP(); };
 $('skOn').onchange = e => { sk.on = e.target.checked; dbgDraw(); };
-$('skDbg').onchange = e => { sk.dbg = e.target.checked; dbgDraw(); };
+$('skDbg').checked = sk.dbg;
+$('skDbg').onchange = e => { sk.dbg = e.target.checked; try { localStorage.setItem('rq_show_log', sk.dbg ? '1' : '0'); } catch (er){} dbgDraw(); };   // ゴーグル中のメニュー（HOME）からも切り替えられる
 $('skCal').onclick = wiiRecal;
 dbgDraw();
 
@@ -3097,7 +3098,10 @@ function relayData(m){
 }
 function gogStatUpdate(){
   const els = document.querySelectorAll('.gogStat'), m = wii.mp;
-  const t = !head.on ? '' : (wii.dev ? skHead() : 'Wii未接続（PC中継でつないで）') + (m.state === 'cal' ? '\n⚠ リモコンを机に置いて静止' : '') + (dbgLines.length ? '\n' + dbgLines[dbgLines.length - 1].replace(/^[\d.]+ /, '') : '');
+  // ふだんは困った時の注意だけ出す。ログ表示（設定・ゴーグル中のメニュー）が ON の時だけ、状態と最新の判定ログも出す
+  const warn = [!wii.dev ? 'Wii未接続（PC中継でつないで）' : '', m.state === 'cal' ? '⚠ リモコンを机に置いて静止' : ''].filter(Boolean);
+  const log = sk.dbg && wii.dev ? [skHead(), dbgLines.length ? dbgLines[dbgLines.length - 1].replace(/^[\d.]+ /, '') : ''].filter(Boolean) : [];
+  const t = !head.on ? '' : warn.concat(log).join('\n');
   for (const el of els){ el.style.display = t ? 'block' : 'none'; if (el.textContent !== t) el.textContent = t; }
 }
 function relayStep(){
@@ -3107,7 +3111,7 @@ function relayStep(){
   $('roomStat').textContent = on ? `部屋モード: ON ✅ ボス ${(-HOVER).toFixed(1)}m 先・足 ${bcFeetOK() ? 'OK' : '見えていない'}` : '部屋モード: 読み込み中…（ゴーグルを開始すると読み込みます）';
   if (on && relay.boss && relay.bossDone !== relay.boss){ relay.bossDone = relay.boss; setBossXZ(relay.boss.x, relay.boss.z); }   // 中継ページで決めたボスの位置
   const now = performance.now();
-  if (head.on && on && !bcFeetOK() && now - (relay.warnT || 0) > 4000){ relay.warnT = now; popCam('PC: 足が見えていません（立って両方のカメラに全身を）', '#ff4d5e', .5, 2); }
+  if (head.on && on && !bcFeetOK() && window.RQLog && RQLog.on() && now - (relay.warnT || 0) > 4000){   /* ログ表示が ON の時だけ */ relay.warnT = now; popCam('PC: 足が見えていません（立って両方のカメラに全身を）', '#ff4d5e', .5, 2); }
 }
 $('rlGo').onclick = () => relayConnect($('rlCode').value);
 try { const c = localStorage.getItem('rqgun_code'); if (c) $('rlCode').value = c; } catch (e){}
@@ -3124,7 +3128,9 @@ requestAnimationFrame(loop);
 // タイトル画面(parytitle.html)から ?start=1 で来たら自動スタート
 if (/[?&]start=1/.test(location.search)) setTimeout(() => dispatchEvent(new MouseEvent('mousedown', { button:0, clientX:innerWidth/2, clientY:innerHeight/2 })), 500);
 </script>
+<script src="../common/boss-intro.js"></script>   <!-- ボス登場の演出（警報 → BOSS BATTLE の帯。その後は本来の登場）-->
 <script src="../common/goggle-lens.js"></script>   <!-- ゴーグルの円の窓 -->
+<script src="../common/goggle-menu.js"></script>   <!-- ゴーグル中のメニュー（Wii の HOME）・ログ表示の設定 -->
 <script src="../common/goggle-game.js"></script>   <!-- goggle.html の中で開かれた時だけ、自動でゴーグル表示へ -->
 </body>
 </html>
