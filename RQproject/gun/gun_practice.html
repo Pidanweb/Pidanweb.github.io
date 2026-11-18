@@ -876,7 +876,7 @@ function hurtBoss(d, at, big, small){
   if (B.hp <= 0){
     B.hp = 0; B.s = 'dead'; state = 'win'; bgmStop(); endAt = performance.now(); bossG.visible = false; lane.visible = false;
     burst(bossG.position, 0x5fe07a, 200, 12); ring(bossG.position, 8, 0x5fe07a, .8); shake = .6;
-    setMsg([['VICTORY!', '#ffd35a', 80], ['ジャイアントスライムを倒した', '#fff', 34], ['クリックでもう一度', '#7ae7ff', 32]]);
+    setMsg([['VICTORY!', '#ffd35a', 80], ['ジャイアントスライムを倒した', '#fff', 34], ['クリック / Ⓐ でもう一度', '#7ae7ff', 32]]);
   }
 }
 
@@ -1126,7 +1126,7 @@ function hurtPlayer(mult = 1){
   B.s = 'knock'; B.stun = false; B.t = 1.2; B.vz = -10;
   if (P.hp <= 0){
     P.hp = 0; state = 'over'; bgmStop(); endAt = performance.now();
-    setMsg([['GAME OVER', '#ff4d5e', 80], [`スライムの残りHP ${Math.ceil(B.hp)}`, '#fff', 34], ['クリックでリトライ', '#7ae7ff', 32]]);
+    setMsg([['GAME OVER', '#ff4d5e', 80], [`スライムの残りHP ${Math.ceil(B.hp)}`, '#fff', 34], ['クリック / Ⓐ でリトライ', '#7ae7ff', 32]]);
   }
 }
 
@@ -1343,7 +1343,7 @@ function update(dt){
 
 function view(x, y, w, h){ renderer.setViewport(x, y, w, h); renderer.setScissor(x, y, w, h); }
 function render(){
-  if (window.rqLens) rqLens(vr && !menuOn);   // 円の窓（ゴーグルの2画面の時だけ。メニューを開いている間は外す）
+  if (window.rqLens) rqLens(vr && (!menuOn || window.RQ_GMENU_OPEN));   // 円の窓（ゴーグルの2画面の時だけ。☰メニューを開いている間は外す）
   camera.fov = (head.on ? head.fov : 70) - fovp; const bx = camera.position.x;
   if (!vr){ view(0, 0, W, H); camera.aspect = W/H; camera.updateProjectionMatrix(); cover(W/H); renderer.render(scene, camera); }
   else {
@@ -1859,7 +1859,7 @@ function roomStep(dt){
   pcMark.position.set(gp.x, 0, gp.z);
   floor.visible = $('xrGrid').checked || !head.on; pcMark.visible = $('xrGrid').checked && head.on;
   const now = performance.now();
-  if (head.on && !f && now - (room.warnT || 0) > 4000){ room.warnT = now; popCam('PC: 足が見えていません（立って両方のカメラに全身を）', '#ff4d5e', .5, 2); }
+  if (head.on && !f && window.RQLog && RQLog.on() && now - (room.warnT || 0) > 4000){   /* ログ表示が ON の時だけ */ room.warnT = now; popCam('PC: 足が見えていません（立って両方のカメラに全身を）', '#ff4d5e', .5, 2); }
   $('roomStat').dataset.feet = f ? '1' : '0';
 }
 // カメラ映像は「スマホカメラの画角どおりの大きさの板」として視線の先に貼る → 表示の視野角に関係なく現実と3Dの縮尺がそろう
@@ -2143,7 +2143,9 @@ if (TRIAL){
   setCtl('mouse');
 }
 </script>
+<script src="../common/boss-intro.js"></script>   <!-- ボス登場の演出（警報 → BOSS BATTLE → 降ってくる → 咆哮 → 開始）-->
 <script src="../common/goggle-lens.js"></script>   <!-- ゴーグルの円の窓 -->
+<script src="../common/goggle-menu.js"></script>   <!-- ゴーグル中のメニュー（Wii の HOME）・ログ表示の設定 -->
 <script src="../common/goggle-game.js"></script>   <!-- goggle.html の中で開かれた時だけ、自動でゴーグル表示へ -->
 </body>
 </html>
