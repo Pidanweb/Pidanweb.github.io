@@ -70,8 +70,8 @@ body.unsup .note{display:block}
 <body>
 <div id="stage"><iframe id="L" title="ページ（左目）" allow="camera; microphone; autoplay; hid; accelerometer; gyroscope; magnetometer; screen-wake-lock"></iframe><iframe id="R" title="複製（右目）" tabindex="-1" aria-hidden="true" src="about:blank"></iframe></div>
 <button id="gear" title="設定">⚙</button>
-<div class="note" style="left:25%">このページはゴーグル表示に対応していません<br>⚙ →「通常の表示に戻る」</div>
-<div class="note" style="left:75%">このページはゴーグル表示に対応していません<br>⚙ →「通常の表示に戻る」</div>
+<div class="note" style="left:25%">このページはゴーグル表示に対応していません<br>Wiiの HOME でロビーへ戻ります</div>
+<div class="note" style="left:75%">このページはゴーグル表示に対応していません<br>Wiiの HOME でロビーへ戻ります</div>
 
 <div id="panel">
   <div class="box">
@@ -83,6 +83,8 @@ body.unsup .note{display:block}
     <label class="sl">メニューの文字の大きさ <b id="uiV">50</b>%<input type="range" id="ui" min="30" max="100" step="1" value="50"></label>
     <small>画面はYouTubeのVR表示と同じく、左右それぞれ円の窓で表示します（間隔・大きさの調整は不要です）。</small>
     <div class="row"><label><input type="checkbox" id="pass" checked> 背景にカメラ映像（周りが見える）</label></div>
+    <div class="row"><label><input type="checkbox" id="log"> ゲーム中に判定ログを表示する</label></div>
+    <small>ふだんはOFFでOK（調整・不具合の確認用）。ゲーム中も Wii の HOME → メニューで切り替えられます。</small>
     <div class="btns" id="bStartRow"><button class="main" id="bStart">🥽 開始</button></div>
     <div class="btns" id="bMenuRow" hidden><button class="main" id="bResume">▶ 戻る</button><button id="bExit">✕ 通常の表示に戻る</button></div>
     <div id="st"></div>
@@ -113,6 +115,8 @@ function loadS(){
 }
 loadS();
 $('ui').oninput = e => { S.ui = +e.target.value/100; $('uiV').textContent = e.target.value; ls.set('rq_goggle_ui', e.target.value); layout(); };
+$('log').checked = ls.get('rq_show_log') === '1';
+$('log').onchange = e => ls.set('rq_show_log', e.target.checked ? '1' : '0');
 $('pass').onchange = e => { S.pass = e.target.checked; ls.set('rq_goggle_pass', S.pass ? '1' : '0'); if (!S.pass) camStop(); };
 
 // ================= 左右の目の配置（YouTube の VR 表示と同じ：左右半分ずつ・円の窓）=================
@@ -188,8 +192,14 @@ function setWii(on){
   if (relay.wiiOn === on) return; relay.wiiOn = on;
   try { RQG.onwii && RQG.onwii(on); } catch (e){}
 }
+let homeWas = false;
 function relayData(m){
   if (!m) return;
+  if (m.t === 'in' && m.d && m.d.length > 1 && m.id >= 0x30 && m.id <= 0x3f){
+    const home = !!(m.d[1] & 0x80);
+    if (home && !homeWas && document.body.classList.contains('unsup')){ homeWas = home; L.src = RQ.url('lobby'); return; }
+    homeWas = home;
+  }
   if (m.t === 'in'){
     const h = fakeWii.oninputreport; if (!h) return;
     try { h({ reportId:m.id, data:new DataView(new Uint8Array(m.d).buffer), timeStamp:performance.now(), device:fakeWii }); } catch (e){}
@@ -307,28 +317,65 @@ function mirrorFrame(){
     if (c.paused && !o.paused) c.play().catch(() => {});
   }
 }
-(function tick(){ requestAnimationFrame(tick); try { mirrorFrame(); } catch (e){} })();
+// CSSアニメーションの時刻を左右でそろえる（複製はあとから作るので、そのままだと右目のアニメが遅れて始まる）
+function animSync(){
+  const src = MR.src; if (!src || !src.getAnimations) return;
+  for (const a of src.getAnimations()){
+    const ef = a.effect, t = ef && ef.target; if (!t || a.currentTime == null) continue;
+    const c = MR.map.get(t); if (!c || !c.getAnimations) continue;
+    const name = a.animationName || a.transitionProperty || '';
+    const b = c.getAnimations({ subtree:true }).find(x => x.effect && x.effect.target === c && (x.effect.pseudoElement || null) === (ef.pseudoElement || null) && (x.animationName || x.transitionProperty || '') === name);
+    if (b && Math.abs((b.currentTime || 0) - a.currentTime) > 20) try { b.currentTime = a.currentTime; } catch (e){}
+  }
+}
+setInterval(() => { try { animSync(); } catch (e){} }, 500);
+function mirrorLoop(win, doc){   // ページの描画（同じ rAF の中で先に登録されている）の直後にコピーする
+  (function f(){ if (MR.src !== doc) return; try { win.requestAnimationFrame(f); } catch (e){ return; } try { mirrorFrame(); } catch (e){} })();
+}
 
 // ================= ページが切り替わった時 =================
-let curUrl = null;
-L.addEventListener('load', () => {
+// 以前は load（画像・フォントなど全部の読み込み完了）を待ってから右目の複製を作っていたので、
+// 左目だけ先にページが出て、右目が遅れて出ていた。今は：
+//   ・前のページを離れる時に左目を隠す
+//   ・新しいページのHTMLを読み終えた時点（readyState が interactive）で複製を作る
+//   ・複製のスタイル・フォントが読めたら（最大0.5秒）左右を同時に出す
+let curUrl = null, curDoc = null;
+const showL = on => { L.style.visibility = on ? '' : 'hidden'; };
+function reveal(doc){
+  const d = R.contentDocument;
+  const links = d ? [...d.querySelectorAll('link[rel~="stylesheet"]')].filter(l => !l.sheet).map(l => new Promise(r => { l.addEventListener('load', r); l.addEventListener('error', r); })) : [];
+  Promise.race([Promise.all(links).then(() => d && d.fonts ? d.fonts.ready : null), new Promise(r => setTimeout(r, 500))])
+    .then(() => { if (curDoc !== doc) return; try { animSync(); } catch (e){} showL(true); });
+}
+function onPage(fromLoad){
   if (mode === 'off') return;
   let win = null, doc = null;
   try { win = L.contentWindow; doc = L.contentDocument; void doc.body; } catch (e){ win = doc = null; }   // 別のサイトに出た
-  if (!win || !doc){ mode = 'self'; mirrorStop(); layout(); document.body.classList.add('unsup'); return; }
+  if (!win || !doc){
+    if (!fromLoad) return;
+    curDoc = null; mode = 'self'; mirrorStop(); layout(); showL(true); document.body.classList.add('unsup'); return;
+  }
+  if (doc === curDoc){ if (fromLoad) showL(true); return; }   // 念のため：読み込み完了で必ず表示
+  if (doc.URL === 'about:blank' || doc.readyState === 'loading') return;
+  curDoc = doc;
   curUrl = win.location.href;
   try { history.replaceState(null, '', '?p=' + encodeURIComponent(curUrl.startsWith(RQ.BASE) ? curUrl.slice(RQ.BASE.length) : curUrl)); } catch (e){}
-  win.addEventListener('pagehide', () => { fakeWii.oninputreport = null; RQG.onwii = RQG.onmsg = null; RQG.send({ t:'voice', cmd:'stop' }); mirrorStop(); });
+  win.addEventListener('pagehide', () => {
+    fakeWii.oninputreport = null; RQG.onwii = RQG.onmsg = null; RQG.send({ t:'voice', cmd:'stop' }); mirrorStop();
+    if (mode === '2d'){ showL(false); try { R.contentDocument.body.innerHTML = ''; } catch (e){} }   // 次のページは左右そろってから出す
+  });
   const decl = win.RQ_GOGGLE;
   document.body.classList.toggle('unsup', decl !== '2d' && decl !== 'self');
   if (decl === 'self'){
     // ゲーム：全面に出して、カメラとPC中継はゲームにゆずる（同時に2つ開くと取り合いになる）
-    mode = 'self'; mirrorStop(); camStop(); relayPause(); layout();
+    mode = 'self'; mirrorStop(); camStop(); relayPause(); layout(); showL(true);
   } else {
-    mode = '2d'; layout(); relayResume(); mirrorBuild(doc);
+    mode = '2d'; layout(); relayResume(); mirrorBuild(doc); mirrorLoop(win, doc); reveal(doc);
   }
   try { win.focus(); } catch (e){}
-});
+}
+L.addEventListener('load', () => onPage(true));
+(function poll(){ requestAnimationFrame(poll); try { onPage(false); } catch (e){} })();
 
 // ================= 開始・終了 =================
 function startPage(){
@@ -348,7 +395,7 @@ async function start(){
   document.body.classList.add('on');
   showPanel(false);
   relay.want = true; relayConnect();
-  mode = '2d'; layout();
+  mode = '2d'; layout(); showL(false);   // 最初のページも左右そろってから出す
   L.src = startPage();
 }
 let wl = null;

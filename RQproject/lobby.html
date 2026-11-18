@@ -296,6 +296,17 @@ const MENUS = {
       run: () => open('quest') },
     { t:'準備する', d:'PCの中継・カメラの位置合わせ', run: () => open('setup') },
     { t:'ジョブを変える', d:'ジョブ選択の画面に戻ります', run: () => goTo(RQ.url('jobSelect')) },
+    { t:'設定', d:'BGM・ログ表示・タイトルへ戻る', run: () => open('settings') },
+  ]},
+  // 設定（リモコンでも選べるように、画面のボタンと同じことをメニューからもできる）
+  settings: { crumb:'設定', items: [
+    { get t(){ return 'BGM'; }, get d(){ return bgm ? 'ロビーの音楽' : 'このジョブにはBGMがありません'; },
+      get r(){ return bgm ? (bgmOn ? 'オン' : 'オフ') : ''; }, get off(){ return bgm ? '' : 'このジョブにはBGMがありません'; },
+      run: () => { bgmToggle(); render(); } },
+    { t:'ログ表示', d:'ゲーム中に判定ログ・注意を出す（調整・不具合の確認用。ふだんはオフ）',
+      get r(){ return RQ.ls.get('rq_show_log') === '1' ? 'オン' : 'オフ'; },
+      run: () => { RQ.ls.set('rq_show_log', RQ.ls.get('rq_show_log') === '1' ? '0' : '1'); tone(1500, .06); render(); } },
+    { t:'タイトルへ戻る', d:'タイトル画面（ハロー・ニューワールド）に戻ります', run: () => goTo(RQ.url('title')) },
   ]},
   quest: { crumb:'クエスト選択', detail:true, items: QUESTS.map(q => q.locked
     ? { q, t:'？？？', off:'新しいクエストを準備中' }
@@ -376,6 +387,11 @@ function bgmStart(){
   if (!bgm || !bgmOn || !bgm.paused) return;
   bgm.volume = BGM_VOL; bgm.play().catch(() => {});
 }
+function bgmToggle(){
+  if (!bgm) return;
+  bgmOn = !bgmOn; RQ.ls.set('rq_lobby_bgm', bgmOn ? 'on' : 'off'); bgmLabel();
+  if (bgmOn){ bgm.currentTime = 0; bgmStart(); } else bgm.pause();
+}
 function bgmFade(){
   if (!bgm || bgm.paused) return;
   const t0 = performance.now(), v0 = bgm.volume;
@@ -384,10 +400,7 @@ function bgmFade(){
 if (bgm){
   bgm.loop = true; bgm.preload = 'auto';
   $('bBgm').hidden = false; bgmLabel();
-  $('bBgm').onclick = e => {
-    e.stopPropagation(); bgmOn = !bgmOn; RQ.ls.set('rq_lobby_bgm', bgmOn ? 'on' : 'off'); bgmLabel();
-    if (bgmOn){ bgm.currentTime = 0; bgmStart(); } else bgm.pause();
-  };
+  $('bBgm').onclick = e => { e.stopPropagation(); bgmToggle(); if (stack[stack.length - 1] === 'settings') render(); };
   bgmStart();   // 自動再生できればここで流れる
   for (const ev of ['pointerdown', 'keydown', 'touchstart']) addEventListener(ev, bgmStart, { capture:true });
 }
