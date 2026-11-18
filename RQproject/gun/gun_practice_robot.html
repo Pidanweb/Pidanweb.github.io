@@ -39,7 +39,7 @@
 </style>
 </head>
 <body>
-<div id="gogBar" style="position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:30;display:none;gap:8px"><button id="gogAlign" class="gb">🧭 向き合わせ</button><button id="gogPlace" class="gb">📍 ボスを置く</button><span class="gb">間隔 <button id="sepM" class="adj">−</button><b id="sepV">50</b>%<button id="sepP" class="adj">＋</button></span><span class="gb">大きさ <button id="ekM" class="adj">−</button><b id="ekV">100</b>%<button id="ekP" class="adj">＋</button></span><button id="gogExit" class="gb">✕ 終了</button></div>
+<div id="gogBar" style="position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:30;display:none;gap:8px"><button id="gogAlign" class="gb">🧭 向き合わせ</button><button id="gogPlace" class="gb">📍 ボスを置く</button><button id="gogExit" class="gb">✕ 終了</button></div>
 <div id="ui"><button id="camBtn">📷 カメラ設定</button> <button id="viewBtn">👁 一人称</button> <button id="ctrlBtn">🖱 マウス</button> <button id="menuBtn">☰</button> <button id="xrBtn">🥽 ゴーグル</button>
   <div id="xrPanel" hidden>
     <b style="color:#ffd35a">📡 PC中継（Wiiリモコン・立ち位置）</b>
@@ -57,9 +57,6 @@
     <label><input type="checkbox" id="xrOrb" checked> 周回モード（回り込むと戦う向きが付いてくる）</label>
     <label>表示の視野角 <b id="xrFovV">60</b>°<input type="range" id="xrFov" min="35" max="100" step="1" value="60"></label>
     <label>目の間隔 <b id="xrIpdV">64</b>mm<input type="range" id="xrIpd" min="50" max="75" step="1" value="64"></label>
-    <label>片目の映像の大きさ <b id="xrEyeKV">100</b>%<input type="range" id="xrEyeK" min="40" max="100" step="1" value="100"></label>
-    <label>左右の映像の中心の間隔 <b id="xrSepV">50</b>%（画面の横幅に対して）<input type="range" id="xrSep" min="25" max="50" step=".5" value="50"></label>
-    <small style="margin-top:0">目安：ゴーグルのレンズの中心間隔（多くは約6.3cm）÷ スマホを横にした時の画面の横幅。例: 画面幅15cm → 42%。映像が近すぎる・二重に見える時は小さく。</small>
     <label>立ち位置の移動倍率 <b id="xrGainV">1.0</b>×<input type="range" id="xrGain" min="1" max="3" step=".1" value="1"></label>
     <label><input type="checkbox" id="xrSbs" checked> 2画面（ゴーグルに入れる）　※外すと手持ちの1画面で、床合わせの確認用</label>
     <button id="gogGo">🥽 開始（頭の向きで見回す）</button>
@@ -1651,12 +1648,14 @@ function update(dt){
 
 function view(x, y, w, h){ renderer.setViewport(x, y, w, h); renderer.setScissor(x, y, w, h); }
 function render(){
+  if (window.rqLens) rqLens(vr && !menuOn);   // 円の窓（ゴーグルの2画面の時だけ。メニューを開いている間は外す）
   camera.fov = (head.on ? head.fov : 70) - fovp; const bx = camera.position.x;
   if (!vr){ view(0, 0, W, H); camera.aspect = W/H; camera.updateProjectionMatrix(); cover(W/H); renderer.render(scene, camera); }
   else {
-    // ゴーグル: 片目の映像をレンズの真下に置く（大きさ・左右の間隔を調整できる。余白は黒）
-    const k = head.on ? head.eyeK : 1, sep = Math.min(head.on ? head.sepK*W : W/2, W - W/2*k), vw = W/2*k, vh = H*k;
-    if (k < 1 || sep !== W/2){ view(0, 0, W, H); renderer.setClearColor(0x000000, 1); renderer.clear(); }
+    // ゴーグル: YouTube の VR 表示と同じく、画面を左右半分ずつ使い、円の窓（common/goggle-lens.js）で切り抜く
+    const sep = W/2, vw = W/2, vh = H, LK = head.on && window.RQ_LENS_K || 1;
+    const hs = hud.scale.clone(), ms = msg.scale.clone();   // 画面に付く表示（HUD・メッセージ）を円の中に収まるよう縮める
+    hud.scale.set(hs.x*LK, hs.y*LK, hs.z); msg.scale.set(ms.x*LK, ms.y*LK, ms.z);
     camera.aspect = vw/vh; camera.updateProjectionMatrix(); cover(vw/vh);
     const p0 = camera.position.clone(), rgt = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);   // 目の間隔は頭の向きの「右」方向に
     for (const e of [-1, 1]){
@@ -1664,6 +1663,7 @@ function render(){
       view(Math.round(W/2 + e*sep/2 - vw/2), Math.round((H - vh)/2), Math.round(vw), Math.round(vh)); renderer.render(scene, camera);
     }
     camera.position.copy(p0); camera.updateMatrixWorld();
+    hud.scale.copy(hs); msg.scale.copy(ms);
     camera.position.x = bx;
   }
 }
@@ -2186,14 +2186,6 @@ function fsHelp(){
   alert(isIOS ? 'iPhone の Safari は全画面表示に対応していません。\n\n共有ボタン（□↑）→「ホーム画面に追加」→ ホーム画面のアイコンから開くと、タブやアドレスバーなしの全画面で起動します。\n（ホーム画面から開いた時は、中継のコードをもう一度入力してください）'
                : 'このブラウザは全画面表示に対応していません。メニューの「ホーム画面に追加」から開くと全画面になります。');
 }
-// 開始後に画面上部のボタンで、左右の映像の間隔・大きさを調整（パネルのスライダーと連動・保存）
-function eyeAdj(id, d){
-  const el = $(id), v = Math.max(+el.min, Math.min(+el.max, +el.value + d)); el.value = v; el.dispatchEvent(new Event('input')); eyeBarUI();
-}
-function eyeBarUI(){ $('sepV').textContent = $('xrSep').value; $('ekV').textContent = $('xrEyeK').value; }
-$('sepM').onclick = () => eyeAdj('xrSep', -.5); $('sepP').onclick = () => eyeAdj('xrSep', .5);
-$('ekM').onclick = () => eyeAdj('xrEyeK', -5); $('ekP').onclick = () => eyeAdj('xrEyeK', 5);
-setTimeout(eyeBarUI, 0);
 // iPhone: 見えない（透明・極小の）動画は省電力で止められて、背景が真っ黒になることがある → 再生を保つ
 function keepVid(){
   if (!head.on || !vid.srcObject) return;
@@ -2201,11 +2193,6 @@ function keepVid(){
   if (camTex && vid.readyState >= 2) camTex.needsUpdate = true;
 }
 
-head.eyeK = 1; head.sepK = .5;
-$('xrEyeK').oninput = e => { head.eyeK = +e.target.value/100; $('xrEyeKV').textContent = e.target.value; try { localStorage.setItem('rq_goggle_eyeK', e.target.value); } catch (er){} };
-$('xrSep').oninput = e => { head.sepK = +e.target.value/100; $('xrSepV').textContent = e.target.value; try { localStorage.setItem('rq_goggle_sep', e.target.value); } catch (er){} };
-try { const a = localStorage.getItem('rq_goggle_eyeK'), b = localStorage.getItem('rq_goggle_sep');
-  if (a){ head.eyeK = +a/100; $('xrEyeK').value = a; $('xrEyeKV').textContent = a; } if (b){ head.sepK = +b/100; $('xrSep').value = b; $('xrSepV').textContent = b; } } catch (e){}
 
 function vplaneUpdate(){
   keepVid();
@@ -2470,6 +2457,7 @@ if (TRIAL){
   setCtl('mouse');
 }
 </script>
+<script src="../common/goggle-lens.js"></script>   <!-- ゴーグルの円の窓 -->
 <script src="../common/goggle-game.js"></script>   <!-- goggle.html の中で開かれた時だけ、自動でゴーグル表示へ -->
 </body>
 </html>
