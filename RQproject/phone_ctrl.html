@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>RQ スマホコントローラー</title>
+<style>
+  html,body{margin:0;height:100%;background:#0a1110;color:#e8fbff;font:15px sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+  main{max-width:520px;margin:0 auto;padding:12px;box-sizing:border-box;min-height:100%;display:flex;flex-direction:column;gap:10px}
+  h1{font-size:18px;color:#7ae7ff;margin:2px 0}
+  section{border:1px solid #7ae7ff44;border-radius:10px;padding:10px 12px;background:#061418}
+  button,input{background:#0d2a30;color:#7ae7ff;border:1px solid #7ae7ff88;border-radius:8px;padding:10px 12px;font:inherit}
+  input{width:7em;font:bold 22px monospace;letter-spacing:4px;text-align:center}
+  .st{font-size:13px;color:#ffd35a;margin-top:6px} .ok{color:#5fe07a} .ng{color:#ff4d5e}
+  small{color:#9fdcea;line-height:1.6;display:block}
+  #vals{font:12px/1.5 monospace;color:#bfe6ff;white-space:pre}
+  #pad{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:1;min-height:180px}
+  .bt{border-radius:16px;font:bold 34px sans-serif;display:grid;place-items:center;border:2px solid #7ae7ff88;background:#0d2a30;color:#7ae7ff}
+  .bt.on{background:#5fe07a;color:#062;border-color:#5fe07a}
+  #log{font:11px/1.45 monospace;color:#9fdcea;max-height:120px;overflow:auto;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<main>
+  <h1>📱 RQ スマホコントローラー</h1>
+  <section>
+    <div><input id="code" inputmode="numeric" maxlength="6" placeholder="000000"> <button id="go">接続</button></div>
+    <div class="st" id="peerSt">PCの hub に表示されている6桁のコードを入れて「接続」</div>
+    <div class="st" id="senSt">センサー: 未開始（「接続」を押すと許可を求めます）</div>
+  </section>
+  <section><div id="vals">—</div></section>
+  <div id="pad"><div class="bt" id="bA">A</div><div class="bt" id="bB">B</div></div>
+  <section><div id="log"></div></section>
+  <small>スマホを手に持ってコントローラーとして使います。画面は点けたままに（自動で消えないようにしています）。iPhone は「接続」を押した時にモーションセンサーの許可が出ます。</small>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const st = (id, t, cls) => { const e = $(id); e.textContent = t; e.className = 'st' + (cls ? ' ' + cls : ''); };
+const logBox = $('log');
+function log(t){
+  const d = new Date(), s = d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+  logBox.textContent = (s + ' ' + t + '\n' + logBox.textContent).slice(0, 4000);
+  send({ t:'plog', msg:t });
+}
+
+// ================= センサー =================
+// devicemotion: 加速度（重力込み / 重力抜き, m/s²）・角速度（deg/s）
+// deviceorientation: 端末の向き（alpha=方位, beta=前後の傾き, gamma=左右の傾き, 度）
+const S = { a:null, la:null, g:null, o:null, iv:0, nM:0, nO:0, started:false, hzM:0, hzO:0 };
+const r3 = v => v == null ? null : Math.round(v*1000)/1000;
+function onMotion(e){
+  const A = e.accelerationIncludingGravity, L = e.acceleration, R = e.rotationRate;
+  S.a = A ? [r3(A.x), r3(A.y), r3(A.z)] : null;
+  S.la = L ? [r3(L.x), r3(L.y), r3(L.z)] : null;
+  S.g = R ? [r3(R.alpha), r3(R.beta), r3(R.gamma)] : null;
+  S.iv = e.interval || 0; S.nM++;
+  sendFrame();
+}
+function onOrient(e){ S.o = [r3(e.alpha), r3(e.beta), r3(e.gamma)]; S.abs = !!e.absolute; S.nO++; }
+async function startSensors(){
+  if (S.started) return true;
+  if (!window.isSecureContext){ st('senSt', '❌ https で開いてください（センサーは https でしか使えません）', 'ng'); log('not secure context'); return false; }
+  try {
+    // iPhone (iOS 13+) はユーザー操作の中で許可を取る必要がある
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function'){
+      const r = await DeviceMotionEvent.requestPermission(); log('DeviceMotion permission: ' + r);
+      if (r !== 'granted'){ st('senSt', '❌ モーションセンサーが許可されませんでした（Safariの設定を確認）', 'ng'); return false; }
+    }
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+      const r = await DeviceOrientationEvent.requestPermission(); log('DeviceOrientation permission: ' + r);
+    }
+  } catch (e){ log('permission error: ' + e.message); }
+  if (typeof DeviceMotionEvent === 'undefined'){ st('senSt', '❌ このブラウザはモーションセンサーに非対応', 'ng'); log('DeviceMotionEvent undefined'); return false; }
+  addEventListener('devicemotion', onMotion);
+  addEventListener('deviceorientation', onOrient);
+  S.started = true; st('senSt', 'センサー: 開始（データ待ち…）');
+  log('sensors started  UA=' + navigator.userAgent.replace(/\s+/g, ' ').slice(0, 120));
+  setTimeout(() => { if (!S.nM){ st('senSt', '⚠ 2秒たってもセンサーのデータが来ません（PCや非対応端末？）', 'ng'); log('no devicemotion events after 2s'); } }, 2000);
+  return true;
+}
+// 画面が消えないように
+let wake = null;
+async function keepAwake(){ try { if ('wakeLock' in navigator){ wake = await navigator.wakeLock.request('screen'); log('wakeLock ok'); } } catch (e){ log('wakeLock失敗: ' + e.name); } }
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible'){ keepAwake(); log('画面が表に戻りました'); }
+  else log('画面が裏に回りました（センサーが止まります）');
+});
+
+// ================= ボタン =================
+const btn = { a:false, b:false };
+function bindBtn(el, k){
+  const set = v => { if (btn[k] === v) return; btn[k] = v; el.classList.toggle('on', v); send({ t:'pbtn', k, v }); if (navigator.vibrate && v) navigator.vibrate(15); };
+  el.addEventListener('pointerdown', e => { e.preventDefault(); set(true); });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(ev, () => set(false));
+  el.addEventListener('contextmenu', e => e.preventDefault());
+}
+bindBtn($('bA'), 'a'); bindBtn($('bB'), 'b');
+
+// ================= PeerJS（PCの hub へ「コントローラー」として接続）=================
+let peer = null, conn = null, seq = 0, lastSend = 0;
+function send(m){ if (conn && conn.open) try { conn.send(m); } catch (e){} }
+function sendFrame(){
+  const now = performance.now(); if (now - lastSend < 14) return; lastSend = now;   // 最大 約60回/秒
+  send({ t:'pm', n:seq++, ts:now, a:S.a, la:S.la, g:S.g, o:S.o, iv:S.iv, btn:[btn.a ? 1 : 0, btn.b ? 1 : 0] });
+}
+function connect(code){
+  if (typeof Peer === 'undefined'){ st('peerSt', '❌ PeerJS を読み込めませんでした（ネット接続を確認）', 'ng'); return; }
+  code = String(code || '').replace(/\D/g, ''); if (code.length !== 6){ st('peerSt', '6桁のコードを入力してください', 'ng'); return; }
+  try { conn && conn.close(); } catch (e){} try { peer && peer.destroy(); } catch (e){}
+  st('peerSt', '接続中…'); log('connecting to rqgun-' + code);
+  peer = new Peer();
+  peer.on('open', id => {
+    const c = conn = peer.connect('rqgun-' + code, { reliable:true, serialization:'json', metadata:{ role:'ctrl' } });
+    c.on('open', () => {
+      st('peerSt', '✅ PCに接続しました', 'ok'); try { localStorage.setItem('rqgun_ctrl_code', code); } catch (e){}
+      send({ t:'phi', ua:navigator.userAgent, w:screen.width, h:screen.height, motion:typeof DeviceMotionEvent !== 'undefined', perm:typeof (window.DeviceMotionEvent && DeviceMotionEvent.requestPermission) === 'function' });
+      log('connected (my id ' + id + ')');
+    });
+    c.on('data', m => { if (m && m.t === 'vib' && navigator.vibrate) navigator.vibrate(m.ms || 40); if (m && m.t === 'ping') send({ t:'pong', ts:m.ts }); });
+    c.on('close', () => { st('peerSt', '⚠ PCとの接続が切れました', 'ng'); log('connection closed'); });
+    c.on('error', e => { st('peerSt', '❌ 通信エラー ' + (e.type || e.message), 'ng'); });
+  });
+  peer.on('error', e => { st('peerSt', '❌ ' + (e.type === 'peer-unavailable' ? 'コードが見つかりません（PCで hub を開いていますか？）' : (e.type || e.message)), 'ng'); log('peer error ' + e.type); });
+}
+$('go').onclick = async () => { await startSensors(); keepAwake(); connect($('code').value); };
+try { const c = new URLSearchParams(location.search).get('code') || localStorage.getItem('rqgun_ctrl_code'); if (c) $('code').value = c; } catch (e){}
+
+// ================= 画面表示 =================
+const f = (v, w = 7) => v == null ? '   —   ' : (v >= 0 ? ' ' : '') + v.toFixed(2).padStart(w - 1);
+const f3 = v => v ? v.map(x => f(x)).join(' ') : '(なし)';
+setInterval(() => {
+  S.hzM = S.nM; S.hzO = S.nO; S.nM = S.nO = 0;
+  if (S.started && S.hzM) st('senSt', `センサー: 動作中 ✅  motion ${S.hzM}回/秒・orientation ${S.hzO}回/秒`, 'ok');
+  send({ t:'prate', m:S.hzM, o:S.hzO });
+}, 1000);
+(function draw(){
+  requestAnimationFrame(draw);
+  $('vals').textContent =
+    `加速度(重力込) m/s²  x y z\n ${f3(S.a)}\n` +
+    `加速度(重力抜) m/s²\n ${f3(S.la)}\n` +
+    `角速度 deg/s  α β γ\n ${f3(S.g)}\n` +
+    `向き deg  α β γ ${S.abs ? '(絶対)' : ''}\n ${f3(S.o)}`;
+})();
+</script>
+</body>
+</html>
