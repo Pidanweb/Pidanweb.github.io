@@ -14,9 +14,26 @@
   .st{font-size:13px;color:#ffd35a;margin-top:6px} .ok{color:#5fe07a} .ng{color:#ff4d5e}
   small{color:#9fdcea;line-height:1.6;display:block}
   #vals{font:12px/1.5 monospace;color:#bfe6ff;white-space:pre}
-  #pad{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:1;min-height:180px}
-  .bt{border-radius:16px;font:bold 34px sans-serif;display:grid;place-items:center;border:2px solid #7ae7ff88;background:#0d2a30;color:#7ae7ff}
-  .bt.on{background:#5fe07a;color:#062;border-color:#5fe07a}
+  details>summary{cursor:pointer;color:#ffd35a;font-size:13px}
+  /* ===== Wiiリモコン風の操作面（左：表の面 / 右：裏のBトリガー）===== */
+  #pad{display:grid;grid-template-columns:1fr 26%;gap:10px;flex:1;min-height:440px;touch-action:none}
+  #face{background:linear-gradient(#f4f6f8,#dde2e6);border-radius:46px;padding:22px 10px;display:flex;flex-direction:column;align-items:center;gap:26px;box-shadow:inset 0 -4px 10px #0003}
+  .bt{display:grid;place-items:center;font:bold 22px sans-serif;color:#3a3f45;background:#e9edf0;border:1px solid #9aa3ab;box-shadow:0 3px 0 #9aa3ab;touch-action:none;-webkit-tap-highlight-color:transparent}
+  .bt.on{background:#5fe07a;color:#062;box-shadow:0 0 0 #9aa3ab;transform:translateY(3px)}
+  #dpad{position:relative;width:168px;height:168px;touch-action:none}
+  #dpad .arm{position:absolute;background:#3a3f45;color:#cfd5da;font-size:18px;display:grid;place-items:center;box-shadow:0 3px 0 #1d2024}
+  #dpad .arm.on{background:#5fe07a;color:#062}
+  #dU{left:56px;top:0;width:56px;height:62px;border-radius:8px 8px 0 0}
+  #dD{left:56px;bottom:0;width:56px;height:62px;border-radius:0 0 8px 8px}
+  #dL{left:0;top:56px;width:62px;height:56px;border-radius:8px 0 0 8px}
+  #dR{right:0;top:56px;width:62px;height:56px;border-radius:0 8px 8px 0}
+  #dC{position:absolute;left:56px;top:50px;width:56px;height:68px;background:#3a3f45;pointer-events:none}
+  #bA{width:96px;height:96px;border-radius:50%;font-size:40px}
+  #sys{display:flex;gap:22px;align-items:center}
+  #bM,#bP{width:54px;height:54px;border-radius:50%;font-size:30px}
+  #bH{width:60px;height:60px;border-radius:50%;font-size:26px;background:#d6dde3}
+  #bB{border-radius:30px 30px 60px 60px;font-size:44px;background:#3a3f45;color:#cfd5da;border-color:#1d2024;box-shadow:0 4px 0 #1d2024}
+  #bB.on{background:#5fe07a;color:#062}
   #log{font:11px/1.45 monospace;color:#9fdcea;max-height:120px;overflow:auto;white-space:pre-wrap}
 </style>
 </head>
@@ -28,10 +45,17 @@
     <div class="st" id="peerSt">PCの hub に表示されている6桁のコードを入れて「接続」</div>
     <div class="st" id="senSt">センサー: 未開始（「接続」を押すと許可を求めます）</div>
   </section>
-  <section><div id="vals">—</div></section>
-  <div id="pad"><div class="bt" id="bA">A</div><div class="bt" id="bB">B</div></div>
-  <section><div id="log"></div></section>
-  <small>スマホを手に持ってコントローラーとして使います。画面は点けたままに（自動で消えないようにしています）。iPhone は「接続」を押した時にモーションセンサーの許可が出ます。</small>
+  <div id="pad">
+    <div id="face">
+      <div id="dpad"><div class="arm" id="dU">▲</div><div class="arm" id="dD">▼</div><div class="arm" id="dL">◀</div><div class="arm" id="dR">▶</div><div id="dC"></div></div>
+      <div class="bt" id="bA">A</div>
+      <div id="sys"><div class="bt" id="bM">−</div><div class="bt" id="bH">⌂</div><div class="bt" id="bP">＋</div></div>
+    </div>
+    <div class="bt" id="bB">B</div>
+  </div>
+  <section><details><summary>センサーの値</summary><div id="vals" style="margin-top:6px">—</div></details></section>
+  <section><details><summary>ログ</summary><div id="log" style="margin-top:6px"></div></details></section>
+  <small>スマホを縦に持ってWiiリモコンのように使います（Bは右端の縦長ボタン）。画面は点けたままに（自動で消えないようにしています）。iPhone は「接続」を押した時にモーションセンサーの許可が出ます。</small>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
@@ -87,22 +111,55 @@ document.addEventListener('visibilitychange', () => {
   else log('画面が裏に回りました（センサーが止まります）');
 });
 
-// ================= ボタン =================
-const btn = { a:false, b:false };
-function bindBtn(el, k){
-  const set = v => { if (btn[k] === v) return; btn[k] = v; el.classList.toggle('on', v); send({ t:'pbtn', k, v }); if (navigator.vibrate && v) navigator.vibrate(15); };
-  el.addEventListener('pointerdown', e => { e.preventDefault(); set(true); });
-  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(ev, () => set(false));
-  el.addEventListener('contextmenu', e => e.preventDefault());
+// ================= ボタン（Wiiリモコンと同じ並び）=================
+// wb = Wiiリモコンのボタンの2バイト（コアボタン）と同じビット配置。あとで仮想Wiiリモコンに流し込めるように合わせてある
+//   1バイト目: ←0x01 →0x02 ↓0x04 ↑0x08 ＋0x10 / 2バイト目: 2 0x01  1 0x02  B 0x04  A 0x08  −0x10  HOME 0x80
+const BITS = { left:[0, 0x01], right:[0, 0x02], down:[0, 0x04], up:[0, 0x08], plus:[0, 0x10], b:[1, 0x04], a:[1, 0x08], minus:[1, 0x10], home:[1, 0x80] };
+const NAMES = { left:'←', right:'→', down:'↓', up:'↑', plus:'＋', minus:'−', home:'HOME', a:'A', b:'B' };
+const btn = {}; for (const k in BITS) btn[k] = false;
+const wb = () => { const w = [0, 0]; for (const k in BITS) if (btn[k]) w[BITS[k][0]] |= BITS[k][1]; return w; };
+function setBtn(k, v, el){
+  if (btn[k] === v) return; btn[k] = v; if (el) el.classList.toggle('on', v);
+  send({ t:'pbtn', k, v, wb:wb() }); lastSend = 0; sendFrame();   // 押した瞬間はすぐ送る
+  if (v && navigator.vibrate) navigator.vibrate(12);
 }
-bindBtn($('bA'), 'a'); bindBtn($('bB'), 'b');
+// 普通のボタン：その上に指が1本でも乗っていれば押している（複数の指で同時押しOK）
+function bindBtn(el, k){
+  const ps = new Set(), upd = () => setBtn(k, ps.size > 0, el);
+  el.addEventListener('pointerdown', e => { e.preventDefault(); ps.add(e.pointerId); try { el.releasePointerCapture(e.pointerId); } catch (er){} upd(); });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(ev, e => { ps.delete(e.pointerId); upd(); });
+  el.addEventListener('pointerenter', e => { if (e.buttons){ ps.add(e.pointerId); upd(); } });   // 指を滑らせて入っても押せる
+}
+bindBtn($('bA'), 'a'); bindBtn($('bB'), 'b'); bindBtn($('bM'), 'minus'); bindBtn($('bH'), 'home'); bindBtn($('bP'), 'plus');
+// 十字キー：指の位置で方向を決める（指を滑らせて方向を変えられる。斜めも可）
+(function(){
+  const pad = $('dpad'), arms = { up:$('dU'), down:$('dD'), left:$('dL'), right:$('dR') }, ps = new Map();
+  function upd(){
+    const on = { up:false, down:false, left:false, right:false }, r = pad.getBoundingClientRect();
+    for (const [, p] of ps){
+      const dx = (p.x - r.left)/r.width - .5, dy = (p.y - r.top)/r.height - .5;
+      if (Math.hypot(dx, dy) < .1) continue;   // 真ん中は遊び
+      const a = Math.atan2(dy, dx)*180/Math.PI;   // 0=右, 90=下
+      // 8方向：各方向 ±67.5° の範囲（斜めは隣どうしが重なる）
+      const near = d => { let t = Math.abs(((a - d) % 360 + 540) % 360 - 180); return t <= 67.5; };
+      if (near(0)) on.right = true; if (near(90)) on.down = true; if (near(180)) on.left = true; if (near(-90)) on.up = true;
+    }
+    for (const k in arms) setBtn(k, on[k], arms[k]);
+  }
+  pad.addEventListener('pointerdown', e => { e.preventDefault(); try { pad.setPointerCapture(e.pointerId); } catch (er){} ps.set(e.pointerId, { x:e.clientX, y:e.clientY }); upd(); });
+  pad.addEventListener('pointermove', e => { if (ps.has(e.pointerId)){ ps.set(e.pointerId, { x:e.clientX, y:e.clientY }); upd(); } });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) pad.addEventListener(ev, e => { if (ps.delete(e.pointerId)) upd(); });
+})();
+// 長押しメニュー・選択・ダブルタップ拡大を止める
+for (const ev of ['contextmenu', 'selectstart', 'dblclick']) $('pad').addEventListener(ev, e => e.preventDefault());
+document.addEventListener('touchmove', e => { if (e.target.closest && e.target.closest('#pad')) e.preventDefault(); }, { passive:false });
 
 // ================= PeerJS（PCの hub へ「コントローラー」として接続）=================
 let peer = null, conn = null, seq = 0, lastSend = 0;
 function send(m){ if (conn && conn.open) try { conn.send(m); } catch (e){} }
 function sendFrame(){
   const now = performance.now(); if (now - lastSend < 14) return; lastSend = now;   // 最大 約60回/秒
-  send({ t:'pm', n:seq++, ts:now, a:S.a, la:S.la, g:S.g, o:S.o, iv:S.iv, btn:[btn.a ? 1 : 0, btn.b ? 1 : 0] });
+  send({ t:'pm', n:seq++, ts:now, a:S.a, la:S.la, g:S.g, o:S.o, iv:S.iv, wb:wb() });
 }
 function connect(code){
   if (typeof Peer === 'undefined'){ st('peerSt', '❌ PeerJS を読み込めませんでした（ネット接続を確認）', 'ng'); return; }
