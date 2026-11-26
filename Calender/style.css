@@ -1,0 +1,38 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: sans-serif; background: #fff7f5; color: #333; }
+main { max-width: 900px; margin: 0 auto; padding: 16px; }
+button, .btn { cursor: pointer; border: 0; border-radius: 8px; background: #d9344f; color: #fff;
+  padding: 10px 18px; font-size: 16px; text-decoration: none; display: inline-block; }
+
+/* 今日の予定ページ */
+.chara { display: flex; align-items: flex-end; gap: 12px; }
+.chara img { height: 340px; }
+.bubble { background: #fff; border: 2px solid #d9344f; border-radius: 16px; padding: 12px 16px;
+  font-size: 18px; margin-bottom: 120px; }
+#list { list-style: none; padding: 0; }
+#list li { display: flex; align-items: center; gap: 12px; background: #fff; border-radius: 10px;
+  padding: 10px 14px; margin-bottom: 8px; box-shadow: 0 1px 3px #0002; }
+#list li button { background: #fff; color: #2a9d8f; border: 2px solid #2a9d8f; width: 40px; height: 40px;
+  padding: 0; font-size: 22px; border-radius: 50%; }
+#list li span.title { flex: 1; font-size: 18px; }
+.limit { color: #d9344f; font-weight: bold; }
+
+/* カレンダーページ */
+.head { display: flex; align-items: center; justify-content: space-between; }
+.head h1 { margin: 0; }
+.grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.wk { text-align: center; font-weight: bold; }
+.cell { background: #fff; min-height: 110px; border-radius: 6px; padding: 3px; cursor: pointer; overflow: hidden; }
+.cell.empty { background: none; cursor: default; }
+.cell.today { outline: 3px solid #d9344f; }
+.cell b { font-size: 14px; }
+.chip { background: #2a9d8f; color: #fff; border-radius: 4px; padding: 2px 4px; margin-top: 2px;
+  font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip.mid { background: #f4a261; text-align: center; }
+.chip.end { background: #d9344f; }
+form { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+form input { padding: 8px; font-size: 16px; }
+form input[name=title] { flex: 1; min-width: 160px; }
+#cheer { position: fixed; right: 0; bottom: 0; height: 200px; pointer-events: none; }
+@media (max-width: 600px) { .cell { min-height: 80px; } .chip { font-size: 10px; } .chara img { height: 220px; }
+  .bubble { margin-bottom: 70px; font-size: 15px; } }

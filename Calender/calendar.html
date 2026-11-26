@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>カレンダー</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <meta name="theme-color" content="#d9344f">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <div class="head">
+    <button id="prev">◀</button>
+    <h1 id="title"></h1>
+    <button id="next">▶</button>
+  </div>
+
+  <form id="form">
+    <input name="title" placeholder="タスク名" required>
+    予定日 <input type="date" name="date" required>
+    締め切り <input type="date" name="due">
+    <button>追加</button>
+  </form>
+
+  <div class="grid" id="grid"></div>
+  <p><a href="index.html">← 今日の予定へ</a>　※タスクをタップすると完了(削除)</p>
+</main>
+<img id="cheer" alt="">
+<script src="app.js"></script>
+<script>
+  const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+  const form = document.getElementById('form');
+  const grid = document.getElementById('grid');
+  let cur = new Date(); cur.setDate(1);
+
+  form.date.value = today();
+  document.getElementById('cheer').src = randomChara();
+
+  // 1日分のチップ: 開始日=タスク名+あと◯日 / 途中=矢印 / 締め切り日=旗
+  function chip(t, day) {
+    let cls = '', text;
+    if (day === t.date) text = t.title + (t.due ? ` ➜ ${remain(t.due)}` : '');
+    else if (day === t.due) { cls = 'end'; text = '🏁 ' + t.title; }
+    else { cls = 'mid'; text = '━━━➜'; }
+    return `<div class="chip ${cls}" data-id="${t.id}">${text}</div>`;
+  }
+
+  function render() {
+    const y = cur.getFullYear(), m = cur.getMonth();
+    document.getElementById('title').textContent = `${y}年${m + 1}月`;
+    const tasks = load();
+    let html = WEEK.map((w) => `<div class="wk">${w}</div>`).join('');
+    html += '<div class="cell empty"></div>'.repeat(new Date(y, m, 1).getDay());
+    for (let d = 1; d <= new Date(y, m + 1, 0).getDate(); d++) {
+      const day = ymd(new Date(y, m, d));
+      const chips = tasks.filter((t) => t.date <= day && day <= (t.due || t.date))
+        .map((t) => chip(t, day)).join('');
+      html += `<div class="cell${day === today() ? ' today' : ''}" data-day="${day}"><b>${d}</b>${chips}</div>`;
+    }
+    grid.innerHTML = html;
+  }
+
+  grid.onclick = (e) => {
+    const c = e.target.closest('.chip');
+    if (c) {
+      if (confirm('このタスクを完了にして消しますか？')) { removeTask(+c.dataset.id); render(); }
+      return;
+    }
+    const cell = e.target.closest('.cell[data-day]');
+    if (cell) { form.date.value = cell.dataset.day; form.title.focus(); } // 日付タップで予定日セット
+  };
+
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    addTask(form.title.value, form.date.value, form.due.value || null);
+    form.title.value = ''; form.due.value = '';
+    render();
+  };
+
+  document.getElementById('prev').onclick = () => { cur.setMonth(cur.getMonth() - 1); render(); };
+  document.getElementById('next').onclick = () => { cur.setMonth(cur.getMonth() + 1); render(); };
+  render();
+</script>
+</body>
+</html>

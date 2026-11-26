@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>今日の予定</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <meta name="theme-color" content="#d9344f">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <div class="chara">
+    <img id="chara" alt="応援キャラ">
+    <div class="bubble" id="msg"></div>
+  </div>
+  <h2>今日の予定 <small id="date"></small></h2>
+  <ul id="list"></ul>
+  <a class="btn" href="calendar.html">了解！カレンダーへ</a>
+</main>
+<script src="app.js"></script>
+<script>
+  const list = document.getElementById('list');
+  const msg = document.getElementById('msg');
+  const chara = document.getElementById('chara');
+  document.getElementById('date').textContent = today();
+
+  const show = (text) => { msg.textContent = text; chara.src = randomChara(); };
+
+  // 今日の予定 = 予定日が今日以前の未完了タスク(期限切れも残す)
+  const todays = () => load().filter((t) => t.date <= today());
+
+  function render() {
+    list.innerHTML = '';
+    todays().forEach((t) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<button title="完了">✓</button><span class="title"></span>` +
+        (t.due ? `<span class="limit">${remain(t.due)}</span>` : '');
+      li.querySelector('.title').textContent = t.title;
+      li.querySelector('button').onclick = () => {
+        removeTask(t.id); // 完了したら消す
+        render();
+        show(todays().length ? 'えらい！次もいこう！' : '全部おわったね！おつかれさま！');
+      };
+      list.appendChild(li);
+    });
+  }
+
+  const n = todays().length;
+  show(n ? `今日のタスクは${n}件だよ！がんばろう！` : '今日の予定はなし！ゆっくりしてね！');
+  render();
+</script>
+</body>
+</html>
