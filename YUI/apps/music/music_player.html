@@ -15,6 +15,14 @@
     align-items: center;
     height: 100vh;
   }
+  #back_btn {
+    position: fixed;
+    top: max(16px, env(safe-area-inset-top));
+    left: 16px;
+    color: #ccc;
+    text-decoration: none;
+    font-size: 13px;
+  }
   .player {
     width: 320px;
     text-align: center;
@@ -68,9 +76,10 @@
 </head>
 <body>
 
+<a id="back_btn" href="../../index.html">← ホームに戻る</a>
 <div class="player">
   <!-- ジャケット画像。スワイプ操作もここで検知します -->
-  <img id="cover" class="cover" src="音楽1.png" alt="cover">
+  <img id="cover" class="cover" src="音楽1.jpg" alt="cover">
   <div class="title" id="title"></div>
 
   <div class="controls">
@@ -87,11 +96,11 @@
   // ▼▼ ここに自分の曲を追加してください（GitHubにアップしたファイル名に合わせる） ▼▼
   const playlist = [
     { title: "曲1", src: "songs/song1.mp3" },
-    { title: "曲2", src: "songs/song2.mp3" },
-    { title: "曲3", src: "songs/song3.mp3" },
+    // { title: "曲2", src: "songs/song2.mp3" },  // ファイルを追加したら有効にする
+    // { title: "曲3", src: "songs/song3.mp3" },
   ];
-  // 画像は共通で 音楽1.png を使用。曲ごとに変えたい場合は各要素に cover: "xxx.png" を追加し、
-  // 下の loadSong 内で song.cover || "音楽1.png" のように参照してください。
+  // 画像は共通で 音楽1.jpg を使用。曲ごとに変えたい場合は各要素に cover: "xxx.png" を追加し、
+  // 下の loadSong 内で song.cover || "音楽1.jpg" のように参照してください。
 
   let current = 0;
   const audio = document.getElementById("audio");
