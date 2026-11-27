@@ -429,7 +429,7 @@
   <!-- ================= モード選択 ================= -->
   <div id="screen_mode" class="screen">
     <div id="top_row">
-      <a href="index.html" class="back_btn">←</a>
+      <a href="../index.html" class="back_btn">←</a>
       <div class="page_title">MODE SELECT</div>
     </div>
     <button class="mode_card" id="mode_up">
@@ -474,7 +474,7 @@
         <div id="timer_digits" class="mono">00:00</div>
         <div id="timer_caption">経過時間</div>
       </div>
-      <div id="study_char"><img id="study_char_img" src="chars/char_normal.png" alt="YUI"></div>
+      <div id="study_char"><img id="study_char_img" src="../chars/char_normal.png" alt="YUI"></div>
       <div id="cd_finished">
         <h2>タイムアップ！</h2>
         <p>お疲れさま。今回は<span id="cd_finished_time" class="mono"></span>集中できました。</p>
@@ -489,7 +489,7 @@
   <!-- ================= 質問オーバーレイ ================= -->
   <div id="overlay_question">
     <div id="q_top">
-      <div id="q_avatar"><img id="q_avatar_img" src="chars/char_normal.png" alt="YUI"></div>
+      <div id="q_avatar"><img id="q_avatar_img" src="../chars/char_normal.png" alt="YUI"></div>
       <div>
         <div id="q_title">YUIに質問</div>
         <div id="q_status">短押しで質問 / テキスト入力もできます</div>
@@ -744,7 +744,7 @@
       const avatar = document.createElement('div');
       avatar.className = 'q_avatar_sm';
       const img = document.createElement('img');
-      img.src = 'chars/char_normal.png';
+      img.src = '../chars/char_normal.png';
       avatar.appendChild(img);
       row.appendChild(avatar);
     }
@@ -758,7 +758,7 @@
 
   function setAvatarState(state) {
     // 画像はchar_normal.pngのみを使用（表情差分は今後追加予定）
-    els.qAvatarImg.src = 'chars/char_normal.png';
+    els.qAvatarImg.src = '../chars/char_normal.png';
     els.qMicBtn.className = state === 'normal' ? '' : `state-${state}`;
   }
 

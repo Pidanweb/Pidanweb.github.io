@@ -31,12 +31,16 @@
     overflow: hidden;
   }
 
+  /* 古いiOS Safariなど 100dvh 非対応の端末でも入力欄が画面外に押し出されないよう、画面に固定する */
   #app {
-    position: relative;
+    position: fixed;
+    inset: 0;
+    height: 100%;
     height: 100dvh;
     display: flex;
     flex-direction: column;
   }
+  #top_bar, #vv_credit, #image_preview_bar { flex-shrink: 0; }
 
   /* ---------- 上部バー ---------- */
 
@@ -105,7 +109,9 @@
 
   #chat_scroll {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     padding: 18px;
     display: flex;
     flex-direction: column;
@@ -155,7 +161,9 @@
   /* ---------- 下部入力エリア ---------- */
 
   #input_bar {
+    flex-shrink: 0;
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-end;
     gap: 8px;
     padding: 10px 12px max(12px, env(safe-area-inset-bottom));
@@ -187,15 +195,16 @@
     50% { box-shadow: 0 0 0 10px rgba(240,104,94,0); }
   }
 
+  /* font-size は16px以上にする(iPhoneは16px未満だと入力時に勝手にズームして入力欄が見えなくなる) */
   #text_input {
-    flex: 1;
-    background: rgba(0,0,0,0.045);
-    border: 1px solid var(--panel-edge);
+    flex: 1 1 140px;
+    background: #f4f1ea;
+    border: 1.5px solid #cfc5ad;
     color: var(--ink);
     border-radius: 20px;
-    padding: 11px 16px;
-    font-size: 14px;
-    line-height: 20px;
+    padding: 10px 16px;
+    font-size: 16px;
+    line-height: 22px;
     font-family: inherit;
     resize: none;
     min-height: 44px;
@@ -263,6 +272,13 @@
   }
   .search_tag { font-size: 11px; opacity: 0.65; margin-top: 4px; }
 
+  /* 幅の狭い画面では入力欄を1段目にまるごと使い、ボタンは2段目に並べる */
+  @media (max-width: 440px) {
+    #text_input { order: -1; flex-basis: 100%; }
+    #input_bar > button { width: 40px; height: 40px; }
+    #send_btn { margin-left: auto; }
+  }
+
   /* ---------- 画像プレビュー(送信前) ---------- */
 
   #image_preview_bar {
@@ -312,7 +328,7 @@
 
   <div id="top_bar">
     <a id="back_btn" href="../index.html">←</a>
-    <div id="top_avatar"><img id="top_avatar_img" src="chars/char_normal.png" alt="YUI"></div>
+    <div id="top_avatar"><img id="top_avatar_img" src="../chars/char_normal.png" alt="YUI"></div>
     <div>
       <div id="top_title">YUI</div>
       <div id="top_status">短押しで質問 / テキスト入力もできます</div>
@@ -356,7 +372,7 @@
   // --- 表情アイコン関連 ---
   const EMOTION_KEY = 'yui_emotion_images';          // 喜怒哀楽4枚(settings.htmlで設定)
   const STAND_KEY = 'yui_custom_char';               // 立ち絵(settings.htmlで設定)
-  const FALLBACK_IMAGE = 'chars/char_normal.png';    // 立ち絵が未設定の時の画像
+  const FALLBACK_IMAGE = '../chars/char_normal.png';    // 立ち絵が未設定の時の画像
 
   const els = {
     backBtn: document.getElementById('back_btn'),
@@ -767,6 +783,14 @@
           return callGemini(contents, { useSearch: false });
         }
         if (daily) throw new Error('このモデルの1日の利用枠を使い切りました。設定で別のモデルにするか、明日以降にお試しください。');
+      }
+      // 検索用モデルが使えない(提供終了・このキーでは利用不可など)ときも、検索なしで答え直す
+      if (useSearch && [400, 403, 404].includes(res.status)) {
+        searchFellBack = `検索用モデル(${model})が使えなかったため`;
+        return callGemini(contents, { useSearch: false });
+      }
+      if (res.status === 404) {
+        throw new Error(`モデル「${model}」が見つかりません(提供終了の可能性)。設定ページでモデル名を変更してください。`);
       }
       throw new Error(errBody?.error?.message || `APIエラー (${res.status})`);
     }

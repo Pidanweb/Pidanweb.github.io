@@ -270,6 +270,9 @@
     <input type="text" id="search_model_input" class="mono" list="model_list" autocomplete="off">
     <datalist id="model_list">
       <option value="gemini-3.5-flash-lite"></option>
+      <option value="gemini-3.1-flash-lite"></option>
+      <option value="gemini-3.8-flash"></option>
+      <option value="gemini-3.6-flash"></option>
       <option value="gemini-2.5-flash-lite"></option>
       <option value="gemini-2.5-flash"></option>
       <option value="gemini-2.5-pro"></option>
@@ -330,7 +333,7 @@
   const EMOTION_KEY = 'yui_emotion_images';
   const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
   const DEFAULT_SEARCH_MODEL = 'gemini-2.5-flash-lite';
-  const FALLBACK_IMAGE = 'chars/char_normal.png';
+  const FALLBACK_IMAGE = '../chars/char_normal.png';
   const $ = (id) => document.getElementById(id);
 
   const statusMsg = $('status_msg');
@@ -346,7 +349,7 @@
     let href = '../index.html';
     try {
       const prog = JSON.parse(localStorage.getItem(PROGRESS_KEY) || 'null');
-      if (prog && prog.level && !prog.completed) href = '../index_tutorial.html';
+      if (prog && prog.level && prog.level < 5) href = '../index_tyuto.html';
     } catch (e) {}
     if (/\/talk\.html(\?|#|$)/.test(document.referrer)) {
       href = 'talk.html';

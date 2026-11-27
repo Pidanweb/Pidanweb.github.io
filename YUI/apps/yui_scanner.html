@@ -634,7 +634,7 @@
 
     <div id="chat_controls">
       <button id="character_avatar" aria-label="長押しでお話しモード">
-        <img id="character_face" src="chars/char_normal.png" alt="YUI">
+        <img id="character_face" src="../chars/char_normal.png" alt="YUI">
       </button>
       <div id="chat_status">短押しで1問だけ / 長押しで会話モード</div>
       <button id="talk_end_btn">⏹ 終了</button>
@@ -743,7 +743,7 @@
   // 立ち絵は settings.html / shoki.html で設定した yui_custom_char を使う(未設定ならデフォルト画像)。
   // 画像は1枚しか設定できないので、状態が変わっても同じ画像のまま(枠のアニメーションで状態を表現)
   function standImage() {
-    try { return localStorage.getItem('yui_custom_char') || 'chars/char_normal.png'; } catch (e) { return 'chars/char_normal.png'; }
+    try { return localStorage.getItem('yui_custom_char') || '../chars/char_normal.png'; } catch (e) { return '../chars/char_normal.png'; }
   }
 
   const CHAT_STATUS_TEXT = {
@@ -763,10 +763,10 @@
   // ---- 時間帯に応じた背景写真をアバターに設定 ----
   function timeOfDayBg() {
     const hour = new Date().getHours();
-    if (hour >= 5 && hour < 11)  return 'chars/bg_morning.jpg';
-    if (hour >= 17 && hour < 20) return 'chars/bg_evening.jpg';
-    if (hour >= 20 || hour < 5)  return 'chars/bg_evening.jpg';
-    return 'chars/bg_day.jpg';
+    if (hour >= 5 && hour < 11)  return '../chars/bg_scene.jpg';
+    if (hour >= 17 && hour < 20) return '../chars/bg_scene.jpg';
+    if (hour >= 20 || hour < 5)  return '../chars/bg_scene.jpg';
+    return '../chars/bg_scene.jpg';
   }
   els.characterAvatar.style.backgroundImage = `url('${timeOfDayBg()}')`;
   els.characterFace.src = standImage();

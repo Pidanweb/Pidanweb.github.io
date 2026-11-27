@@ -203,7 +203,7 @@
 </head>
 <body>
 <div id="app">
-  <a id="back_btn" href="index.html">← ホームに戻る</a>
+  <a id="back_btn" href="../index.html">← ホームに戻る</a>
   <h1>自己紹介 & カード作成</h1>
   <p class="desc">
     自分のプロフィールを設定してカードを作成できます。<br>
@@ -220,7 +220,7 @@
     <div class="form_group">
       <label>相棒画像（アイコン）</label>
       <div class="img_picker_box">
-        <img id="partner_preview" src="chars/char_normal.png" alt="相棒画像">
+        <img id="partner_preview" src="../chars/char_normal.png" alt="相棒画像">
         <input type="file" id="input_img_file" accept="image/*" style="font-size:12px;">
       </div>
     </div>
@@ -251,7 +251,7 @@
   <!-- 2. 完成カード表示エリア -->
   <h2 style="font-size:16px; font-family:'M PLUS Rounded 1c'; margin:20px 0 8px;">自己紹介カード プレビュー</h2>
   <div class="profile_card_preview" id="card_element">
-    <img id="card_avatar_img" class="card_avatar" src="chars/char_normal.png" alt="相棒">
+    <img id="card_avatar_img" class="card_avatar" src="../chars/char_normal.png" alt="相棒">
     <div class="card_body">
       <div class="card_name" id="card_display_name">名前</div>
       <div class="card_short_comment" id="card_display_comment">よろしくね！</div>
@@ -285,7 +285,7 @@
 <script>
 (() => {
   const STORAGE_KEY = 'yui_profile_data';
-  const DEFAULT_IMG = 'chars/char_normal.png';
+  const DEFAULT_IMG = '../chars/char_normal.png';
 
   // DOM要素
   const inputName = document.getElementById('input_name');

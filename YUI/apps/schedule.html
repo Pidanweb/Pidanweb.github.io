@@ -86,7 +86,8 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
+    padding-top: 6px;
     border-radius: 12px;
     background: var(--panel);
     border: 1px solid var(--panel-edge);
@@ -102,12 +103,101 @@
     font-weight: 700;
   }
   .cal_cell .dot {
-    width: 5px;
-    height: 5px;
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: var(--scan);
+  }
+  .cal_cell.selected { background: var(--scan-soft); }
+
+  /* 期限つき予定の横棒(開始日〜期限日まで、セルをまたいでつながって見えるように左右へはみ出させる) */
+  .cal_bars {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    pointer-events: none;
+  }
+  .cal_bar {
+    height: 5px;
+    margin: 0 -3px;
+  }
+  .cal_bar.empty { visibility: hidden; }
+  .cal_bar.start { margin-left: 5px; border-top-left-radius: 3px; border-bottom-left-radius: 3px; }
+  .cal_bar.end   { margin-right: 5px; border-top-right-radius: 3px; border-bottom-right-radius: 3px; }
+  .cal_bar.done  { background: #b9b9bd !important; }
+  .cal_more {
+    position: absolute;
+    left: 4px;
+    top: 3px;
+    font-size: 9px;
+    color: var(--ink-dim);
+  }
+
+  /* 期限つきタスクの一覧(カレンダーの下) */
+  #due_section { margin-top: 14px; }
+  .due_item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 12px;
+    padding: 9px 12px;
+    margin-bottom: 6px;
+    font-size: 13px;
+  }
+  .due_swatch { width: 14px; height: 6px; border-radius: 3px; flex-shrink: 0; }
+  .due_name { flex: 1; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .due_left { font-size: 12px; font-weight: 800; color: var(--warn); flex-shrink: 0; }
+  .due_left.urgent { color: var(--danger); }
+  .due_left.over { color: var(--ink-dim); }
+  .due_item.done { background: #1d1d1f; border-color: #1d1d1f; }
+  .due_item.done .due_name { color: #77777c; text-decoration: line-through; }
+  .due_item.done .due_left { color: #77777c; }
+
+  /* 予定リスト内の期限表示 */
+  .event_due {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--warn);
     margin-top: 3px;
   }
+  .event_due.urgent { color: var(--danger); }
+  .event_due_bar {
+    height: 6px;
+    border-radius: 3px;
+    background: #ece5d3;
+    overflow: hidden;
+    margin-top: 5px;
+    width: 160px;
+    max-width: 100%;
+  }
+  .event_due_bar > i { display: block; height: 100%; border-radius: 3px; }
+  .event_btns { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; flex-shrink: 0; }
+  .event_done_btn {
+    border: 2px solid #1a1a1a;
+    background: #fff;
+    color: #1a1a1a;
+    border-radius: 10px;
+    padding: 5px 10px;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 800;
+  }
+  .event_row { flex: 0 0 auto; }
+  .event_row > div:first-child { flex: 1; min-width: 0; }
+  .event_row.done { background: #1d1d1f; border-color: #1d1d1f; }
+  .event_row.done .event_main { color: #77777c; text-decoration: line-through; }
+  .event_row.done .event_time, .event_row.done .event_memo { color: #5d5d62; }
+  .event_row.done .event_due, .event_row.done .event_due_bar { display: none; }
+  .event_row.done .event_done_btn { background: #3a3a3e; border-color: #3a3a3e; color: #b8b8bd; }
 
   /* ---------- 予定リスト ---------- */
   #list_section {
@@ -200,6 +290,7 @@
     margin: 12px 0 4px;
   }
   #form_panel input[type="time"],
+  #form_panel input[type="date"],
   #form_panel input[type="text"],
   #form_panel textarea {
     width: 100%;
@@ -212,6 +303,9 @@
     font-family: inherit;
   }
   #form_panel textarea { height: 70px; resize: none; }
+  .form_hint { font-size: 11.5px; color: var(--ink-dim); margin-top: 4px; }
+  .form_row2 { display: flex; gap: 10px; }
+  .form_row2 > div { flex: 1; min-width: 0; }
   #form_buttons {
     display: flex;
     gap: 10px;
@@ -232,7 +326,7 @@
 </head>
 <body>
 <div id="app">
-  <a id="back_btn" href="index.html">← ホームに戻る</a>
+  <a id="back_btn" href="../index.html">← ホームに戻る</a>
   <h1>スケジュール</h1>
 
   <div id="cal_header">
@@ -245,6 +339,8 @@
   </div>
   <div id="cal_grid"></div>
 
+  <div id="due_section"></div>
+
   <div id="list_section">
     <div id="list_title">選択中の日の予定</div>
     <button id="add_btn">＋ この日に予定を追加</button>
@@ -254,8 +350,17 @@
   <div id="form_panel">
     <div id="form_sheet">
       <div id="form_date_label"></div>
-      <label>時間</label>
-      <input type="time" id="form_time">
+      <div class="form_row2">
+        <div>
+          <label>時間</label>
+          <input type="time" id="form_time">
+        </div>
+        <div>
+          <label>期限(任意)</label>
+          <input type="date" id="form_due">
+        </div>
+      </div>
+      <div class="form_hint">期限を入れると、カレンダーに開始日〜期限日の横棒が出て、残り日数が分かります。</div>
       <label>やること</label>
       <input type="text" id="form_task" placeholder="例: 通院">
       <label>メモ</label>
@@ -309,6 +414,7 @@
     formPanel: document.getElementById('form_panel'),
     formDateLabel: document.getElementById('form_date_label'),
     formTime: document.getElementById('form_time'),
+    formDue: document.getElementById('form_due'),
     formTask: document.getElementById('form_task'),
     formMemo: document.getElementById('form_memo'),
     formSaveBtn: document.getElementById('form_save_btn'),
@@ -335,9 +441,43 @@
     return dateStr(d.getFullYear(), d.getMonth(), d.getDate());
   }
 
+  // 日付文字列(YYYY-MM-DD)どうしの日数差
+  function dayDiff(fromStr, toStr) {
+    const [y1, m1, d1] = fromStr.split('-').map(Number);
+    const [y2, m2, d2] = toStr.split('-').map(Number);
+    return Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 86400000);
+  }
+  // その日に関係する予定か(当日の予定 or 期限つきで期間中)
+  function coversDate(ev, ds) {
+    if (ev.date === ds) return true;
+    return !!(ev.due && ev.date <= ds && ds <= ev.due);
+  }
+  // 期限の残り日数の表示文
+  function dueLabel(ev) {
+    const left = dayDiff(todayStr(), ev.due);
+    if (left > 0) return { text: `残り${left}日`, cls: left <= 1 ? 'urgent' : '' };
+    if (left === 0) return { text: '今日が期限', cls: 'urgent' };
+    return { text: `期限切れ(${-left}日前)`, cls: 'over' };
+  }
+  // 期限つき予定の色(idから毎回同じ色を選ぶ)
+  const BAR_COLORS = ['#e8913a', '#4f8ef0', '#d9558f', '#8a63d2', '#2fae90', '#c9a227'];
+  function colorOf(ev) {
+    let h = 0;
+    for (const c of String(ev.id)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return BAR_COLORS[h % BAR_COLORS.length];
+  }
+
   let viewYear = new Date().getFullYear();
   let viewMonth = new Date().getMonth(); // 0-indexed
   let selectedDate = todayStr();
+  // ホームから schedule.html#2026-11-27 のように開かれたら、その日を選択する
+  if (/^#\d{4}-\d{2}-\d{2}$/.test(location.hash)) {
+    selectedDate = location.hash.slice(1);
+    const [y, m] = selectedDate.split('-').map(Number);
+    viewYear = y; viewMonth = m - 1;
+  }
+
+  const MAX_LANES = 3; // 1マスに並べる横棒の最大本数
 
   function renderCalendar() {
     els.calMonthLabel.textContent = `${viewYear}年 ${viewMonth + 1}月`;
@@ -345,8 +485,23 @@
 
     const firstDay = new Date(viewYear, viewMonth, 1).getDay();
     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const monthStart = dateStr(viewYear, viewMonth, 1);
+    const monthEnd = dateStr(viewYear, viewMonth, daysInMonth);
     const schedule = loadSchedule();
-    const datesWithEvents = new Set(schedule.map(ev => ev.date));
+    // 横棒にしない(期限なしの)予定がある日 → 点を表示
+    const datesWithEvents = new Set(schedule.filter(ev => !ev.due).map(ev => ev.date));
+
+    // この月にかかる期限つき予定を、開始日の早い順に段(レーン)へ割り当てる
+    const ranged = schedule
+      .filter(ev => ev.due && ev.date <= monthEnd && ev.due >= monthStart)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.due.localeCompare(b.due));
+    const laneEnds = [];
+    ranged.forEach(ev => {
+      let lane = laneEnds.findIndex(end => end < ev.date);
+      if (lane === -1) { lane = laneEnds.length; laneEnds.push(ev.due); }
+      else laneEnds[lane] = ev.due;
+      ev._lane = lane;
+    });
 
     for (let i = 0; i < firstDay; i++) {
       const empty = document.createElement('div');
@@ -359,7 +514,7 @@
       const cell = document.createElement('div');
       cell.className = 'cal_cell';
       if (ds === todayStr()) cell.classList.add('today');
-      if (ds === selectedDate) cell.style.background = 'var(--scan-soft)';
+      if (ds === selectedDate) cell.classList.add('selected');
 
       const num = document.createElement('div');
       num.textContent = d;
@@ -371,6 +526,35 @@
         cell.appendChild(dot);
       }
 
+      // 横棒
+      const here = ranged.filter(ev => ev.date <= ds && ds <= ev.due);
+      if (here.length) {
+        const bars = document.createElement('div');
+        bars.className = 'cal_bars';
+        const usedLanes = Math.min(MAX_LANES, Math.max(...here.map(ev => ev._lane)) + 1);
+        const weekday = (firstDay + d - 1) % 7;
+        for (let lane = 0; lane < usedLanes; lane++) {
+          const ev = here.find(e => e._lane === lane);
+          const bar = document.createElement('div');
+          bar.className = 'cal_bar';
+          if (!ev) { bar.classList.add('empty'); bars.appendChild(bar); continue; }
+          bar.style.background = colorOf(ev);
+          if (ev.date === ds || d === 1 || weekday === 0) bar.classList.add('start');
+          if (ev.due === ds || d === daysInMonth || weekday === 6) bar.classList.add('end');
+          if (ev.done) bar.classList.add('done');
+          bar.title = ev.task;
+          bars.appendChild(bar);
+        }
+        cell.appendChild(bars);
+        const hidden = here.filter(ev => ev._lane >= MAX_LANES).length;
+        if (hidden) {
+          const more = document.createElement('div');
+          more.className = 'cal_more';
+          more.textContent = `+${hidden}`;
+          cell.appendChild(more);
+        }
+      }
+
       cell.addEventListener('click', () => {
         selectedDate = ds;
         renderCalendar();
@@ -379,6 +563,35 @@
 
       els.calGrid.appendChild(cell);
     }
+
+    renderDueList(ranged);
+  }
+
+  // カレンダー下: この月にかかる期限つきタスクの一覧(色・残り日数)
+  function renderDueList(ranged) {
+    const box = document.getElementById('due_section');
+    box.innerHTML = '';
+    ranged.forEach(ev => {
+      const item = document.createElement('div');
+      item.className = 'due_item' + (ev.done ? ' done' : '');
+      const sw = document.createElement('span');
+      sw.className = 'due_swatch';
+      sw.style.background = ev.done ? '#77777c' : colorOf(ev);
+      const name = document.createElement('span');
+      name.className = 'due_name';
+      name.textContent = ev.task;
+      const left = document.createElement('span');
+      const lb = dueLabel(ev);
+      left.className = 'due_left ' + lb.cls;
+      left.textContent = ev.done ? '完了' : lb.text;
+      item.append(sw, name, left);
+      item.addEventListener('click', () => {
+        selectedDate = ev.date;
+        renderCalendar();
+        renderEventList();
+      });
+      box.appendChild(item);
+    });
   }
 
   function formatDateLabel(ds) {
@@ -391,8 +604,8 @@
     els.listTitle.textContent = `${formatDateLabel(selectedDate)}の予定`;
     const schedule = loadSchedule();
     const todays = schedule
-      .filter(ev => ev.date === selectedDate)
-      .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+      .filter(ev => coversDate(ev, selectedDate))
+      .sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
 
     els.eventList.innerHTML = '';
 
@@ -406,7 +619,7 @@
 
     todays.forEach(ev => {
       const row = document.createElement('div');
-      row.className = 'event_row';
+      row.className = 'event_row' + (ev.done ? ' done' : '');
 
       const left = document.createElement('div');
       if (ev.time) {
@@ -420,12 +633,44 @@
       main.textContent = ev.task;
       left.appendChild(main);
 
+      if (ev.due) {
+        const lb = dueLabel(ev);
+        const due = document.createElement('div');
+        due.className = 'event_due ' + lb.cls;
+        due.textContent = `${formatDateLabel(ev.date)}〜${formatDateLabel(ev.due)}・${lb.text}`;
+        left.appendChild(due);
+        const bar = document.createElement('div');
+        bar.className = 'event_due_bar';
+        const fill = document.createElement('i');
+        const total = Math.max(1, dayDiff(ev.date, ev.due));
+        const passed = Math.min(1, Math.max(0, dayDiff(ev.date, todayStr()) / total));
+        fill.style.width = Math.round(passed * 100) + '%';
+        fill.style.background = colorOf(ev);
+        bar.appendChild(fill);
+        left.appendChild(bar);
+      }
+
       if (ev.memo) {
         const memo = document.createElement('div');
         memo.className = 'event_memo';
         memo.textContent = ev.memo;
         left.appendChild(memo);
       }
+
+      const btns = document.createElement('div');
+      btns.className = 'event_btns';
+
+      const doneBtn = document.createElement('button');
+      doneBtn.className = 'event_done_btn';
+      doneBtn.textContent = ev.done ? '戻す' : '完了';
+      doneBtn.addEventListener('click', () => {
+        const all = loadSchedule();
+        const t = all.find(e => e.id === ev.id);
+        if (t) t.done = !t.done;
+        saveSchedule(all);
+        renderCalendar();
+        renderEventList();
+      });
 
       const delBtn = document.createElement('button');
       delBtn.className = 'event_del_btn';
@@ -437,15 +682,18 @@
         renderEventList();
       });
 
+      btns.append(doneBtn, delBtn);
       row.appendChild(left);
-      row.appendChild(delBtn);
+      row.appendChild(btns);
       els.eventList.appendChild(row);
     });
   }
 
   function openForm(ds) {
-    els.formDateLabel.textContent = formatDateLabel(ds);
+    els.formDateLabel.textContent = formatDateLabel(ds) + ' から';
     els.formTime.value = '';
+    els.formDue.value = '';
+    els.formDue.min = ds;
     els.formTask.value = '';
     els.formMemo.value = '';
     els.formPanel.dataset.date = ds;
@@ -464,14 +712,23 @@
       els.formTask.focus();
       return;
     }
+    const start = els.formPanel.dataset.date;
+    let due = els.formDue.value;
+    if (due && due < start) {
+      alert('期限は開始日より後の日付にしてください。');
+      return;
+    }
+    if (due === start) due = ''; // 同じ日なら通常の予定として扱う
     const all = loadSchedule();
-    all.push({
+    const item = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
-      date: els.formPanel.dataset.date,
+      date: start,
       time: els.formTime.value,
       task,
       memo: els.formMemo.value.trim(),
-    });
+    };
+    if (due) item.due = due;
+    all.push(item);
     saveSchedule(all);
     advanceTutorial(3); // 予定を登録できたらレベルアップ
     els.formPanel.classList.remove('active');
