@@ -1,6 +1,6 @@
 // YUI Service Worker
 // 更新を配信したいときは VERSION を上げる(古いキャッシュが自動で消える)
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = 'yui-' + VERSION;
 
 // 先に保存しておくファイル。存在しないものがあっても無視されるので、増減はお好みで

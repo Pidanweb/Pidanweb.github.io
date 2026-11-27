@@ -116,7 +116,7 @@
   #vn_layer {
     flex-direction: column;
     justify-content: flex-end;
-    background-image: url('chars/初期設定背景.PNG');
+    background-image: url('chars/初期設定背景.png');
     background-size: cover;
     background-position: center;
   }
@@ -1070,7 +1070,7 @@
     </div>
 
     <div id="home_buttons">
-      <a id="talk_nav_btn" class="home_nav_btn" href="talk.html">
+      <a id="talk_nav_btn" class="home_nav_btn" href="apps/talk.html">
         <span class="icon">💬</span>
         <span class="label">お話しする</span>
       </a>
@@ -1089,27 +1089,27 @@
         <button id="apps_close_btn">✕</button>
       </div>
       <div id="apps_grid">
-        <a class="app_tile" href="study.html">
+        <a class="app_tile" href="apps/study.html">
           <span class="app_icon">📚</span>
           <span class="app_label">勉強</span>
         </a>
-        <a class="app_tile" href="settings.html">
+        <a class="app_tile" href="apps/settings.html">
           <span class="app_icon">⚙️</span>
           <span class="app_label">設定</span>
         </a>
-        <a class="app_tile" href="break.html">
+        <a class="app_tile" href="apps/music/music_player.html">
           <span class="app_icon">🍃</span>
           <span class="app_label">息抜き</span>
         </a>
-        <a class="app_tile" href="yui_scanner.html">
+        <a class="app_tile" href="apps/yui_scanner.html">
           <span class="app_icon">📷</span>
           <span class="app_label">カメラ</span>
         </a>
-        <a class="app_tile" href="schedule.html">
+        <a class="app_tile" href="apps/schedule.html">
           <span class="app_icon">🗓️</span>
           <span class="app_label">スケジュール</span>
         </a>
-        <a class="app_tile" href="draw_game.html">
+        <a class="app_tile" href="apps/draw_game.html">
           <span class="app_icon">🎨</span>
           <span class="app_label">お絵描き当て</span>
         </a>
@@ -1117,7 +1117,7 @@
           <span class="app_icon">🎁</span>
           <span class="app_label">フレンドを迎える</span>
         </label>
-        <a class="app_tile" href="https://pidanweb.github.io/YUI/profile.html" target="_blank" rel="noopener">
+        <a class="app_tile" href="apps/profile.html" target="_blank" rel="noopener">
           <span class="app_icon">🪪</span>
           <span class="app_label">プロフィール</span>
         </a>
@@ -1171,10 +1171,10 @@
   // ---- 時間帯に応じた背景写真(VNキャラクターステージ用) ----
   function timeOfDayBg() {
     const hour = new Date().getHours();
-    if (hour >= 5 && hour < 11)  return 'chars/bg_morning.jpg';
-    if (hour >= 17 && hour < 20) return 'chars/bg_evening.jpg';
-    if (hour >= 20 || hour < 5)  return 'chars/bg_evening.jpg';
-    return 'chars/bg_day.jpg';
+    if (hour >= 5 && hour < 11)  return 'chars/bg_scene.jpg';
+    if (hour >= 17 && hour < 20) return 'chars/bg_scene.jpg';
+    if (hour >= 20 || hour < 5)  return 'chars/bg_scene.jpg';
+    return 'chars/bg_scene.jpg';
   }
   els.vnStage.style.backgroundImage = `url('${timeOfDayBg()}')`;
 
@@ -1261,7 +1261,7 @@
       todays.forEach(ev => {
         const row = document.createElement('a');
         row.className = 'schedule_row';
-        row.href = 'schedule.html';
+        row.href = 'apps/schedule.html';
         if (ev.time) {
           const time = document.createElement('span');
           time.className = 'schedule_time';
@@ -1279,7 +1279,7 @@
     // 予定の追加ボタンはスクロールリストの一番下に配置
     const addRow = document.createElement('a');
     addRow.className = 'schedule_add_row';
-    addRow.href = 'schedule.html';
+    addRow.href = 'apps/schedule.html';
     addRow.textContent = '＋ 予定を追加';
     els.scheduleList.appendChild(addRow);
   }
@@ -2048,11 +2048,11 @@
         const dy = e.clientY - downY;
         reset();
         if (dy < -DIRECTION_PX) {
-          window.location.href = 'yui_scanner.html';
+          window.location.href = 'apps/yui_scanner.html';
           return;
         }
         if (dy > DIRECTION_PX) {
-          window.location.href = 'talk.html';
+          window.location.href = 'apps/talk.html';
           return;
         }
         return;

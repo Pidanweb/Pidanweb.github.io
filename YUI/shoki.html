@@ -115,7 +115,7 @@
   #vn_layer {
     flex-direction: column;
     justify-content: flex-end;
-    background-image: url('chars/初期設定背景.PNG');
+    background-image: url('chars/初期設定背景.png');
     background-size: cover;
     background-position: center;
   }
@@ -390,10 +390,10 @@
   // ---- 時間帯に応じた背景写真(VNキャラクターステージ用) ----
   function timeOfDayBg() {
     const hour = new Date().getHours();
-    if (hour >= 5 && hour < 11)  return 'chars/bg_morning.jpg';
-    if (hour >= 17 && hour < 20) return 'chars/bg_evening.jpg';
-    if (hour >= 20 || hour < 5)  return 'chars/bg_evening.jpg';
-    return 'chars/bg_day.jpg';
+    if (hour >= 5 && hour < 11)  return 'chars/bg_scene.jpg';
+    if (hour >= 17 && hour < 20) return 'chars/bg_scene.jpg';
+    if (hour >= 20 || hour < 5)  return 'chars/bg_scene.jpg';
+    return 'chars/bg_scene.jpg';
   }
   els.vnStage.style.backgroundImage = `url('${timeOfDayBg()}')`;
 
